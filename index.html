@@ -3,893 +3,375 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seven de Burgers · POS Web (v6.2-full)</title>
+  <title>Seven de Burgers · POS v6.6</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore-compat.js"></script>
   <style>
-*{box-sizing:border-box}body{margin:0;background:#0b0b12;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #1b1b24;background:#0d0d16;position:sticky;top:0;z-index:10}
-.brand{display:flex;align-items:center;gap:10px}
-.logo{width:40px;height:40px;display:grid;place-items:center;background:#ffcc00;color:#0b0b12;font-weight:900;border-radius:8px;box-shadow:0 0 0 3px #222}
-.brand-text h1{font-size:18px;line-height:1;margin:0}
-brand-text span{font-size:12px;opacity:.8}
-.nav{display:flex;gap:8px}
-.tab{background:#151521;color:#ddd;border:1px solid #24243b;border-radius:10px;padding:8px 12px;cursor:pointer}
-.tab.active{border-color:#ffcc00;color:#ffcc00}
-.userbox{display:flex;gap:8px;align-items:center}
-.userbox button{background:#151521;border:1px solid #2a2a3f;color:#ddd;border-radius:8px;padding:6px 10px;cursor:pointer}
-.userbox .secondary{opacity:.7}
-main{padding:16px}
-.view{display:none}.view.visible{display:block}
-.grid{display:grid;gap:16px}
-.grid.two{grid-template-columns:1fr 1fr}
-.grid.three{grid-template-columns:1fr 1fr 1fr}
-.card{background:#0f0f19;border:1px solid #202033;border-radius:16px;padding:14px}
-.card h2{margin:0 0 10px 0;font-size:18px}
-.row{display:flex;gap:10px;align-items:center;margin:8px 0}
-.row input,.row textarea,.filters select,.filters input{background:#111120;border:1px solid #23233a;color:#eee;border-radius:10px;padding:8px;flex:1}
-.menu-list{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.menu-item{border:1px solid #26263f;background:#0f0f1f;border-radius:12px;padding:10px}
-.menu-item h4{margin:0 0 4px 0}
-.badge{display:inline-block;font-size:11px;background:#1b1b2e;border:1px solid #2c2c44;color:#a9a9d1;padding:2px 6px;border-radius:999px;margin-right:6px}
-.price{color:#ffcc00;font-weight:800}
-.btn{background:#17172a;border:1px solid #2a2a46;color:#eee;border-radius:10px;padding:6px 10px;cursor:pointer}
-.btn.primary{background:#ffcc00;color:#111;font-weight:800}
-.btn.small{font-size:12px;padding:4px 8px}
-.order-items{display:flex;flex-direction:column;gap:8px;margin:8px 0}
-.order-line{display:flex;justify-content:space-between;gap:8px;background:#131324;border:1px solid #26263f;border-radius:10px;padding:8px}
-.order-line .meta{font-size:12px;opacity:.8}
-.totals{display:flex;justify-content:space-between;font-weight:800;margin-top:8px}
-.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
-.kds-list{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.ticket{background:#101020;border:1px solid #2a2a42;border-radius:14px;padding:10px}
-.ticket h4{margin:0 0 6px 0}
-.ticket .items{font-size:13px;line-height:1.3}
-.status{display:flex;gap:6px;margin-top:8px}
-.status button{flex:1}
-.muted{opacity:.7}.small{font-size:12px}
-.filters{display:flex;gap:8px;margin-bottom:8px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
-.modal.visible{display:flex}
-.modal-card{background:#0f0f1a;border:1px solid #22223b;border-radius:14px;padding:14px;min-width:320px;max-width:520px}
-.extras-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
-.extras-chip{display:flex;justify-content:space-between;align-items:center;border:1px solid #2a2a46;background:#151526;border-radius:10px;padding:6px 8px;font-size:13px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111;color:#fff;border:1px solid #333;padding:10px 14px;border-radius:10px;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,.4)}
-.waiter-status{margin-top:12px}
-.waiter-status .order-line{cursor:default}
-.reco-pill{display:inline-block;border:1px dashed #444;padding:2px 6px;border-radius:999px;font-size:12px;margin:3px 4px}
-@media (max-width:980px){.grid.two{grid-template-columns:1fr}.grid.three{grid-template-columns:1fr} .kds-list{grid-template-columns:1fr 1fr} .menu-list{grid-template-columns:1fr}}
+    :root { --bg:#0e0f13; --panel:#161924; --text:#f2f2f6; --muted:#9aa0aa; --accent:#ffd54a; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--text); background:#0a0b10; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header{ display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#0f1320; border-bottom:1px solid #1f2333; position:sticky; top:0; z-index:20; }
+    .brand{ display:flex; gap:12px; align-items:center; font-weight:800; letter-spacing:.3px; }
+    .brand .logo{ width:44px; height:44px; display:grid; place-items:center; border-radius:10px; background:#1a2245; border:1px solid #232a45; font-family:"Press Start 2P"; color:var(--accent);}
+    .tabs{ display:flex; gap:8px; }
+    .tab{ padding:10px 12px; border-radius:10px; background:#121524; border:1px solid #22273b; cursor:pointer; font-weight:600; color:var(--muted);}
+    .tab.active{ background:#171b2e; color:var(--text); border-color:#2b3152; }
+    .main{ padding:18px; display:grid; gap:16px; max-width:1100px; margin:0 auto; }
+    .panel{ background:#101427; border:1px solid #1c2340; border-radius:14px; padding:16px; }
+    .title{ font-weight:800; letter-spacing:.3px; margin:0 0 12px 0; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap:12px; }
+    .btn{ background:#1a2146; border:1px solid #283060; color:var(--text); padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; letter-spacing:.3px; }
+    .btn:hover{ filter:brightness(1.05); }
+    .btn.primary{ background:#2a3c8a; border-color:#31469c; }
+    .btn.success{ background:#1f5b3a; border-color:#2c7a52; }
+    .btn.warn{ background:#7a4a14; border-color:#a9651c; }
+    .muted{ color:var(--muted); }
+    input, select, textarea{ width:100%; background:#0e1326; color:var(--text); border:1px solid #1d2342; border-radius:10px; padding:10px; outline:none; font:inherit; }
+    textarea{ min-height:80px; }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row > *{ flex:1; min-width:200px; }
+    .order-card{ border:1px solid #233056; border-radius:12px; padding:12px; background:#121935; display:grid; gap:8px; }
+    .pill{ padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #2b325a; color:#c9d1ff; width:max-content; }
+    .status-pending{ background:#261721; }
+    .status-prep{ background:#202a18; }
+    .status-ready{ background:#1a2133; }
+    .small{ font-size:12px; }
+    footer{ text-align:center; padding:18px; color:#8087a0; }
   </style>
 </head>
 <body>
-  <header class="topbar">
+  <header>
     <div class="brand">
       <div class="logo">7</div>
-      <div class="brand-text">
-        <h1>SEVEN</h1>
-        <span>DE BURGERS</span>
+      <div>
+        <div style="font-family:'Press Start 2P'; font-size:13px; line-height:1;">SEVEN DE BURGERS</div>
+        <div class="small muted">POS v6.6 · Mesas / Cocina en tiempo real</div>
       </div>
     </div>
-    <nav class="nav">
-      <button id="tabWaiter" class="tab active">Mesero</button>
-      <button id="tabKitchen" class="tab">Cocina</button>
-      <button id="tabAdmin" class="tab">Admin</button>
-    </nav>
-    <div class="userbox">
-      <span id="userRole">Invitado</span>
-      <button id="btnLogin">Entrar</button>
-      <button id="btnLogout" class="secondary">Salir</button>
+    <div class="tabs">
+      <div class="tab active" id="tab-waiter">Mesero</div>
+      <div class="tab" id="tab-kitchen">Cocina</div>
     </div>
   </header>
 
-  <main>
-    <section id="viewWaiter" class="view visible">
-      <div class="grid two">
-        <div class="card">
-          <h2>Menú</h2>
-          <div class="filters">
-            <select id="categoryFilter">
-              <option value="all">Todo</option>
-              <option value="burgers">Burgers</option>
-              <option value="minis">Minis</option>
-              <option value="player">Player Select</option>
-            </select>
-            <input id="searchInput" placeholder="Buscar..." />
-          </div>
-          <div id="menuList" class="menu-list"></div>
-        </div>
-
-        <div class="card waiter-status">
-          <h2>Estatus de pedidos (hoy)</h2>
-          <div class="row"><label><input type="checkbox" id="chkMineOnly" /> Solo mis mesas</label></div>
-          <div id="waiterFeed" class="order-items"></div>
-        </div>
-
-        <div class="card">
-          <h2>Pedido actual</h2>
-          <div class="row">
-            <label>Mesa / Cliente</label>
-            <input id="orderTable" placeholder="Mesa 1, Para llevar, etc." />
-          </div>
-          <div id="orderItems" class="order-items"></div>
-          <div class="row">
-            <label>Comentarios a cocina</label>
-            <textarea id="orderNotes" rows="2" placeholder="Sin cebolla, extra salsa, etc."></textarea>
-          </div>
-          <div class="totals">
-            <div>Subtotal: $<span id="subtotal">0</span></div>
-            <div>Total: $<span id="total">0</span></div>
-          </div>
-          <div class="actions">
-            <button id="btnClear" class="secondary">Vaciar</button>
-            <button id="btnSend" class="primary">Enviar a cocina</button>
-          </div>
-        </div>
+  <main class="main">
+    <section class="panel" id="identity">
+      <h3 class="title">Identifícate</h3>
+      <div class="row">
+        <div><label>Nombre del mesero</label><input id="waiterName" placeholder="Ej. Alex" /></div>
+        <div><label>Mesa por defecto</label><select id="defaultTable"><option value="">—</option><option value="1">Mesa 1</option><option value="2">Mesa 2</option><option value="3">Mesa 3</option><option value="4">Mesa 4</option><option value="5">Mesa 5</option><option value="6">Mesa 6</option><option value="7">Mesa 7</option><option value="8">Mesa 8</option><option value="9">Mesa 9</option><option value="10">Mesa 10</option><option value="11">Mesa 11</option><option value="12">Mesa 12</option></select></div>
+        <div><label>PIN (opcional)</label><input id="pin" placeholder="4321 mesero / 5678 cocina" /></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn primary" id="saveIdentity">Guardar</button>
+        <div class="muted small">Se guarda en este navegador.</div>
       </div>
     </section>
 
-    <section id="viewKitchen" class="view">
-      <div class="card">
-        <h2>Órdenes en tiempo real</h2>
-        <div id="kdsList" class="kds-list"></div>
+    <section class="panel" id="waiterView">
+      <h3 class="title">Crear pedido</h3>
+      <div class="row">
+        <div><label>Mesa</label><select id="mesaSelect"><option value="">Selecciona mesa</option><option value="1">Mesa 1</option><option value="2">Mesa 2</option><option value="3">Mesa 3</option><option value="4">Mesa 4</option><option value="5">Mesa 5</option><option value="6">Mesa 6</option><option value="7">Mesa 7</option><option value="8">Mesa 8</option><option value="9">Mesa 9</option><option value="10">Mesa 10</option><option value="11">Mesa 11</option><option value="12">Mesa 12</option></select></div>
+        <div><label>Hamburguesa</label><select id="burgerSelect"><option value="">Selecciona</option><option value="starter">Starter Burger · $47</option><option value="koopa">Koopa Crunch · $57</option><option value="fatality">Fatality Flame · $67</option><option value="megabyte">Mega Byte · $77</option><option value="hadouken">Hadouken · $77</option><option value="nintendo">Nintendo Nostalgia · $67</option><option value="finalboss">Final Boss Burger · $97</option><option value="player">Player Select (arma tu burger)</option></select></div>
+      </div>
+
+      <div id="playerExtras" style="display:none; margin-top:10px;">
+        <div class="muted small" style="margin-bottom:6px;">Extras (Player Select):</div>
+        <div class="grid" id="extrasGrid"></div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div><label>¿Agregar salsa sugerida?</label>
+          <select id="salsaSugerida"><option value="no">No</option><option value="si">Sí</option></select>
+        </div>
+        <div><label>Salsa elegida (si el cliente pide otra)</label>
+          <select id="salsaElegida"><option value="">—</option><option>Ajo & Habanero</option><option>Chipotle</option><option>Chimichurri (León, Gto.)</option><option>Cheddar</option><option>Mostaza dulce</option><option>Jalapeño rostizado</option><option>Curry Seven</option><option>BBQ tamarindo</option></select>
+        </div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <label>Notas para cocina (omitir/añadir — Ej: sin jitomate)</label>
+        <textarea id="notas"></textarea>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn success" id="enviarPedido">Enviar a cocina</button>
+        <button class="btn" id="limpiar">Limpiar</button>
       </div>
     </section>
 
-    <section id="viewAdmin" class="view">
-      <div class="grid three">
-        <div class="card">
-          <h2>Menú & Precios</h2>
-          <div id="adminMenu"></div>
-        </div>
-        <div class="card">
-          <h2>Inventario</h2>
-          <div id="adminInventory"></div>
-        </div>
-        <div class="card">
-          <h2>Finanzas</h2>
-          <div class="row">
-            <label>Rango:</label>
-            <input type="date" id="fromDate">
-            <input type="date" id="toDate">
-            <button id="btnCalc">Calcular</button>
-          </div>
-          <div id="financeBox"></div>
-          <hr/>
-          <h3>Claves de rol</h3>
-          <p class="muted small">Pruebas sin usuarios: usa PIN por rol.</p>
-          <div class="row"><label>Mesero PIN</label><input id="pinWaiter" placeholder="4321"></div>
-          <div class="row"><label>Cocina PIN</label><input id="pinKitchen" placeholder="5678"></div>
-          <div class="row"><label>Admin PIN</label><input id="pinAdmin" placeholder="9999"></div>
-          <button id="btnSavePins">Guardar PINs</button>
-        </div>
+    <section class="panel" id="myOrders">
+      <h3 class="title">Mis pedidos</h3>
+      <div id="misPedidosGrid" class="grid"></div>
+    </section>
+
+    <section class="panel" id="kitchenView" style="display:none;">
+      <h3 class="title">Cocina · Pedidos en tiempo real</h3>
+      <div class="row" style="margin-bottom:8px;">
+        <div><label>Filtro por mesa</label><input id="kitchenFilterMesa" placeholder="Ej. 4" /></div>
+        <div><label>Estado</label><select id="kitchenFilterEstado"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="preparando">Preparando</option><option value="listo">Listo</option></select></div>
       </div>
+      <div id="kitchenGrid" class="grid"></div>
     </section>
   </main>
-  <!-- Modal Player Select -->
-  <div id="modalExtras" class="modal">
-    <div class="modal-card">
-      <h3>Personalizar (Player Select)</h3>
-      <div id="psReco"></div>
-      <div id="extrasList"></div>
-      <div class="row">
-        <label>Notas (opcional)</label>
-        <input id="customNotes" placeholder="sin jitomate, etc." />
-      </div>
-      <div class="actions">
-        <button id="btnCancelExtras" class="secondary">Cancelar</button>
-        <button id="btnAddExtras" class="primary">Agregar</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Modal notas por ítem -->
-  <div id="modalItemNote" class="modal">
-    <div class="modal-card">
-      <h3>Personalizar ítem</h3>
-      <div><strong>Salsas sugeridas</strong></div>
-      <div id="suggestList" class="extras-grid"></div>
-      <div class="row"><textarea id="itemNoteText" rows="3" placeholder="Notas (opcional): sin jitomate, pan bien tostado..."></textarea></div>
-      <div class="actions">
-        <button id="btnCancelItemNote" class="secondary">Cancelar</button>
-        <button id="btnConfirmItemNote" class="primary">Agregar</button>
-      </div>
-    </div>
-  </div>
+  <footer class="small" style="text-align:center; padding:16px; color:#8a92ad;">© 2025 Seven de Burgers · v6.6</footer>
 
-  <!-- Modal elegir sugerencias (post-ítem) -->
-  <div id="modalSuggestPick" class="modal">
-    <div class="modal-card">
-      <h3>Agregar salsas sugeridas</h3>
-      <div id="suggestPickList" class="extras-grid"></div>
-      <div class="actions">
-        <button id="btnSuggestCancel" class="secondary">Cancelar</button>
-        <button id="btnSuggestAdd" class="primary">Agregar seleccionadas</button>
-      </div>
-    </div>
-  </div>
   <script>
-window.FB_CONFIG = {
-  apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
-  authDomain: "seven-de-burgers.firebaseapp.com",
-  projectId: "seven-de-burgers",
-  storageBucket: "seven-de-burgers.appspot.com",
-  messagingSenderId: "34089845279",
-  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
-  measurementId: "G-Q8YQJGL2XY"
-};
-  </script>
-  <script>
-window.MENU = {
-  burgers: [
-    { id:"b1", name:"Starter Burger", price:47, category:"burgers",
-      ingredients:["Pan","Carne","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla"],
-      includes:["Mayonesa","Cátsup","Mostaza"], recommendedSauce:null },
-    { id:"b2", name:"Koopa Crunch", price:57, category:"burgers",
-      ingredients:["Pan","Carne","Queso blanco","Piña","Tocino","Lechuga","Jitomate","Cebolla"],
-      includes:["Mayonesa","Cátsup","Mostaza"], recommendedSauce:null },
-    { id:"b3", name:"Fatality Flame", price:67, category:"burgers",
-      ingredients:["Pan","Carne","Salsa cheddar","Tocino","Salsa habanero","Lechuga","Jitomate","Cebolla"],
-      includes:["Mayonesa","Cátsup","Mostaza"], recommendedSauce:"Habanero" },
-    { id:"b4", name:"Mega Byte", price:77, category:"burgers",
-      ingredients:["Pan","Carne","Salsa cheddar","Queso blanco","Tocino","Salchicha","Lechuga","Jitomate","Cebolla"],
-      includes:["Mayonesa","Cátsup"], recommendedSauce:"Cheddar" },
-    { id:"b5", name:"Hadouken", price:77, category:"burgers",
-      ingredients:["Pan","Carne","Queso blanco","Queso amarillo","Salchicha","Aderezo chipotle","Lechuga","Jitomate","Cebolla"],
-      includes:[], recommendedSauce:"Chipotle" },
-    { id:"b6", name:"Nintendo Nostalgia", price:67, category:"burgers",
-      ingredients:["Pan","Carne","Queso blanco","Piña","Jamón","Lechuga","Jitomate","Cebolla"],
-      includes:["Mayonesa","Cátsup","Mostaza"], recommendedSauce:null },
-    { id:"b7", name:"Final Boss Burger", price:97, category:"burgers",
-      ingredients:["Pan","Carne","Salsa cheddar","Queso blanco","Queso amarillo","Tocino","Jamón","Salchicha","Piña","Salsa habanero","Aderezo chipotle","Lechuga","Jitomate","Cebolla"],
-      includes:["Mayonesa","Cátsup","Mostaza"], recommendedSauce:"Habanero/Chipotle" }
-  ],
-  minis: [
-    { id:"m1", name:"Starter Mini", price:27, category:"minis", baseRef:"b1" },
-    { id:"m2", name:"Koopa Crunch Mini", price:27, category:"minis", baseRef:"b2" },
-    { id:"m3", name:"Fatality Flame Mini", price:37, category:"minis", baseRef:"b3" },
-    { id:"m4", name:"Mega Byte Mini", price:37, category:"minis", baseRef:"b4" },
-    { id:"m5", name:"Hadouken Mini", price:37, category:"minis", baseRef:"b5" },
-    { id:"m6", name:"Nintendo Nostalgia Mini", price:37, category:"minis", baseRef:"b6" },
-    { id:"m7", name:"Final Boss Mini", price:47, category:"minis", baseRef:"b7" }
-  ],
-  playerBase: { id:"p0", name:"Player Select (base)", price:47, category:"player",
-    base:["Pan","Carne (85 g)","Queso blanco","Queso amarillo","Lechuga","Jitomate","Cebolla"],
-    includes:["Mayonesa","Cátsup","Mostaza"]
-  },
-  aderezos: [
-    { id:"a1", name:"Aderezo de ajo habanero", price:5 },
-    { id:"a2", name:"Aderezo chipotle", price:5 },
-    { id:"a3", name:"Salsa chimichurri", price:5 },
-    { id:"a4", name:"Aderezo cheddar", price:5 },
-    { id:"a5", name:"Aderezo de mostaza dulce", price:5 },
-    { id:"a6", name:"Aderezo de jalapeño rostizado", price:5 },
-    { id:"a7", name:"Aderezo de curry especiado", price:5 },
-    { id:"a8", name:"Salsa secreta Seven", price:5 }
-  ],
-  extras: [
-    { id:"e1", name:"Tocino", price:6 },
-    { id:"e2", name:"Piña", price:5 },
-    { id:"e3", name:"Jamón", price:5 },
-    { id:"e4", name:"Salchicha", price:8 },
-    { id:"e5", name:"Cebolla caramelizada", price:5 },
-    { id:"e6", name:"Queso blanco", price:5 },
-    { id:"e7", name:"Queso amarillo", price:5 },
-    { id:"e8", name:"Carne extra 85 g", price:17 }
-  ]
-};
+    const firebaseConfig = {"apiKey": "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4", "authDomain": "seven-de-burgers.firebaseapp.com", "projectId": "seven-de-burgers", "storageBucket": "seven-de-burgers.firebasestorage.app", "messagingSenderId": "34089845279", "appId": "1:34089845279:web:d13440c34e6bb7fa910b2a", "measurementId": "G-Q8YQJGL2XY"};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-window.MARIDAJES = {
-  max: 2,
-  triggers: [
-    { any:["Piña"], suggest:["Aderezo chipotle","Aderezo de curry especiado"] },
-    { any:["Tocino"], suggest:["Aderezo chipotle","Aderezo de jalapeño rostizado"] },
-    { any:["Salchicha"], suggest:["Aderezo cheddar"] },
-    { any:["Jamón"], suggest:["Aderezo de mostaza dulce","Salsa chimichurri"] },
-    { all:["Queso blanco","Queso amarillo"], suggest:["Salsa chimichurri","Aderezo de curry especiado"] },
-    { any:["Salsa cheddar"], suggest:["Salsa chimichurri"] },
-    { any:["Salsa habanero"], suggest:["Aderezo cheddar"] }
-  ],
-  fallback: {
-    b3:["Aderezo de ajo habanero"],
-    b4:["Aderezo cheddar"],
-    b5:["Aderezo chipotle"],
-    b7:["Aderezo de ajo habanero","Aderezo chipotle"],
-    default:["Salsa secreta Seven"]
-  }
-};
-  </script>
-  <script>
-firebase.initializeApp(window.FB_CONFIG);
-const db = firebase.firestore();
+    const state = {
+      waiterName: localStorage.getItem('waiterName') || '',
+      defaultTable: localStorage.getItem('defaultTable') || '',
+      pin: localStorage.getItem('pin') || '',
+      role: 'waiter',
+      burgers: [{"id": "starter", "name": "Starter Burger", "price": 47, "ingredients": ["Pan", "Carne (85g)", "Queso amarillo", "Queso blanco", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": null}, {"id": "koopa", "name": "Koopa Crunch", "price": 57, "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Pi\u00f1a", "Tocino", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Mostaza dulce"}, {"id": "fatality", "name": "Fatality Flame", "price": 67, "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Tocino", "Salsa habanero", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Habanero"}, {"id": "megabyte", "name": "Mega Byte", "price": 77, "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Queso blanco", "Tocino", "Salchicha", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "BBQ tamarindo"}, {"id": "hadouken", "name": "Hadouken", "price": 77, "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Queso amarillo", "Salchicha", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Chipotle"}, {"id": "nintendo", "name": "Nintendo Nostalgia", "price": 67, "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Pi\u00f1a", "Jam\u00f3n", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Mostaza dulce"}, {"id": "finalboss", "name": "Final Boss Burger", "price": 97, "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Queso blanco", "Queso amarillo", "Tocino", "Jam\u00f3n", "Salchicha", "Pi\u00f1a", "Salsa habanero", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla", "C\u00e1tsup", "Mayonesa", "Mostaza"], "salsaSugerida": "Curry Seven"}],
+      extras: [{"name": "Tocino", "price": 6}, {"name": "Pi\u00f1a", "price": 5}, {"name": "Salsa habanero", "price": 3}, {"name": "Salsa chimichurri", "price": 4}, {"name": "Jam\u00f3n", "price": 5}, {"name": "Salchicha", "price": 8}, {"name": "Salsa cheddar", "price": 3}],
+      salsas: ["Ajo & Habanero", "Chipotle", "Chimichurri (Le\u00f3n, Gto.)", "Cheddar", "Mostaza dulce", "Jalape\u00f1o rostizado", "Curry Seven", "BBQ tamarindo"]
+    };
 
-let ROLE = localStorage.getItem("role") || "guest";
-let WAITER_NAME = localStorage.getItem("waiterName") || "";
-let CART = [];
-let PINS = { waiter:"4321", kitchen:"5678", admin:"9999" };
+    const waiterNameEl = document.getElementById('waiterName');
+    const defaultTableEl = document.getElementById('defaultTable');
+    const pinEl = document.getElementById('pin');
+    const saveIdentityBtn = document.getElementById('saveIdentity');
 
-const qs = s => document.querySelector(s);
-const qsa = s => Array.from(document.querySelectorAll(s));
-const fmt = n => (Math.round((n + Number.EPSILON)*100)/100).toFixed(0);
-function showToast(msg){
-  const t = document.createElement('div');
-  t.className='toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(()=>{ t.remove(); }, 3000);
-}
+    const tabWaiter = document.getElementById('tab-waiter');
+    const tabKitchen = document.getElementById('tab-kitchen');
+    const waiterView = document.getElementById('waiterView');
+    const kitchenView = document.getElementById('kitchenView');
 
-function setView(v){
-  qsa(".view").forEach(el=>el.classList.remove("visible"));
-  qs("#view"+v).classList.add("visible");
-  qsa(".tab").forEach(el=>el.classList.remove("active"));
-  const id = v==="Waiter"?"#tabWaiter":(v==="Kitchen"?"#tabKitchen":"#tabAdmin");
-  qs(id).classList.add("active");
-}
-qs("#tabWaiter").onclick = ()=> setView("Waiter");
-qs("#tabKitchen").onclick = ()=> setView("Kitchen");
-qs("#tabAdmin").onclick  = ()=> setView("Admin");
+    const mesaSelect = document.getElementById('mesaSelect');
+    const burgerSelect = document.getElementById('burgerSelect');
+    const playerExtras = document.getElementById('playerExtras');
+    const extrasGrid = document.getElementById('extrasGrid');
+    const salsaSugeridaEl = document.getElementById('salsaSugerida');
+    const salsaElegidaEl = document.getElementById('salsaElegida');
+    const notasEl = document.getElementById('notas');
+    const enviarPedido = document.getElementById('enviarPedido');
+    const limpiarBtn = document.getElementById('limpiar');
+    const misPedidosGrid = document.getElementById('misPedidosGrid');
 
-function refreshRoleUI(){
-  qs("#userRole").textContent = ROLE.toUpperCase() + (ROLE==="waiter" && WAITER_NAME? " · "+WAITER_NAME : "");
-  qs("#tabAdmin").style.display = (ROLE==="admin") ? "inline-block" : "none";
-  if(ROLE==="kitchen") setView("Kitchen");
-  else if(ROLE==="admin") setView("Admin");
-  else setView("Waiter");
-}
-qs("#btnLogin").onclick = async()=>{
-  const pin = prompt("PIN (mesero, cocina o admin):");
-  try{
-    const sdoc = await db.collection("settings").doc("pins").get();
-    const pins = sdoc.exists ? sdoc.data() : PINS;
-    if(pin===pins.waiter){ ROLE="waiter"; if(!WAITER_NAME){ WAITER_NAME = prompt("Tu nombre de mesero (para asignación de mesas):","Mesero"); localStorage.setItem("waiterName", WAITER_NAME||"Mesero"); } }
-    else if(pin===pins.kitchen){ ROLE="kitchen"; }
-    else if(pin===pins.admin){ ROLE="admin"; }
-    else { alert("PIN incorrecto"); return; }
-    localStorage.setItem("role", ROLE);
-    refreshRoleUI();
-  }catch(_){
-    if(pin===PINS.waiter){ ROLE="waiter"; if(!WAITER_NAME){ WAITER_NAME = prompt("Tu nombre de mesero (para asignación de mesas):","Mesero"); localStorage.setItem("waiterName", WAITER_NAME||"Mesero"); } }
-    else if(pin===PINS.kitchen){ ROLE="kitchen"; }
-    else if(pin===PINS.admin){ ROLE="admin"; }
-    else { alert("PIN incorrecto"); return; }
-    localStorage.setItem("role", ROLE);
-    refreshRoleUI();
-  }
-};
-qs("#btnLogout").onclick = ()=>{ ROLE="guest"; localStorage.removeItem("role"); refreshRoleUI(); };
-refreshRoleUI();
+    const kitchenFilterMesa = document.getElementById('kitchenFilterMesa');
+    const kitchenFilterEstado = document.getElementById('kitchenFilterEstado');
+    const kitchenGrid = document.getElementById('kitchenGrid');
 
-function getCombinedIngredientsById(baseId){
-  let it = window.MENU.burgers.find(x=>x.id===baseId);
-  if(it){ return [...(it.ingredients||[]), ...((it.includes||[]))]; }
-  let mi = window.MENU.minis.find(x=>x.id===baseId);
-  if(mi && mi.baseRef){
-    it = window.MENU.burgers.find(x=>x.id===mi.baseRef);
-    if(it) return [...(it.ingredients||[]), ...((it.includes||[]))];
-  }
-  if(baseId===window.MENU.playerBase.id){
-    const pb = window.MENU.playerBase;
-    return [...(pb.base||[]), ...((pb.includes||[]))];
-  }
-  return [];
-}
-function getAderezoByName(nm){
-  return window.MENU.aderezos.find(a=>a.name===nm) || null;
-}
-function suggestByIngredients(ingredients){
-  const res = [];
-  const seen = new Set();
-  const trig = window.MARIDAJES.triggers;
-  const ing = (ingredients||[]).map(x=>String(x).toLowerCase());
-  const has = (s)=> ing.some(x=>x.includes(String(s).toLowerCase()));
-  for(const rule of trig){
-    if(rule.any){
-      if(rule.any.some(k=>has(k))){
-        for(const nm of rule.suggest){
-          if(!seen.has(nm)){ seen.add(nm); res.push(nm); }
-        }
-      }
-    }else if(rule.all){
-      const ok = rule.all.every(k=>has(k));
-      if(ok){
-        for(const nm of rule.suggest){
-          if(!seen.has(nm)){ seen.add(nm); res.push(nm); }
-        }
+    waiterNameEl.value = state.waiterName;
+    defaultTableEl.value = state.defaultTable;
+    pinEl.value = state.pin;
+    if (!mesaSelect.value && state.defaultTable) mesaSelect.value = state.defaultTable;
+
+    function activateTab(which){
+      if(which==='waiter') {
+        tabWaiter.classList.add('active');
+        tabKitchen.classList.remove('active');
+        waiterView.style.display='block';
+        kitchenView.style.display='none';
+      } else {
+        tabKitchen.classList.add('active');
+        tabWaiter.classList.remove('active');
+        kitchenView.style.display='block';
+        waiterView.style.display='none';
       }
     }
-    if(res.length >= window.MARIDAJES.max) break;
-  }
-  return res.slice(0, window.MARIDAJES.max);
-}
-function fallbackRecommended(baseId){
-  const fb = window.MARIDAJES.fallback;
-  return fb[baseId] || fb.default || [];
-}
-function suggestForItem(baseId, extraNames){
-  const baseIngr = getCombinedIngredientsById(baseId);
-  const allIngr = [...baseIngr, ...(extraNames||[])];
-  const s = suggestByIngredients(allIngr);
-  if(s.length>0) return s;
-  return fallbackRecommended(baseId);
-}
+    tabWaiter.onclick = () => activateTab('waiter');
+    tabKitchen.onclick = () => activateTab('kitchen');
 
-function addToCart(item, custom={}){
-  if(!item) return;
-  const combinedIngr = custom.ingredients || getCombinedIngredientsById(item.id);
-  const line = {
-    id: Date.now()+""+Math.floor(Math.random()*1000),
-    name: item.name,
-    baseId: item.id,
-    price: item.price + (custom.extrasTotal||0) + (custom.aderezosTotal||0),
-    qty: 1,
-    extras: custom.extras||[],
-    aderezos: custom.aderezos||[],
-    notes: custom.notes||"",
-    ingredients: combinedIngr,
-    recommended: (item.recommendedSauce||null)
-  };
-  CART.push(line);
-  refreshCart();
-}
-function refreshCart(){
-  const wrap = qs("#orderItems");
-  wrap.innerHTML = "";
-  let subtotal = 0;
-  CART.forEach(line=>{
-    subtotal += line.price*line.qty;
+    saveIdentityBtn.onclick = () => {
+      state.waiterName = waiterNameEl.value.trim() || 'Mesero';
+      state.defaultTable = defaultTableEl.value;
+      state.pin = pinEl.value.trim();
+      localStorage.setItem('waiterName', state.waiterName);
+      localStorage.setItem('defaultTable', state.defaultTable);
+      localStorage.setItem('pin', state.pin);
+      state.role = (state.pin==='5678') ? 'kitchen' : 'waiter';
+      activateTab(state.role==='kitchen'?'kitchen':'waiter');
+      subscribeMyOrders();
+      subscribeKitchen();
+      alert('Identidad guardada');
+    };
 
-    const ingr = line.ingredients || [];
-    const ex   = line.extras || [];
-    let sugNames = suggestByIngredients([...ingr, ...ex]);
-    if(sugNames.length===0){
-      const fb = fallbackRecommended(line.baseId||"");
-      sugNames = fb || [];
+    function renderExtras(){
+      extrasGrid.innerHTML='';
+      state.extras.forEach((ex,idx)=>{
+        const id = 'ex_'+idx;
+        const div = document.createElement('div');
+        div.className='order-card';
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <div><strong>${ex.name}</strong></div>
+            <label class="small muted">+${ex.price}</label>
+          </div>
+          <div class="row" style="align-items:center;">
+            <label class="small muted" style="flex:0 0 auto;">Agregar</label>
+            <input type="checkbox" id="${id}" />
+          </div>`;
+        extrasGrid.appendChild(div);
+      });
     }
-    sugNames = (sugNames||[]).filter(nm => !(line.aderezos||[]).includes(nm));
-    const sugHtml = (sugNames && sugNames.length)
-      ? `<div class="small muted">Sugerencias auto: ${sugNames.join(", ")} · 
-           <button class="btn small" data-action="add-first-suggest" data-id="${line.id}" data-sug="${sugNames.join("|")}">Agregar 1ª</button>
-           <button class="btn small" data-action="choose-suggest" data-id="${line.id}" data-sug="${sugNames.join("|")}">Elegir...</button>
-         </div>`
-      : "";
+    renderExtras();
 
-    const div = document.createElement("div");
-    div.className="order-line";
-    div.innerHTML = `
-      <div>
-        <div><strong>${line.name}</strong> × ${line.qty} — $ ${fmt(line.price*line.qty)}</div>
-        <div class="meta">
-          ${line.aderezos.length? 'Aderezos: '+line.aderezos.join(', ')+'; ': ''}
-          ${line.extras.length? 'Extras: '+line.extras.join(', ')+'; ': ''}
-          ${line.notes? 'Notas: '+line.notes: ''}
+    burgerSelect.onchange = () => {
+      const val = burgerSelect.value;
+      playerExtras.style.display = (val==='player') ? 'block' : 'none';
+      const b = state.burgers.find(x=>x.id===val);
+      if(b && b.salsaSugerida) salsaSugeridaEl.value = 'si'; else salsaSugeridaEl.value='no';
+    };
+
+    limpiarBtn.onclick = () => {
+      burgerSelect.value='';
+      playerExtras.style.display='none';
+      Array.from(extrasGrid.querySelectorAll('input[type=checkbox]')).forEach(ch=>ch.checked=false);
+      salsaSugeridaEl.value='no';
+      salsaElegidaEl.value='';
+      notasEl.value='';
+    };
+
+    function nowTs(){ return Date.now(); }
+    function getSelectedExtras(){
+      const out=[];
+      Array.from(extrasGrid.querySelectorAll('input[type=checkbox]')).forEach((ch,idx)=>{
+        if(ch.checked) out.push(state.extras[idx]);
+      });
+      return out;
+    }
+
+    enviarPedido.onclick = async () => {
+      const mesa = (mesaSelect.value || state.defaultTable || '').trim();
+      const burgerId = burgerSelect.value;
+      if(!mesa || !burgerId){ alert('Selecciona mesa y hamburguesa'); return; }
+      const waiter = state.waiterName || 'Mesero';
+      const base = state.burgers.find(x=>x.id===burgerId);
+      let itemName = '';
+      let price = 0;
+      let ingredientes = [];
+      let salsaSugerida = base ? (base.salsaSugerida || null) : null;
+
+      if(burgerId==='player'){
+        itemName = 'Player Select';
+        price = 47 + getSelectedExtras().reduce((a,b)=>a+b.price,0);
+        ingredientes = [
+          'Base: Pan, Carne (85g), Queso amarillo, Queso blanco, Lechuga, Jitomate, Cebolla',
+          ...getSelectedExtras().map(e=>'Extra: '+e.name)
+        ];
+      } else {
+        itemName = base.name;
+        price = base.price;
+        ingredientes = base.ingredients;
+      }
+
+      const quiereSalsaSugerida = (salsaSugeridaEl.value==='si');
+      const salsaElegida = salsaElegidaEl.value || null;
+      const notas = (notasEl.value||'').trim();
+
+      const payload = {
+        mesa, waiter, itemName, burgerId, price, ingredientes,
+        salsaSugerida: salsaSugerida || null,
+        quiereSalsaSugerida,
+        salsaElegida,
+        notas,
+        status:'pendiente',
+        createdAt: nowTs()
+      };
+      try {
+        await db.collection('orders').add(payload);
+        alert('Pedido enviado a cocina');
+        limpiarBtn.click();
+      } catch(e){
+        console.error(e);
+        alert('Error al enviar pedido');
+      }
+    };
+
+    let unsubMy = null;
+    function subscribeMyOrders(){
+      if(unsubMy) unsubMy();
+      const waiter = state.waiterName || 'Mesero';
+      unsubMy = db.collection('orders')
+        .where('waiter','==',waiter)
+        .orderBy('createdAt','desc')
+        .onSnapshot(snap=>{
+          misPedidosGrid.innerHTML='';
+          snap.forEach(doc=>{
+            const d=doc.data();
+            if(d.status==='entregado') return;
+            const card = document.createElement('div');
+            card.className='order-card';
+            card.innerHTML = `
+              <div class="row" style="justify-content:space-between;">
+                <div><span class="pill">Mesa ${d.mesa}</span></div>
+                <div class="small muted">${new Date(d.createdAt).toLocaleTimeString()}</div>
+              </div>
+              <div><strong>${d.itemName}</strong> <span class="muted">· $${d.price}</span></div>
+              <div class="small muted">Ingredientes: ${(Array.isArray(d.ingredientes)?d.ingredientes.join(', '):d.ingredientes)}</div>
+              <div class="small">Salsa sugerida: <strong>${(d.salsaSugerida || '—')}</strong> · Cliente ${(d.quiereSalsaSugerida?'SÍ':'NO')}</div>
+              <div class="small">Salsa elegida: <strong>${(d.salsaElegida || '—')}</strong></div>
+              <div class="small">Notas: <em>${(d.notas || '—')}</em></div>
+              <div class="row" style="margin-top:6px; gap:8px;">
+                <div class="pill ${(d.status==='pendiente'?'status-pending': d.status==='preparando'?'status-prep':'status-ready')}">Estado: ${d.status}</div>
+                <button class="btn warn" data-act="preparando">Marcar preparando</button>
+                <button class="btn success" data-act="listo">Marcar listo</button>
+                <button class="btn" data-act="entregado">Marcar entregado</button>
+              </div>`;
+            card.querySelectorAll('button').forEach(b=>{
+              b.onclick = async () => { await db.collection('orders').doc(doc.id).update({status:b.dataset.act}); }
+            });
+            misPedidosGrid.appendChild(card);
+          });
+        });
+    }
+    subscribeMyOrders();
+
+    let unsubK = null;
+    function renderKitchen(docId, d){
+      const card = document.createElement('div');
+      card.className='order-card';
+      const ingredientes = Array.isArray(d.ingredientes) ? d.ingredientes : [d.ingredientes];
+      card.innerHTML = `
+        <div class="row" style="justify-content:space-between;">
+          <div><span class="pill">Mesa ${d.mesa}</span> · <span class="small muted">${d.waiter}</span></div>
+          <div class="small muted">${new Date(d.createdAt).toLocaleTimeString()}</div>
         </div>
-        ${sugHtml}
-      </div>
-      <div>
-        <button class="btn small secondary" data-id="${line.id}">Quitar</button>
-      </div>
-    `;
-    wrap.appendChild(div);
-  });
-  qs("#subtotal").textContent = fmt(subtotal);
-  qs("#total").textContent = fmt(subtotal);
-  wrap.querySelectorAll("button[data-id]").forEach(b=>{
-    b.onclick = ()=>{
-      CART = CART.filter(l=>l.id!==b.getAttribute("data-id"));
-      refreshCart();
-    };
-  });
-  wrap.querySelectorAll('button[data-action="add-first-suggest"]').forEach(b=>{
-    b.onclick = ()=>{
-      const id = b.getAttribute("data-id");
-      const names = (b.getAttribute("data-sug")||"").split("|").filter(Boolean);
-      const first = names[0];
-      const line = CART.find(x=>x.id===id);
-      if(!line || !first) return;
-      if(!line.aderezos) line.aderezos = [];
-      if(!line.aderezos.includes(first)){
-        line.aderezos.push(first);
-        const a = window.MENU.aderezos.find(x=>x.name===first);
-        const p = a ? a.price : 5;
-        line.price += p;
-        refreshCart();
-        showToast("Salsa sugerida añadida");
-      }
-    };
-  });
-  wrap.querySelectorAll('button[data-action="choose-suggest"]').forEach(b=>{
-    b.onclick = ()=>{
-      const id = b.getAttribute("data-id");
-      const names = (b.getAttribute("data-sug")||"").split("|").filter(Boolean);
-      openSuggestPickModal(id, names);
-    };
-  });
-}
-qs("#btnClear").onclick = ()=>{ CART=[]; refreshCart(); };
-
-qs("#btnSend").onclick = async()=>{
-  if(!CART.length){ alert("Agrega productos al pedido"); return; }
-  const table = qs("#orderTable").value || "Mostrador";
-  const notes = qs("#orderNotes").value || "";
-  const total = Number(qs("#total").textContent);
-  const order = {
-    table, notes, items: CART, total,
-    waiterName: WAITER_NAME||"Mesero",
-    status:"pending",
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  try{
-    await db.collection("orders").add(order);
-    CART = []; refreshCart(); qs("#orderNotes").value=""; qs("#orderTable").value="";
-    showToast("Pedido enviado a cocina ✅");
-  }catch(e){
-    alert("Error al enviar: " + e.message);
-  }
-};
-
-// Player Select modal
-function openExtrasModal(){
-  const m = document.querySelector("#modalExtras");
-  const box = document.querySelector("#extrasList");
-  const psReco = document.querySelector("#psReco");
-  box.innerHTML = ""; psReco.innerHTML = "";
-
-  const makeSection = (title, list, idprefix)=>{
-    const el = document.createElement("div");
-    el.innerHTML = "<h4>"+title+"</h4>";
-    const grid = document.createElement("div");
-    grid.className="extras-grid";
-    list.forEach(it=>{
-      const row = document.createElement("div");
-      row.className="extras-chip";
-      row.innerHTML = `<span>${it.name}</span><span>$ ${it.price}</span><input type="checkbox" data-kind="${idprefix}" data-name="${it.name}" data-price="${it.price}"/>`;
-      grid.appendChild(row);
-    });
-    el.appendChild(grid);
-    return el;
-  };
-
-  const secA = makeSection("Aderezos (+$5 c/u)", window.MENU.aderezos, "aderezo");
-  const secE = makeSection("Extras", window.MENU.extras, "extra");
-  box.appendChild(secA); box.appendChild(secE);
-
-  const recompute = ()=>{
-    const chosenExtras = Array.from(box.querySelectorAll('input[data-kind="extra"]:checked')).map(ch=>ch.getAttribute("data-name"));
-    const rec = suggestForItem(window.MENU.playerBase.id, chosenExtras);
-    psReco.innerHTML = rec.length? ('<div class="small muted">Sugerencias: '+rec.map(r=>`<span class="reco-pill">${r}</span>`).join(' ')+'</div>') : '<div class="small muted">(Sin sugerencia)</div>';
-    box.querySelectorAll('input[data-kind="aderezo"]').forEach(inp=>{
-      const nm = inp.getAttribute("data-name");
-      const chip = inp.closest(".extras-chip");
-      if(rec.includes(nm)){ chip.style.borderColor="#ffcc00"; chip.style.background="#1b1720"; }
-      else { chip.style.borderColor="#2a2a46"; chip.style.background="#151526"; }
-    });
-  };
-  box.addEventListener('change', recompute);
-  recompute();
-
-  m.classList.add("visible");
-  document.querySelector("#btnCancelExtras").onclick = ()=> m.classList.remove("visible");
-  document.querySelector("#btnAddExtras").onclick = ()=>{
-    const checks = box.querySelectorAll("input[type=checkbox]:checked");
-    const ad = []; const ex = []; let adTotal=0, exTotal=0;
-    checks.forEach(ch=>{
-      const nm = ch.getAttribute("data-name");
-      const pr = Number(ch.getAttribute("data-price"));
-      const kind = ch.getAttribute("data-kind");
-      if(kind==="aderezo"){ ad.push(nm); adTotal+=pr; } else { ex.push(nm); exTotal+=pr; }
-    });
-    const notes = document.querySelector("#customNotes").value;
-    addToCart(window.MENU.playerBase, { aderezos:ad, extras:ex, aderezosTotal:adTotal, extrasTotal:exTotal, notes });
-    document.querySelector("#customNotes").value=""; m.classList.remove("visible");
-  };
-}
-
-// Modal notas por ítem
-(function(){
-  const modal = document.getElementById('modalItemNote');
-  const ta = document.getElementById('itemNoteText');
-  const list = document.getElementById('suggestList');
-  const btnC = document.getElementById('btnCancelItemNote');
-  const btnOk = document.getElementById('btnConfirmItemNote');
-
-  window.openItemNoteModal = (baseItem)=>{
-    window.__PENDING_ITEM__ = baseItem;
-    ta.value = '';
-    list.innerHTML = '';
-    const recNames = suggestForItem(baseItem.id, []);
-    if(recNames.length===0){
-      const p = document.createElement('div'); p.className='small muted'; p.textContent='(Sin sugerencia)';
-      list.appendChild(p);
-    }else{
-      recNames.forEach(nm=>{
-        const a = getAderezoByName(nm);
-        if(!a) return;
-        const row = document.createElement('div');
-        row.className='extras-chip';
-        row.innerHTML = `<span>${a.name}</span><span>$ ${a.price}</span><input type="checkbox" data-name="${a.name}" data-price="${a.price}" checked/>`;
-        list.appendChild(row);
-      });
-    }
-    modal.classList.add('visible');
-  };
-
-  btnC.onclick = ()=>{ modal.classList.remove('visible'); window.__PENDING_ITEM__ = null; };
-  btnOk.onclick = ()=>{
-    const item = window.__PENDING_ITEM__;
-    if(item){
-      let ad = []; let adTotal=0;
-      list.querySelectorAll('input[type=checkbox]:checked').forEach(ch=>{
-        ad.push(ch.getAttribute('data-name')); adTotal += Number(ch.getAttribute('data-price'))||0;
-      });
-      addToCart(item, { notes: ta.value || '', aderezos: ad, aderezosTotal: adTotal });
-    }
-    window.__PENDING_ITEM__ = null;
-    modal.classList.remove('visible');
-  };
-})();
-
-(function(){
-  const modal = document.getElementById('modalSuggestPick');
-  const list  = document.getElementById('suggestPickList');
-  const btnC  = document.getElementById('btnSuggestCancel');
-  const btnOk = document.getElementById('btnSuggestAdd');
-  let targetLineId = null;
-
-  window.openSuggestPickModal = (lineId, names)=>{
-    targetLineId = lineId;
-    list.innerHTML='';
-    names.forEach(nm=>{
-      const a = window.MENU.aderezos.find(x=>x.name===nm) || {name:nm, price:5};
-      const row = document.createElement('div');
-      row.className='extras-chip';
-      row.innerHTML = `<span>${a.name}</span><span>$ ${a.price}</span><input type="checkbox" data-name="${a.name}" data-price="${a.price}" checked/>`;
-      list.appendChild(row);
-    });
-    modal.classList.add('visible');
-  };
-
-  btnC.onclick = ()=>{ modal.classList.remove('visible'); targetLineId=null; };
-  btnOk.onclick = ()=>{
-    if(!targetLineId){ modal.classList.remove('visible'); return; }
-    const line = CART.find(x=>x.id===targetLineId);
-    if(line){
-      if(!line.aderezos) line.aderezos = [];
-      let added = 0;
-      list.querySelectorAll('input[type=checkbox]:checked').forEach(ch=>{
-        const nm = ch.getAttribute('data-name');
-        const pr = Number(ch.getAttribute('data-price'))||5;
-        if(!line.aderezos.includes(nm)){
-          line.aderezos.push(nm);
-          line.price += pr;
-          added++;
-        }
-      });
-      refreshCart();
-      if(added>0) showToast("Salsas sugeridas añadidas");
-    }
-    modal.classList.remove('visible');
-    targetLineId = null;
-  };
-})();
-
-function findItemById(id){
-  return window.MENU.burgers.find(b=>b.id===id) ||
-         window.MENU.minis.find(m=>m.id===id) ||
-        (window.MENU.playerBase.id===id ? window.MENU.playerBase : null);
-}
-
-function renderMenu(){
-  const list = document.querySelector("#menuList");
-  list.innerHTML = "";
-  const term = (document.querySelector("#searchInput").value||"").toLowerCase();
-  const cat  = document.querySelector("#categoryFilter").value;
-
-  const addCard = (item, type)=>{
-    const div = document.createElement("div");
-    div.className = "menu-item";
-    const ingrText = (item.ingredients||[]).join(", ");
-    const sugText = item.recommendedSauce? (" · Salsa sugerida: "+item.recommendedSauce) : "";
-    div.innerHTML = `
-      <h4>${item.name} <span class="price">$ ${item.price}</span></h4>
-      <div class="badges"><span class="badge">${type}</span></div>
-      <div class="muted small">${ingrText}${sugText}</div>
-      <div style="margin-top:6px;display:flex;gap:6px">
-        <button class="btn small" data-id="${item.id}" data-type="${type}">Agregar</button>
-        ${type==="player" ? '<button class="btn small" data-id="'+item.id+'" data-type="player-custom">Personalizar</button>' : ''}
-      </div>`;
-    list.appendChild(div);
-  };
-
-  window.MENU.burgers
-    .filter(b => (cat==="all"||cat==="burgers"))
-    .filter(b => b.name.toLowerCase().includes(term))
-    .forEach(b => addCard(b, "burger"));
-
-  window.MENU.minis
-    .filter(m => (cat==="all"||cat==="minis"))
-    .filter(m => m.name.toLowerCase().includes(term))
-    .forEach(m => addCard(m, "mini"));
-
-  if(cat==="all" || cat==="player"){
-    addCard(window.MENU.playerBase, "player");
-  }
-
-  list.querySelectorAll("button").forEach(btn=>{
-    btn.onclick = ()=>{
-      const id   = btn.getAttribute("data-id");
-      const type = btn.getAttribute("data-type");
-      if(type==="player-custom"){
-        openExtrasModal();
-      }else{
-        const baseItem = findItemById(id);
-        openItemNoteModal(baseItem);
-      }
-    };
-  });
-}
-document.querySelector("#categoryFilter").onchange = renderMenu;
-document.querySelector("#searchInput").oninput = renderMenu;
-renderMenu();
-
-// KDS
-function kdsSuggestionFromLine(i){
-  const ingr = i.ingredients || [];
-  const ex = i.extras || [];
-  const rec = suggestForItem(i.baseId||"", [...ex]);
-  if(rec.length>0) return rec;
-  return fallbackRecommended(i.baseId||"") || [];
-}
-function listenKDS(){
-  db.collection("orders").orderBy("createdAt","desc").limit(30).onSnapshot(snap=>{
-    const wrap = document.querySelector("#kdsList");
-    wrap.innerHTML="";
-    snap.docs.forEach(doc=>{
-      const o = { id:doc.id, ...doc.data() };
-      if(o.status==='delivered') return;
-      const div = document.createElement("div");
-      div.className="ticket";
-      const itemsHtml = (o.items||[]).map(i=>{
-        const sugg = (!i.aderezos || i.aderezos.length===0) ? kdsSuggestionFromLine(i) : [];
-        const parts = [
-          "<strong>"+i.name+"</strong> × "+i.qty,
-          i.aderezos?.length? "Aderezos: "+i.aderezos.join(", ") : null,
-          i.extras?.length? "Extras: "+i.extras.join(", ") : null,
-          i.notes? "Notas: "+i.notes : null,
-          (sugg.length? "Sugerida: "+sugg.join(", ") : null),
-          i.ingredients?.length ? "Ingredientes: "+i.ingredients.join(", ") : null
-        ].filter(Boolean).join("<br/>");
-        return "<div class='items'>"+parts+"</div>";
-      }).join("<hr/>");
-      div.innerHTML = `
-        <h4>Mesa: ${o.table} — <span class="muted">${o.status}</span></h4>
-        ${o.notes ? '<div class="items"><em>Notas generales: '+o.notes+'</em></div>' : ''}
-        ${itemsHtml}
-        <div class="status">
-          <button data-st="pending">Pendiente</button>
-          <button data-st="in_progress">En proceso</button>
-          <button data-st="ready">Listo</button>
-          <button data-st="delivered">Entregado</button>
+        <div><strong style="color:var(--accent)">${d.itemName}</strong> <span class="muted">· $${d.price}</span></div>
+        <div class="small">Salsa sugerida: <strong>${(d.salsaSugerida || '—')}</strong> · Cliente ${(d.quiereSalsaSugerida?'SÍ':'NO')}</div>
+        <div class="small">Salsa elegida: <strong>${(d.salsaElegida || '—')}</strong></div>
+        <div class="small muted">Ingredientes:</div>
+        <ul class="small" style="margin:0 0 6px 18px;">${ingredientes.map(x=>`<li>${x}</li>`).join('')}</ul>
+        <div class="small">Notas: <em>${(d.notas || '—')}</em></div>
+        <div class="row" style="margin-top:8px; gap:8px;">
+          <div class="pill ${(d.status==='pendiente'?'status-pending': d.status==='preparando'?'status-prep':'status-ready')}">Estado: ${d.status}</div>
+          <button class="btn warn" data-act="preparando">Preparando</button>
+          <button class="btn success" data-act="listo">Listo</button>
+          <button class="btn" data-act="entregado">Entregado</button>
         </div>`;
-      div.querySelectorAll(".status button").forEach(b=>{
-        b.onclick = async()=>{
-          await db.collection("orders").doc(o.id).update({ status:b.getAttribute("data-st") });
-        };
+      card.querySelectorAll('button').forEach(b=>{
+        b.onclick = async () => { await db.collection('orders').doc(docId).update({status:b.dataset.act}); }
       });
-      wrap.appendChild(div);
-    });
-  });
-}
-listenKDS();
+      return card;
+    }
 
-// Waiter feed
-let ORDER_STATUS_CACHE = {};
-let MINE_ONLY = false;
-function startWaiterFeed(){
-  const wrap = document.getElementById('waiterFeed');
-  const chk = document.getElementById('chkMineOnly');
-  chk.onchange = ()=>{ MINE_ONLY = chk.checked; };
-
-  const start = new Date(); start.setHours(0,0,0,0);
-  db.collection('orders').where('createdAt','>=',start).orderBy('createdAt','desc').limit(30)
-    .onSnapshot(snap=>{
-      wrap.innerHTML='';
-      snap.docChanges().forEach(change=>{
-        const d = change.doc;
-        const data = d.data();
-        const prev = ORDER_STATUS_CACHE[d.id];
-        if(prev && prev !== data.status && (data.waiterName||'Mesero') === (WAITER_NAME||'Mesero')){
-          showToast(`Pedido de ${data.table} ahora: ${data.status.replace('_',' ')}`);
-        }
-        ORDER_STATUS_CACHE[d.id] = data.status;
+    function subscribeKitchen(){
+      if(unsubK) unsubK();
+      unsubK = db.collection('orders').orderBy('createdAt','desc').onSnapshot(snap=>{
+        const mesaFilter = (kitchenFilterMesa.value||'').trim();
+        const estFilter = kitchenFilterEstado.value;
+        kitchenGrid.innerHTML='';
+        snap.forEach(doc=>{
+          const d=doc.data();
+          if(d.status==='entregado') return;
+          if(mesaFilter && String(d.mesa)!==mesaFilter) return;
+          if(estFilter && d.status!==estFilter) return;
+          kitchenGrid.appendChild(renderKitchen(doc.id, d));
+        });
       });
-      snap.docs.forEach(doc=>{
-        const o = { id:doc.id, ...doc.data() };
-        if(o.status==='delivered') return;
-        if(MINE_ONLY && (o.waiterName||'Mesero') !== (WAITER_NAME||'Mesero')) return;
-        const line = document.createElement('div');
-        line.className='order-line';
-        line.innerHTML = `<div><strong>${o.table}</strong> — <span class="muted">${o.status}</span><div class="small muted">${o.items?.length||0} items · $ ${(o.total||0).toFixed(0)}</div></div><div></div>`;
-        wrap.appendChild(line);
-      });
-    });
-}
-startWaiterFeed();
-
-// Admin demos
-function renderAdminMenu(){
-  const box = document.querySelector("#adminMenu");
-  box.innerHTML = "";
-  ["burgers","minis"].forEach(cat=>{
-    const title = document.createElement("h4"); title.textContent = cat.toUpperCase();
-    box.appendChild(title);
-    window.MENU[cat].forEach(it=>{
-      const row = document.createElement("div");
-      row.className="row";
-      row.innerHTML = `<span style="flex:2">${it.name}</span><input style="max-width:120px" type="number" value="${it.price}" data-id="${it.id}" /><span>$</span>`;
-      box.appendChild(row);
-    });
-  });
-  const save = document.createElement("button");
-  save.className="btn"; save.textContent="Guardar precios";
-  save.onclick = ()=>{
-    document.querySelectorAll("#adminMenu input").forEach(inp=>{
-      const id = inp.getAttribute("data-id");
-      const val= Number(inp.value);
-      let obj = window.MENU.burgers.find(x=>x.id===id) || window.MENU.minis.find(x=>x.id===id);
-      if(obj){ obj.price = val; }
-    });
-    alert("Precios actualizados (solo en esta sesión).");
-  };
-  box.appendChild(save);
-}
-function renderInventory(){
-  const box = document.querySelector("#adminInventory");
-  box.innerHTML = "<p class='muted small'>Inventario demo (conectaremos Firestore después).</p>";
-  const wrap = document.createElement("div");
-  wrap.className="order-items";
-  box.appendChild(wrap);
-  const items = [
-    {name:"Pan burger", unit:"pza", stock:30, min:12},
-    {name:"Carne 85 g", unit:"pza", stock:50, min:20},
-    {name:"Queso amarillo", unit:"reb", stock:80, min:30},
-    {name:"Queso blanco", unit:"reb", stock:80, min:30}
-  ];
-  items.forEach(it=>{
-    const line=document.createElement("div"); line.className="row";
-    const warn = it.stock<=it.min? "<span class='badge' style='border-color:#ff5b5b;color:#ff5b5b'>Bajo</span>":"";
-    line.innerHTML = `<span style="flex:2">${it.name} (${it.unit})</span><span>Stock: ${it.stock}</span><span>Min: ${it.min}</span>${warn}`;
-    wrap.appendChild(line);
-  });
-}
-async function calcFinance(){
-  const from = document.querySelector("#fromDate").value ? new Date(document.querySelector("#fromDate").value) : new Date(new Date().toDateString());
-  const to   = document.querySelector("#toDate").value ? new Date(document.querySelector("#toDate").value+" 23:59") : new Date();
-  const snap = await db.collection("orders").where("createdAt",">=",from).where("createdAt","<=",to).get();
-  let revenue=0, orders=0;
-  snap.forEach(d=>{ orders++; revenue += (d.data().total||0); });
-  const box = document.querySelector("#financeBox");
-  box.innerHTML = `
-    <div class="order-line"><div>Órdenes</div><div>${orders}</div></div>
-    <div class="order-line"><div>Ingresos estimados</div><div>$ ${(Math.round((revenue+Number.EPSILON)*100)/100).toFixed(0)}</div></div>
-    <p class="muted small">Para costos/utilidad, añadimos COGS por producto en Firestore más adelante.</p>`;
-}
-document.querySelector("#btnCalc").onclick = calcFinance;
-
-document.querySelector("#btnSavePins").onclick = async()=>{
-  const w = document.querySelector("#pinWaiter").value || "4321";
-  const k = document.querySelector("#pinKitchen").value || "5678";
-  const a = document.querySelector("#pinAdmin").value || "9999";
-  try{
-    await db.collection("settings").doc("pins").set({waiter:w, kitchen:k, admin:a});
-    alert("PINs guardados en Firestore.");
-  }catch(e){
-    alert("No se pudo guardar en Firestore. Se usarán por defecto en cliente.");
-  }
-};
-
-function renderAll(){ renderMenu(); renderAdminMenu(); renderInventory(); }
-renderAll();
+    }
+    subscribeKitchen();
+    kitchenFilterMesa.oninput = subscribeKitchen;
+    kitchenFilterEstado.onchange = subscribeKitchen;
   </script>
 </body>
 </html>
