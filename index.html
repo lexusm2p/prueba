@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seven de Burgers · POS Web</title>
-  <link rel="icon" href="data:image/png;base64,iVBORw0KGgo=">
+  <title>Seven de Burgers · POS Web (v6.2-full)</title>
   <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore-compat.js"></script>
@@ -14,7 +13,7 @@
 .brand{display:flex;align-items:center;gap:10px}
 .logo{width:40px;height:40px;display:grid;place-items:center;background:#ffcc00;color:#0b0b12;font-weight:900;border-radius:8px;box-shadow:0 0 0 3px #222}
 .brand-text h1{font-size:18px;line-height:1;margin:0}
-.brand-text span{font-size:12px;opacity:.8}
+brand-text span{font-size:12px;opacity:.8}
 .nav{display:flex;gap:8px}
 .tab{background:#151521;color:#ddd;border:1px solid #24243b;border-radius:10px;padding:8px 12px;cursor:pointer}
 .tab.active{border-color:#ffcc00;color:#ffcc00}
@@ -51,18 +50,17 @@ main{padding:16px}
 .status button{flex:1}
 .muted{opacity:.7}.small{font-size:12px}
 .filters{display:flex;gap:8px;margin-bottom:8px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
 .modal.visible{display:flex}
 .modal-card{background:#0f0f1a;border:1px solid #22223b;border-radius:14px;padding:14px;min-width:320px;max-width:520px}
 .extras-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
 .extras-chip{display:flex;justify-content:space-between;align-items:center;border:1px solid #2a2a46;background:#151526;border-radius:10px;padding:6px 8px;font-size:13px}
-@media (max-width:980px){.grid.two{grid-template-columns:1fr}.grid.three{grid-template-columns:1fr} .kds-list{grid-template-columns:1fr 1fr} .menu-list{grid-template-columns:1fr}}
-  
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111; color:#fff;
-  border:1px solid #333; padding:10px 14px;border-radius:10px; z-index:9999; box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111;color:#fff;border:1px solid #333;padding:10px 14px;border-radius:10px;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,.4)}
 .waiter-status{margin-top:12px}
 .waiter-status .order-line{cursor:default}
-</style>
+.reco-pill{display:inline-block;border:1px dashed #444;padding:2px 6px;border-radius:999px;font-size:12px;margin:3px 4px}
+@media (max-width:980px){.grid.two{grid-template-columns:1fr}.grid.three{grid-template-columns:1fr} .kds-list{grid-template-columns:1fr 1fr} .menu-list{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -101,10 +99,13 @@ main{padding:16px}
           </div>
           <div id="menuList" class="menu-list"></div>
         </div>
+
         <div class="card waiter-status">
           <h2>Estatus de pedidos (hoy)</h2>
+          <div class="row"><label><input type="checkbox" id="chkMineOnly" /> Solo mis mesas</label></div>
           <div id="waiterFeed" class="order-items"></div>
         </div>
+
         <div class="card">
           <h2>Pedido actual</h2>
           <div class="row">
@@ -156,7 +157,7 @@ main{padding:16px}
           <div id="financeBox"></div>
           <hr/>
           <h3>Claves de rol</h3>
-          <p class="muted">Para prueba sin crear usuarios: introduce PIN por rol.</p>
+          <p class="muted small">Pruebas sin usuarios: usa PIN por rol.</p>
           <div class="row"><label>Mesero PIN</label><input id="pinWaiter" placeholder="4321"></div>
           <div class="row"><label>Cocina PIN</label><input id="pinKitchen" placeholder="5678"></div>
           <div class="row"><label>Admin PIN</label><input id="pinAdmin" placeholder="9999"></div>
@@ -165,10 +166,11 @@ main{padding:16px}
       </div>
     </section>
   </main>
-
+  <!-- Modal Player Select -->
   <div id="modalExtras" class="modal">
     <div class="modal-card">
-      <h3>Personalizar</h3>
+      <h3>Personalizar (Player Select)</h3>
+      <div id="psReco"></div>
       <div id="extrasList"></div>
       <div class="row">
         <label>Notas (opcional)</label>
@@ -181,8 +183,32 @@ main{padding:16px}
     </div>
   </div>
 
+  <!-- Modal notas por ítem -->
+  <div id="modalItemNote" class="modal">
+    <div class="modal-card">
+      <h3>Personalizar ítem</h3>
+      <div><strong>Salsas sugeridas</strong></div>
+      <div id="suggestList" class="extras-grid"></div>
+      <div class="row"><textarea id="itemNoteText" rows="3" placeholder="Notas (opcional): sin jitomate, pan bien tostado..."></textarea></div>
+      <div class="actions">
+        <button id="btnCancelItemNote" class="secondary">Cancelar</button>
+        <button id="btnConfirmItemNote" class="primary">Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal elegir sugerencias (post-ítem) -->
+  <div id="modalSuggestPick" class="modal">
+    <div class="modal-card">
+      <h3>Agregar salsas sugeridas</h3>
+      <div id="suggestPickList" class="extras-grid"></div>
+      <div class="actions">
+        <button id="btnSuggestCancel" class="secondary">Cancelar</button>
+        <button id="btnSuggestAdd" class="primary">Agregar seleccionadas</button>
+      </div>
+    </div>
+  </div>
   <script>
-// Tu Firebase (inline)
 window.FB_CONFIG = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
   authDomain: "seven-de-burgers.firebaseapp.com",
@@ -193,9 +219,7 @@ window.FB_CONFIG = {
   measurementId: "G-Q8YQJGL2XY"
 };
   </script>
-
   <script>
-// Datos del menú y catálogos (acordados)
 window.MENU = {
   burgers: [
     { id:"b1", name:"Starter Burger", price:47, category:"burgers",
@@ -254,49 +278,46 @@ window.MENU = {
     { id:"e8", name:"Carne extra 85 g", price:17 }
   ]
 };
-  </script>
 
+window.MARIDAJES = {
+  max: 2,
+  triggers: [
+    { any:["Piña"], suggest:["Aderezo chipotle","Aderezo de curry especiado"] },
+    { any:["Tocino"], suggest:["Aderezo chipotle","Aderezo de jalapeño rostizado"] },
+    { any:["Salchicha"], suggest:["Aderezo cheddar"] },
+    { any:["Jamón"], suggest:["Aderezo de mostaza dulce","Salsa chimichurri"] },
+    { all:["Queso blanco","Queso amarillo"], suggest:["Salsa chimichurri","Aderezo de curry especiado"] },
+    { any:["Salsa cheddar"], suggest:["Salsa chimichurri"] },
+    { any:["Salsa habanero"], suggest:["Aderezo cheddar"] }
+  ],
+  fallback: {
+    b3:["Aderezo de ajo habanero"],
+    b4:["Aderezo cheddar"],
+    b5:["Aderezo chipotle"],
+    b7:["Aderezo de ajo habanero","Aderezo chipotle"],
+    default:["Salsa secreta Seven"]
+  }
+};
+  </script>
   <script>
-// App
 firebase.initializeApp(window.FB_CONFIG);
 const db = firebase.firestore();
 
-// Helpers extra (v3)
-function showToast(msg){
-  const t = document.createElement('div');
-  t.className='toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(()=>{ t.remove(); }, 4000);
-}
-function getCombinedIngredientsById(baseId){
-  // Burger
-  let it = window.MENU.burgers.find(x=>x.id===baseId);
-  if(it){
-    return [...(it.ingredients||[]), ...((it.includes||[]))];
-  }
-  // Mini -> map to base
-  let mi = window.MENU.minis.find(x=>x.id===baseId);
-  if(mi && mi.baseRef){
-    it = window.MENU.burgers.find(x=>x.id===mi.baseRef);
-    if(it) return [...(it.ingredients||[]), ...((it.includes||[]))];
-  }
-  // Player base
-  if(baseId===window.MENU.playerBase.id){
-    const pb = window.MENU.playerBase;
-    return [...(pb.base||[]), ...((pb.includes||[]))];
-  }
-  return [];
-}
-
-
 let ROLE = localStorage.getItem("role") || "guest";
+let WAITER_NAME = localStorage.getItem("waiterName") || "";
 let CART = [];
 let PINS = { waiter:"4321", kitchen:"5678", admin:"9999" };
 
 const qs = s => document.querySelector(s);
 const qsa = s => Array.from(document.querySelectorAll(s));
 const fmt = n => (Math.round((n + Number.EPSILON)*100)/100).toFixed(0);
+function showToast(msg){
+  const t = document.createElement('div');
+  t.className='toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.remove(); }, 3000);
+}
 
 function setView(v){
   qsa(".view").forEach(el=>el.classList.remove("visible"));
@@ -310,7 +331,7 @@ qs("#tabKitchen").onclick = ()=> setView("Kitchen");
 qs("#tabAdmin").onclick  = ()=> setView("Admin");
 
 function refreshRoleUI(){
-  qs("#userRole").textContent = ROLE.toUpperCase();
+  qs("#userRole").textContent = ROLE.toUpperCase() + (ROLE==="waiter" && WAITER_NAME? " · "+WAITER_NAME : "");
   qs("#tabAdmin").style.display = (ROLE==="admin") ? "inline-block" : "none";
   if(ROLE==="kitchen") setView("Kitchen");
   else if(ROLE==="admin") setView("Admin");
@@ -321,14 +342,14 @@ qs("#btnLogin").onclick = async()=>{
   try{
     const sdoc = await db.collection("settings").doc("pins").get();
     const pins = sdoc.exists ? sdoc.data() : PINS;
-    if(pin===pins.waiter){ ROLE="waiter"; }
+    if(pin===pins.waiter){ ROLE="waiter"; if(!WAITER_NAME){ WAITER_NAME = prompt("Tu nombre de mesero (para asignación de mesas):","Mesero"); localStorage.setItem("waiterName", WAITER_NAME||"Mesero"); } }
     else if(pin===pins.kitchen){ ROLE="kitchen"; }
     else if(pin===pins.admin){ ROLE="admin"; }
     else { alert("PIN incorrecto"); return; }
     localStorage.setItem("role", ROLE);
     refreshRoleUI();
   }catch(_){
-    if(pin===PINS.waiter){ ROLE="waiter"; }
+    if(pin===PINS.waiter){ ROLE="waiter"; if(!WAITER_NAME){ WAITER_NAME = prompt("Tu nombre de mesero (para asignación de mesas):","Mesero"); localStorage.setItem("waiterName", WAITER_NAME||"Mesero"); } }
     else if(pin===PINS.kitchen){ ROLE="kitchen"; }
     else if(pin===PINS.admin){ ROLE="admin"; }
     else { alert("PIN incorrecto"); return; }
@@ -339,17 +360,65 @@ qs("#btnLogin").onclick = async()=>{
 qs("#btnLogout").onclick = ()=>{ ROLE="guest"; localStorage.removeItem("role"); refreshRoleUI(); };
 refreshRoleUI();
 
-function findItemById(id){
-  return window.MENU.burgers.find(b=>b.id===id) ||
-         window.MENU.minis.find(m=>m.id===id) ||
-        (window.MENU.playerBase.id===id ? window.MENU.playerBase : null);
+function getCombinedIngredientsById(baseId){
+  let it = window.MENU.burgers.find(x=>x.id===baseId);
+  if(it){ return [...(it.ingredients||[]), ...((it.includes||[]))]; }
+  let mi = window.MENU.minis.find(x=>x.id===baseId);
+  if(mi && mi.baseRef){
+    it = window.MENU.burgers.find(x=>x.id===mi.baseRef);
+    if(it) return [...(it.ingredients||[]), ...((it.includes||[]))];
+  }
+  if(baseId===window.MENU.playerBase.id){
+    const pb = window.MENU.playerBase;
+    return [...(pb.base||[]), ...((pb.includes||[]))];
+  }
+  return [];
+}
+function getAderezoByName(nm){
+  return window.MENU.aderezos.find(a=>a.name===nm) || null;
+}
+function suggestByIngredients(ingredients){
+  const res = [];
+  const seen = new Set();
+  const trig = window.MARIDAJES.triggers;
+  const ing = (ingredients||[]).map(x=>String(x).toLowerCase());
+  const has = (s)=> ing.some(x=>x.includes(String(s).toLowerCase()));
+  for(const rule of trig){
+    if(rule.any){
+      if(rule.any.some(k=>has(k))){
+        for(const nm of rule.suggest){
+          if(!seen.has(nm)){ seen.add(nm); res.push(nm); }
+        }
+      }
+    }else if(rule.all){
+      const ok = rule.all.every(k=>has(k));
+      if(ok){
+        for(const nm of rule.suggest){
+          if(!seen.has(nm)){ seen.add(nm); res.push(nm); }
+        }
+      }
+    }
+    if(res.length >= window.MARIDAJES.max) break;
+  }
+  return res.slice(0, window.MARIDAJES.max);
+}
+function fallbackRecommended(baseId){
+  const fb = window.MARIDAJES.fallback;
+  return fb[baseId] || fb.default || [];
+}
+function suggestForItem(baseId, extraNames){
+  const baseIngr = getCombinedIngredientsById(baseId);
+  const allIngr = [...baseIngr, ...(extraNames||[])];
+  const s = suggestByIngredients(allIngr);
+  if(s.length>0) return s;
+  return fallbackRecommended(baseId);
 }
 
 function addToCart(item, custom={}){
   if(!item) return;
   const combinedIngr = custom.ingredients || getCombinedIngredientsById(item.id);
   const line = {
-    id: Date.now()+"",
+    id: Date.now()+""+Math.floor(Math.random()*1000),
     name: item.name,
     baseId: item.id,
     price: item.price + (custom.extrasTotal||0) + (custom.aderezosTotal||0),
@@ -357,18 +426,34 @@ function addToCart(item, custom={}){
     extras: custom.extras||[],
     aderezos: custom.aderezos||[],
     notes: custom.notes||"",
-    ingredients: combinedIngr
+    ingredients: combinedIngr,
+    recommended: (item.recommendedSauce||null)
   };
   CART.push(line);
   refreshCart();
 }
-
 function refreshCart(){
   const wrap = qs("#orderItems");
   wrap.innerHTML = "";
   let subtotal = 0;
   CART.forEach(line=>{
     subtotal += line.price*line.qty;
+
+    const ingr = line.ingredients || [];
+    const ex   = line.extras || [];
+    let sugNames = suggestByIngredients([...ingr, ...ex]);
+    if(sugNames.length===0){
+      const fb = fallbackRecommended(line.baseId||"");
+      sugNames = fb || [];
+    }
+    sugNames = (sugNames||[]).filter(nm => !(line.aderezos||[]).includes(nm));
+    const sugHtml = (sugNames && sugNames.length)
+      ? `<div class="small muted">Sugerencias auto: ${sugNames.join(", ")} · 
+           <button class="btn small" data-action="add-first-suggest" data-id="${line.id}" data-sug="${sugNames.join("|")}">Agregar 1ª</button>
+           <button class="btn small" data-action="choose-suggest" data-id="${line.id}" data-sug="${sugNames.join("|")}">Elegir...</button>
+         </div>`
+      : "";
+
     const div = document.createElement("div");
     div.className="order-line";
     div.innerHTML = `
@@ -379,6 +464,7 @@ function refreshCart(){
           ${line.extras.length? 'Extras: '+line.extras.join(', ')+'; ': ''}
           ${line.notes? 'Notas: '+line.notes: ''}
         </div>
+        ${sugHtml}
       </div>
       <div>
         <button class="btn small secondary" data-id="${line.id}">Quitar</button>
@@ -388,10 +474,35 @@ function refreshCart(){
   });
   qs("#subtotal").textContent = fmt(subtotal);
   qs("#total").textContent = fmt(subtotal);
-  wrap.querySelectorAll("button").forEach(b=>{
+  wrap.querySelectorAll("button[data-id]").forEach(b=>{
     b.onclick = ()=>{
       CART = CART.filter(l=>l.id!==b.getAttribute("data-id"));
       refreshCart();
+    };
+  });
+  wrap.querySelectorAll('button[data-action="add-first-suggest"]').forEach(b=>{
+    b.onclick = ()=>{
+      const id = b.getAttribute("data-id");
+      const names = (b.getAttribute("data-sug")||"").split("|").filter(Boolean);
+      const first = names[0];
+      const line = CART.find(x=>x.id===id);
+      if(!line || !first) return;
+      if(!line.aderezos) line.aderezos = [];
+      if(!line.aderezos.includes(first)){
+        line.aderezos.push(first);
+        const a = window.MENU.aderezos.find(x=>x.name===first);
+        const p = a ? a.price : 5;
+        line.price += p;
+        refreshCart();
+        showToast("Salsa sugerida añadida");
+      }
+    };
+  });
+  wrap.querySelectorAll('button[data-action="choose-suggest"]').forEach(b=>{
+    b.onclick = ()=>{
+      const id = b.getAttribute("data-id");
+      const names = (b.getAttribute("data-sug")||"").split("|").filter(Boolean);
+      openSuggestPickModal(id, names);
     };
   });
 }
@@ -404,23 +515,27 @@ qs("#btnSend").onclick = async()=>{
   const total = Number(qs("#total").textContent);
   const order = {
     table, notes, items: CART, total,
+    waiterName: WAITER_NAME||"Mesero",
     status:"pending",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   try{
     await db.collection("orders").add(order);
     CART = []; refreshCart(); qs("#orderNotes").value=""; qs("#orderTable").value="";
-    alert("Pedido enviado a cocina ✅");
+    showToast("Pedido enviado a cocina ✅");
   }catch(e){
     alert("Error al enviar: " + e.message);
   }
 };
 
+// Player Select modal
 function openExtrasModal(){
-  const m = qs("#modalExtras");
-  const box = qs("#extrasList");
-  box.innerHTML = "";
-  const makeSection = (title, list)=>{
+  const m = document.querySelector("#modalExtras");
+  const box = document.querySelector("#extrasList");
+  const psReco = document.querySelector("#psReco");
+  box.innerHTML = ""; psReco.innerHTML = "";
+
+  const makeSection = (title, list, idprefix)=>{
     const el = document.createElement("div");
     el.innerHTML = "<h4>"+title+"</h4>";
     const grid = document.createElement("div");
@@ -428,45 +543,157 @@ function openExtrasModal(){
     list.forEach(it=>{
       const row = document.createElement("div");
       row.className="extras-chip";
-      row.innerHTML = `<span>${it.name}</span><span>$ ${it.price}</span><input type="checkbox" data-id="${it.id}" data-name="${it.name}" data-price="${it.price}"/>`;
+      row.innerHTML = `<span>${it.name}</span><span>$ ${it.price}</span><input type="checkbox" data-kind="${idprefix}" data-name="${it.name}" data-price="${it.price}"/>`;
       grid.appendChild(row);
     });
     el.appendChild(grid);
-    box.appendChild(el);
+    return el;
   };
-  makeSection("Aderezos (+$5 c/u)", window.MENU.aderezos);
-  makeSection("Extras", window.MENU.extras);
-  m.classList.add("visible");
 
-  qs("#btnCancelExtras").onclick = ()=> m.classList.remove("visible");
-  qs("#btnAddExtras").onclick = ()=>{
+  const secA = makeSection("Aderezos (+$5 c/u)", window.MENU.aderezos, "aderezo");
+  const secE = makeSection("Extras", window.MENU.extras, "extra");
+  box.appendChild(secA); box.appendChild(secE);
+
+  const recompute = ()=>{
+    const chosenExtras = Array.from(box.querySelectorAll('input[data-kind="extra"]:checked')).map(ch=>ch.getAttribute("data-name"));
+    const rec = suggestForItem(window.MENU.playerBase.id, chosenExtras);
+    psReco.innerHTML = rec.length? ('<div class="small muted">Sugerencias: '+rec.map(r=>`<span class="reco-pill">${r}</span>`).join(' ')+'</div>') : '<div class="small muted">(Sin sugerencia)</div>';
+    box.querySelectorAll('input[data-kind="aderezo"]').forEach(inp=>{
+      const nm = inp.getAttribute("data-name");
+      const chip = inp.closest(".extras-chip");
+      if(rec.includes(nm)){ chip.style.borderColor="#ffcc00"; chip.style.background="#1b1720"; }
+      else { chip.style.borderColor="#2a2a46"; chip.style.background="#151526"; }
+    });
+  };
+  box.addEventListener('change', recompute);
+  recompute();
+
+  m.classList.add("visible");
+  document.querySelector("#btnCancelExtras").onclick = ()=> m.classList.remove("visible");
+  document.querySelector("#btnAddExtras").onclick = ()=>{
     const checks = box.querySelectorAll("input[type=checkbox]:checked");
     const ad = []; const ex = []; let adTotal=0, exTotal=0;
     checks.forEach(ch=>{
-      const id = ch.getAttribute("data-id");
       const nm = ch.getAttribute("data-name");
       const pr = Number(ch.getAttribute("data-price"));
-      if(id.startsWith("a")){ ad.push(nm); adTotal+=pr; } else { ex.push(nm); exTotal+=pr; }
+      const kind = ch.getAttribute("data-kind");
+      if(kind==="aderezo"){ ad.push(nm); adTotal+=pr; } else { ex.push(nm); exTotal+=pr; }
     });
-    const notes = qs("#customNotes").value;
+    const notes = document.querySelector("#customNotes").value;
     addToCart(window.MENU.playerBase, { aderezos:ad, extras:ex, aderezosTotal:adTotal, extrasTotal:exTotal, notes });
-    qs("#customNotes").value=""; m.classList.remove("visible");
+    document.querySelector("#customNotes").value=""; m.classList.remove("visible");
   };
 }
 
+// Modal notas por ítem
+(function(){
+  const modal = document.getElementById('modalItemNote');
+  const ta = document.getElementById('itemNoteText');
+  const list = document.getElementById('suggestList');
+  const btnC = document.getElementById('btnCancelItemNote');
+  const btnOk = document.getElementById('btnConfirmItemNote');
+
+  window.openItemNoteModal = (baseItem)=>{
+    window.__PENDING_ITEM__ = baseItem;
+    ta.value = '';
+    list.innerHTML = '';
+    const recNames = suggestForItem(baseItem.id, []);
+    if(recNames.length===0){
+      const p = document.createElement('div'); p.className='small muted'; p.textContent='(Sin sugerencia)';
+      list.appendChild(p);
+    }else{
+      recNames.forEach(nm=>{
+        const a = getAderezoByName(nm);
+        if(!a) return;
+        const row = document.createElement('div');
+        row.className='extras-chip';
+        row.innerHTML = `<span>${a.name}</span><span>$ ${a.price}</span><input type="checkbox" data-name="${a.name}" data-price="${a.price}" checked/>`;
+        list.appendChild(row);
+      });
+    }
+    modal.classList.add('visible');
+  };
+
+  btnC.onclick = ()=>{ modal.classList.remove('visible'); window.__PENDING_ITEM__ = null; };
+  btnOk.onclick = ()=>{
+    const item = window.__PENDING_ITEM__;
+    if(item){
+      let ad = []; let adTotal=0;
+      list.querySelectorAll('input[type=checkbox]:checked').forEach(ch=>{
+        ad.push(ch.getAttribute('data-name')); adTotal += Number(ch.getAttribute('data-price'))||0;
+      });
+      addToCart(item, { notes: ta.value || '', aderezos: ad, aderezosTotal: adTotal });
+    }
+    window.__PENDING_ITEM__ = null;
+    modal.classList.remove('visible');
+  };
+})();
+
+(function(){
+  const modal = document.getElementById('modalSuggestPick');
+  const list  = document.getElementById('suggestPickList');
+  const btnC  = document.getElementById('btnSuggestCancel');
+  const btnOk = document.getElementById('btnSuggestAdd');
+  let targetLineId = null;
+
+  window.openSuggestPickModal = (lineId, names)=>{
+    targetLineId = lineId;
+    list.innerHTML='';
+    names.forEach(nm=>{
+      const a = window.MENU.aderezos.find(x=>x.name===nm) || {name:nm, price:5};
+      const row = document.createElement('div');
+      row.className='extras-chip';
+      row.innerHTML = `<span>${a.name}</span><span>$ ${a.price}</span><input type="checkbox" data-name="${a.name}" data-price="${a.price}" checked/>`;
+      list.appendChild(row);
+    });
+    modal.classList.add('visible');
+  };
+
+  btnC.onclick = ()=>{ modal.classList.remove('visible'); targetLineId=null; };
+  btnOk.onclick = ()=>{
+    if(!targetLineId){ modal.classList.remove('visible'); return; }
+    const line = CART.find(x=>x.id===targetLineId);
+    if(line){
+      if(!line.aderezos) line.aderezos = [];
+      let added = 0;
+      list.querySelectorAll('input[type=checkbox]:checked').forEach(ch=>{
+        const nm = ch.getAttribute('data-name');
+        const pr = Number(ch.getAttribute('data-price'))||5;
+        if(!line.aderezos.includes(nm)){
+          line.aderezos.push(nm);
+          line.price += pr;
+          added++;
+        }
+      });
+      refreshCart();
+      if(added>0) showToast("Salsas sugeridas añadidas");
+    }
+    modal.classList.remove('visible');
+    targetLineId = null;
+  };
+})();
+
+function findItemById(id){
+  return window.MENU.burgers.find(b=>b.id===id) ||
+         window.MENU.minis.find(m=>m.id===id) ||
+        (window.MENU.playerBase.id===id ? window.MENU.playerBase : null);
+}
+
 function renderMenu(){
-  const list = qs("#menuList");
+  const list = document.querySelector("#menuList");
   list.innerHTML = "";
-  const term = qs("#searchInput").value.toLowerCase();
-  const cat  = qs("#categoryFilter").value;
+  const term = (document.querySelector("#searchInput").value||"").toLowerCase();
+  const cat  = document.querySelector("#categoryFilter").value;
 
   const addCard = (item, type)=>{
     const div = document.createElement("div");
     div.className = "menu-item";
+    const ingrText = (item.ingredients||[]).join(", ");
+    const sugText = item.recommendedSauce? (" · Salsa sugerida: "+item.recommendedSauce) : "";
     div.innerHTML = `
       <h4>${item.name} <span class="price">$ ${item.price}</span></h4>
       <div class="badges"><span class="badge">${type}</span></div>
-      <div class="muted small">${(item.ingredients||[]).join(", ")}</div>
+      <div class="muted small">${ingrText}${sugText}</div>
       <div style="margin-top:6px;display:flex;gap:6px">
         <button class="btn small" data-id="${item.id}" data-type="${type}">Agregar</button>
         ${type==="player" ? '<button class="btn small" data-id="'+item.id+'" data-type="player-custom">Personalizar</button>' : ''}
@@ -496,29 +723,40 @@ function renderMenu(){
         openExtrasModal();
       }else{
         const baseItem = findItemById(id);
-        const n = prompt('Notas para este ítem (opcional):','');
-        addToCart(baseItem, { notes:n||'' });
+        openItemNoteModal(baseItem);
       }
     };
   });
 }
-qs("#categoryFilter").onchange = renderMenu;
-qs("#searchInput").oninput = renderMenu;
+document.querySelector("#categoryFilter").onchange = renderMenu;
+document.querySelector("#searchInput").oninput = renderMenu;
+renderMenu();
 
+// KDS
+function kdsSuggestionFromLine(i){
+  const ingr = i.ingredients || [];
+  const ex = i.extras || [];
+  const rec = suggestForItem(i.baseId||"", [...ex]);
+  if(rec.length>0) return rec;
+  return fallbackRecommended(i.baseId||"") || [];
+}
 function listenKDS(){
   db.collection("orders").orderBy("createdAt","desc").limit(30).onSnapshot(snap=>{
-    const wrap = qs("#kdsList");
+    const wrap = document.querySelector("#kdsList");
     wrap.innerHTML="";
     snap.docs.forEach(doc=>{
       const o = { id:doc.id, ...doc.data() };
+      if(o.status==='delivered') return;
       const div = document.createElement("div");
       div.className="ticket";
-      const itemsHtml = o.items.map(i=>{
+      const itemsHtml = (o.items||[]).map(i=>{
+        const sugg = (!i.aderezos || i.aderezos.length===0) ? kdsSuggestionFromLine(i) : [];
         const parts = [
           "<strong>"+i.name+"</strong> × "+i.qty,
           i.aderezos?.length? "Aderezos: "+i.aderezos.join(", ") : null,
           i.extras?.length? "Extras: "+i.extras.join(", ") : null,
           i.notes? "Notas: "+i.notes : null,
+          (sugg.length? "Sugerida: "+sugg.join(", ") : null),
           i.ingredients?.length ? "Ingredientes: "+i.ingredients.join(", ") : null
         ].filter(Boolean).join("<br/>");
         return "<div class='items'>"+parts+"</div>";
@@ -544,8 +782,43 @@ function listenKDS(){
 }
 listenKDS();
 
+// Waiter feed
+let ORDER_STATUS_CACHE = {};
+let MINE_ONLY = false;
+function startWaiterFeed(){
+  const wrap = document.getElementById('waiterFeed');
+  const chk = document.getElementById('chkMineOnly');
+  chk.onchange = ()=>{ MINE_ONLY = chk.checked; };
+
+  const start = new Date(); start.setHours(0,0,0,0);
+  db.collection('orders').where('createdAt','>=',start).orderBy('createdAt','desc').limit(30)
+    .onSnapshot(snap=>{
+      wrap.innerHTML='';
+      snap.docChanges().forEach(change=>{
+        const d = change.doc;
+        const data = d.data();
+        const prev = ORDER_STATUS_CACHE[d.id];
+        if(prev && prev !== data.status && (data.waiterName||'Mesero') === (WAITER_NAME||'Mesero')){
+          showToast(`Pedido de ${data.table} ahora: ${data.status.replace('_',' ')}`);
+        }
+        ORDER_STATUS_CACHE[d.id] = data.status;
+      });
+      snap.docs.forEach(doc=>{
+        const o = { id:doc.id, ...doc.data() };
+        if(o.status==='delivered') return;
+        if(MINE_ONLY && (o.waiterName||'Mesero') !== (WAITER_NAME||'Mesero')) return;
+        const line = document.createElement('div');
+        line.className='order-line';
+        line.innerHTML = `<div><strong>${o.table}</strong> — <span class="muted">${o.status}</span><div class="small muted">${o.items?.length||0} items · $ ${(o.total||0).toFixed(0)}</div></div><div></div>`;
+        wrap.appendChild(line);
+      });
+    });
+}
+startWaiterFeed();
+
+// Admin demos
 function renderAdminMenu(){
-  const box = qs("#adminMenu");
+  const box = document.querySelector("#adminMenu");
   box.innerHTML = "";
   ["burgers","minis"].forEach(cat=>{
     const title = document.createElement("h4"); title.textContent = cat.toUpperCase();
@@ -571,8 +844,8 @@ function renderAdminMenu(){
   box.appendChild(save);
 }
 function renderInventory(){
-  const box = qs("#adminInventory");
-  box.innerHTML = "<p class='muted small'>Inventario básico demo (puedo conectarlo a Firestore luego).</p>";
+  const box = document.querySelector("#adminInventory");
+  box.innerHTML = "<p class='muted small'>Inventario demo (conectaremos Firestore después).</p>";
   const wrap = document.createElement("div");
   wrap.className="order-items";
   box.appendChild(wrap);
@@ -590,50 +863,33 @@ function renderInventory(){
   });
 }
 async function calcFinance(){
-  const from = qs("#fromDate").value ? new Date(qs("#fromDate").value) : new Date(new Date().toDateString());
-  const to   = qs("#toDate").value ? new Date(qs("#toDate").value+" 23:59") : new Date();
+  const from = document.querySelector("#fromDate").value ? new Date(document.querySelector("#fromDate").value) : new Date(new Date().toDateString());
+  const to   = document.querySelector("#toDate").value ? new Date(document.querySelector("#toDate").value+" 23:59") : new Date();
   const snap = await db.collection("orders").where("createdAt",">=",from).where("createdAt","<=",to).get();
   let revenue=0, orders=0;
   snap.forEach(d=>{ orders++; revenue += (d.data().total||0); });
-  const box = qs("#financeBox");
+  const box = document.querySelector("#financeBox");
   box.innerHTML = `
     <div class="order-line"><div>Órdenes</div><div>${orders}</div></div>
-    <div class="order-line"><div>Ingresos estimados</div><div>$ ${fmt(revenue)}</div></div>
+    <div class="order-line"><div>Ingresos estimados</div><div>$ ${(Math.round((revenue+Number.EPSILON)*100)/100).toFixed(0)}</div></div>
     <p class="muted small">Para costos/utilidad, añadimos COGS por producto en Firestore más adelante.</p>`;
 }
-qs("#btnCalc").onclick = calcFinance;
+document.querySelector("#btnCalc").onclick = calcFinance;
+
+document.querySelector("#btnSavePins").onclick = async()=>{
+  const w = document.querySelector("#pinWaiter").value || "4321";
+  const k = document.querySelector("#pinKitchen").value || "5678";
+  const a = document.querySelector("#pinAdmin").value || "9999";
+  try{
+    await db.collection("settings").doc("pins").set({waiter:w, kitchen:k, admin:a});
+    alert("PINs guardados en Firestore.");
+  }catch(e){
+    alert("No se pudo guardar en Firestore. Se usarán por defecto en cliente.");
+  }
+};
 
 function renderAll(){ renderMenu(); renderAdminMenu(); renderInventory(); }
 renderAll();
-
-// Live feed para Mesero: lista de pedidos de hoy + notificaciones por cambio de status
-let ORDER_STATUS_CACHE = {};
-function startWaiterFeed(){
-  const wrap = document.getElementById('waiterFeed');
-  const start = new Date(); start.setHours(0,0,0,0);
-  db.collection('orders').where('createdAt','>=',start).orderBy('createdAt','desc').limit(30)
-    .onSnapshot(snap=>{
-      wrap.innerHTML='';
-      snap.docChanges().forEach(change=>{
-        const d = change.doc;
-        const data = d.data();
-        const prev = ORDER_STATUS_CACHE[d.id];
-        if(prev && prev !== data.status){
-          showToast(`Pedido de ${data.table} ahora: ${data.status.replace('_',' ')}`);
-        }
-        ORDER_STATUS_CACHE[d.id] = data.status;
-      });
-      snap.docs.forEach(doc=>{
-        const o = { id:doc.id, ...doc.data() };
-        const line = document.createElement('div');
-        line.className='order-line';
-        line.innerHTML = `<div><strong>${o.table}</strong> — <span class="muted">${o.status}</span><div class="small muted">${o.items?.length||0} items · $ ${fmt(o.total||0)}</div></div><div></div>`;
-        wrap.appendChild(line);
-      });
-    });
-}
-startWaiterFeed();
-
   </script>
 </body>
 </html>
