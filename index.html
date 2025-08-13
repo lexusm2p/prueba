@@ -1,72 +1,185 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seven de Burgers · POS v6.8 (Kiosko + Aderezos completos)</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore-compat.js"></script>
-  <style>
-    :root { --bg:#0e0f13; --panel:#161924; --text:#f2f2f6; --muted:#9aa0aa; --accent:#ffd54a; }
-    * { box-sizing:border-box; }
-    body { margin:0; color:var(--text); background:#0a0b10; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    header{ display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#0f1320; border-bottom:1px solid #1f2333; position:sticky; top:0; z-index:20; }
-    .brand{ display:flex; gap:12px; align-items:center; font-weight:800; letter-spacing:.3px; cursor:pointer; }
-    .brand .logo{ width:44px; height:44px; display:grid; place-items:center; border-radius:10px; background:#1a2245; border:1px solid #232a45; font-family:"Press Start 2P"; color:var(--accent);}
-    .tabs{ display:flex; gap:8px; }
-    .tab{ padding:10px 12px; border-radius:10px; background:#121524; border:1px solid #22273b; cursor:pointer; font-weight:600; color:var(--muted);}
-    .tab.active{ background:#171b2e; color:var(--text); border-color:#2b3152; }
-    .main{ padding:18px; display:grid; gap:16px; max-width:1100px; margin:0 auto; }
-    .panel{ background:#101427; border:1px solid #1c2340; border-radius:14px; padding:16px; }
-    .title{ font-weight:800; letter-spacing:.3px; margin:0 0 12px 0; }
-    .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:12px; }
-    .btn{ background:#1a2146; border:1px solid #283060; color:var(--text); padding:12px 14px; border-radius:10px; cursor:pointer; font-weight:700; letter-spacing:.3px; }
-    .btn:hover{ filter:brightness(1.05); }
-    .btn.primary{ background:#2a3c8a; border-color:#31469c; }
-    .btn.success{ background:#1f5b3a; border-color:#2c7a52; }
-    .btn.warn{ background:#7a4a14; border-color:#a9651c; }
-    .muted{ color:var(--muted); }
-    input, select, textarea{ width:100%; background:#0e1326; color:var(--text); border:1px solid #1d2342; border-radius:10px; padding:12px; outline:none; font:inherit; }
-    textarea{ min-height:80px; }
-    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .row > *{ flex:1; min-width:200px; }
-    .order-card{ border:1px solid #233056; border-radius:12px; padding:12px; background:#121935; display:grid; gap:8px; }
-    .pill{ padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #2b325a; color:#c9d1ff; width:max-content; }
-    .status-pending{ background:#261721; }
-    .status-prep{ background:#202a18; }
-    .status-ready{ background:#1a2133; }
-    .small{ font-size:12px; }
-    footer{ text-align:center; padding:18px; color:#8087a0; }
-    .advanced{ display:none; margin-top:8px; }
-    .sectionTitle{ font-weight:700; margin:8px 0 4px; color:#cbd2ff; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Seven de Burgers · Suite POS v7.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore-compat.js"></script>
+<style>
+  :root { --bg:#0e0f13; --panel:#161924; --text:#f2f2f6; --muted:#9aa0aa; --accent:#ffd54a; }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--text); background:#0a0b10; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#0f1320; border-bottom:1px solid #1f2333; position:sticky; top:0; z-index:50; }
+  .brand{ display:flex; gap:12px; align-items:center; font-weight:800; letter-spacing:.3px; }
+  .brand .logo{ width:44px; height:44px; display:grid; place-items:center; border-radius:10px; background:#1a2245; border:1px solid #232a45; font-family:"Press Start 2P"; color:var(--accent);}
+  nav.tabs { display:flex; gap:8px; }
+  .tabBtn{ background:#121935; border:1px solid #242e55; color:#cfd6ff; padding:10px 12px; border-radius:10px; cursor:pointer; }
+  .tabBtn.active{ background:#2a3c8a; border-color:#31469c; color:#fff; }
+  .main{ padding:18px; display:grid; gap:16px; max-width:1100px; margin:0 auto; }
+  .panel{ background:#101427; border:1px solid #1c2340; border-radius:14px; padding:16px; }
+  .title{ font-weight:800; letter-spacing:.3px; margin:0 0 12px 0; }
+  .muted{ color:var(--muted); }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .row > *{ flex:1; min-width:160px; }
+  input, select, textarea{ width:100%; background:#0e1326; color:#f2f2f6; border:1px solid #1d2342; border-radius:10px; padding:12px; outline:none; font:inherit; }
+  textarea{ min-height:80px; }
+  .cards{ display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:12px; }
+  .card{ border:1px solid #233056; border-radius:12px; padding:12px; background:#121935; cursor:pointer; }
+  .cardHead{ display:flex; justify-content:space-between; align-items:center; }
+  .cardTitle{ font-weight:700; }
+  .cardPrice{ background:#1a2146; border:1px solid #283060; padding:6px 10px; border-radius:999px; }
+  .cardBadges{ color:#aeb6d9; font-size:12px; margin-top:6px; }
+  .stepper{ display:flex; gap:8px; }
+  .step{ flex:1; padding:10px; border:1px solid #223055; border-radius:10px; text-align:center; color:#9aa2c8; }
+  .step.active{ background:#171b2e; color:#fff; border-color:#2b3152; }
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .chip{padding:10px 12px;border-radius:999px;border:1px solid #2b325a;background:#121935;color:#cbd2ff;cursor:pointer;user-select:none;}
+  .chip.active{background:#2a3c8a;border-color:#31469c;color:#fff;}
+  .suggest{ background:#0e152e; border:1px dashed #2b3b7a; border-radius:10px; padding:10px; color:#c8d0ff; }
+  .summaryBar{ position:sticky; bottom:0; background:linear-gradient(0deg, #0a0b10 0%, #101427 35%); border-top:1px solid #1d2548; padding:12px; display:flex; gap:10px; align-items:center; justify-content:space-between; }
+  .btn{ background:#1a2146; border:1px solid #283060; color:var(--text); padding:12px 14px; border-radius:10px; cursor:pointer; font-weight:700; letter-spacing:.3px; }
+  .btn.primary{ background:#2a3c8a; border-color:#31469c; }
+  .btn.success{ background:#1f5b3a; border-color:#2c7a52; }
+  .btn.warn{ background:#6b3b1f; border-color:#8e4f2a; }
+  .btn:disabled{ opacity:.6; pointer-events:none; }
+  .baseBox{ background:#0b1022; border:1px solid #1b2550; padding:10px; border-radius:10px; font-size:13px; color:#cdd4ff; }
+  .miniNote{ font-size:12px; color:#aeb6d9; }
+  /* Kitchen */
+  .kList{ display:grid; gap:10px; }
+  .ticket{ border:1px solid #2a355f; border-radius:12px; background:#121935; padding:12px; }
+  .ticketHead{ display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap; }
+  .badge{ padding:4px 8px; border-radius:999px; border:1px solid #2a355f; background:#0f1530; color:#cfd6ff; font-size:12px; }
+  .status{ font-weight:700; }
+  ul.ingred{ margin:8px 0 0 18px; }
+  .section{ display:none; }
+  .section.active{ display:block; }
+</style>
 </head>
 <body>
-  <header>
-    <div class="brand" id="brand">
-      <div class="logo">7</div>
+<header>
+  <div class="brand">
+    <div class="logo">7</div>
+    <div>
+      <div style="font-family:'Press Start 2P'; font-size:13px; line-height:1;">SEVEN DE BURGERS</div>
+      <div class="miniNote">Suite POS · v7.1</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tabBtn active" data-tab="kiosk">Kiosko</button>
+    <button class="tabBtn" data-tab="waiter">Mesero</button>
+    <button class="tabBtn" data-tab="kitchen">Cocina</button>
+  </nav>
+</header>
+
+<main class="main">
+
+  <!-- KIOSKO -->
+  <section id="kiosk" class="section active">
+    <div class="panel">
+      <div class="stepper">
+        <div class="step active" id="ks1">1) Burger</div>
+        <div class="step" id="ks2">2) Personaliza</div>
+        <div class="step" id="ks3">3) Confirma</div>
+      </div>
+    </div>
+
+    <div class="panel" id="k_step1">
+      <h3 class="title">1) Elige tu burger</h3>
+      <div class="row">
+        <div><label>Tu nombre (opcional)</label><input id="kName" placeholder="Tu nombre" /></div>
+        <div><label>Mesa</label><select id="kMesa"><option value="">Selecciona mesa</option><option value="1">Mesa 1</option>
+<option value="2">Mesa 2</option>
+<option value="3">Mesa 3</option>
+<option value="4">Mesa 4</option>
+<option value="5">Mesa 5</option>
+<option value="6">Mesa 6</option>
+<option value="7">Mesa 7</option>
+<option value="8">Mesa 8</option>
+<option value="9">Mesa 9</option>
+<option value="10">Mesa 10</option>
+<option value="11">Mesa 11</option>
+<option value="12">Mesa 12</option></select></div>
+      </div>
+      <div class="cards" id="k_burgerCards"></div>
+    </div>
+
+    <div class="panel" id="k_step2" style="display:none;">
+      <h3 class="title">2) Personaliza (opcional)</h3>
+      <div id="k_includeBox" class="baseBox" style="display:none;"></div>
+      <div style="margin-top:6px;"><strong>Extras</strong></div>
+      <div class="chips" id="k_chipsExtras"></div>
+      <div style="margin-top:10px;"><strong>Aderezos (+$5 c/u)</strong></div>
+      <div class="chips" id="k_chipsAderezos"></div>
+      <div class="suggest" id="k_sugBox" style="display:none; margin-top:12px;">
+        <div class="row" style="align-items:center;">
+          <div style="flex:2;"><strong>🎲 Sugerencias del chef:</strong> <span id="k_sugText"></span></div>
+          <div style="flex:1; text-align:right;">
+            <label class="miniNote">Agregar recomendados (+$5 c/u)</label>
+            <input type="checkbox" id="k_addRecs" />
+          </div>
+        </div>
+        <div class="miniNote" style="margin-top:6px;">Solo se cobra si activas y quedan seleccionados.</div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div>
+          <label>¿Quieres que te sorprendamos con algún aderezo extra?</label>
+          <select id="k_wantSurprise"><option value="no">No</option><option value="si">Sí</option></select>
+        </div>
+        <div>
+          <label>Otra salsa (si prefieres)</label>
+          <select id="k_otherSauce"><option value="">—</option><option>Ajo & Habanero</option>
+<option>Chipotle</option>
+<option>Chimichurri (León, Gto.)</option>
+<option>Cheddar</option>
+<option>Mostaza dulce</option>
+<option>Jalapeño rostizado</option>
+<option>Curry Seven</option>
+<option>BBQ tamarindo</option></select>
+        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <label>Notas</label>
+        <textarea id="k_notes" placeholder="Ej: sin jitomate, extra lechuga"></textarea>
+        <div class="chips" id="k_quickNotes">
+          <div class="chip" data-note="Sin jitomate">Sin jitomate</div>
+          <div class="chip" data-note="Sin cebolla">Sin cebolla</div>
+          <div class="chip" data-note="Extra lechuga">Extra lechuga</div>
+          <div class="chip" data-note="Poco picante">Poco picante</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="k_step3" style="display:none;">
+      <h3 class="title">3) Revisa y confirma</h3>
+      <div id="k_reviewBox" class="baseBox"></div>
+      <div class="miniNote" id="k_readyMsg" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="summaryBar">
       <div>
-        <div style="font-family:'Press Start 2P'; font-size:13px; line-height:1;">SEVEN DE BURGERS</div>
-        <div class="small muted">POS v6.8 · Mesero / Cocina / Kiosko</div>
+        <div><strong id="k_sumTitle">Selecciona una burger</strong></div>
+        <div class="miniNote" id="k_sumDetail"></div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div><strong>Total: $<span id="k_sumTotal">0</span></strong></div>
+        <button class="btn" id="k_btnBack" disabled>Anterior</button>
+        <button class="btn primary" id="k_btnNext" disabled>Siguiente</button>
+        <button class="btn success" id="k_btnConfirm" disabled>Confirmar pedido</button>
       </div>
     </div>
-    <div class="tabs" id="tabs">
-      <div class="tab active" id="tab-waiter">Mesero</div>
-      <div class="tab" id="tab-kitchen">Cocina</div>
-      <div class="tab" id="tab-kiosk">Kiosko</div>
-    </div>
-  </header>
+  </section>
 
-  <main class="main">
-    <!-- Identidad -->
-    <section class="panel" id="identity">
-      <h3 class="title">Identifícate</h3>
+  <!-- MESERO -->
+  <section id="waiter" class="section">
+    <div class="panel">
+      <h3 class="title">Panel de Mesero</h3>
       <div class="row">
-        <div><label>Nombre del mesero</label><input id="waiterName" placeholder="Ej. Alex" /></div>
-        <div><label>Mesa por defecto</label><select id="defaultTable"><option value="">—</option><option value="1">Mesa 1</option>
+        <div><label>Tu nombre (mesero)</label><input id="w_name" placeholder="Ej: Luis"/></div>
+        <div><label>Mesa</label><select id="w_mesa"><option value="">Selecciona mesa</option><option value="1">Mesa 1</option>
 <option value="2">Mesa 2</option>
 <option value="3">Mesa 3</option>
 <option value="4">Mesa 4</option>
@@ -79,61 +192,29 @@
 <option value="11">Mesa 11</option>
 <option value="12">Mesa 12</option></select></div>
       </div>
+      <div class="row">
+        <div><label>Cliente (opcional)</label><input id="w_customer" placeholder="Nombre del cliente"/></div>
+        <div><label>Ver solo mis pedidos</label><select id="w_onlyMine"><option value="no">No</option><option value="si">Sí</option></select></div>
+      </div>
+    </div>
 
-      <div style="margin-top:8px;">
-        <a href="#" id="toggleAdvanced" class="small">Opciones avanzadas</a>
-        <div class="advanced" id="advancedBox">
-          <div class="row">
-            <div><label>PIN</label><input id="pin" placeholder="4321 mesero / 5678 cocina" /></div>
-            <div><label>Forzar rol por URL</label><input readonly value="?role=waiter | ?role=kitchen" /></div>
+    <div class="panel">
+      <h4 class="title">Nueva orden</h4>
+      <div class="cards" id="w_burgerCards"></div>
+      <div id="w_customize" style="display:none; margin-top:10px;">
+        <div id="w_includeBox" class="baseBox"></div>
+        <div style="margin-top:6px;"><strong>Extras</strong></div>
+        <div class="chips" id="w_chipsExtras"></div>
+        <div style="margin-top:10px;"><strong>Aderezos (+$5 c/u)</strong></div>
+        <div class="chips" id="w_chipsAderezos"></div>
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label>¿Sorprender con aderezos?</label>
+            <select id="w_wantSurprise"><option value="no">No</option><option value="si">Sí</option></select>
           </div>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <button class="btn primary" id="saveIdentity">Guardar</button>
-        <div class="muted small">Se guarda en este navegador.</div>
-      </div>
-    </section>
-
-    <!-- MESERO -->
-    <section class="panel" id="waiterView">
-      <h3 class="title">Crear pedido</h3>
-      <div class="row">
-        <div><label>Mesa</label><select id="mesaSelect"><option value="">Selecciona mesa</option><option value="1">Mesa 1</option>
-<option value="2">Mesa 2</option>
-<option value="3">Mesa 3</option>
-<option value="4">Mesa 4</option>
-<option value="5">Mesa 5</option>
-<option value="6">Mesa 6</option>
-<option value="7">Mesa 7</option>
-<option value="8">Mesa 8</option>
-<option value="9">Mesa 9</option>
-<option value="10">Mesa 10</option>
-<option value="11">Mesa 11</option>
-<option value="12">Mesa 12</option></select></div>
-        <div><label>Hamburguesa</label><select id="burgerSelect"><option value="">Selecciona</option><option value="starter">Starter Burger · $47</option>
-<option value="koopa">Koopa Crunch · $57</option>
-<option value="fatality">Fatality Flame · $67</option>
-<option value="megabyte">Mega Byte · $77</option>
-<option value="hadouken">Hadouken · $77</option>
-<option value="nintendo">Nintendo Nostalgia · $67</option>
-<option value="finalboss">Final Boss Burger · $97</option><option value="player">Player Select (arma tu burger)</option></select></div>
-      </div>
-
-      <div id="playerSection" style="display:none; margin-top:10px;">
-        <div class="sectionTitle">Extras</div>
-        <div class="grid" id="extrasGrid"></div>
-        <div class="sectionTitle">Aderezos (+$5 c/u)</div>
-        <div class="grid" id="aderezosGrid"></div>
-      </div>
-
-      <div class="row" style="margin-top:10px;">
-        <div><label>¿Agregar salsa sugerida?</label>
-          <select id="salsaSugerida"><option value="no">No</option><option value="si">Sí</option></select>
-        </div>
-        <div><label>Salsa elegida (si el cliente pide otra)</label>
-          <select id="salsaElegida"><option value="">—</option><option>Ajo & Habanero</option>
+          <div>
+            <label>Otra salsa</label>
+            <select id="w_otherSauce"><option value="">—</option><option>Ajo & Habanero</option>
 <option>Chipotle</option>
 <option>Chimichurri (León, Gto.)</option>
 <option>Cheddar</option>
@@ -141,42 +222,23 @@
 <option>Jalapeño rostizado</option>
 <option>Curry Seven</option>
 <option>BBQ tamarindo</option></select>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <label>Notas</label>
+          <textarea id="w_notes" placeholder="Ej: sin jitomate"></textarea>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" id="w_cancel">Cancelar</button>
+          <button class="btn success" id="w_send">Enviar a cocina</button>
         </div>
       </div>
+    </div>
 
-      <div style="margin-top:10px;">
-        <label>Notas para cocina (omitir/añadir — Ej: sin jitomate)</label>
-        <textarea id="notas"></textarea>
-      </div>
-
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <button class="btn success" id="enviarPedido">Enviar a cocina</button>
-        <button class="btn" id="limpiar">Limpiar</button>
-      </div>
-    </section>
-
-    <!-- MIS PEDIDOS -->
-    <section class="panel" id="myOrders">
-      <h3 class="title">Mis pedidos</h3>
-      <div id="misPedidosGrid" class="grid"></div>
-    </section>
-
-    <!-- COCINA -->
-    <section class="panel" id="kitchenView" style="display:none;">
-      <h3 class="title">Cocina · Pedidos en tiempo real</h3>
-      <div class="row" style="margin-bottom:8px;">
-        <div><label>Filtro por mesa</label><input id="kitchenFilterMesa" placeholder="Ej. 4" /></div>
-        <div><label>Estado</label><select id="kitchenFilterEstado"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="preparando">Preparando</option><option value="listo">Listo</option></select></div>
-      </div>
-      <div id="kitchenGrid" class="grid"></div>
-    </section>
-
-    <!-- KIOSKO (cliente) -->
-    <section class="panel" id="kioskView" style="display:none;">
-      <h3 class="title">Kiosko de auto-pedido</h3>
+    <div class="panel">
+      <h4 class="title">Pedidos activos</h4>
       <div class="row">
-        <div><label>Tu nombre (opcional)</label><input id="kioskName" placeholder="Tu nombre" /></div>
-        <div><label>Mesa</label><select id="kioskMesa"><option value="">Selecciona mesa</option><option value="1">Mesa 1</option>
+        <div><label>Filtrar por mesa</label><select id="w_filterMesa"><option value="">Todas</option><option value="1">Mesa 1</option>
 <option value="2">Mesa 2</option>
 <option value="3">Mesa 3</option>
 <option value="4">Mesa 4</option>
@@ -188,361 +250,320 @@
 <option value="10">Mesa 10</option>
 <option value="11">Mesa 11</option>
 <option value="12">Mesa 12</option></select></div>
-      </div>
-
-      <div class="row" style="margin-top:8px;">
-        <div><label>Hamburguesa</label><select id="kioskBurger"><option value="">Selecciona</option><option value="starter">Starter Burger · $47</option>
-<option value="koopa">Koopa Crunch · $57</option>
-<option value="fatality">Fatality Flame · $67</option>
-<option value="megabyte">Mega Byte · $77</option>
-<option value="hadouken">Hadouken · $77</option>
-<option value="nintendo">Nintendo Nostalgia · $67</option>
-<option value="finalboss">Final Boss Burger · $97</option><option value="player">Player Select (arma tu burger)</option></select></div>
-      </div>
-
-      <div id="kioskPlayerSection" style="display:none; margin-top:10px;">
-        <div class="sectionTitle">Extras</div>
-        <div class="grid" id="kioskExtrasGrid"></div>
-        <div class="sectionTitle">Aderezos (+$5 c/u)</div>
-        <div class="grid" id="kioskAderezosGrid"></div>
-      </div>
-
-      <div class="row" style="margin-top:10px;">
-        <div><label>¿Agregar salsa sugerida?</label>
-          <select id="kioskSugerida"><option value="si">Sí</option><option value="no">No</option></select>
-        </div>
-        <div><label>Otra salsa (si prefieres)</label>
-          <select id="kioskSalsa"><option value="">—</option><option>Ajo & Habanero</option>
-<option>Chipotle</option>
-<option>Chimichurri (León, Gto.)</option>
-<option>Cheddar</option>
-<option>Mostaza dulce</option>
-<option>Jalapeño rostizado</option>
-<option>Curry Seven</option>
-<option>BBQ tamarindo</option></select>
+        <div><label>Estado</label>
+          <select id="w_filterStatus">
+            <option value="">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="preparando">Preparando</option>
+            <option value="listo">Listo</option>
+          </select>
         </div>
       </div>
+      <div id="w_orders" class="kList"></div>
+    </div>
+  </section>
 
-      <div style="margin-top:10px;">
-        <label>Notas (Ej: sin jitomate, extra lechuga)</label>
-        <textarea id="kioskNotas"></textarea>
-      </div>
-
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <button class="btn success" id="kioskEnviar">Confirmar pedido</button>
-        <button class="btn" id="kioskLimpiar">Limpiar</button>
-      </div>
-
-      <div class="muted small" style="margin-top:6px;">* Al confirmar, tu pedido se envía directo a cocina.</div>
-    </section>
-  </main>
-
-  <footer class="small" style="text-align:center; padding:16px; color:#8a92ad;">© 2025 Seven de Burgers · v6.8</footer>
-
-  <script>
-    const firebaseConfig = {"apiKey": "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4", "authDomain": "seven-de-burgers.firebaseapp.com", "projectId": "seven-de-burgers", "storageBucket": "seven-de-burgers.firebasestorage.app", "messagingSenderId": "34089845279", "appId": "1:34089845279:web:d13440c34e6bb7fa910b2a", "measurementId": "G-Q8YQJGL2XY"};
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    const state = {
-      waiterName: localStorage.getItem('waiterName') || '',
-      defaultTable: localStorage.getItem('defaultTable') || '',
-      pin: localStorage.getItem('pin') || '',
-      role: 'waiter',
-      burgers: [{"id": "starter", "name": "Starter Burger", "price": 47, "ingredients": ["Pan", "Carne (85g)", "Queso amarillo", "Queso blanco", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": null}, {"id": "koopa", "name": "Koopa Crunch", "price": 57, "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Pi\u00f1a", "Tocino", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Mostaza dulce"}, {"id": "fatality", "name": "Fatality Flame", "price": 67, "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Tocino", "Salsa habanero", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Habanero"}, {"id": "megabyte", "name": "Mega Byte", "price": 77, "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Queso blanco", "Tocino", "Salchicha", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "BBQ tamarindo"}, {"id": "hadouken", "name": "Hadouken", "price": 77, "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Queso amarillo", "Salchicha", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Chipotle"}, {"id": "nintendo", "name": "Nintendo Nostalgia", "price": 67, "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Pi\u00f1a", "Jam\u00f3n", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "C\u00e1tsup", "Mostaza"], "salsaSugerida": "Mostaza dulce"}, {"id": "finalboss", "name": "Final Boss Burger", "price": 97, "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Queso blanco", "Queso amarillo", "Tocino", "Jam\u00f3n", "Salchicha", "Pi\u00f1a", "Salsa habanero", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla", "C\u00e1tsup", "Mayonesa", "Mostaza"], "salsaSugerida": "Curry Seven"}],
-      extras: [{"name": "Tocino", "price": 6}, {"name": "Pi\u00f1a", "price": 5}, {"name": "Jam\u00f3n", "price": 5}, {"name": "Salchicha", "price": 8}],
-      aderezos: [{"name": "Ajo & Habanero", "price": 5}, {"name": "Chipotle", "price": 5}, {"name": "Chimichurri (Le\u00f3n, Gto.)", "price": 5}, {"name": "Cheddar", "price": 5}, {"name": "Mostaza dulce", "price": 5}, {"name": "Jalape\u00f1o rostizado", "price": 5}, {"name": "Curry Seven", "price": 5}, {"name": "BBQ tamarindo", "price": 5}],
-      salsas: ["Ajo & Habanero", "Chipotle", "Chimichurri (Le\u00f3n, Gto.)", "Cheddar", "Mostaza dulce", "Jalape\u00f1o rostizado", "Curry Seven", "BBQ tamarindo"]
-    };
-
-    const $ = (sel) => document.querySelector(sel);
-    const brand = $('#brand');
-    const waiterNameEl = $('#waiterName');
-    const defaultTableEl = $('#defaultTable');
-    const pinEl = document.querySelector('#pin');
-    const toggleAdvanced = $('#toggleAdvanced');
-    const advancedBox = $('#advancedBox');
-    const saveIdentityBtn = $('#saveIdentity');
-
-    const tabWaiter = $('#tab-waiter');
-    const tabKitchen = $('#tab-kitchen');
-    const tabKiosk = $('#tab-kiosk');
-    const waiterView = $('#waiterView');
-    const kitchenView = $('#kitchenView');
-    const kioskView = $('#kioskView');
-    const tabsEl = $('#tabs');
-    const identityEl = $('#identity');
-
-    const mesaSelect = $('#mesaSelect');
-    const burgerSelect = $('#burgerSelect');
-    const playerSection = $('#playerSection');
-    const extrasGrid = $('#extrasGrid');
-    const aderezosGrid = $('#aderezosGrid');
-    const salsaSugeridaEl = $('#salsaSugerida');
-    const salsaElegidaEl = $('#salsaElegida');
-    const notasEl = $('#notas');
-    const enviarPedido = $('#enviarPedido');
-    const limpiarBtn = $('#limpiar');
-    const misPedidosGrid = $('#misPedidosGrid');
-
-    const kitchenFilterMesa = $('#kitchenFilterMesa');
-    const kitchenFilterEstado = $('#kitchenFilterEstado');
-    const kitchenGrid = $('#kitchenGrid');
-
-    // Kiosk refs
-    const kioskName = $('#kioskName');
-    const kioskMesa = $('#kioskMesa');
-    const kioskBurger = $('#kioskBurger');
-    const kioskPlayerSection = $('#kioskPlayerSection');
-    const kioskExtrasGrid = $('#kioskExtrasGrid');
-    const kioskAderezosGrid = $('#kioskAderezosGrid');
-    const kioskSugerida = $('#kioskSugerida');
-    const kioskSalsa = $('#kioskSalsa');
-    const kioskNotas = $('#kioskNotas');
-    const kioskEnviar = $('#kioskEnviar');
-    const kioskLimpiar = $('#kioskLimpiar');
-
-    waiterNameEl.value = state.waiterName;
-    defaultTableEl.value = state.defaultTable;
-    if (!mesaSelect.value && state.defaultTable) mesaSelect.value = state.defaultTable;
-
-    toggleAdvanced.onclick = (e)=>{ e.preventDefault(); advancedBox.style.display = advancedBox.style.display==='block' ? 'none' : 'block'; };
-
-    // Easter egg: 5 clics al logo -> alterna a cocina
-    let clicks = 0; brand.onclick = ()=>{ clicks++; if(clicks>=5){ clicks=0; activateTab('kitchen'); }};
-
-    function activateTab(which){
-      waiterView.style.display='none';
-      kitchenView.style.display='none';
-      kioskView.style.display='none';
-      tabWaiter.classList.remove('active');
-      tabKitchen.classList.remove('active');
-      tabKiosk.classList.remove('active');
-      if(which==='waiter'){ waiterView.style.display='block'; tabWaiter.classList.add('active'); }
-      if(which==='kitchen'){ kitchenView.style.display='block'; tabKitchen.classList.add('active'); }
-      if(which==='kiosk'){ kioskView.style.display='block'; tabKiosk.classList.add('active'); }
-    }
-    tabWaiter.onclick = () => activateTab('waiter');
-    tabKitchen.onclick = () => activateTab('kitchen');
-    tabKiosk.onclick = () => activateTab('kiosk');
-
-    function urlParams(){ const p = new URLSearchParams(location.search); const o={}; p.forEach((v,k)=>o[k]=v); return o; }
-    const P = urlParams();
-    if(P.role==='kitchen'){ activateTab('kitchen'); tabsEl.style.display='none'; identityEl.style.display='none'; }
-    if(P.role==='waiter'){ activateTab('waiter'); tabsEl.style.display=''; identityEl.style.display=''; }
-    if(P.kiosk==='1'){
-      activateTab('kiosk'); tabsEl.style.display='none'; identityEl.style.display='none';
-      if(P.mesa){ kioskMesa.value = P.mesa; }
-      if(P.mesaLock==='1'){ kioskMesa.setAttribute('disabled','disabled'); }
-    }
-
-    saveIdentityBtn.onclick = () => {
-      const pin = (pinEl?.value || '').trim();
-      localStorage.setItem('waiterName', waiterNameEl.value.trim() || 'Mesero');
-      localStorage.setItem('defaultTable', defaultTableEl.value);
-      localStorage.setItem('pin', pin);
-      const role = (pin==='5678') ? 'kitchen' : 'waiter';
-      activateTab(role==='kitchen'?'kitchen':'waiter');
-      subscribeMyOrders();
-      subscribeKitchen();
-      alert('Identidad guardada');
-    };
-
-    function renderCheckGrid(gridEl, items){
-      gridEl.innerHTML='';
-      items.forEach((ex,idx)=>{
-        const id = gridEl.id+'_'+idx;
-        const div = document.createElement('div');
-        div.className='order-card';
-        div.innerHTML = `
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-            <div><strong>${ex.name}</strong></div>
-            <label class="small muted">+${ex.price}</label>
-          </div>
-          <div class="row" style="align-items:center;">
-            <label class="small muted" style="flex:0 0 auto;">Agregar</label>
-            <input type="checkbox" id="${id}" />
-          </div>`;
-        gridEl.appendChild(div);
-      });
-    }
-    renderCheckGrid(extrasGrid, state.extras);
-    renderCheckGrid(aderezosGrid, state.aderezos);
-
-    burgerSelect.onchange = () => {
-      playerSection.style.display = (burgerSelect.value==='player') ? 'block' : 'none';
-      const b = state.burgers.find(x=>x.id===burgerSelect.value);
-      if(b && b.salsaSugerida) salsaSugeridaEl.value = 'si'; else salsaSugeridaEl.value='no';
-    };
-
-    function gridSelections(gridEl, list){
-      const out=[];
-      Array.from(gridEl.querySelectorAll('input[type=checkbox]')).forEach((ch,idx)=>{
-        if(ch.checked) out.push(list[idx]);
-      });
-      return out;
-    }
-
-    function nowTs(){ return Date.now(); }
-
-    // Mesero enviar
-    enviarPedido.onclick = async () => {
-      const mesa = (mesaSelect.value || localStorage.getItem('defaultTable') || '').trim();
-      const burgerId = burgerSelect.value;
-      if(!mesa || !burgerId){ alert('Selecciona mesa y hamburguesa'); return; }
-      const waiter = (localStorage.getItem('waiterName') || 'Mesero');
-      const base = state.burgers.find(x=>x.id===burgerId);
-      let itemName = ''; let price = 0; let ingredientes = []; let salsaSugerida = base ? (base.salsaSugerida || null) : null;
-
-      if(burgerId==='player'){
-        const ex = gridSelections(extrasGrid, state.extras);
-        const ad = gridSelections(aderezosGrid, state.aderezos);
-        itemName = 'Player Select';
-        price = 47 + ex.reduce((a,b)=>a+b.price,0) + ad.reduce((a,b)=>a+b.price,0);
-        ingredientes = ['Base: Pan, Carne (85g), Queso amarillo, Queso blanco, Lechuga, Jitomate, Cebolla',
-                        ...ex.map(e=>'Extra: '+e.name),
-                        ...ad.map(e=>'Aderezo extra: '+e.name)];
-      } else {
-        itemName = base.name; price = base.price; ingredientes = base.ingredients;
-      }
-      const quiereSalsaSugerida = (document.querySelector('#salsaSugerida').value==='si');
-      const salsaElegida = document.querySelector('#salsaElegida').value || null;
-      const notas = (notasEl.value||'').trim();
-
-      const payload = { mesa, waiter, itemName, burgerId, price, ingredientes, salsaSugerida: (salsaSugerida||null), quiereSalsaSugerida, salsaElegida, notas, status:'pendiente', source:'waiter', createdAt: nowTs() };
-      try { await db.collection('orders').add(payload); alert('Pedido enviado a cocina'); limpiarBtn.click(); } catch(e){ console.error(e); alert('Error al enviar pedido'); }
-    };
-
-    // Kiosk render
-    renderCheckGrid(kioskExtrasGrid, state.extras);
-    renderCheckGrid(kioskAderezosGrid, state.aderezos);
-
-    kioskBurger.onchange = () => {
-      kioskPlayerSection.style.display = (kioskBurger.value==='player') ? 'block' : 'none';
-      const b = state.burgers.find(x=>x.id===kioskBurger.value);
-      kioskSugerida.value = (b && b.salsaSugerida) ? 'si' : 'no';
-    };
-
-    function kioskSelections(gridEl, list){
-      const out=[];
-      Array.from(gridEl.querySelectorAll('input[type=checkbox]')).forEach((ch,idx)=>{
-        if(ch.checked) out.push(list[idx]);
-      });
-      return out;
-    }
-
-    // Kiosk enviar
-    kioskEnviar.onclick = async () => {
-      const mesa = (kioskMesa.value||'').trim();
-      const burgerId = kioskBurger.value;
-      if(!mesa || !burgerId){ alert('Selecciona mesa y hamburguesa'); return; }
-      const base = state.burgers.find(x=>x.id===burgerId);
-      let itemName = ''; let price = 0; let ingredientes = []; let salsaSugerida = base ? (base.salsaSugerida || null) : null;
-
-      if(burgerId==='player'){
-        const ex = kioskSelections(kioskExtrasGrid, state.extras);
-        const ad = kioskSelections(kioskAderezosGrid, state.aderezos);
-        itemName = 'Player Select';
-        price = 47 + ex.reduce((a,b)=>a+b.price,0) + ad.reduce((a,b)=>a+b.price,0);
-        ingredientes = ['Base: Pan, Carne (85g), Queso amarillo, Queso blanco, Lechuga, Jitomate, Cebolla',
-                        ...ex.map(e=>'Extra: '+e.name),
-                        ...ad.map(e=>'Aderezo extra: '+e.name)];
-      } else {
-        itemName = base.name; price = base.price; ingredientes = base.ingredients;
-      }
-      const quiereSalsaSugerida = (kioskSugerida.value==='si');
-      const salsaElegida = kioskSalsa.value || null;
-      const notas = (kioskNotas.value||'').trim();
-      const waiter = (kioskName.value.trim()||'KIOSKO');
-
-      const payload = { mesa, waiter, itemName, burgerId, price, ingredientes, salsaSugerida: (salsaSugerida||null), quiereSalsaSugerida, salsaElegida, notas, status:'pendiente', source:'kiosk', createdAt: nowTs() };
-      try { await db.collection('orders').add(payload); alert('¡Pedido enviado! Lo estamos preparando 👾'); kioskLimpiar.click(); } catch(e){ console.error(e); alert('Error al enviar pedido'); }
-    };
-
-    kioskLimpiar.onclick = () => {
-      kioskBurger.value=''; kioskPlayerSection.style.display='none';
-      Array.from(kioskExtrasGrid.querySelectorAll('input[type=checkbox]')).forEach(ch=>ch.checked=false);
-      Array.from(kioskAderezosGrid.querySelectorAll('input[type=checkbox]')).forEach(ch=>ch.checked=false);
-      kioskSugerida.value='si'; kioskSalsa.value=''; kioskNotas.value='';
-    };
-
-    // Mis pedidos
-    let unsubMy = null;
-    function subscribeMyOrders(){
-      if(unsubMy) unsubMy();
-      const waiter = (localStorage.getItem('waiterName') || 'Mesero');
-      unsubMy = db.collection('orders').where('waiter','==',waiter).orderBy('createdAt','desc').onSnapshot(snap=>{
-        misPedidosGrid.innerHTML='';
-        snap.forEach(doc=>{
-          const d=doc.data(); if(d.status==='entregado') return;
-          const card = document.createElement('div'); card.className='order-card';
-          card.innerHTML = `
-            <div class="row" style="justify-content:space-between;">
-              <div><span class="pill">Mesa ${d.mesa}</span></div>
-              <div class="small muted">${new Date(d.createdAt).toLocaleTimeString()}</div>
-            </div>
-            <div><strong>${d.itemName}</strong> <span class="muted">· $${d.price}</span></div>
-            <div class="small muted">Ingredientes: ${(Array.isArray(d.ingredientes)?d.ingredientes.join(', '):d.ingredientes)}</div>
-            <div class="small">Salsa sugerida: <strong>${(d.salsaSugerida || '—')}</strong> · Cliente ${(d.quiereSalsaSugerida?'SÍ':'NO')}</div>
-            <div class="small">Salsa elegida: <strong>${(d.salsaElegida || '—')}</strong></div>
-            <div class="small">Notas: <em>${(d.notas || '—')}</em></div>
-            <div class="row" style="margin-top:6px; gap:8px;">
-              <div class="pill ${(d.status==='pendiente'?'status-pending': d.status==='preparando'?'status-prep':'status-ready')}">Estado: ${d.status}</div>
-              <button class="btn warn" data-act="preparando">Marcar preparando</button>
-              <button class="btn success" data-act="listo">Marcar listo</button>
-              <button class="btn" data-act="entregado">Marcar entregado</button>
-            </div>`;
-          card.querySelectorAll('button').forEach(b=>{ b.onclick = async () => { await db.collection('orders').doc(doc.id).update({status:b.dataset.act}); } });
-          misPedidosGrid.appendChild(card);
-        });
-      });
-    }
-    subscribeMyOrders();
-
-    // Cocina
-    let unsubK = null;
-    function renderKitchen(docId, d){
-      const card = document.createElement('div'); card.className='order-card';
-      const ingredientes = Array.isArray(d.ingredientes) ? d.ingredientes : [d.ingredientes];
-      card.innerHTML = `
-        <div class="row" style="justify-content:space-between;">
-          <div><span class="pill">Mesa ${d.mesa}</span> · <span class="small muted">${d.waiter}</span></div>
-          <div class="small muted">${new Date(d.createdAt).toLocaleTimeString()}</div>
+  <!-- COCINA -->
+  <section id="kitchen" class="section">
+    <div class="panel">
+      <h3 class="title">Tablero de Cocina</h3>
+      <div class="row">
+        <div><label>Filtrar mesa</label><select id="k_filterMesa"><option value="">Todas</option><option value="1">Mesa 1</option>
+<option value="2">Mesa 2</option>
+<option value="3">Mesa 3</option>
+<option value="4">Mesa 4</option>
+<option value="5">Mesa 5</option>
+<option value="6">Mesa 6</option>
+<option value="7">Mesa 7</option>
+<option value="8">Mesa 8</option>
+<option value="9">Mesa 9</option>
+<option value="10">Mesa 10</option>
+<option value="11">Mesa 11</option>
+<option value="12">Mesa 12</option></select></div>
+        <div><label>Estado</label>
+          <select id="k_filterStatus">
+            <option value="">Pendiente + Preparando</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="preparando">Preparando</option>
+            <option value="listo">Listo</option>
+          </select>
         </div>
-        <div><strong style="color:var(--accent)">${d.itemName}</strong> <span class="muted">· $${d.price}</span></div>
-        <div class="small">Salsa sugerida: <strong>${(d.salsaSugerida || '—')}</strong> · Cliente ${(d.quiereSalsaSugerida?'SÍ':'NO')}</div>
-        <div class="small">Salsa elegida: <strong>${(d.salsaElegida || '—')}</strong></div>
-        <div class="small muted">Ingredientes:</div>
-        <ul class="small" style="margin:0 0 6px 18px;">${ingredientes.map(x=>`<li>${x}</li>`).join('')}</ul>
-        <div class="small">Notas: <em>${(d.notas || '—')}</em></div>
-        <div class="row" style="margin-top:8px; gap:8px;">
-          <div class="pill ${(d.status==='pendiente'?'status-pending': d.status==='preparando'?'status-prep':'status-ready')}">Estado: ${d.status}</div>
-          <button class="btn warn" data-act="preparando">Preparando</button>
-          <button class="btn success" data-act="listo">Listo</button>
-          <button class="btn" data-act="entregado">Entregado</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div id="k_orders" class="kList"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// Firebase
+const fbCfg = {"apiKey": "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4", "authDomain": "seven-de-burgers.firebaseapp.com", "projectId": "seven-de-burgers", "storageBucket": "seven-de-burgers.firebasestorage.app", "messagingSenderId": "34089845279", "appId": "1:34089845279:web:d13440c34e6bb7fa910b2a", "measurementId": "G-Q8YQJGL2XY"};
+firebase.initializeApp(fbCfg);
+const db = firebase.firestore();
+
+// Data shared
+const BURGERS = [{"id": "starter", "name": "Starter Burger", "price": 47, "badges": ["Clásica"], "ingredients": ["Pan", "Carne (85g)", "Queso amarillo", "Queso blanco", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Cátsup", "Mostaza"]}, {"id": "koopa", "name": "Koopa Crunch", "price": 57, "badges": ["🍍 Piña", "🥓 Tocino"], "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Cátsup", "Mostaza"]}, {"id": "fatality", "name": "Fatality Flame", "price": 67, "badges": ["🌶️ Picante"], "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Tocino", "Salsa habanero", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Cátsup", "Mostaza"]}, {"id": "megabyte", "name": "Mega Byte", "price": 77, "badges": ["🥓 Tocino", "🥩 Salchicha"], "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Queso blanco", "Tocino", "Salchicha", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Cátsup", "Mostaza"]}, {"id": "hadouken", "name": "Hadouken", "price": 77, "badges": ["🌶️ Chipotle"], "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Queso amarillo", "Salchicha", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla", "Cátsup", "Mostaza"]}, {"id": "nintendo", "name": "Nintendo Nostalgia", "price": 67, "badges": ["🍍 Piña", "🥓 Jamón"], "ingredients": ["Pan", "Carne (85g)", "Queso blanco", "Piña", "Jamón", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Cátsup", "Mostaza"]}, {"id": "finalboss", "name": "Final Boss Burger", "price": 97, "badges": ["👑 Carga completa"], "ingredients": ["Pan", "Carne (85g)", "Salsa cheddar", "Queso blanco", "Queso amarillo", "Tocino", "Jamón", "Salchicha", "Piña", "Salsa habanero", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla", "Cátsup", "Mayonesa", "Mostaza"]}];
+const EXTRAS = [{"id": "tocino", "name": "Tocino", "price": 6}, {"id": "pina", "name": "Piña", "price": 5}, {"id": "jamon", "name": "Jamón", "price": 5}, {"id": "salchicha", "name": "Salchicha", "price": 8}];
+const ADEREZOS = [{"id": "ajo_hab", "name": "Ajo & Habanero", "price": 5}, {"id": "chipotle", "name": "Chipotle", "price": 5}, {"id": "chimi", "name": "Chimichurri (León, Gto.)", "price": 5}, {"id": "cheddar", "name": "Cheddar", "price": 5}, {"id": "mostaza_d", "name": "Mostaza dulce", "price": 5}, {"id": "jala_rost", "name": "Jalapeño rostizado", "price": 5}, {"id": "curry7", "name": "Curry Seven", "price": 5}, {"id": "bbq_tam", "name": "BBQ tamarindo", "price": 5}];
+const PAIRINGS = {"starter": ["Mostaza dulce", "Cheddar"], "koopa": ["Mostaza dulce", "Curry Seven"], "fatality": ["BBQ tamarindo", "Chipotle"], "megabyte": ["BBQ tamarindo", "Jalapeño rostizado"], "hadouken": ["Chipotle", "Jalapeño rostizado"], "nintendo": ["Mostaza dulce", "Cheddar"], "finalboss": ["Curry Seven", "Chimichurri (León, Gto.)"]};
+
+// Tab Navigation
+const tabs = document.querySelectorAll('.tabBtn');
+const sections = {"kiosk":document.getElementById('kiosk'),"waiter":document.getElementById('waiter'),"kitchen":document.getElementById('kitchen')};
+tabs.forEach(btn=>btn.onclick=()=>{tabs.forEach(b=>b.classList.remove('active'));btn.classList.add('active');Object.values(sections).forEach(s=>s.classList.remove('active'));sections[btn.dataset.tab].classList.add('active');});
+
+// ========== UTIL ==========
+const money = n => (Math.round(n*100)/100).toFixed(0);
+const sum = arr => arr.reduce((a,b)=>a+b,0);
+function chip(container, items, selected, onChange){
+  container.innerHTML='';
+  items.forEach(it=>{ 
+    const div = document.createElement('div');
+    div.className='chip'+(selected.find(x=>x.id===it.id)?' active':'');
+    div.textContent = it.name + (it.price?` +${it.price}`:'');
+    div.onclick = ()=>{ 
+      const i = selected.findIndex(x=>x.id===it.id);
+      if(i>=0) selected.splice(i,1); else selected.push(it);
+      chip(container, items, selected, onChange);
+      onChange && onChange();
+    };
+    container.appendChild(div);
+  });
+}
+function cardGrid(container, onPick){
+  container.innerHTML = '';
+  BURGERS.forEach(b=>{
+    const div = document.createElement('div');
+    div.className='card'; div.setAttribute('data-id', b.id); div.setAttribute('data-price', b.price);
+    div.innerHTML = `<div class="cardHead"><div class="cardTitle">${b.name}</div><div class="cardPrice">$${b.price}</div></div>`+
+                    `<div class="cardBadges">${(b.badges||[]).join(' · ')}</div>`;
+    div.onclick = ()=>onPick(b.id, b.price);
+    container.appendChild(div);
+  });
+  // Player Select
+  const pl = document.createElement('div');
+  pl.className = 'card'; pl.setAttribute('data-id','player'); pl.setAttribute('data-price','47');
+  pl.innerHTML = `<div class="cardHead"><div class="cardTitle">Player Select</div><div class="cardPrice">$47</div></div><div class="cardBadges">Arma tu burger</div>`;
+  pl.onclick = ()=>onPick('player', 47);
+  container.appendChild(pl);
+}
+
+// ========== KIOSKO LOGIC ==========
+const k = {
+  step:1, mesa:'', customer:'', burgerId:'', price:0, include:[], extras:[], salsas:[], wantSurprise:false, recs:false, otherSauce:'', notes:''
+};
+const kRefs = {
+  s1: document.getElementById('ks1'), s2: document.getElementById('ks2'), s3: document.getElementById('ks3'),
+  step1: document.getElementById('k_step1'), step2: document.getElementById('k_step2'), step3: document.getElementById('k_step3'),
+  name: document.getElementById('kName'), mesa: document.getElementById('kMesa'),
+  cards: document.getElementById('k_burgerCards'),
+  include: document.getElementById('k_includeBox'),
+  cExtras: document.getElementById('k_chipsExtras'),
+  cAd: document.getElementById('k_chipsAderezos'),
+  sugBox: document.getElementById('k_sugBox'),
+  sugText: document.getElementById('k_sugText'),
+  addRecs: document.getElementById('k_addRecs'),
+  want: document.getElementById('k_wantSurprise'),
+  other: document.getElementById('k_otherSauce'),
+  notes: document.getElementById('k_notes'),
+  quick: document.getElementById('k_quickNotes'),
+  review: document.getElementById('k_reviewBox'), msg: document.getElementById('k_readyMsg'),
+  sumTitle: document.getElementById('k_sumTitle'), sumDetail: document.getElementById('k_sumDetail'), sumTotal: document.getElementById('k_sumTotal'),
+  back: document.getElementById('k_btnBack'), next: document.getElementById('k_btnNext'), confirm: document.getElementById('k_btnConfirm')
+};
+function k_setStep(n){
+  k.step=n; kRefs.step1.style.display=(n===1)?'block':'none'; kRefs.step2.style.display=(n===2)?'block':'none'; kRefs.step3.style.display=(n===3)?'block':'none';
+  kRefs.s1.classList.toggle('active', n===1); kRefs.s2.classList.toggle('active', n===2); kRefs.s3.classList.toggle('active', n===3);
+  kRefs.back.disabled=(n===1); kRefs.next.disabled=!(n===1||n===2); kRefs.confirm.disabled=(n!==3); k_refresh();
+}
+function k_refresh(){
+  const b = BURGERS.find(x=>x.id===k.burgerId);
+  kRefs.sumTitle.textContent = k.burgerId ? (b?b.name:'Player Select') : 'Selecciona una burger';
+  const ex = k.extras.map(x=>x.name).join(', '); const ad = k.salsas.map(x=>x.name).join(', ');
+  const parts = []; if(ex) parts.push('Extras: '+ex); if(ad) parts.push('Aderezos: '+ad);
+  kRefs.sumDetail.textContent = parts.join(' · ');
+  const total = k.price + sum(k.extras.map(x=>x.price)) + sum(k.salsas.map(x=>x.price));
+  kRefs.sumTotal.textContent = money(total);
+  const readyBasics = !!k.burgerId && !!kRefs.mesa.value;
+  if(k.step===1){ kRefs.next.disabled=!readyBasics; }
+}
+kRefs.name.oninput = () => k.customer = kRefs.name.value.trim();
+kRefs.mesa.onchange = () => { k.mesa = kRefs.mesa.value; k_refresh(); };
+kRefs.quick.addEventListener('click', e=>{ const tag=e.target.closest('.chip'); if(!tag) return; const t=tag.getAttribute('data-note'); const curr=(kRefs.notes.value||'').trim(); kRefs.notes.value = curr ? curr + (curr.endsWith('.')?'':'; ') + t : t; });
+
+function k_pick(id, price){
+  k.burgerId=id; k.price=price;
+  const base = (id==='player') ? ["Pan","Carne (85g)","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla","Mayonesa","Cátsup","Mostaza"] : (BURGERS.find(x=>x.id===id)?.ingredients||[]);
+  k.include = base; kRefs.include.style.display='block'; kRefs.include.textContent='Incluye: '+base.join(', ');
+  k.extras=[]; k.salsas=[]; k.wantSurprise=false; k.recs=false; kRefs.want.value='no'; kRefs.addRecs.checked=false; k.otherSauce=''; kRefs.other.value='';
+  chip(kRefs.cExtras, EXTRAS, k.extras, k_refresh);
+  chip(kRefs.cAd, ADEREZOS, k.salsas, k_refresh);
+  const sugs = PAIRINGS[id]||[]; kRefs.sugText.textContent = sugs.join(', '); kRefs.sugBox.style.display='none';
+  k_setStep(2);
+}
+cardGrid(kRefs.cards, k_pick);
+kRefs.want.onchange = ()=>{ k.wantSurprise = (kRefs.want.value==='si'); const sugs = PAIRINGS[k.burgerId]||[]; kRefs.sugText.textContent = sugs.join(', '); kRefs.sugBox.style.display = (k.wantSurprise && sugs.length && k.burgerId!=='player') ? 'block':'none'; };
+kRefs.addRecs.onchange = ()=>{ 
+  const sugs = PAIRINGS[k.burgerId]||[]; k.recs = kRefs.addRecs.checked;
+  ADEREZOS.forEach(a=>{ const match=sugs.includes(a.name); const i=k.salsas.findIndex(x=>x.id===a.id);
+    if(k.recs && match && i<0) k.salsas.push(a);
+    if(!k.recs && match && i>=0) k.salsas.splice(i,1);
+  }); chip(kRefs.cAd, ADEREZOS, k.salsas, k_refresh); k_refresh();
+};
+
+kRefs.back.onclick = ()=>{ if(k.step>1) k_setStep(k.step-1); };
+kRefs.next.onclick = ()=>{ if(k.step===1) k_setStep(2); else if(k.step===2) {
+  const b = BURGERS.find(x=>x.id===k.burgerId); const name = b?b.name:'Player Select';
+  const lines = []; lines.push('Burger: '+name+` ($${k.price})`);
+  if(k.extras.length) lines.push('Extras: '+k.extras.map(x=>x.name+` ($${x.price})`).join(', '));
+  if(k.salsas.length) lines.push('Aderezos: '+k.salsas.map(x=>x.name+` ($${x.price})`).join(', '));
+  if(kRefs.other.value) lines.push('Otra salsa: '+kRefs.other.value);
+  if(k.wantSurprise) lines.push('Sorpréndeme: SÍ (sugerencias: '+(PAIRINGS[k.burgerId]||[]).join(', ')+(k.recs?'; agregadas':'')+')');
+  if(kRefs.notes.value.trim()) lines.push('Notas: '+kRefs.notes.value.trim());
+  kRefs.review.textContent = lines.join(' | ');
+  kRefs.msg.textContent = k.customer ? `Te avisaremos cuando tu pedido esté listo, ${k.customer}.` : 'Te avisaremos cuando tu pedido esté listo.';
+  k_setStep(3);
+} };
+kRefs.confirm.onclick = async ()=>{
+  const total = k.price + sum(k.extras.map(x=>x.price)) + sum(k.salsas.map(x=>x.price));
+  const payload = {
+    mesa: k.mesa, server:'KIOSKO', customerName: k.customer||null,
+    itemName: (BURGERS.find(x=>x.id===k.burgerId)?.name || 'Player Select'),
+    burgerId: k.burgerId, price: parseInt(money(total),10),
+    ingredientes: k.include, extras: k.extras.map(e=>e.name), aderezos: k.salsas.map(a=>a.name),
+    salsaElegida: (kRefs.other.value||null), surprise: k.wantSurprise, surpriseOptions: (PAIRINGS[k.burgerId]||[]),
+    notas: (kRefs.notes.value||'').trim(), status:'pendiente', source:'kiosk', createdAt: Date.now()
+  };
+  kRefs.confirm.disabled=true; kRefs.confirm.textContent='Enviando...';
+  try { await db.collection('orders').add(payload); alert('¡Pedido enviado!'); location.reload(); }
+  catch(e){ console.error(e); alert('Error al enviar pedido'); kRefs.confirm.disabled=false; kRefs.confirm.textContent='Confirmar pedido'; }
+};
+
+// ========== MESERO LOGIC ==========
+const w = { mesa:'', server:'', customer:'', burgerId:'', price:0, include:[], extras:[], salsas:[], want:false, other:'', notes:'' };
+const wRefs = {
+  name: document.getElementById('w_name'), mesa: document.getElementById('w_mesa'), customer: document.getElementById('w_customer'), onlyMine: document.getElementById('w_onlyMine'),
+  cards: document.getElementById('w_burgerCards'),
+  customBox: document.getElementById('w_customize'),
+  include: document.getElementById('w_includeBox'),
+  cExtras: document.getElementById('w_chipsExtras'),
+  cAd: document.getElementById('w_chipsAderezos'),
+  want: document.getElementById('w_wantSurprise'),
+  other: document.getElementById('w_otherSauce'),
+  notes: document.getElementById('w_notes'),
+  cancel: document.getElementById('w_cancel'),
+  send: document.getElementById('w_send'),
+  list: document.getElementById('w_orders'),
+  fMesa: document.getElementById('w_filterMesa'),
+  fStatus: document.getElementById('w_filterStatus')
+};
+wRefs.name.oninput = ()=> w.server = wRefs.name.value.trim();
+wRefs.mesa.onchange = ()=> w.mesa = wRefs.mesa.value;
+wRefs.customer.oninput = ()=> w.customer = wRefs.customer.value.trim();
+cardGrid(wRefs.cards, (id, price)=>{ 
+  w.burgerId=id; w.price=price; w.include = (id==='player') ? ["Pan","Carne (85g)","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla","Mayonesa","Cátsup","Mostaza"] : (BURGERS.find(x=>x.id===id)?.ingredients||[]);
+  w.extras=[]; w.salsas=[]; w.want=false; wRefs.want.value='no'; w.other=''; wRefs.other.value='';
+  wRefs.include.textContent='Incluye: '+w.include.join(', ');
+  chip(wRefs.cExtras, EXTRAS, w.extras);
+  chip(wRefs.cAd, ADEREZOS, w.salsas);
+  wRefs.customBox.style.display='block';
+});
+wRefs.want.onchange = ()=> w.want = (wRefs.want.value==='si');
+wRefs.other.onchange = ()=> w.other = wRefs.other.value;
+wRefs.cancel.onclick = ()=> wRefs.customBox.style.display='none';
+wRefs.send.onclick = async ()=>{
+  if(!w.server || !w.mesa) return alert('Mesero y Mesa son obligatorios');
+  const total = w.price + sum(w.extras.map(x=>x.price)) + sum(w.salsas.map(x=>x.price));
+  const payload = {
+    mesa: w.mesa, server: w.server, customerName: w.customer||null,
+    itemName: (BURGERS.find(x=>x.id===w.burgerId)?.name || 'Player Select'),
+    burgerId: w.burgerId, price: parseInt(money(total),10),
+    ingredientes: w.include, extras: w.extras.map(e=>e.name), aderezos: w.salsas.map(a=>a.name),
+    salsaElegida: (w.other||null), surprise: w.want, surpriseOptions: (PAIRINGS[w.burgerId]||[]),
+    notas: (wRefs.notes.value||'').trim(), status:'pendiente', source:'waiter', createdAt: Date.now()
+  };
+  try { await db.collection('orders').add(payload); wRefs.customBox.style.display='none'; wRefs.notes.value=''; alert('Pedido enviado a cocina'); }
+  catch(e){ console.error(e); alert('Error al enviar'); }
+};
+// Live list for waiter
+let unsubW=null;
+function waiterListen(){
+  if(unsubW) unsubW();
+  let q = db.collection('orders').where('status','in',['pendiente','preparando','listo']).orderBy('createdAt','desc');
+  if(wRefs.onlyMine.value==='si' && w.server) q = q.where('server','==', w.server);
+  if(wRefs.fMesa.value) q = q.where('mesa','==', wRefs.fMesa.value);
+  unsubW = q.onSnapshot(s=>{
+    wRefs.list.innerHTML='';
+    s.forEach(doc=>{ const o=doc.data(); const div=document.createElement('div'); div.className='ticket';
+      div.innerHTML = `<div class="ticketHead">
+          <div><strong>Mesa ${o.mesa}</strong> · <span class="badge">${o.itemName}</span> · <span class="miniNote">Mesero: ${o.server||'-'}</span></div>
+          <div class="badge status">${o.status.toUpperCase()}</div>
+        </div>
+        <ul class="ingred">${(o.ingredientes||[]).map(x=>`<li>${x}</li>`).join('')}</ul>
+        ${(o.extras&&o.extras.length)?`<div class="miniNote">Extras: ${o.extras.join(', ')}</div>`:''}
+        ${(o.aderezos&&o.aderezos.length)?`<div class="miniNote">Aderezos: ${o.aderezos.join(', ')}</div>`:''}
+        ${(o.surprise)?`<div class="miniNote">Sorpréndeme: SÍ (${(o.surpriseOptions||[]).join(', ')})</div>`:''}
+        ${(o.salsaElegida)?`<div class="miniNote">Otra salsa: ${o.salsaElegida}</div>`:''}
+        ${(o.notas)?`<div class="miniNote">Notas: ${o.notas}</div>`:''}
+        <div class="row" style="margin-top:8px;">
+          <button class="btn" data-act="markDelivered">Marcar entregado</button>
         </div>`;
-      card.querySelectorAll('button').forEach(b=>{ b.onclick = async () => { await db.collection('orders').doc(docId).update({status:b.dataset.act}); } });
-      return card;
-    }
+      div.querySelector('[data-act="markDelivered"]').onclick = async ()=>{ await db.collection('orders').doc(doc.id).update({status:'entregado'}); };
+      wRefs.list.appendChild(div);
+    });
+  });
+}
+[wRefs.onlyMine, wRefs.fMesa, wRefs.fStatus].forEach(el=> el.onchange = waiterListen);
+wRefs.name.addEventListener('input', waiterListen);
 
-    function subscribeKitchen(){
-      if(unsubK) unsubK();
-      unsubK = db.collection('orders').orderBy('createdAt','desc').onSnapshot(snap=>{
-        const mesaFilter = (kitchenFilterMesa.value||'').trim();
-        const estFilter = kitchenFilterEstado.value;
-        kitchenGrid.innerHTML='';
-        snap.forEach(doc=>{
-          const d=doc.data();
-          if(d.status==='entregado') return;
-          if(mesaFilter && String(d.mesa)!==mesaFilter) return;
-          if(estFilter && d.status!==estFilter) return;
-          kitchenGrid.appendChild(renderKitchen(doc.id, d));
-        });
-      });
-    }
-    subscribeKitchen();
-    kitchenFilterMesa.oninput = subscribeKitchen;
-    kitchenFilterEstado.onchange = subscribeKitchen;
-  </script>
+// ========== COCINA LOGIC ==========
+const kList = document.getElementById('k_orders');
+const kFMesa = document.getElementById('k_filterMesa');
+const kFStatus = document.getElementById('k_filterStatus');
+let unsubK=null;
+function kitchenListen(){
+  if(unsubK) unsubK();
+  let q = db.collection('orders').orderBy('createdAt','desc');
+  unsubK = q.onSnapshot(s=>{
+    kList.innerHTML='';
+    s.forEach(doc=>{ const o=doc.data();
+      // Filter out entregado unless explicitly selected
+      const fStatus = kFStatus.value;
+      const statusOk = (fStatus==='' && (o.status==='pendiente'||o.status==='preparando')) || (fStatus!=='' && o.status===fStatus);
+      const mesaOk = !kFMesa.value || o.mesa===kFMesa.value;
+      if(!statusOk || !mesaOk) return;
+      const div = document.createElement('div'); div.className='ticket';
+      div.innerHTML = `<div class="ticketHead">
+          <div><strong>Mesa ${o.mesa}</strong> · <span class="badge">${o.itemName}</span> · <span class="miniNote">Servidor: ${o.server||'-'} ${o.customerName?('· Cliente: '+o.customerName):''}</span></div>
+          <div class="badge status">${o.status.toUpperCase()}</div>
+        </div>
+        <ul class="ingred">${(o.ingredientes||[]).map(x=>`<li>${x}</li>`).join('')}</ul>
+        ${(o.extras&&o.extras.length)?`<div class="miniNote">Extras: ${o.extras.join(', ')}</div>`:''}
+        ${(o.aderezos&&o.aderezos.length)?`<div class="miniNote">Aderezos: ${o.aderezos.join(', ')}</div>`:''}
+        ${(o.surprise)?`<div class="miniNote">Sorpréndeme: SÍ (${(o.surpriseOptions||[]).join(', ')})</div>`:''}
+        ${(o.salsaElegida)?`<div class="miniNote">Otra salsa: ${o.salsaElegida}</div>`:''}
+        ${(o.notas)?`<div class="miniNote"><strong>Notas:</strong> ${o.notas}</div>`:''}
+        <div class="row" style="margin-top:8px;">
+          ${(o.status==='pendiente')?'<button class="btn primary" data-act="toPrep">Marcar PREPARANDO</button>':''}
+          ${(o.status==='preparando')?'<button class="btn success" data-act="toReady">Marcar LISTO</button>':''}
+          ${(o.status==='listo')?'<button class="btn warn" data-act="toPending">Revertir a PENDIENTE</button>':''}
+        </div>`;
+      const btnPrep = div.querySelector('[data-act="toPrep"]');
+      const btnReady = div.querySelector('[data-act="toReady"]');
+      const btnPend = div.querySelector('[data-act="toPending"]');
+      if(btnPrep) btnPrep.onclick = async ()=>{ await db.collection('orders').doc(doc.id).update({status:'preparando'}); };
+      if(btnReady) btnReady.onclick = async ()=>{ await db.collection('orders').doc(doc.id).update({status:'listo'}); };
+      if(btnPend) btnPend.onclick = async ()=>{ await db.collection('orders').doc(doc.id).update({status:'pendiente'}); };
+      kList.appendChild(div);
+    });
+  });
+}
+[kFMesa, kFStatus].forEach(el=> el.onchange = kitchenListen);
+
+// Init on load
+window.addEventListener('load', ()=>{ kitchenListen(); waiterListen(); });
+</script>
 </body>
 </html>
