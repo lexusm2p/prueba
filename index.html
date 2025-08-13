@@ -57,7 +57,12 @@ main{padding:16px}
 .extras-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
 .extras-chip{display:flex;justify-content:space-between;align-items:center;border:1px solid #2a2a46;background:#151526;border-radius:10px;padding:6px 8px;font-size:13px}
 @media (max-width:980px){.grid.two{grid-template-columns:1fr}.grid.three{grid-template-columns:1fr} .kds-list{grid-template-columns:1fr 1fr} .menu-list{grid-template-columns:1fr}}
-  </style>
+  
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111; color:#fff;
+  border:1px solid #333; padding:10px 14px;border-radius:10px; z-index:9999; box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.waiter-status{margin-top:12px}
+.waiter-status .order-line{cursor:default}
+</style>
 </head>
 <body>
   <header class="topbar">
@@ -95,6 +100,10 @@ main{padding:16px}
             <input id="searchInput" placeholder="Buscar..." />
           </div>
           <div id="menuList" class="menu-list"></div>
+        </div>
+        <div class="card waiter-status">
+          <h2>Estatus de pedidos (hoy)</h2>
+          <div id="waiterFeed" class="order-items"></div>
         </div>
         <div class="card">
           <h2>Pedido actual</h2>
@@ -186,7 +195,7 @@ window.FB_CONFIG = {
   </script>
 
   <script>
-// Datos del menú y catálogos
+// Datos del menú y catálogos (acordados)
 window.MENU = {
   burgers: [
     { id:"b1", name:"Starter Burger", price:47, category:"burgers",
@@ -212,13 +221,13 @@ window.MENU = {
       includes:["Mayonesa","Cátsup","Mostaza"], recommendedSauce:"Habanero/Chipotle" }
   ],
   minis: [
-    { id:"m1", name:"Starter Mini", price:27, category:"minis" },
-    { id:"m2", name:"Koopa Crunch Mini", price:27, category:"minis" },
-    { id:"m3", name:"Fatality Flame Mini", price:37, category:"minis" },
-    { id:"m4", name:"Mega Byte Mini", price:37, category:"minis" },
-    { id:"m5", name:"Hadouken Mini", price:37, category:"minis" },
-    { id:"m6", name:"Nintendo Nostalgia Mini", price:37, category:"minis" },
-    { id:"m7", name:"Final Boss Mini", price:47, category:"minis" }
+    { id:"m1", name:"Starter Mini", price:27, category:"minis", baseRef:"b1" },
+    { id:"m2", name:"Koopa Crunch Mini", price:27, category:"minis", baseRef:"b2" },
+    { id:"m3", name:"Fatality Flame Mini", price:37, category:"minis", baseRef:"b3" },
+    { id:"m4", name:"Mega Byte Mini", price:37, category:"minis", baseRef:"b4" },
+    { id:"m5", name:"Hadouken Mini", price:37, category:"minis", baseRef:"b5" },
+    { id:"m6", name:"Nintendo Nostalgia Mini", price:37, category:"minis", baseRef:"b6" },
+    { id:"m7", name:"Final Boss Mini", price:47, category:"minis", baseRef:"b7" }
   ],
   playerBase: { id:"p0", name:"Player Select (base)", price:47, category:"player",
     base:["Pan","Carne (85 g)","Queso blanco","Queso amarillo","Lechuga","Jitomate","Cebolla"],
@@ -252,6 +261,35 @@ window.MENU = {
 firebase.initializeApp(window.FB_CONFIG);
 const db = firebase.firestore();
 
+// Helpers extra (v3)
+function showToast(msg){
+  const t = document.createElement('div');
+  t.className='toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.remove(); }, 4000);
+}
+function getCombinedIngredientsById(baseId){
+  // Burger
+  let it = window.MENU.burgers.find(x=>x.id===baseId);
+  if(it){
+    return [...(it.ingredients||[]), ...((it.includes||[]))];
+  }
+  // Mini -> map to base
+  let mi = window.MENU.minis.find(x=>x.id===baseId);
+  if(mi && mi.baseRef){
+    it = window.MENU.burgers.find(x=>x.id===mi.baseRef);
+    if(it) return [...(it.ingredients||[]), ...((it.includes||[]))];
+  }
+  // Player base
+  if(baseId===window.MENU.playerBase.id){
+    const pb = window.MENU.playerBase;
+    return [...(pb.base||[]), ...((pb.includes||[]))];
+  }
+  return [];
+}
+
+
 let ROLE = localStorage.getItem("role") || "guest";
 let CART = [];
 let PINS = { waiter:"4321", kitchen:"5678", admin:"9999" };
@@ -280,7 +318,6 @@ function refreshRoleUI(){
 }
 qs("#btnLogin").onclick = async()=>{
   const pin = prompt("PIN (mesero, cocina o admin):");
-  // PINS en Firestore (doc: settings/pins) — opcional
   try{
     const sdoc = await db.collection("settings").doc("pins").get();
     const pins = sdoc.exists ? sdoc.data() : PINS;
@@ -310,6 +347,7 @@ function findItemById(id){
 
 function addToCart(item, custom={}){
   if(!item) return;
+  const combinedIngr = custom.ingredients || getCombinedIngredientsById(item.id);
   const line = {
     id: Date.now()+"",
     name: item.name,
@@ -318,7 +356,8 @@ function addToCart(item, custom={}){
     qty: 1,
     extras: custom.extras||[],
     aderezos: custom.aderezos||[],
-    notes: custom.notes||""
+    notes: custom.notes||"",
+    ingredients: combinedIngr
   };
   CART.push(line);
   refreshCart();
@@ -456,7 +495,9 @@ function renderMenu(){
       if(type==="player-custom"){
         openExtrasModal();
       }else{
-        addToCart(findItemById(id));
+        const baseItem = findItemById(id);
+        const n = prompt('Notas para este ítem (opcional):','');
+        addToCart(baseItem, { notes:n||'' });
       }
     };
   });
@@ -477,12 +518,14 @@ function listenKDS(){
           "<strong>"+i.name+"</strong> × "+i.qty,
           i.aderezos?.length? "Aderezos: "+i.aderezos.join(", ") : null,
           i.extras?.length? "Extras: "+i.extras.join(", ") : null,
-          i.notes? "Notas: "+i.notes : null
+          i.notes? "Notas: "+i.notes : null,
+          i.ingredients?.length ? "Ingredientes: "+i.ingredients.join(", ") : null
         ].filter(Boolean).join("<br/>");
         return "<div class='items'>"+parts+"</div>";
       }).join("<hr/>");
       div.innerHTML = `
         <h4>Mesa: ${o.table} — <span class="muted">${o.status}</span></h4>
+        ${o.notes ? '<div class="items"><em>Notas generales: '+o.notes+'</em></div>' : ''}
         ${itemsHtml}
         <div class="status">
           <button data-st="pending">Pendiente</button>
@@ -562,6 +605,35 @@ qs("#btnCalc").onclick = calcFinance;
 
 function renderAll(){ renderMenu(); renderAdminMenu(); renderInventory(); }
 renderAll();
+
+// Live feed para Mesero: lista de pedidos de hoy + notificaciones por cambio de status
+let ORDER_STATUS_CACHE = {};
+function startWaiterFeed(){
+  const wrap = document.getElementById('waiterFeed');
+  const start = new Date(); start.setHours(0,0,0,0);
+  db.collection('orders').where('createdAt','>=',start).orderBy('createdAt','desc').limit(30)
+    .onSnapshot(snap=>{
+      wrap.innerHTML='';
+      snap.docChanges().forEach(change=>{
+        const d = change.doc;
+        const data = d.data();
+        const prev = ORDER_STATUS_CACHE[d.id];
+        if(prev && prev !== data.status){
+          showToast(`Pedido de ${data.table} ahora: ${data.status.replace('_',' ')}`);
+        }
+        ORDER_STATUS_CACHE[d.id] = data.status;
+      });
+      snap.docs.forEach(doc=>{
+        const o = { id:doc.id, ...doc.data() };
+        const line = document.createElement('div');
+        line.className='order-line';
+        line.innerHTML = `<div><strong>${o.table}</strong> — <span class="muted">${o.status}</span><div class="small muted">${o.items?.length||0} items · $ ${fmt(o.total||0)}</div></div><div></div>`;
+        wrap.appendChild(line);
+      });
+    });
+}
+startWaiterFeed();
+
   </script>
 </body>
 </html>
