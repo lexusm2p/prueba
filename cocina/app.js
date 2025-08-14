@@ -1,49 +1,60 @@
+import { firebaseConfig } from "../shared/firebase-init.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getFirestore, collection, query, where, onSnapshot, doc, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-import { subscribeOrders, setStatus, archiveDelivered } from '../shared/backend.js';
-import { Status } from '../shared/status.js';
-import { beep } from '../lib/notify.js';
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+await signInAnonymously(auth).catch(console.error);
 
-const elP = document.querySelector('#listPending');
-const elIP = document.querySelector('#listProgress');
-const elR = document.querySelector('#listReady');
+const $ = s=>document.querySelector(s);
+const ordersBox = $('#orders');
+const beep = $('#beep');
 
-function card(o){
-  const ing = (o.ingredients||[]).join(', ');
-  const ade = (o.aderezos||[]).join(', ') || '—';
-  const ex = (o.extras||[]).join(', ') || '—';
-  return `<div class="k-card" data-id="${o.id}">
-    <h4>${o.itemName} × ${o.qty} — <span class="meta">$${o.total}</span></h4>
-    <div class="meta">Cliente: ${o.client||'—'} • Origen: ${o.server||'—'}</div>
-    <div class="meta">Ingredientes: ${ing}</div>
-    <div class="meta">Aderezos: ${ade}</div>
-    <div class="meta">Extras: ${ex}</div>
-    <div class="meta">Notas: ${o.notes||'—'}</div>
-    <div class="btns">
-      ${o.status===Status.PENDING? `<button class="btn take" data-a="take">Tomar</button>`:''}
-      ${o.status===Status.IN_PROGRESS? `<button class="btn ready" data-a="ready">Listo</button>`:''}
-      ${o.status===Status.READY? `<button class="btn deliver" data-a="deliver">Entregar</button>`:''}
-    </div>
-  </div>`;
-}
-
-function render(list){
-  const p = list.filter(o=>o.status===Status.PENDING);
-  const ip = list.filter(o=>o.status===Status.IN_PROGRESS);
-  const r = list.filter(o=>o.status===Status.READY);
-  elP.innerHTML = p.map(card).join('') || '<small>Sin pendientes</small>';
-  elIP.innerHTML = ip.map(card).join('') || '<small>Sin preparación</small>';
-  elR.innerHTML = r.map(card).join('') || '<small>Sin listos</small>';
-}
-
-subscribeOrders((arr)=>{
-  render(arr);
-}, {});
-
-document.addEventListener('click', async (e)=>{
-  const btn = e.target.closest('button[data-a]'); if(!btn) return;
-  const card = btn.closest('.k-card'); const id = card?.dataset.id; if(!id) return;
-  const a = btn.dataset.a;
-  if (a==='take') await setStatus(id, Status.IN_PROGRESS);
-  if (a==='ready') { await setStatus(id, Status.READY); beep(); }
-  if (a==='deliver') await archiveDelivered(id);
+const q = query(collection(db,"orders"), where("status","in",["PENDING","EN_PREPARACION","READY"]), orderBy("ts","asc"));
+onSnapshot(q, (snap)=>{
+  ordersBox.innerHTML = '';
+  snap.forEach(docu=>{
+    const o = { id:docu.id, ...docu.data() };
+    ordersBox.appendChild(renderOrder(o));
+  });
 });
+
+function renderOrder(o){
+  const el = document.createElement('div');
+  el.className = 'k-card';
+  const itemsList = (o.items||[]).map(it=>`<div>• ${it.name} <span class="tiny">($${it.price})</span></div>`).join('');
+  const saucesInfo = o.saucesPack?.enabled
+    ? `<div class="badge">PACK 3 (½ porción)</div><div class="tiny">${(o.saucesPack.selected && o.saucesPack.selected.length) ? o.saucesPack.selected.join(', ') : (o.saucesPack.surprise ? 'SORPRESA' : '—')}</div>`
+    : '';
+  const tableInfo = o.table ? `<div class="tiny">Mesa/Orden: <strong>${o.table}</strong> ${o.customer?('· '+o.customer):''}</div>` : '';
+  const notes = o.notes ? `<div class="tiny">Notas: ${o.notes}</div>` : '';
+
+  el.innerHTML = `
+    <div><strong>#${o.id.slice(-5).toUpperCase()}</strong> · <span class="tiny">${o.status}</span></div>
+    ${tableInfo}
+    <div class="tiny">Total: $${o.total}</div>
+    <hr/>
+    <div>${itemsList}</div>
+    <div style="margin-top:6px">${saucesInfo} ${(o.vasitos && o.vasitos>0)?('<div class="badge">VASITOS x'+o.vasitos+'</div>'):''}</div>
+    ${notes}
+    <div class="k-actions">
+      ${o.status!=="EN_PREPARACION" ? '<button class="k-btn warn" data-act="prep">En preparación</button>' : ''}
+      ${o.status!=="READY" ? '<button class="k-btn ready" data-act="ready">Listo</button>' : ''}
+      <button class="k-btn danger" data-act="delivered">Entregado</button>
+    </div>
+  `;
+
+  el.querySelectorAll('[data-act]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const act = btn.dataset.act;
+      const ref = doc(db,"orders",o.id);
+      if (act==="prep"){ await updateDoc(ref,{status:"EN_PREPARACION"}); }
+      else if (act==="ready"){ await updateDoc(ref,{status:"READY"}); try{ beep.currentTime=0; beep.play(); }catch(e){} }
+      else if (act==="delivered"){ await updateDoc(ref,{status:"DELIVERED"}); el.remove(); }
+    });
+  });
+
+  return el;
+}
