@@ -1,10 +1,10 @@
 // Rellena con tus credenciales reales de Firebase (App Web)
 export const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME.firebaseapp.com",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME.appspot.com",
-  messagingSenderId: "REPLACE_ME",
-  appId: "1:REPLACE_ME:web:REPLACE_ME",
-  measurementId: "G-REPLACE"
+  apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+  authDomain: "seven-de-burgers.firebaseapp.com",
+  projectId: "seven-de-burgers",
+  storageBucket: "seven-de-burgers.firebasestorage.app",
+  messagingSenderId: "34089845279",
+  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
+  measurementId: "G-Q8YQJGL2XY"
 };
