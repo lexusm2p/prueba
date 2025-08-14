@@ -1,39 +1,28 @@
+
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Seven de Burgers – Kiosko</title>
-<style>
-  :root{
-    --bg:#0f2333; --card:#12324a; --muted:#9ec3d9; --accent:#ffcc33; --accent2:#ffd966;
-    --ok:#35d07f; --text:#eaf6ff; --chip:#0b2a3d;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font:500 16px/1.4 system-ui,-apple-system,Segoe UI,Roboto}
-  header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #16384f}
-  .brand{font-weight:800;letter-spacing:.3px}
-  .wrap{max-width:980px;margin:0 auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-  .card{background:var(--card);border-radius:14px;padding:14px;border:1px solid #1c4560;box-shadow:0 2px 10px rgba(0,0,0,.15)}
-  .name{font-weight:800;font-size:18px}
-  .price{color:var(--accent);font-weight:800}
-  .ing{color:var(--muted);font-size:13px;margin-top:6px}
-  .row{display:flex;gap:10px;margin-top:10px}
-  button{cursor:pointer;border:0;border-radius:10px;padding:10px 12px;font-weight:700}
-  .b-primary{background:var(--accent);color:#262200}
-  .b-ghost{background:#0b2a3d;color:var(--muted);border:1px solid #1e4056}
-  .link{color:var(--accent2);text-decoration:underline dotted}
-  /* Modal */
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:10px}
-  .panel{width:min(720px,100%);background:#0e2231;border:1px solid #1a3f56;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
-  .ph{padding:14px 16px;border-bottom:1px solid #1a3f56;display:flex;justify-content:space-between;align-items:center}
-  .pb{padding:0 14px 14px}
-  .scroll{max-height:60vh;overflow:auto;padding:14px;display:grid;gap:14px}
-  .group{background:#0b2a3d;border:1px solid #1a3f56;border-radius:12px;padding:12px}
-  .group h4{margin:0 0 8px 0;font-size:15px;color:#c9e6f7}
-  .field{display:flex;gap:8px;align-items:center;margin:6px 0}
-  .field input[type="text"], .field input[type="number"], textarea{
-    width:100%;background:#092436;color:var(--text);border:1px solid #1a3f56;border-radius:8px;padding:9px;font:inherit
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Seven de Burgers</title>
+  <style>body{margin:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;background:#0b1b2a;color:#fff}
+  .wrap{display:flex;min-height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+  a.btn{background:#ffcc00;color:#111;padding:12px 18px;border-radius:12px;text-decoration:none;font-weight:700}
+  .muted{opacity:.75}</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Seven de Burgers</h1>
+    <a class="btn" href="./kiosk/">Ir al Kiosko</a>
+    <div>
+      <a class="btn" href="./mesero/">Mesero</a>
+      <a class="btn" href="./cocina/">Cocina</a>
+      <a class="btn" href="./admin/">Admin</a>
+    </div>
+    <p class="muted">Sugerencia: usa el botón “Ir al Kiosko” para vista cliente.</p>
+  </div>
+</body>
+</html>
   }
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{background:var(--chip);border:1px solid #1a3f56;border-radius:999px;padding:6px 10px;font-size:12px;color:var(--muted)}
