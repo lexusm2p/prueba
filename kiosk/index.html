@@ -1,34 +1,236 @@
-
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Kiosko • Seven de Burgers</title>
-<link rel="stylesheet" href="./styles.css"/>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Seven de Burgers – Kiosko</title>
+<style>
+  :root{
+    --bg:#0f2333; --card:#12324a; --muted:#9ec3d9; --accent:#ffcc33; --accent2:#ffd966;
+    --ok:#35d07f; --text:#eaf6ff; --chip:#0b2a3d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:500 16px/1.4 system-ui,-apple-system,Segoe UI,Roboto}
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #16384f}
+  .brand{font-weight:800;letter-spacing:.3px}
+  .wrap{max-width:980px;margin:0 auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .card{background:var(--card);border-radius:14px;padding:14px;border:1px solid #1c4560;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  .name{font-weight:800;font-size:18px}
+  .price{color:var(--accent);font-weight:800}
+  .ing{color:var(--muted);font-size:13px;margin-top:6px}
+  .row{display:flex;gap:10px;margin-top:10px}
+  button{cursor:pointer;border:0;border-radius:10px;padding:10px 12px;font-weight:700}
+  .b-primary{background:var(--accent);color:#262200}
+  .b-ghost{background:#0b2a3d;color:var(--muted);border:1px solid #1e4056}
+  .link{color:var(--accent2);text-decoration:underline dotted}
+  /* Modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:10px}
+  .panel{width:min(720px,100%);background:#0e2231;border:1px solid #1a3f56;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+  .ph{padding:14px 16px;border-bottom:1px solid #1a3f56;display:flex;justify-content:space-between;align-items:center}
+  .pb{padding:0 14px 14px}
+  .scroll{max-height:60vh;overflow:auto;padding:14px;display:grid;gap:14px}
+  .group{background:#0b2a3d;border:1px solid #1a3f56;border-radius:12px;padding:12px}
+  .group h4{margin:0 0 8px 0;font-size:15px;color:#c9e6f7}
+  .field{display:flex;gap:8px;align-items:center;margin:6px 0}
+  .field input[type="text"], .field input[type="number"], textarea{
+    width:100%;background:#092436;color:var(--text);border:1px solid #1a3f56;border-radius:8px;padding:9px;font:inherit
+  }
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:var(--chip);border:1px solid #1a3f56;border-radius:999px;padding:6px 10px;font-size:12px;color:var(--muted)}
+  .bar{display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #1a3f56;padding:12px 14px;background:#0b2030}
+  .note{font-size:12px;color:#cfe9f7}
+  .hidden{display:none}
+  .hint{font-size:12px;color:#cfe9f7;margin-left:6px}
+  .ok{color:var(--ok);font-weight:800}
+</style>
 </head>
 <body>
-<header>
-  <a class="logo" href="../">Seven de Burgers</a>
-  <div class="actions">
-    <a class="pill" href="../mesero/">Login</a>
-  </div>
-</header>
-<main>
-  <section id="cards"></section>
-</main>
+  <header>
+    <div class="brand"><a href="./index.html" style="color:inherit;text-decoration:none">Seven de Burgers</a></div>
+    <button class="b-ghost" onclick="location.href='./index.html'">Kiosko</button>
+  </header>
 
-<div id="modal" class="modal hidden">
-  <div class="dialog">
-    <div class="dlg-header"><strong id="dlg-title"></strong><button id="dlg-close">✕</button></div>
-    <div class="dlg-body">
-      <div class="stepper" id="stepper"></div>
-      <div class="step step-1"></div>
-      <div class="step step-2 hidden"></div>
-      <div class="step step-3 hidden"></div>
+  <main class="wrap" id="menu"></main>
+
+  <!-- Modal contenedor -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true"></div>
+
+<script type="module">
+/* ===== Firebase (usa tu proyecto) ===== */
+import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+  authDomain: "seven-de-burgers.firebaseapp.com",
+  projectId: "seven-de-burgers",
+  storageBucket: "seven-de-burgers.firebasestorage.app",
+  messagingSenderId: "34089845279",
+  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
+  measurementId: "G-Q8YQJGL2XY"
+};
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+/* ===== beep corto ===== */
+function beep(ms=180, freq=880){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type='square'; o.frequency.value=freq; g.gain.value=.05; o.start();
+    setTimeout(()=>{o.stop();ctx.close()}, ms);
+  }catch(e){}
+}
+
+/* ===== Datos ===== */
+const BURGERS = [
+  {id:'starter',   name:'Starter Burger',  price:47, ing:'Pan, Carne 85g, Queso amarillo, Queso blanco, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza', sugg:'Mostaza dulce'},
+  {id:'koopa',     name:'Koopa Crunch',    price:57, ing:'Pan, Carne, Queso blanco, Piña, Tocino, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza', sugg:'Chimichurri'},
+  {id:'flame',     name:'Fatality Flame',  price:67, ing:'Pan, Carne, Salsa Cheddar, Tocino, Salsa habanero, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza', sugg:'Habanero'},
+  {id:'megabyte',  name:'Mega Byte',       price:77, ing:'Pan, Carne, Salsa Cheddar, Queso blanco, Tocino, Salchicha, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup', sugg:'Cheddar'},
+  {id:'hadouken',  name:'Hadouken',        price:77, ing:'Pan, Carne, Queso blanco, Queso amarillo, Salchicha, Aderezo chipotle, Lechuga, Jitomate, Cebolla', sugg:'Chipotle'},
+  {id:'nintendo',  name:'Nintendo Nostalgia', price:67, ing:'Pan, Carne, Queso blanco, Piña, Jamón, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza', sugg:'Mostaza dulce'},
+  {id:'boss',      name:'Final Boss Burger', price:97, ing:'Pan, Carne, Salsa Cheddar, Queso blanco, Queso amarillo, Tocino, Jamón, Salchicha, Piña, Salsa habanero, Aderezo chipotle', sugg:'Cheddar'}
+];
+
+const ADEREZOS = [
+  'Aderezo Cheddar','Aderezo Chipotle','Aderezo Habanero','Salsa Chimichurri',
+  'Mostaza dulce','Jalapeño rostizado','Curry suave','Salsa Secreta Seven'
+].map(n=>({name:n, price:5}));
+
+const EXTRAS = [
+  {name:'Tocino', price:6},
+  {name:'Jamón', price:5},
+  {name:'Salchicha', price:8},
+  {name:'Piña', price:5},
+  {name:'Cebolla caramelizada', price:5}
+];
+
+/* ===== UI: tarjetas ===== */
+const $menu = document.getElementById('menu');
+$menu.innerHTML = BURGERS.map(b => `
+  <article class="card" data-id="${b.id}">
+    <div class="name">${b.name}</div>
+    <div class="ing">${b.ing}</div>
+    <div class="row">
+      <button class="b-ghost" data-act="info">Ingredientes</button>
+      <div style="flex:1"></div>
+      <div class="price">$${b.price}</div>
+      <button class="b-primary" data-act="order">Ordenar</button>
     </div>
-  </div>
-</div>
+  </article>
+`).join('');
 
-<script type="module" src="./app.js"></script>
+/* ===== Modal ===== */
+const $modal = document.getElementById('modal');
+
+$menu.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-act]');
+  if(!btn) return;
+  const card = btn.closest('.card'); const id = card.dataset.id;
+  const b = BURGERS.find(x=>x.id===id);
+  if(btn.dataset.act==='info'){ alert(b.ing); return; }
+  openModal(b);
+});
+
+function openModal(b){
+  $modal.innerHTML = `
+    <div class="panel" role="document">
+      <div class="ph">
+        <div><strong>${b.name}</strong> · <span class="price">$${b.price}</span><br>
+        <span class="hint">Salsa sugerida: ${b.sugg}</span></div>
+        <button class="b-ghost" data-x>✕</button>
+      </div>
+      <div class="scroll">
+        <div class="group">
+          <h4>Datos del pedido</h4>
+          <div class="field"><input id="name" type="text" placeholder="Tu nombre (opcional)"></div>
+          <div class="field"><input id="qty" type="number" min="1" value="1"></div>
+          <div class="field"><textarea id="notes" rows="2" placeholder="Notas para cocina (ej. sin jitomate)"></textarea></div>
+        </div>
+
+        <div class="group">
+          <h4>Aderezos extra (+$5 c/u)</h4>
+          ${ADEREZOS.map((a,i)=>`
+            <label class="field"><input type="checkbox" data-kind="ad" data-name="${a.name}" data-price="${a.price}">
+              <span>${a.name} <span class="hint">+$${a.price}</span></span></label>
+          `).join('')}
+          <label class="field"><input id="surprise" type="checkbox">
+            <span>¿Quieres que te sorprendamos con una nueva configuración (aderezo)? <span class="hint">+$5 si se activa</span></span>
+          </label>
+        </div>
+
+        <div class="group">
+          <h4>Ingredientes extra</h4>
+          ${EXTRAS.map(x=>`
+            <label class="field"><input type="checkbox" data-kind="ex" data-name="${x.name}" data-price="${x.price}">
+              <span>${x.name} <span class="hint">+$${x.price}</span></span></label>
+          `).join('')}
+        </div>
+
+        <div class="group">
+          <h4>Ingredientes de la burger</h4>
+          <div class="chips">${b.ing.split(',').map(s=>`<span class="chip">${s.trim()}</span>`).join('')}</div>
+        </div>
+      </div>
+      <div class="bar">
+        <div class="note">Kiosko · mesa: Mostrador</div>
+        <button class="b-primary" id="send">Enviar pedido</button>
+      </div>
+    </div>
+  `;
+  $modal.classList.remove('hidden');
+
+  $modal.querySelector('[data-x]').onclick = ()=> $modal.classList.add('hidden');
+  $modal.querySelector('#send').onclick = ()=> submitOrder(b);
+}
+
+async function submitOrder(b){
+  const name  = $modal.querySelector('#name').value.trim();
+  const qty   = parseInt($modal.querySelector('#qty').value||'1',10);
+  const notes = $modal.querySelector('#notes').value.trim();
+  const surprise = $modal.querySelector('#surprise').checked;
+
+  const selAds = [...$modal.querySelectorAll('input[data-kind="ad"]:checked')]
+      .map(i=>({name:i.dataset.name, price:+i.dataset.price}));
+  const selEx  = [...$modal.querySelectorAll('input[data-kind="ex"]:checked')]
+      .map(i=>({name:i.dataset.name, price:+i.dataset.price}));
+
+  // si el cliente pidió “sorpréndeme” y no eligió aderezos, agregamos la sugerida como extra cobrada
+  if(surprise && selAds.length===0){
+    selAds.push({name:`Sorpresa: ${b.sugg}`, price:5});
+  }
+
+  const extraTotal = selAds.reduce((a,x)=>a+x.price,0) + selEx.reduce((a,x)=>a+x.price,0);
+  const total = b.price*qty + extraTotal;
+
+  const payload = {
+    source:'kiosk',
+    table:'Mostrador',
+    customerName:name || null,
+    status:'PENDING',
+    createdAt: serverTimestamp(),
+    items: [{
+      burgerId:b.id, name:b.name, unitPrice:b.price, qty,
+      suggested:b.sugg,
+      extras:{ aderezos: selAds, ingredientes: selEx },
+      surprise
+    }],
+    notes,
+    totals:{ base:b.price*qty, extras:extraTotal, grand:total }
+  };
+
+  try{
+    await addDoc(collection(db,'orders'), payload);
+    beep(); // confirmación
+    $modal.classList.add('hidden');
+    alert('¡Pedido enviado! Te avisaremos cuando esté listo.');
+  }catch(err){
+    console.error(err);
+    alert('No se pudo enviar el pedido. Revisa tu conexión e intenta de nuevo.');
+  }
+}
+</script>
 </body>
 </html>
