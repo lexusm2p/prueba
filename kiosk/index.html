@@ -1,0 +1,34 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Kiosko • Seven de Burgers</title>
+<link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+<header>
+  <a class="logo" href="../">Seven de Burgers</a>
+  <div class="actions">
+    <a class="pill" href="../mesero/">Login</a>
+  </div>
+</header>
+<main>
+  <section id="cards"></section>
+</main>
+
+<div id="modal" class="modal hidden">
+  <div class="dialog">
+    <div class="dlg-header"><strong id="dlg-title"></strong><button id="dlg-close">✕</button></div>
+    <div class="dlg-body">
+      <div class="stepper" id="stepper"></div>
+      <div class="step step-1"></div>
+      <div class="step step-2 hidden"></div>
+      <div class="step step-3 hidden"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
