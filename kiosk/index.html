@@ -45,18 +45,9 @@
 </style>
 </head>
 <body>
-  
-<script type="module">
-  import { ROUTES } from '../lib/config.js';
-  document.querySelectorAll('[data-href]')
-    .forEach(a => a.href = ROUTES[a.dataset.href]);
-</script>
   <header>
     <div class="brand"><a href="./index.html" style="color:inherit;text-decoration:none">Seven de Burgers</a></div>
     <button class="b-ghost" onclick="location.href='./index.html'">Kiosko</button>
-     <div class="brand"><a href="./index.html" style="color:inherit;text-decoration:none">Seven de Burgers</a></div>
-    <button class="b-ghost" onclick="location.href='./mesero/index.html'">Mesero</button>
-
   </header>
 
   <main class="wrap" id="menu"></main>
