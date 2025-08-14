@@ -1,23 +1,154 @@
+import { firebaseConfig } from "../shared/firebase-init.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
-import { subscribeOrders } from '../shared/backend.js';
-import { Status } from '../shared/status.js';
-import { beep } from '../lib/notify.js';
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+await signInAnonymously(auth).catch(console.error);
 
-const el = document.querySelector('#feed');
-let knownReady = new Set();
+const SAUCES = [
+  "Aderezo Ajo Habanero","Aderezo Chipotle","Salsa Chimichurri","Aderezo Cheddar",
+  "Mostaza Dulce","Jalapeño Rostizado","Curry Suave","Salsa Secreta Seven"
+];
+const PACK_PRICE = 10, MAX_IN_PACK = 3;
 
-function row(o){
-  return `<div class="order">
-    <h4>${o.itemName} × ${o.qty} — <span class="badge">${o.status}</span></h4>
-    <div>Cliente: ${o.client||'—'}</div>
-    <div>Total: $${o.total}</div>
-  </div>`;
+const MINI_CATALOG = [
+  { id:"mini_starter",  name:"Starter Mini",   price:27 },
+  { id:"mini_koopa",    name:"Koopa Crunch Mini",   price:27 },
+  { id:"mini_fatality", name:"Fatality Flame Mini", price:37 },
+  { id:"mini_mega",     name:"Mega Byte Mini",      price:37 },
+  { id:"mini_hadouken", name:"Hadouken Mini",       price:37 },
+  { id:"mini_nintendo", name:"Nintendo Nostalgia Mini", price:37 },
+  { id:"mini_boss",     name:"Final Boss Mini",     price:47 }
+];
+const BIG_CATALOG = [
+  { id:"starter", name:"Starter Burger", price:47, ingr:"Pan, Carne, Queso amarillo, Queso blanco, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza" },
+  { id:"koopa", name:"Koopa Crunch", price:57, ingr:"Pan, Carne, Queso blanco, Piña, Tocino, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza" },
+  { id:"fatality", name:"Fatality Flame", price:67, ingr:"Pan, Carne, Salsa Cheddar, Tocino, Salsa Habanero, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza" },
+  { id:"mega", name:"Mega Byte", price:77, ingr:"Pan, Carne, Salsa Cheddar, Queso blanco, Tocino, Salchicha, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup" },
+  { id:"hadouken", name:"Hadouken", price:77, ingr:"Pan, Carne, Queso blanco, Queso amarillo, Salchicha, Aderezo Chipotle, Lechuga, Jitomate, Cebolla" },
+  { id:"nintendo", name:"Nintendo Nostalgia", price:67, ingr:"Pan, Carne, Queso blanco, Piña, Jamón, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza" },
+  { id:"boss", name:"Final Boss Burger", price:97, ingr:"Pan, Carne, Salsa Cheddar, Queso blanco, Queso amarillo, Tocino, Jamón, Salchicha, Piña, Salsa Habanero, Aderezo Chipotle" }
+];
+
+let minisToPick = 0, pickedMinis = [], selectedSauces = new Set(), pickedBig = null;
+const $ = s=>document.querySelector(s); const $$ = s=>Array.from(document.querySelectorAll(s));
+
+// Tabs
+$('#tabMinis').addEventListener('click', ()=>{ $('#tabMinis').classList.add('active'); $('#tabGrandes').classList.remove('active'); $('#viewMinis').classList.remove('hidden'); $('#viewGrandes').classList.add('hidden'); renderSummary(); });
+$('#tabGrandes').addEventListener('click', ()=>{ $('#tabGrandes').classList.add('active'); $('#tabMinis').classList.remove('active'); $('#viewGrandes').classList.remove('hidden'); $('#viewMinis').classList.add('hidden'); renderSummary(); });
+
+// Minis selectors
+$$('#viewMinis .chip').forEach(btn=>btn.addEventListener('click', ()=>{
+  minisToPick = parseInt(btn.dataset.minis,10); pickedMinis=[]; renderMiniList(); renderSauces(); renderSummary();
+}));
+
+function renderMiniList(){
+  const cont = $('#miniList'); cont.innerHTML='';
+  MINI_CATALOG.forEach(item=>{
+    const cnt = pickedMinis.filter(id=>id===item.id).length;
+    const canAdd = pickedMinis.length < minisToPick || minisToPick===7;
+    const el = document.createElement('div'); el.className='card mini';
+    el.innerHTML = `<div class="row"><div><strong>${item.name}</strong><br/><span>$${item.price}</span></div>
+    <div><button class="small" data-add="${item.id}" ${canAdd?'':'disabled'}>Añadir</button>
+    <button class="small ghost" data-rem="${item.id}" ${cnt>0?'':'disabled'}>Quitar</button></div></div>
+    <div class="tiny">Elegidas: ${cnt}</div>`;
+    cont.appendChild(el);
+  });
+  $$('#miniList [data-add]').forEach(b=>b.addEventListener('click', ()=>{
+    if (minisToPick===0) minisToPick=1;
+    if (minisToPick===7 && pickedMinis.length>=7) return;
+    if (minisToPick!==7 && pickedMinis.length>=minisToPick) return;
+    pickedMinis.push(b.dataset.add); renderMiniList(); renderSummary();
+  }));
+  $$('#miniList [data-rem]').forEach(b=>b.addEventListener('click', ()=>{
+    const i = pickedMinis.indexOf(b.dataset.rem); if (i>-1){ pickedMinis.splice(i,1); renderMiniList(); renderSummary(); }
+  }));
 }
 
-subscribeOrders((arr)=>{
-  // if any new READY, beep once
-  arr.filter(o=>o.status===Status.READY).forEach(o=>{
-    if(!knownReady.has(o.id)){ knownReady.add(o.id); beep(); }
+function renderSauces(){
+  const box = $('#saucePicker'); box.innerHTML=''; selectedSauces = new Set();
+  SAUCES.forEach(name=>{
+    const id='s_'+name.replace(/\W+/g,'_'); const lbl=document.createElement('label'); lbl.className='tag';
+    lbl.innerHTML = `<input type="checkbox" id="${id}"> ${name}`; box.appendChild(lbl);
+    lbl.querySelector('input').addEventListener('change', e=>{
+      if (e.target.checked){
+        if (selectedSauces.size>=MAX_IN_PACK){ e.target.checked=false; return; }
+        selectedSauces.add(name);
+      } else { selectedSauces.delete(name); }
+      renderSummary();
+    });
   });
-  el.innerHTML = arr.map(row).join('') || '<small>Sin órdenes</small>';
-}, {});
+}
+
+// Grandes
+function renderBigList(){
+  const cont = $('#bigList'); cont.innerHTML='';
+  BIG_CATALOG.forEach(b=>{
+    const el = document.createElement('div'); el.className='card';
+    el.innerHTML = `<strong>${b.name}</strong> · $${b.price}<div class="tiny">${b.ingr}</div>
+    <div class="actions"><button class="small" data-pick="${b.id}">Seleccionar</button></div>`;
+    cont.appendChild(el);
+  });
+  $$('#bigList [data-pick]').forEach(btn=>btn.addEventListener('click',()=>{
+    pickedBig = BIG_CATALOG.find(x=>x.id===btn.dataset.pick); renderSummary();
+  }));
+}
+renderBigList();
+
+function calcTotals(){
+  let total = 0;
+  let lines = [];
+  if (!$('#viewMinis').classList.contains('hidden')){
+    const minisTotal = pickedMinis.reduce((s,id)=> s + (MINI_CATALOG.find(m=>m.id===id)?.price||0), 0);
+    const pack = selectedSauces.size>0 ? PACK_PRICE : 0;
+    total = minisTotal + pack;
+    lines.push(`Minis: $${minisTotal}`);
+    if (pack>0) lines.push(`Pack Power-Ups 3×$10: $${pack} · ${[...selectedSauces].join(', ')}`);
+  } else if (pickedBig){
+    total = pickedBig.price;
+    lines.push(`${pickedBig.name}: $${pickedBig.price}`);
+  }
+  return { total, lines };
+}
+
+function renderSummary(){
+  const { total, lines } = calcTotals();
+  const cust = document.getElementById('custName').value||'';
+  const mesa = document.getElementById('tableId').value||'';
+  const notes = document.getElementById('notes').value||'';
+  const details = lines.length? lines.join('<br/>') : 'Sin selección aún';
+  document.getElementById('orderSummary').innerHTML = `<div><strong>Cliente:</strong> ${cust||'—'} · <strong>Mesa/Orden:</strong> ${mesa||'—'}</div><hr/><div>${details}</div><hr/><div class="total"><strong>Total: $${total}</strong></div><div class="tiny">Notas: ${notes||'—'}</div>`;
+}
+
+['custName','tableId','notes'].forEach(id=>document.getElementById(id).addEventListener('input', renderSummary));
+
+document.getElementById('btnSendOrder').addEventListener('click', async ()=>{
+  const mesa = document.getElementById('tableId').value||'';
+  const cust = document.getElementById('custName').value||'';
+  const notes = document.getElementById('notes').value||'';
+  if (!mesa){ alert('Escribe la mesa/orden'); return; }
+
+  const payload = { ts:Date.now(), source:'waiter', status:'PENDING', table:mesa, customer:cust, notes };
+  if (!$('#viewMinis').classList.contains('hidden')){
+    payload.kind='minis';
+    payload.items = pickedMinis.map(id=>{ const m = MINI_CATALOG.find(x=>x.id===id); return { sku:id, name:m.name, price:m.price }; });
+    payload.saucesPack = selectedSauces.size>0 ? { enabled:true, selected:[...selectedSauces], applied:true, packPrice:10 } : null;
+  } else if (pickedBig){
+    payload.kind='burger';
+    payload.items = [{ sku:pickedBig.id, name:pickedBig.name, price:pickedBig.price }];
+  } else {
+    alert('Selecciona minis o una burger'); return;
+  }
+  payload.total = payload.items.reduce((s,it)=>s+it.price,0) + (payload.saucesPack?payload.saucesPack.packPrice:0);
+
+  try{
+    await addDoc(collection(db,"orders"), { ...payload, createdAt: serverTimestamp() });
+    alert('¡Enviado a cocina!');
+    pickedMinis=[]; selectedSauces=new Set(); pickedBig=null;
+    document.getElementById('notes').value='';
+    renderMiniList(); renderSummary();
+  }catch(e){ console.error(e); alert('Error al enviar.'); }
+});
