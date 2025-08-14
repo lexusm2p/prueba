@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Login · Seven de Burgers</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🍔 Seven de Burgers <span class="badge">Acceso</span></div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <h3>Elige rol</h3>
+      <div class="two-col">
+        <div>
+          <label>Rol</label>
+          <select id="selRol">
+            <option value="mesero">Mesero</option>
+            <option value="cocina">Cocina</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+        <div>
+          <label>PIN</label>
+          <input type="text" id="inpPin" placeholder="Ingresa PIN">
+        </div>
+      </div>
+      <div id="rowMesero" class="two-col" style="margin-top:8px">
+        <div>
+          <label>Nombre del mesero</label>
+          <input type="text" id="inpNombre" placeholder="Ej. Carlos">
+        </div>
+        <div>
+          <label>Mesa asignada</label>
+          <input type="text" id="inpMesa" placeholder="Ej. M1">
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;justify-content:flex-end">
+        <a class="btn secondary" href="../kiosk/index.html">Volver</a>
+        <button class="btn" id="btnEntrar">Entrar</button>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import {Auth} from '../shared/auth.js';
+    const sel = document.getElementById('selRol');
+    const pin = document.getElementById('inpPin');
+    const nom = document.getElementById('inpNombre');
+    const mesa = document.getElementById('inpMesa');
+    const row = document.getElementById('rowMesero');
+
+    function toggle(){ row.style.display = (sel.value==='mesero') ? 'grid' : 'none'; }
+    sel.addEventListener('change', toggle); toggle();
+
+    document.getElementById('btnEntrar').addEventListener('click', ()=>{
+      const p = pin.value.trim();
+      const role = sel.value;
+      const ok = (role==='mesero' && p==='7777') || (role==='cocina' && p==='1313') || (role==='admin' && p==='4242');
+      if(!ok){ alert('PIN incorrecto'); return; }
+      Auth.role = role;
+      if(role==='mesero'){
+        const w = {name: nom.value.trim()||'Mesero', table: mesa.value.trim()||'M1'};
+        Auth.waiter = w;
+        location.href = '../mesero/index.html';
+      }else if(role==='cocina'){
+        location.href = '../cocina/index.html';
+      }else{
+        location.href = '../admin/index.html';
+      }
+    });
+  </script>
+</body>
+</html>
