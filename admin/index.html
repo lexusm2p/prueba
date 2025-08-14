@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Admin · Seven de Burgers</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🍔 Seven de Burgers <span class="badge">Admin</span></div>
+    <div class="row">
+      <a class="btn secondary" href="../kiosk/index.html">Kiosko</a>
+      <button class="btn ghost" id="btnLogout">Salir</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <div class="kicker">Ventas</div>
+      <table class="table" id="tbl">
+        <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant</th><th>Total</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="row" style="justify-content:flex-end;margin-top:10px">
+        <div>Total ingresos: <span class="price" id="lblIngreso">$0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import {Auth} from '../shared/auth.js';
+    import {Storage} from '../shared/storage.js';
+    import {BURGERS, ADEREZOS, EXTRAS} from '../shared/menu.js';
+    if(Auth.role!=='admin'){ location.replace('../login/index.html'); }
+    document.getElementById('btnLogout').addEventListener('click', ()=>Auth.logout());
+
+    function calcTotal(o){
+      const ad = (o.aderezos||[]).map(id=>ADEREZOS.find(a=>a.id===id)?.price||0).reduce((a,b)=>a+b,0);
+      const ex = (o.extras||[]).map(id=>EXTRAS.find(x=>x.id===id)?.price||0).reduce((a,b)=>a+b,0);
+      const base = o.priceUnit||0;
+      return (base + ad + ex) * (o.qty||1);
+    }
+
+    const tbody = document.querySelector('#tbl tbody');
+    const lbl = document.getElementById('lblIngreso');
+
+    function render(list){
+      const closed = list.filter(o=>o.status==='entregado');
+      tbody.innerHTML = closed.map(o=>`<tr>
+        <td>${new Date(o.createdAt).toLocaleString()}</td>
+        <td>${o.customer||'-'}</td>
+        <td>${o.burgerName||'-'}</td>
+        <td>${o.qty||1}</td>
+        <td>$${calcTotal(o)}</td>
+      </tr>`).join('');
+      const sum = closed.reduce((s,o)=>s+calcTotal(o),0);
+      lbl.textContent = '$' + sum;
+    }
+
+    const unsub = Storage.subscribeOrders(render);
+  </script>
+</body>
+</html>
