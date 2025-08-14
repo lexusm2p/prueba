@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kiosko · Seven de Burgers</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🍔 Seven de Burgers <span class="badge">Kiosko</span></div>
+    <div class="row">
+      <button class="btn secondary" id="btnLogin">Login</button>
+    </div>
+  </div>
+  <div class="container">
+    <div id="menuGrid" class="grid"></div>
+  </div>
+  <footer>© Seven de Burgers · Hecho con ❤️</footer>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="backdrop"></div>
+  <div class="modal" id="orderModal">
+    <header>
+      <div>
+        <div class="kicker">Hacer pedido</div>
+        <strong id="modalTitle"></strong>
+      </div>
+      <button class="btn ghost" id="btnClose">Cerrar</button>
+    </header>
+    <div class="content">
+      <div class="two-col">
+        <div>
+          <label>Nombre del cliente</label>
+          <input type="text" id="inpCliente" placeholder="Tu nombre">
+        </div>
+        <div>
+          <label>Cantidad</label>
+          <input type="number" id="inpQty" min="1" step="1" value="1">
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Salsa sugerida</label>
+        <div class="item">
+          <input type="checkbox" id="chkSuggested" checked>
+          <div class="meta">¿Quieres que te sorprendamos con <span id="lblSugerida">—</span>?</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Aderezos extra (+$5 c/u)</label>
+        <div id="listAderezos" class="list"></div>
+      </div>
+
+      <div class="section">
+        <label>Ingredientes extra (costo variable)</label>
+        <div id="listExtras" class="list"></div>
+      </div>
+
+      <div class="section">
+        <label>Quitar ingredientes</label>
+        <div id="listRemove" class="list"></div>
+      </div>
+
+      <div class="section">
+        <label>Notas a cocina</label>
+        <textarea id="txtNotas" rows="3" placeholder="Sin jitomate, término medio, etc."></textarea>
+      </div>
+    </div>
+    <footer>
+      <div class="small">Total: <span class="price" id="lblTotal">$0</span></div>
+      <div class="row">
+        <button class="btn secondary" id="btnCancel">Cancelar</button>
+        <button class="btn" id="btnConfirm">Confirmar pedido</button>
+      </div>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast">Pedido enviado</div>
+
+  <script type="module">
+    import {BURGERS, ADEREZOS, EXTRAS, REMOVIBLES} from '../shared/menu.js';
+    import {Storage} from '../shared/storage.js';
+
+    const menuGrid = document.getElementById('menuGrid');
+    const backdrop = document.getElementById('backdrop');
+    const modal = document.getElementById('orderModal');
+    const btnClose = document.getElementById('btnClose');
+    const btnCancel = document.getElementById('btnCancel');
+    const btnConfirm = document.getElementById('btnConfirm');
+    const lblTotal = document.getElementById('lblTotal');
+    const lblSug = document.getElementById('lblSugerida');
+    const chkSuggested = document.getElementById('chkSuggested');
+    const inpCliente = document.getElementById('inpCliente');
+    const inpQty = document.getElementById('inpQty');
+    const txtNotas = document.getElementById('txtNotas');
+    const listAd = document.getElementById('listAderezos');
+    const listEx = document.getElementById('listExtras');
+    const listRm = document.getElementById('listRemove');
+    const toast = document.getElementById('toast');
+
+    let current = null;
+    let state = {aderezos:new Set(), extras:new Set(), remove:new Set()};
+
+    function openModal(item){
+      current = item;
+      document.getElementById('modalTitle').textContent = item.name + ' · $' + item.price;
+      lblSug.textContent = item.suggested || 'una salsa sorpresa';
+      chkSuggested.checked = true;
+      inpCliente.value = ''; inpQty.value = 1; txtNotas.value = '';
+      state = {aderezos:new Set(), extras:new Set(), remove:new Set()};
+
+      renderTicks();
+      calcTotal();
+      backdrop.style.display='block'; modal.style.display='block';
+    }
+    function closeModal(){ backdrop.style.display='none'; modal.style.display='none'; }
+
+    function renderMenu(){
+      menuGrid.innerHTML = BURGERS.map(b=>`
+        <div class="card">
+          <div class="kicker">Salsa sugerida: ${b.suggested || '—'}</div>
+          <h3>${b.name}</h3>
+          <div class="small">${b.ingredients.join(' · ')}</div>
+          <div class="row" style="margin-top:10px">
+            <div class="price">$${b.price}</div>
+            <span class="chip">Umami +</span>
+            <span style="flex:1"></span>
+            <button class="btn" data-id="${b.id}">Ordenar</button>
+          </div>
+        </div>
+      `).join('');
+      menuGrid.querySelectorAll('button[data-id]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const item = BURGERS.find(x=>x.id===btn.dataset.id);
+          openModal(item);
+        });
+      });
+    }
+
+    function renderTicks(){
+      listAd.innerHTML = ADEREZOS.map(a=>`
+        <label class="item">
+          <input type="checkbox" data-type="ad" data-id="${a.id}">
+          <div class="meta">${a.name}</div>
+          <div class="cost">+$${a.price}</div>
+        </label>
+      `).join('');
+      listEx.innerHTML = EXTRAS.map(e=>`
+        <label class="item">
+          <input type="checkbox" data-type="ex" data-id="${e.id}">
+          <div class="meta">${e.name}</div>
+          <div class="cost">+$${e.price}</div>
+        </label>
+      `).join('');
+      listRm.innerHTML = REMOVIBLES.map(r=>`
+        <label class="item">
+          <input type="checkbox" data-type="rm" data-id="${r}">
+          <div class="meta">Quitar: ${r}</div>
+        </label>
+      `).join('');
+
+      modal.querySelectorAll('input[type="checkbox"]').forEach(ch=>{
+        ch.addEventListener('change', (e)=>{
+          const t = e.target.dataset.type, id = e.target.dataset.id;
+          if(t==='ad'){ e.target.checked ? state.aderezos.add(id) : state.aderezos.delete(id); }
+          if(t==='ex'){ e.target.checked ? state.extras.add(id) : state.extras.delete(id); }
+          if(t==='rm'){ e.target.checked ? state.remove.add(id) : state.remove.delete(id); }
+          calcTotal();
+        });
+      });
+    }
+
+    function calcTotal(){
+      if(!current) return;
+      const qty = Math.max(1, parseInt(inpQty.value||'1',10));
+      const ad = [...state.aderezos].map(id=>ADEREZOS.find(a=>a.id===id)?.price||0).reduce((a,b)=>a+b,0);
+      const ex = [...state.extras].map(id=>EXTRAS.find(a=>a.id===id)?.price||0).reduce((a,b)=>a+b,0);
+      const base = current.price;
+      const total = qty * (base + ad + ex);
+      lblTotal.textContent = '$' + total;
+    }
+
+    btnConfirm.addEventListener('click', async ()=>{
+      const qty = Math.max(1, parseInt(inpQty.value||'1',10));
+      const order = {
+        type:'kiosk',
+        burgerId: current.id,
+        burgerName: current.name,
+        priceUnit: current.price,
+        qty,
+        customer: inpCliente.value.trim() || 'Cliente',
+        suggestedApplied: chkSuggested.checked,
+        suggestedName: current.suggested || null,
+        aderezos: [...state.aderezos],
+        extras: [...state.extras],
+        remove: [...state.remove],
+        notes: txtNotas.value.trim(),
+        status: 'en_preparacion'
+      };
+      await Storage.addOrder(order);
+      closeModal();
+      toast.textContent='Pedido enviado a cocina'; toast.style.display='block'; setTimeout(()=>toast.style.display='none', 1800);
+    });
+
+    btnClose.addEventListener('click', closeModal);
+    btnCancel.addEventListener('click', closeModal);
+    document.getElementById('btnLogin').addEventListener('click', ()=>{
+      location.href='../login/index.html';
+    });
+
+    [inpQty].forEach(el=>el.addEventListener('input', calcTotal));
+
+    renderMenu();
+  </script>
+</body>
+</html>
