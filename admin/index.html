@@ -1,28 +1,29 @@
 
-<!doctype html>
-<html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Admin · Seven de Burgers</title><link rel="stylesheet" href="../assets/styles.css"></head>
-<body>
-  <div class="header"><div class="logo">🍔 Seven de Burgers <span class="badge">Admin</span></div><div class="row"><a class="btn secondary" href="../login/index.html">Login</a></div></div>
-  <div class="container">
-    <div class="card">
-      <div class="kicker">Ventas (Entregadas)</div>
-      <table class="table" id="tbl"><thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant</th><th>Total</th></tr></thead><tbody></tbody></table>
-      <div class="row" style="justify-content:flex-end;margin-top:10px"><div>Total ingresos: <span class="price" id="lblTotal">$0</span></div></div>
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Admin • Seven de Burgers</title>
+<link rel="stylesheet" href="./styles.css"/></head><body>
+<header><a class="logo" href="../">Seven de Burgers</a><div class="actions"><a class="pill" href="../kiosk/">Kiosko</a></div></header>
+<main>
+  <nav class="tabs">
+    <button data-tab="compras" class="active">Compras</button>
+    <button data-tab="inventario">Inventario</button>
+    <button data-tab="finanzas">Finanzas</button>
+    <button data-tab="usuarios">Usuarios</button>
+  </nav>
+  <section id="compras" class="tab active">
+    <h3>Registrar compra</h3>
+    <div class="grid">
+      <input id="item" placeholder="Ingrediente / Insumo"/>
+      <input id="qty" type="number" placeholder="Cantidad"/>
+      <input id="unit" type="number" placeholder="Costo unitario"/>
+      <button id="add">Agregar</button>
     </div>
-  </div>
-  <script type="module">
-    import {subscribeOrders, Status} from '../shared/state.smart.js';
-    import {ADEREZOS, EXTRAS} from '../shared/menu.js';
-    function pAd(id){ return ADEREZOS.find(a=>a.id===id)?.price||0; } function pEx(id){ return EXTRAS.find(e=>e.id===id)?.price||0; }
-    function calcTotal(o){ const ad=(o.aderezos||[]).reduce((s,id)=>s+pAd(id),0); const ex=(o.extras||[]).reduce((s,id)=>s+pEx(id),0); return (o.priceUnit+ad+ex)*(o.qty||1); }
-    const tbody=document.querySelector('#tbl tbody'); const lbl=document.getElementById('lblTotal');
-    subscribeOrders((orders)=>{
-      const done=orders.filter(o=>o.status===Status.DELIVERED);
-      tbody.innerHTML = done.map(o=>`<tr><td>${new Date(o.updatedAt||o.createdAt).toLocaleString()}</td><td>${o.customer||'-'}</td><td>${o.burgerName||'-'}</td><td>${o.qty||1}</td><td>$${calcTotal(o)}</td></tr>`).join('');
-      lbl.textContent='$'+done.reduce((s,o)=>s+calcTotal(o),0);
-    });
-  </script>
-  <footer>Backend: <span id="bk">—</span></footer>
-  <script type="module">import {backendName} from '../shared/state.smart.js'; document.getElementById('bk').textContent=backendName;</script>
+    <div id="listCompras"></div>
+  </section>
+  <section id="inventario" class="tab"><h3>Inventario</h3><div id="inv"></div></section>
+  <section id="finanzas" class="tab"><h3>Finanzas</h3><div id="fin"></div></section>
+  <section id="usuarios" class="tab"><h3>Usuarios</h3><div id="users"></div></section>
+</main>
+<script type="module" src="./app.js"></script>
 </body></html>
