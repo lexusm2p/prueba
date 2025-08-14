@@ -49,6 +49,21 @@
   <footer>Backend: <span id="bk">—</span></footer>
   <script type="module">import {backendName} from '../shared/state.smart.js'; document.getElementById('bk').textContent=backendName;</script>
 </body></html>
+      listProgress.innerHTML = ip.map(card).join('') || '<div class="empty">Sin preparación</div>';
+      listReady.innerHTML = r.map(card).join('') || '<div class="empty">Sin listos</div>';
+    }
+    subscribeOrders(render);
+    document.addEventListener('click', async (e)=>{
+      const btn=e.target.closest('button[data-a]'); if(!btn) return;
+      const id=btn.closest('.k-card')?.dataset.id; if(!id) return; const a=btn.dataset.a;
+      if(a==='take') await setStatus(id, Status.IN_PROGRESS);
+      if(a==='ready') await setStatus(id, Status.READY);
+      if(a==='deliver') await archiveDelivered(id);
+    });
+  </script>
+  <footer>Backend: <span id="bk">—</span></footer>
+  <script type="module">import {backendName} from '../shared/state.smart.js'; document.getElementById('bk').textContent=backendName;</script>
+</body></html>
   <script type="module">
     import {BURGERS, ADEREZOS, EXTRAS, REMOVIBLES} from '../shared/menu.js';
     import * as state from '../shared/state.smart.js';
