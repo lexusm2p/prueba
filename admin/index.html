@@ -26,30 +26,3 @@
   <footer>Backend: <span id="bk">—</span></footer>
   <script type="module">import {backendName} from '../shared/state.smart.js'; document.getElementById('bk').textContent=backendName;</script>
 </body></html>
-    function calcTotal(o){
-      const ad = (o.aderezos||[]).map(id=>ADEREZOS.find(a=>a.id===id)?.price||0).reduce((a,b)=>a+b,0);
-      const ex = (o.extras||[]).map(id=>EXTRAS.find(x=>x.id===id)?.price||0).reduce((a,b)=>a+b,0);
-      const base = o.priceUnit||0;
-      return (base + ad + ex) * (o.qty||1);
-    }
-
-    const tbody = document.querySelector('#tbl tbody');
-    const lbl = document.getElementById('lblIngreso');
-
-    function render(list){
-      const closed = list.filter(o=>o.status==='entregado');
-      tbody.innerHTML = closed.map(o=>`<tr>
-        <td>${new Date(o.createdAt).toLocaleString()}</td>
-        <td>${o.customer||'-'}</td>
-        <td>${o.burgerName||'-'}</td>
-        <td>${o.qty||1}</td>
-        <td>$${calcTotal(o)}</td>
-      </tr>`).join('');
-      const sum = closed.reduce((s,o)=>s+calcTotal(o),0);
-      lbl.textContent = '$' + sum;
-    }
-
-    const unsub = Storage.subscribeOrders(render);
-  </script>
-</body>
-</html>
