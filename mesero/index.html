@@ -1,9 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mesero · Seven de Burgers</title>
+<style>
+  :root{--bg:#0f2333;--pane:#0e2231;--card:#12324a;--line:#1a3f56;--text:#eaf6ff;--muted:#a9cbe0;--accent:#ffcc33;--ok:#35d07f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:500 16px/1.45 system-ui,-apple-system,Segoe UI,Roboto}
+  header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--pane)}
+  .brand{font-weight:900}
+  .wrap{max-width:980px;margin:0 auto;padding:12px;display:grid;grid-template-columns:1fr;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{background:#0b2a3d;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px;color:var(--muted)}
+  .meta{color:var(--muted);font-size:12px}
+  button{cursor:pointer;border:0;border-radius:10px;padding:8px 10px;font-weight:800}
+  .b{background:#0b2a3d;color:#cfe9f7;border:1px solid var(--line)}
+  .b-ok{background:var(--ok);color:#052f1a}
+  .right{margin-left:auto}
+  .tag{background:#0b2a3d;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:12px;color:#cfe9f7}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🧑‍🍳 Mesero — Seven de Burgers</div>
+  <div class="row">
+    <span id="who" class="tag"></span>
+    <button class="b" id="login">Login</button>
+    <a class="b" href="../kiosk/index.html">Kiosko</a>
+  </div>
+</header>
 
-<!doctype html><html lang="es"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Mesero • Seven de Burgers</title>
-<link rel="stylesheet" href="./styles.css"/></head><body>
-<header><a class="logo" href="../">Seven de Burgers</a><div class="actions"><a class="pill" href="../kiosk/">Kiosko</a></div></header>
-<main><div id="feed"></div></main>
-<script type="module" src="./app.js"></script>
-</body></html>
+<main class="wrap">
+  <section>
+    <h3>Listos para entregar</h3>
+    <div id="list"></div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+import { getFirestore, collection, query, where, orderBy, onSnapshot, doc, updateDoc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+
+const config = {
+  apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+  authDomain: "seven-de-burgers.firebaseapp.com",
+  projectId: "seven-de-burgers",
+  storageBucket: "seven-de-burgers.firebasestorage.app",
+  messagingSenderId: "34089845279",
+  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
+  measurementId: "G-Q8YQJGL2XY"
+};
+const app = initializeApp(config);
+const db  = getFirestore(app);
+
+/* ingredientes base por id para mostrar al mesero si cocina lo pide */
+const MAP_ING = {
+  starter:'Pan, Carne 85g, Queso amarillo, Queso blanco, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza',
+  koopa:'Pan, Carne, Queso blanco, Piña, Tocino, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza',
+  flame:'Pan, Carne, Salsa Cheddar, Tocino, Salsa habanero, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza',
+  megabyte:'Pan, Carne, Salsa Cheddar, Queso blanco, Tocino, Salchicha, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup',
+  hadouken:'Pan, Carne, Queso blanco, Queso amarillo, Salchicha, Aderezo chipotle, Lechuga, Jitomate, Cebolla',
+  nintendo:'Pan, Carne, Queso blanco, Piña, Jamón, Lechuga, Jitomate, Cebolla, Mayonesa, Catsup, Mostaza',
+  boss:'Pan, Carne, Salsa Cheddar, Queso blanco, Queso amarillo, Tocino, Jamón, Salchicha, Piña, Salsa habanero, Aderezo chipotle'
+};
+
+/* beep */
+function beep(ms=160,f=980){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type='square';o.frequency.value=f;g.gain.value=.06;o.start();setTimeout(()=>{o.stop();a.close()},ms);}catch(_){}}
+
+const $list = document.getElementById('list');
+const $who  = document.getElementById('who');
+const $login= document.getElementById('login');
+
+function setUser(name){
+  if(name){ localStorage.setItem('waiter', name); $who.textContent = `Mesero: ${name}`; }
+  else { localStorage.removeItem('waiter'); $who.textContent=''; }
+}
+setUser(localStorage.getItem('waiter')||'');
+
+$login.onclick = ()=>{
+  const name = prompt('Tu nombre de mesero:')?.trim();
+  if(name) setUser(name);
+};
+
+function card(id,o){
+  const it=o.items?.[0]||{};
+  const base = it.baseIngredients || MAP_ING[it.burgerId] || '';
+  const ads  = (it.extras?.aderezos||[]).map(x=>x.name);
+  const exs  = (it.extras?.ingredientes||[]).map(x=>x.name);
+  const chips = (base? base.split(',').map(s=>s.trim()):[]).map(s=>`<span class="chip">${s}</span>`).join('');
+  const chipsEx = [...ads, ...exs].map(s=>`<span class="chip">${s}</span>`).join('');
+  const who = `${o.customerName?o.customerName+' · ':''}${o.table||'Mostrador'}`;
+  return `
+  <article class="card" data-id="${id}">
+    <div class="row"><strong>${it.name}</strong> × ${it.qty||1}<span class="meta right">${who}</span></div>
+    ${o.notes?`<div class="meta">Notas: ${o.notes}</div>`:''}
+    <div class="chips">${chips}</div>
+    ${chipsEx?`<div class="chips" style="margin-top:6px">${chipsEx}</div>`:''}
+    <div class="row" style="margin-top:8px">
+      ${o.assignedTo ? `<span class="meta">Asignado a: ${o.assignedTo}</span>` : `<button class="b" data-a="claim">Reclamar</button>`}
+      <button class="b b-ok right" data-a="deliver">Entregado</button>
+    </div>
+  </article>`;
+}
+
+let first = true, prevIds = new Set();
+onSnapshot(
+  query(collection(db,'orders'), where('status','==','READY'), orderBy('readyAt','desc')),
+  (snap)=>{
+    const items=[]; const ids=new Set();
+    snap.forEach(d=>{ items.push({id:d.id, data:d.data()}); ids.add(d.id); });
+    // beep si aparece un READY nuevo
+    if(!first){
+      for(const it of items){ if(!prevIds.has(it.id)) { beep(); break; } }
+    }
+    prevIds = ids; first=false;
+
+    const me = localStorage.getItem('waiter')||'';
+    // Mostrar todos, pero arriba los del mesero (si ya los reclamó)
+    items.sort((a,b)=>{
+      const A = a.data.assignedTo===me ? -1 : 0;
+      const B = b.data.assignedTo===me ? -1 : 0;
+      return A-B;
+    });
+
+    $list.innerHTML = items.map(x=>card(x.id,x.data)).join('') || '<div class="meta">Sin listos</div>';
+  }
+);
+
+document.addEventListener('click', async (e)=>{
+  const btn = e.target.closest('button[data-a]'); if(!btn) return;
+  const card = btn.closest('.card'); const id = card?.dataset.id; if(!id) return;
+  const a = btn.dataset.a;
+  if(a==='claim'){
+    const me = localStorage.getItem('waiter')||'';
+    if(!me){ alert('Haz login como mesero.'); return; }
+    await updateDoc(doc(db,'orders',id), { assignedTo: me });
+  }
+  if(a==='deliver'){
+    const ref = doc(db,'orders',id);
+    const snap = await getDoc(ref);
+    if(snap.exists()){
+      const data = snap.data();
+      await setDoc(doc(db,'orders_archive',id), { ...data, status:'DELIVERED', deliveredAt: serverTimestamp() });
+      await deleteDoc(ref);
+    }
+  }
+});
+</script>
+</body>
+</html>
