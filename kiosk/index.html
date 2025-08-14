@@ -46,6 +46,16 @@
   <link rel="stylesheet" href="/prueba/styles-patch.css">
 </head>
 <body>
+  <!-- appbar.html : pega este bloque justo dentro de <body>, arriba de tu contenido -->
+<header class="appbar">
+  <a class="brand" href="/prueba/kiosk/">🍔 Seven de Burgers</a>
+  <nav class="topnav">
+    <a href="/prueba/kiosk/">Ir al kiosko</a>
+    <a href="/prueba/mesero/">Ir a mesero</a>
+    <a href="/prueba/cocina/">Ir a cocina</a>
+  </nav>
+</header>
+
   <header>
     <div class="brand"><a href="./index.html" style="color:inherit;text-decoration:none">Seven de Burgers</a></div>
     <button class="b-ghost" onclick="location.href='./index.html'">Kiosko</button>
