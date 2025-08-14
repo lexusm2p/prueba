@@ -140,7 +140,7 @@
               ${o.status!=='en_proceso'?'<button class="btn secondary" data-a="proc" data-id="'+o.id+'">En proceso</button>':''}
               ${o.status!=='listo'?'<button class="btn" data-a="ready" data-id="'+o.id+'">Listo</button>':''}
             </div>
-          </div>`;
+          </div>;
         }).join('');
 
       grid.querySelectorAll('button[data-id]').forEach(b=>{
