@@ -45,6 +45,17 @@
 </style>
 </head>
 <body>
+  <!-- en el HTML -->
+<nav class="links">
+  <a data-href="kiosk">Ir al kiosko</a>
+  <a data-href="waiter">Ir a mesero</a>
+  <a data-href="kitchen">Ir a cocina</a>
+</nav>
+<script type="module">
+  import { ROUTES } from '../lib/config.js';
+  document.querySelectorAll('[data-href]')
+    .forEach(a => a.href = ROUTES[a.dataset.href]);
+</script>
   <header>
     <div class="brand"><a href="./index.html" style="color:inherit;text-decoration:none">Seven de Burgers</a></div>
     <button class="b-ghost" onclick="location.href='./index.html'">Kiosko</button>
