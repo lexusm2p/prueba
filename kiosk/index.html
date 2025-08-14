@@ -2,77 +2,33 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Kiosko · Seven de Burgers (v7.6.1)</title>
-  <link rel="stylesheet" href="../assets/styles.css">
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Kiosko • Seven de Burgers</title>
+<link rel="stylesheet" href="./styles.css"/>
 </head>
 <body>
-  <div class="header">
-    <div class="logo">🍔 Seven de Burgers <span class="badge">Kiosko</span></div>
-    <div class="row"><a class="btn secondary" href="../login/index.html">Login</a></div>
+<header>
+  <a class="logo" href="../">Seven de Burgers</a>
+  <div class="actions">
+    <a class="pill" href="../mesero/">Login</a>
   </div>
-  <div class="container"><div id="grid" class="grid"></div></div>
-  <div class="backdrop" id="backdrop"></div>
-  <div class="modal" id="modal">
-    <header><strong id="ttl">—</strong><button class="btn ghost" id="mClose">Cerrar</button></header>
-    <div class="content">
-      <div class="row">
-        <div style="flex:1"><label>Nombre del cliente</label><input type="text" id="inpCliente" placeholder="Tu nombre"></div>
-        <div style="width:140px"><label>Cantidad</label><input type="number" id="inpQty" min="1" step="1" value="1"></div>
-      </div>
-      <div class="section">
-        <label>¿Quieres que te sorprendamos con una nueva configuración (aderezo)?</label>
-        <div class="item"><input type="checkbox" id="chkRec" checked><div class="meta">Sugerencia del chef: <b id="lblRec">—</b></div><div class="cost">+$5</div></div>
-        <div class="small">*Nunca repetimos el aderezo que ya trae la receta base.</div>
-      </div>
-      <div class="section"><label>Aderezos extra (+$5 c/u)</label><div id="listAd" class="list"></div></div>
-      <div class="section"><label>Ingredientes extra</label><div id="listEx" class="list"></div></div>
-      <div class="section"><label>Quitar ingredientes</label><div id="listRm" class="list"></div></div>
-      <div class="section"><label>Notas a cocina</label><textarea id="txtNotas" rows="3" placeholder="Sin jitomate, término medio…"></textarea></div>
+</header>
+<main>
+  <section id="cards"></section>
+</main>
+
+<div id="modal" class="modal hidden">
+  <div class="dialog">
+    <div class="dlg-header"><strong id="dlg-title"></strong><button id="dlg-close">✕</button></div>
+    <div class="dlg-body">
+      <div class="stepper" id="stepper"></div>
+      <div class="step step-1"></div>
+      <div class="step step-2 hidden"></div>
+      <div class="step step-3 hidden"></div>
     </div>
-    <footer><div>Total: <span class="price" id="lblTotal">$0</span></div><button class="btn" id="btnConfirm">Confirmar pedido</button></footer>
   </div>
-  <div class="toast" id="toast">Pedido enviado</div>
-  <script type="module">
-    import {BURGERS, ADEREZOS, EXTRAS, REMOVIBLES} from '../shared/menu.js';
-    import * as state from '../shared/state.smart.js';
-    const {addOrder} = state;
-    const grid=document.getElementById('grid'), modal=document.getElementById('modal'), backdrop=document.getElementById('backdrop');
-    const ttl=document.getElementById('ttl'), inpCliente=document.getElementById('inpCliente'), inpQty=document.getElementById('inpQty');
-    const lblTotal=document.getElementById('lblTotal'), listAd=document.getElementById('listAd'), listEx=document.getElementById('listEx'), listRm=document.getElementById('listRm');
-    const lblRec=document.getElementById('lblRec'), chkRec=document.getElementById('chkRec'), txtNotas=document.getElementById('txtNotas'), toast=document.getElementById('toast');
-    const btnConfirm=document.getElementById('btnConfirm'), btnClose=document.getElementById('mClose');
-    let current=null, recId=null, adSet=new Set(), exSet=new Set(), rmSet=new Set();
-    function card(b){return `<div class="card"><div class="small">Sugerida base: ${b.suggestedBase}</div><h3>${b.name}</h3><div class="small">${b.ingredients.join(' · ')}</div><div class="row" style="margin-top:10px"><div class="price">$${b.price}</div><span style="flex:1"></span><button class="btn" data-id="${b.id}">Ordenar</button></div></div>`}
-    function renderMenu(){ grid.innerHTML=BURGERS.map(card).join(''); grid.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>openModal(b.dataset.id))); }
-    function openModal(id){
-      current=BURGERS.find(x=>x.id===id); adSet.clear(); exSet.clear(); rmSet.clear(); inpCliente.value=''; inpQty.value=1; txtNotas.value='';
-      const base=(current.suggestedBase||'').toLowerCase(); const deny=new Set(base.split(/\s*\+\s*/)); const recs=(current.recommended||[]).filter(r=>!deny.has(r)); recId=recs[0]||null;
-      lblRec.textContent= recId ? (ADEREZOS.find(a=>a.id===recId)?.name || 'Sorpresa') : 'Sorpresa'; chkRec.checked=!!recId;
-      ttl.textContent = `${current.name} · $${current.price}`;
-      listAd.innerHTML = ADEREZOS.map(a=>`<label class="item"><input type="checkbox" data-t="ad" data-id="${a.id}"><div class="meta">${a.name}</div><div class="cost">+$${a.price}</div></label>`).join('');
-      listEx.innerHTML = EXTRAS.map(e=>`<label class="item"><input type="checkbox" data-t="ex" data-id="${e.id}"><div class="meta">${e.name}</div><div class="cost">+$${e.price}</div></label>`).join('');
-      listRm.innerHTML = REMOVIBLES.map(r=>`<label class="item"><input type="checkbox" data-t="rm" data-id="${r}"><div class="meta">Quitar: ${r}</div></label>`).join('');
-      modal.style.display='block'; backdrop.style.display='block'; bind(); calcTotal();
-    }
-    function closeModal(){ modal.style.display='none'; backdrop.style.display='none'; }
-    function bind(){ modal.querySelectorAll('input[type="checkbox"]').forEach(ch=>{ ch.addEventListener('change',(e)=>{
-      const t=e.target.dataset.t, id=e.target.dataset.id; if(t==='ad'){e.target.checked?adSet.add(id):adSet.delete(id);} if(t==='ex'){e.target.checked?exSet.add(id):exSet.delete(id);} if(t==='rm'){e.target.checked?rmSet.add(id):rmSet.delete(id);} calcTotal(); })}); inpQty.addEventListener('input',calcTotal); document.getElementById('mClose').addEventListener('click',closeModal); }
-    function priceAd(id){ return ADEREZOS.find(a=>a.id===id)?.price||0 } function priceEx(id){ return EXTRAS.find(e=>e.id===id)?.price||0 }
-    function calcTotal(){ if(!current) return; const qty=Math.max(1,parseInt(inpQty.value||'1',10)); let extra=0; if(chkRec.checked && recId && !adSet.has(recId)) extra+=priceAd(recId); for(const id of adSet) extra+=priceAd(id); for(const id of exSet) extra+=priceEx(id); lblTotal.textContent='$'+(qty*(current.price+extra)); }
-    btnConfirm.addEventListener('click', async ()=>{
-      const qty=Math.max(1,parseInt(inpQty.value||'1',10)); const ad=new Set(adSet); if(chkRec.checked && recId) ad.add(recId);
-      const finalIngs=current.ingredients.filter(x=>!rmSet.has(x.split(' ')[0]));
-      await addOrder({ type:'kiosk', burgerId:current.id, burgerName:current.name, priceUnit:current.price, qty, customer:(inpCliente.value||'Cliente').trim(), recommendedApplied:!!(chkRec.checked&&recId), recommendedId:recId, aderezos:[...ad], extras:[...exSet], remove:[...rmSet], notes:txtNotas.value.trim(), ingredientesFinales:finalIngs });
-      closeModal(); const t=document.getElementById('toast'); t.textContent='Pedido enviado'; t.style.display='block'; setTimeout(()=>t.classList.add('show'),10); setTimeout(()=>{t.classList.remove('show'); t.style.display='none'},1800);
-    });
-    renderMenu();
-  </script>
-  <footer>Backend: <span id="bk">—</span></footer>
-  <script type="module">
-    import {backendName} from '../shared/state.smart.js';
-    document.getElementById('bk').textContent = backendName;
-  </script>
+</div>
+
+<script type="module" src="./app.js"></script>
 </body>
 </html>
