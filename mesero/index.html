@@ -1,84 +1,33 @@
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Mesero · Seven de Burgers</title>
-  <link rel="stylesheet" href="../assets/styles.css">
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Mesero · Seven de Burgers</title><link rel="stylesheet" href="../assets/styles.css"></head>
 <body>
-  <div class="header">
-    <div class="logo">🍔 Seven de Burgers <span class="badge">Mesero</span></div>
-    <div class="row">
-      <a class="btn secondary" href="../kiosk/index.html">Kiosko</a>
-      <button class="btn ghost" id="btnLogout">Salir</button>
-    </div>
-  </div>
+  <div class="header"><div class="logo">🍔 Seven de Burgers <span class="badge">Mesero</span></div><div class="row"><a class="btn secondary" href="../kiosk/index.html">Kiosko</a><button class="btn ghost" id="btnSalir">Salir</button></div></div>
   <div class="container">
-    <div class="card">
-      <div class="kicker">Mi mesa</div>
-      <h3 id="lblMesa">—</h3>
-      <div class="row">
-        <button class="btn" id="btnNueva">Nueva orden</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="kicker">Mis órdenes</div>
-      <table class="table" id="tbl">
-        <thead><tr><th>Cliente</th><th>Producto</th><th>Cant</th><th>Estatus</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <div class="card"><div class="row"><div><b id="lblMesero">Mesero</b> · Mesa <b id="lblMesa">M1</b></div></div></div>
+    <div class="card"><div class="kicker">Órdenes</div><table class="table" id="tbl"><thead><tr><th>Cliente</th><th>Producto</th><th>Cant</th><th>Estatus</th><th></th></tr></thead><tbody></tbody></table></div>
   </div>
-
-  <!-- Modal de alta reutiliza el de kiosko, embebido via iframe para simplicidad -->
-  <div class="modal-backdrop" id="backdrop"></div>
-  <div class="modal" id="mdlOrden">
-    <header><strong>Nueva orden</strong><button class="btn ghost" id="mClose">Cerrar</button></header>
-    <div class="content">
-      <iframe id="kioskFrame" src="../kiosk/index.html" style="width:100%;height:60vh;border:none;border-radius:12px;background:#061a2b"></iframe>
-      <p class="small">Tip: usa el kiosko para armar la orden del cliente y finaliza aquí.</p>
-    </div>
-    <footer><span></span><button class="btn secondary" id="mDone">Listo</button></footer>
-  </div>
-
+  <div class="toast" id="toast"></div>
   <script type="module">
-    import {Auth} from '../shared/auth.js';
-    import {Storage} from '../shared/storage.js';
-    if(Auth.role!=='mesero'){ location.replace('../login/index.html'); }
-
-    const waiter = Auth.waiter || {name:'Mesero', table:'M1'};
-    document.getElementById('lblMesa').textContent = waiter.name + ' · ' + waiter.table;
-
-    document.getElementById('btnLogout').addEventListener('click', ()=>Auth.logout());
-
+    import {subscribeOrders, setStatus, Status} from '../shared/state.smart.js';
+    const waiter = JSON.parse(localStorage.getItem('sb_waiter')||'null') || {name:'Mesero', table:'M1'};
+    const waiterId = sessionStorage.getItem('sb_mesero_id');
+    document.getElementById('lblMesero').textContent = waiter.name; document.getElementById('lblMesa').textContent = waiter.table;
+    document.getElementById('btnSalir').addEventListener('click', ()=>{ localStorage.removeItem('sb_role'); location.href='../kiosk/index.html'; });
     const tbody = document.querySelector('#tbl tbody');
     function render(list){
-      tbody.innerHTML = list
-        .filter(o=>o.type && (o.type==='kiosk' || o.type==='mesero'))
-        .filter(o=>!o.waiter || o.waiter===waiter.name || o.table===waiter.table || o.type==='kiosk')
-        .map(o=>`<tr>
-          <td>${o.customer||'-'}</td>
-          <td>${o.burgerName||o.title||'-'}</td>
-          <td>${o.qty||1}</td>
-          <td>${o.status}</td>
-          <td>${o.status==='listo' ? '<button class="btn smallBtn" data-id="'+o.id+'">Entregar</button>' : ''}</td>
-        </tr>`).join('');
-      tbody.querySelectorAll('button[data-id]').forEach(b=>{
-        b.addEventListener('click', ()=> Storage.updateOrder(b.dataset.id, {status:'entregado'}) );
-      });
+      const mine = list.filter(o => o.table===waiter.table || o.waiterId===waiterId || o.type==='kiosk');
+      tbody.innerHTML = mine.map(o=>`<tr><td>${o.customer||'-'}</td><td>${o.burgerName||'-'}</td><td>${o.qty||1}</td><td>${o.status}</td><td>${o.status===Status.READY ? '<button class="btn" data-id="'+o.id+'">Entregar</button>' : ''}</td></tr>`).join('');
+      tbody.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>setStatus(b.dataset.id, Status.DELIVERED)));
     }
-    const unsub = Storage.subscribeOrders(render);
-
-    // Modal kiosk inline
-    const backdrop = document.getElementById('backdrop');
-    const modal = document.getElementById('mdlOrden');
-    function open(){ backdrop.style.display='block'; modal.style.display='block'; }
-    function close(){ backdrop.style.display='none'; modal.style.display='none'; }
-    document.getElementById('btnNueva').addEventListener('click', open);
-    document.getElementById('mClose').addEventListener('click', close);
-    document.getElementById('mDone').addEventListener('click', close);
+    function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.classList.add('show'),10); setTimeout(()=>{t.classList.remove('show'); t.style.display='none';}, 2800); }
+    subscribeOrders((orders)=>{
+      render(orders);
+      const now=Date.now();
+      orders.filter(o => o.status===Status.READY && (o.table===waiter.table || o.waiterId===waiterId)).forEach(o => { if(now-(o.updatedAt||0)<4000) toast(`Orden lista: ${o.burgerName} · Mesa ${o.table||'-'}`); });
+    });
   </script>
-</body>
-</html>
+  <footer>Backend: <span id="bk">—</span></footer>
+  <script type="module">import {backendName} from '../shared/state.smart.js'; document.getElementById('bk').textContent=backendName;</script>
+</body></html>
