@@ -1,39 +1,54 @@
 
 <!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Kiosko · Seven de Burgers (v7.6.1)</title>
-  <link rel="stylesheet" href="../assets/styles.css">
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Cocina · Seven de Burgers</title><link rel="stylesheet" href="../assets/styles.css"></head>
 <body>
-  <div class="header">
-    <div class="logo">🍔 Seven de Burgers <span class="badge">Kiosko</span></div>
-    <div class="row"><a class="btn secondary" href="../login/index.html">Login</a></div>
+  <div class="header"><div class="logo">🍔 Seven de Burgers <span class="badge">Cocina</span></div><div class="row"><a class="btn secondary" href="../login/index.html">Login</a></div></div>
+  <div class="container">
+    <div class="columns"><section><h3>Pendientes</h3><div id="list-pending"></div></section><section><h3>En preparación</h3><div id="list-progress"></div></section><section><h3>Listos</h3><div id="list-ready"></div></section></div>
   </div>
-  <div class="container"><div id="grid" class="grid"></div></div>
-  <div class="backdrop" id="backdrop"></div>
-  <div class="modal" id="modal">
-    <header><strong id="ttl">—</strong><button class="btn ghost" id="mClose">Cerrar</button></header>
-    <div class="content">
-      <div class="row">
-        <div style="flex:1"><label>Nombre del cliente</label><input type="text" id="inpCliente" placeholder="Tu nombre"></div>
-        <div style="width:140px"><label>Cantidad</label><input type="number" id="inpQty" min="1" step="1" value="1"></div>
-      </div>
-      <div class="section">
-        <label>¿Quieres que te sorprendamos con una nueva configuración (aderezo)?</label>
-        <div class="item"><input type="checkbox" id="chkRec" checked><div class="meta">Sugerencia del chef: <b id="lblRec">—</b></div><div class="cost">+$5</div></div>
-        <div class="small">*Nunca repetimos el aderezo que ya trae la receta base.</div>
-      </div>
-      <div class="section"><label>Aderezos extra (+$5 c/u)</label><div id="listAd" class="list"></div></div>
-      <div class="section"><label>Ingredientes extra</label><div id="listEx" class="list"></div></div>
-      <div class="section"><label>Quitar ingredientes</label><div id="listRm" class="list"></div></div>
-      <div class="section"><label>Notas a cocina</label><textarea id="txtNotas" rows="3" placeholder="Sin jitomate, término medio…"></textarea></div>
-    </div>
-    <footer><div>Total: <span class="price" id="lblTotal">$0</span></div><button class="btn" id="btnConfirm">Confirmar pedido</button></footer>
-  </div>
-  <div class="toast" id="toast">Pedido enviado</div>
+  <script type="module">
+    import {subscribeOrders, setStatus, archiveDelivered, Status} from '../shared/state.smart.js';
+    const listPending=document.getElementById('list-pending'), listProgress=document.getElementById('list-progress'), listReady=document.getElementById('list-ready');
+    const pillClass=s=>({pending:'pill--pending',in_progress:'pill--in_progress',ready:'pill--ready'})[s]||'pill--pending';
+    const pillText=s=>({pending:'Pendiente',in_progress:'En preparación',ready:'Listo'})[s]||s;
+    function card(o){
+      const ing=Array.isArray(o.ingredientesFinales)?o.ingredientesFinales.join(' · '):'—';
+      const ad=(o.aderezos||[]).join(', ')||'—'; const ex=(o.extras||[]).join(', ')||'—';
+      return `<article class="k-card" data-id="${o.id}">
+        <header><strong>${o.customer||'Cliente'}</strong> · Mesa ${o.table||'-'} <span class="pill ${pillClass(o.status)}">${pillText(o.status)}</span></header>
+        <div class="small"><b>${o.burgerName}</b> × ${o.qty||1}</div>
+        <div class="small"><b>Ingredientes:</b> ${ing}</div>
+        <div class="small"><b>Aderezos extra:</b> ${ad}</div>
+        <div class="small"><b>Extras:</b> ${ex}</div>
+        <div class="small"><b>Notas:</b> ${o.notes||'—'}</div>
+        <div class="k-actions">
+          ${o.status==='pending' ? '<button class="k-btn k-primary" data-a="take">Tomar</button>' : ''}
+          ${o.status==='in_progress' ? '<button class="k-btn k-primary" data-a="ready">Listo</button>' : ''}
+          ${o.status==='ready' ? '<button class="k-btn k-success" data-a="deliver">Despachado</button>' : ''}
+        </div>
+      </article>`;
+    }
+    function render(list){
+      const p=list.filter(o=>o.status===Status.PENDING);
+      const ip=list.filter(o=>o.status===Status.IN_PROGRESS);
+      const r=list.filter(o=>o.status===Status.READY);
+      listPending.innerHTML = p.map(card).join('') || '<div class="empty">Sin pendientes</div>';
+      listProgress.innerHTML = ip.map(card).join('') || '<div class="empty">Sin preparación</div>';
+      listReady.innerHTML = r.map(card).join('') || '<div class="empty">Sin listos</div>';
+    }
+    subscribeOrders(render);
+    document.addEventListener('click', async (e)=>{
+      const btn=e.target.closest('button[data-a]'); if(!btn) return;
+      const id=btn.closest('.k-card')?.dataset.id; if(!id) return; const a=btn.dataset.a;
+      if(a==='take') await setStatus(id, Status.IN_PROGRESS);
+      if(a==='ready') await setStatus(id, Status.READY);
+      if(a==='deliver') await archiveDelivered(id);
+    });
+  </script>
+  <footer>Backend: <span id="bk">—</span></footer>
+  <script type="module">import {backendName} from '../shared/state.smart.js'; document.getElementById('bk').textContent=backendName;</script>
+</body></html>
   <script type="module">
     import {BURGERS, ADEREZOS, EXTRAS, REMOVIBLES} from '../shared/menu.js';
     import * as state from '../shared/state.smart.js';
