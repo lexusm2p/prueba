@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cocina · Seven de Burgers</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🍔 Seven de Burgers <span class="badge">Cocina</span></div>
+    <div class="row">
+      <a class="btn secondary" href="../kiosk/index.html">Kiosko</a>
+      <button class="btn ghost" id="btnLogout">Salir</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <script type="module">
+    import {Auth} from '../shared/auth.js';
+    import {Storage} from '../shared/storage.js';
+    import {BURGERS, ADEREZOS, EXTRAS} from '../shared/menu.js';
+    if(Auth.role!=='cocina' && Auth.role!=='admin'){ location.replace('../login/index.html'); }
+
+    const grid = document.getElementById('grid');
+    document.getElementById('btnLogout').addEventListener('click', ()=>Auth.logout());
+
+    const byId = (arr, id)=> arr.find(x=>x.id===id);
+    function render(list){
+      grid.innerHTML = list
+        .filter(o=>['en_preparacion','en_proceso','listo'].includes(o.status))
+        .map(o=>{
+          const burger = BURGERS.find(b=>b.id===o.burgerId);
+          const baseIng = burger ? burger.ingredients : [];
+          const removed = o.remove||[];
+          const finalIng = baseIng.filter(i=>!removed.includes(i));
+          const adLabels = (o.aderezos||[]).map(id=>byId(ADEREZOS,id)?.name||id);
+          const exLabels = (o.extras||[]).map(id=>byId(EXTRAS,id)?.name||id);
+          return `<div class="card">
+            <div class="kicker">#${o.id.slice(-5)} · ${new Date(o.createdAt).toLocaleTimeString()}</div>
+            <h3>${o.burgerName||'-'} × ${o.qty||1}</h3>
+            <div class="small"><strong>Ingredientes:</strong> ${finalIng.join(' · ')}</div>
+            <div class="small"><strong>Aderezos extra:</strong> ${adLabels.join(', ') || '—'}</div>
+            <div class="small"><strong>Extras:</strong> ${exLabels.join(', ') || '—'}</div>
+            <div class="small"><strong>Salsa sugerida:</strong> ${o.suggestedApplied ? (o.suggestedName||'—') : 'No aplicada'}</div>
+            <div class="small"><strong>Notas:</strong> ${o.notes||'—'}</div>
+            <div class="row" style="margin-top:8px">
+              <span class="chip">${o.customer||'Cliente'}</span>
+              ${o.table?'<span class="chip">Mesa '+o.table+'</span>':''}
+              <span style="flex:1"></span>
+              ${o.status!=='en_proceso'?'<button class="btn secondary" data-a="proc" data-id="'+o.id+'">En proceso</button>':''}
+              ${o.status!=='listo'?'<button class="btn" data-a="ready" data-id="'+o.id+'">Listo</button>':''}
+            </div>
+          </div>`;
+        }).join('');
+
+      grid.querySelectorAll('button[data-id]').forEach(b=>{
+        const id = b.dataset.id, a = b.dataset.a;
+        b.addEventListener('click', ()=>{
+          Storage.updateOrder(id, {status: a==='proc' ? 'en_proceso' : 'listo'});
+        });
+      });
+    }
+
+    const unsub = Storage.subscribeOrders(render);
+  </script>
+</body>
+</html>
