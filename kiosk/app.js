@@ -1,5 +1,6 @@
 import { db, collection, addDoc, serverTimestamp } from '../lib/firebase.js';
 import { toast } from '../lib/toast.js';
+import { RECIPES } from '../lib/recipes.js';
 
 const menuEl = document.getElementById('menu');
 const modal  = document.getElementById('modal');
@@ -50,9 +51,21 @@ function roundTo7(n){ if(!ROUND_TO_7_END) return Math.round(n);
 
 function card(p){
   const el=document.createElement('div'); el.className='card';
-  el.innerHTML=`<div class="row"><h3>${p.name}</h3><div class="right price">$${p.price}</div></div>
-  <div class="sub">Salsa sugerida: <b>${p.suggest}</b></div>
-  <div class="row" style="margin-top:10px"><button class="btn">Agregar</button></div>`;
+  const base = RECIPES[p.name] || [];
+  el.innerHTML=`
+    <div class="row">
+      <h3>${p.name}</h3>
+      <div class="right price">$${p.price}</div>
+    </div>
+    <div class="sub">Salsa sugerida: <b>${p.suggest}</b></div>
+    <details class="recipe" style="margin-top:8px">
+      <summary>¿Qué lleva?</summary>
+      <ul class="list">
+        ${base.map(i=>`<li>${i}</li>`).join('')}
+      </ul>
+    </details>
+    <div class="row" style="margin-top:10px"><button class="btn">Agregar</button></div>
+  `;
   el.querySelector('.btn').onclick=()=> openModal(p);
   return el;
 }
@@ -85,7 +98,23 @@ function recalcPieceTotal(p){
 function openModal(p){
   CURRENT=p; fQty.value=1; fSug.textContent=p.suggest; fNotes.value='';
   fAde.innerHTML=''; fExt.innerHTML=''; fAde.appendChild(buildList(aderezos,5)); fExt.appendChild(buildList(extras,5));
-  modal.classList.add('open'); recalcPieceTotal(p);
+
+  // Incluye (base)
+  const base = RECIPES[p.name] || [];
+  // Inserta bloque (si no existe ya)
+  let baseBlock = document.getElementById('base-block');
+  if(!baseBlock){
+    baseBlock = document.createElement('div');
+    baseBlock.id='base-block';
+    baseBlock.className='group';
+    baseBlock.style.marginTop='-2px';
+    document.getElementById('orderForm').insertBefore(baseBlock, document.getElementById('orderForm').children[1]);
+  }
+  baseBlock.innerHTML = `<h3 style="margin:0 0 6px">Incluye (base)</h3>
+    <ul class="list">${base.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+
+  modal.classList.add('open');
+  recalcPieceTotal(p);
   modal.querySelectorAll('input[type="checkbox"], #f-qty').forEach(x=> x.oninput=()=>recalcPieceTotal(p));
 }
 mClose.onclick=()=> modal.classList.remove('open');
@@ -111,12 +140,10 @@ function cartTotals(){
     total += base;
     if(isMini(it.name)){ minisQty += it.qty; minisSub += base; }
   }
-  // Descuento 3-minis MIX & MATCH
   let unlocked=false;
   if(minisQty>=3){
     const disc = minisSub*COMBO3_DISCOUNT;
-    total -= disc;
-    unlocked = true;
+    total -= disc; unlocked = true;
   }
   const shown = ROUND_TO_7_END ? roundTo7(total) : Math.round(total);
   return {items, total: shown, unlocked};
@@ -132,12 +159,14 @@ function renderCartModal(){
   cartList.innerHTML='';
   if(!CART.length){ cartList.innerHTML='<div class="empty">Tu carrito está vacío</div>'; cartGrand.textContent='$0'; return; }
   CART.forEach((it,idx)=>{
+    const base = RECIPES[it.name] || [];
     const el=document.createElement('div'); el.className='card';
     el.innerHTML = `
       <div class="row">
         <h3>${it.name} ×${it.qty}</h3>
         <div class="right"><button class="btn small" data-i="${idx}">Quitar</button></div>
       </div>
+      <div class="sub"><b>Base:</b> ${base.join(', ')}</div>
       <div class="sub">Sugerida: <b>${it.suggest}</b></div>
       ${it.aderezos.length? `<div class="sub">Aderezos: ${it.aderezos.join(', ')}</div>`:''}
       ${it.extras.length? `<div class="sub">Extras: ${it.extras.join(', ')}</div>`:''}
@@ -152,7 +181,7 @@ openCart.onclick = ()=>{ renderCartModal(); cartModal.classList.add('open'); };
 cartClose.onclick= ()=> cartModal.classList.remove('open');
 cartClear.onclick= ()=>{ CART=[]; renderCartModal(); refreshCartUI(); };
 
-// Agregar pieza al carrito (NO envía aún a Firestore)
+// Agregar pieza al carrito
 document.getElementById('orderForm').onsubmit=(e)=>{
   e.preventDefault();
   const qty=+fQty.value||1;
@@ -164,33 +193,32 @@ document.getElementById('orderForm').onsubmit=(e)=>{
   });
   modal.classList.remove('open');
   refreshCartUI();
-  // “logro” si ya se armaron 3 minis en el carrito total
   const t=cartTotals();
   toast(t.unlocked ? '⭐ ¡Desbloqueaste un logro! Combo de minis' : 'Agregado al carrito');
 };
 
-// Confirmar y crear ticket
+// Confirmar ticket
 async function checkout(){
   if(CART.length===0){ toast('Tu carrito está vacío'); return; }
   const name = fName.value.trim() || 'Cliente';
   const ticketId = `T${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
-  const t=cartTotals();
   const createdAt = serverTimestamp();
 
-  // Guardar cada línea como documento (compatible con Cocina/Admin actuales)
   for(const it of CART){
     await addDoc(collection(db,'orders'),{
       ticketId, source:'kiosk', customer:name,
       product:it.name, qty:it.qty, aderezos:it.aderezos, extras:it.extras, notes:it.notes,
-      suggested:it.suggest, total: Math.round(it.price*it.qty + it.aderezos.length*EXTRA_ADE_PRICE + it.extras.length*EXTRA_ING_PRICE),
+      suggested:it.suggest,
+      base: RECIPES[it.name] || [],              // <<<<<< agrega base al doc
+      total: Math.round(it.price*it.qty + it.aderezos.length*5 + it.extras.length*5),
       status:'PENDING', createdAt
     });
   }
   CART=[]; refreshCartUI(); cartModal.classList.remove('open');
-  toast(t.unlocked ? '⭐ Pedido creado — combo minis aplicado' : '¡Pedido creado!');
+  toast('¡Pedido creado!');
 }
 cartCheckout.onclick = checkout;
 
-// Inicial
+// Init
 renderMenu();
 refreshCartUI();
