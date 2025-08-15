@@ -1,7 +1,7 @@
-/* Google Fonts */
+/* Google Fonts 
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Nunito+Sans:wght@400;600;700;800&family=Press+Start+2P&display=swap');
 
-/* Variables de tipografía */
+/* Variables de tipografía 
 :root{
   --font-display: "Chakra Petch", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-body: "Nunito Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -14,18 +14,17 @@
   --radius:14px;--gap:12px;--shadow:0 10px 30px rgba(0,0,0,.35)
 }
 *{box-sizing:border-box} html,body{margin:0;height:100%}
-/* Asignaciones globales */
+/* Asignaciones globales 
 body.shell{ font-family: var(--font-body); }
 
-/* Títulos con display */
-h1,h2,h3{ font-family: var(--font-display); letter-spacing: 0.2px; }
+/* Títulos con display h1,h2,h3{ font-family: var(--font-display); letter-spacing: 0.2px; }
 
-/* Precios y badges con acento retro (en pequeñas dosis) */
+/* Precios y badges con acento retro (en pequeñas dosis) 
 .price{ font-family: var(--font-display); font-weight: 800; letter-spacing: .2px; font-variant-numeric: tabular-nums; }
 .badge{ font-family: var(--font-display); }
 
 /* Micro-acentos 8-bit (úsalo solo en chips/etiquetas cortas si quieres más retro) */
-/* .chip-8bit{ font-family: var(--font-accent); font-size:.8rem; letter-spacing: .5px; } */
+/* .chip-8bit{ font-family: var(--font-accent); font-size:.8rem; letter-spacing: .5px; } 
 body.shell{background:linear-gradient(180deg,#0c1a24,#08131a);color:var(--text);font:500 16px/1.35 system-ui,-apple-system,Segoe UI,Roboto}
 .container{max-width:1100px;margin-inline:auto;padding:18px}
 h1,h2,h3{margin:.2rem 0 1rem} a{color:var(--accent);text-decoration:none}
@@ -63,4 +62,229 @@ tbody td:last-child{border-right:1px solid #1b3a50;border-top-right-radius:10px;
   bottom:18px;background:#0b1a24;border:1px solid #1b3a50;color:var(--text);
   padding:10px 14px;border-radius:14px;box-shadow:var(--shadow);z-index:9999
 
+}
+  */
+/* -------------------------------------------------------
+   Seven de Burgers — UI Kit (retro gamer, legible, móvil)
+   ------------------------------------------------------- */
+
+/* 1) Tipografías */
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Nunito+Sans:wght@400;600;700;800&family=Press+Start+2P&display=swap');
+
+/* 2) Variables de tema */
+:root{
+  /* Colores */
+  --bg:#0e1c26;
+  --panel:#112636;
+  --panel-2:#0f2130;
+  --brand:#ffd54a;
+  --brand-ink:#1b1b1b;
+  --text:#e6f1ff;
+  --muted:#9bb3c7;
+  --ok:#3ddc97;
+  --warn:#ffcc00;
+  --accent:#5ab1ff;
+  --danger:#ff6b6b;
+
+  /* Tipografías */
+  --font-display: "Chakra Petch", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-body: "Nunito Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-accent: "Press Start 2P", "Chakra Petch", system-ui, sans-serif;
+
+  /* Spacing & otros */
+  --radius:14px;
+  --gap:12px;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+}
+
+/* 3) Base */
+*{ box-sizing:border-box; }
+html,body{ height:100%; margin:0; }
+html{ scroll-behavior:smooth; }
+body.shell{
+  background:linear-gradient(180deg,#0c1a24,#08131a);
+  color:var(--text);
+  font:500 16px/1.35 var(--font-body);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  overscroll-behavior:contain;
+}
+a{ color:var(--accent); text-decoration:none; }
+.container{ max-width:1100px; margin-inline:auto; padding:18px; }
+
+/* 4) Titulares / jerarquía tipográfica */
+h1,h2,h3{
+  margin:.2rem 0 1rem;
+  font-family:var(--font-display);
+  letter-spacing:.2px;
+}
+h1{ font-size:1.9rem; line-height:1.15; }
+h2{ font-size:1.35rem; line-height:1.2;  }
+h3{ font-size:1.05rem; line-height:1.25; }
+
+@media (min-width:768px){
+  h1{ font-size:2.2rem; }
+  h2{ font-size:1.6rem; }
+  h3{ font-size:1.15rem; }
+}
+
+/* 5) Tarjetas / layout */
+.card{
+  background:var(--panel);
+  border-radius:var(--radius);
+  padding:16px;
+  box-shadow:var(--shadow);
+}
+.grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+.row{ display:flex; gap:10px; align-items:center; }
+.right{ margin-left:auto; }
+.muted, .sub{ color:var(--muted); }
+.sub{ font-size:.92rem; }
+
+/* 6) Botones */
+.btn{
+  background:var(--brand);
+  color:var(--brand-ink);
+  border:0; border-radius:12px;
+  padding:10px 14px;
+  font-family:var(--font-display);
+  font-weight:800;
+  cursor:pointer;
+  transition:transform .06s ease;
+}
+.btn:active{ transform:translateY(1px); }
+.btn.outline{
+  background:transparent; color:var(--brand);
+  border:1px solid var(--brand);
+}
+.btn.small{ padding:8px 10px; border-radius:10px; font-size:.9rem; }
+
+/* 7) Badges / precios / chips */
+.badge{
+  display:inline-block;
+  padding:.15rem .5rem;
+  border-radius:999px;
+  background:#163447;
+  color:var(--muted);
+  font-size:.8rem;
+  font-family:var(--font-display);
+}
+.price{
+  font-family:var(--font-display);
+  font-weight:800;
+  color:var(--brand);
+  letter-spacing:.2px;
+  font-variant-numeric:tabular-nums;
+}
+.chip-8bit{ font-family:var(--font-accent); font-size:.8rem; letter-spacing:.5px; }
+
+/* 8) Formularios */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+select{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #1b3a50;
+  background:#0e2130;
+  color:#e6f1ff;
+  outline:none;
+}
+input::placeholder{ color:#7fa1b6; }
+
+/* Checkboxes grandes y alineados */
+.item-row{
+  display:grid;
+  grid-template-columns:28px 1fr auto;
+  align-items:center;
+  gap:10px;
+  padding:10px 8px;
+  border-radius:10px;
+}
+.item-row:hover{ background:#0e2434; }
+.item-row input[type="checkbox"]{
+  width:22px; height:22px;
+  accent-color:var(--brand);
+  margin:0;
+}
+.item-row span{ line-height:1.2; }
+
+/* Grupos de formulario */
+.group{
+  background:#0b1a24;
+  border-radius:14px;
+  padding:10px;
+}
+.form-grid{ display:grid; gap:12px; }
+
+/* 9) Modal / hoja */
+.modal{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.45);
+  display:none; place-items:center;
+  padding:14px;
+  z-index:999;
+}
+.modal.open{ display:grid; }
+.sheet{
+  width:min(800px,100%);
+  max-height:90vh;          /* evita cortes en iPhone */
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  background:var(--panel-2);
+  border-radius:18px;
+  padding:16px;
+  box-shadow:var(--shadow);
+}
+
+/* 10) Totales fijos */
+.sticky-total{
+  position:sticky; bottom:0;
+  background:linear-gradient(180deg,transparent 0,#0b1a24 25%);
+  padding-top:10px;
+}
+
+/* 11) Columnas de cocina */
+.k-columns{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.col{ min-height:50vh; }
+.empty{ color:var(--muted); opacity:.7; }
+
+/* 12) Tablas admin */
+.table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
+thead th{ color:var(--muted); font-weight:700; text-align:left; }
+tbody td{
+  background:#0b1a24; padding:10px;
+  border-top:1px solid #1b3a50; border-bottom:1px solid #1b3a50;
+}
+tbody td:first-child{ border-left:1px solid #1b3a50; border-top-left-radius:10px; border-bottom-left-radius:10px; }
+tbody td:last-child { border-right:1px solid #1b3a50; border-top-right-radius:10px; border-bottom-right-radius:10px; }
+
+/* 13) Toasts (incluye “logro” con estrella) */
+.toast{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:18px;
+  background:#0b1a24; border:1px solid #1b3a50; color:var(--text);
+  padding:10px 14px; border-radius:14px; box-shadow:var(--shadow); z-index:9999;
+  font-family:var(--font-display);
+}
+
+/* 14) Utilidades */
+.hidden{ display:none !important; }
+.center{ text-align:center; }
+.w-100{ width:100%; }
+
+/* 15) Responsivo fino (móviles estrechos) */
+@media (max-width:420px){
+  .grid{ grid-template-columns:1fr; }
+  .row{ gap:8px; }
+  .btn{ padding:10px 12px; }
+  h1{ font-size:1.7rem; }
+  h2{ font-size:1.3rem; }
+  h3{ font-size:1rem; }
+  .item-row{ grid-template-columns:26px 1fr auto; }
+}
+
+/* 16) Touch-friendly tweaks para iOS */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea, button { font-size:16px; } /* evita zoom automático en inputs */
 }
