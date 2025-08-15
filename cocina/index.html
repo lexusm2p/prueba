@@ -1,25 +1,46 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seven de Burgers · Cocina</title>
-  <link rel="stylesheet" href="../shared/styles.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Cocina — Seven de Burgers</title>
+  <link rel="stylesheet" href="../styles.css"/>
+  <style>
+    .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:14px;}
+    section{background:#0f2233;border-radius:12px;padding:12px;min-height:60vh}
+    h3{margin:0 0 8px;color:#f1b02a}
+    .list{display:flex;flex-direction:column;gap:10px;max-height:70vh;overflow:auto}
+    .k-card{background:#0e1a28;border:1px solid #2b3d52;border-radius:10px;padding:10px}
+    .k-card .head{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+    .k-card .chip{margin-left:auto;background:#243a5a;color:#aee;border-radius:999px;padding:2px 8px;font-size:.8rem}
+    .foot{display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:6px}
+    button[data-a]{background:#f1b02a;border:none;border-radius:10px;padding:6px 10px;font-weight:700}
+    .empty{opacity:.6}
+    @media (max-width:900px){.cols{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
-<header class="brand">
-  <img src="../shared/logo-seven-pixel.svg" alt="Seven de Burgers"/>
-  <div>
-    <div class="name">Seven de Burgers</div>
-    <div class="tag">Vista Cocina</div>
-  </div>
-</header>
+  <header style="padding:10px 14px">
+    <b>👨‍🍳 Cocina — Seven de Burgers</b>
+    <a href="../kiosk/index.html" style="margin-left:12px">Ir al kiosko</a>
+    <a href="../mesero/index.html" style="margin-left:12px">Ir a mesero</a>
+  </header>
 
-<main class="container">
-  <h1 class="title">Pedidos activos</h1>
-  <div id="orders"></div>
-  <audio id="beep" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAZGF0YQAAAAA=" preload="auto"></audio>
-</main>
-<script type="module" src="./app.js"></script>
+  <div class="cols">
+    <section>
+      <h3>Sin pendientes</h3>
+      <div id="list-pending" class="list"><div class="empty">—</div></div>
+    </section>
+    <section>
+      <h3>En preparación</h3>
+      <div id="list-progress" class="list"><div class="empty">—</div></div>
+    </section>
+    <section>
+      <h3>Listos</h3>
+      <div id="list-ready" class="list"><div class="empty">—</div></div>
+    </section>
+  </div>
+
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
