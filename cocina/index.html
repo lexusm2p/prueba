@@ -4,20 +4,21 @@
 <link rel="stylesheet" href="../styles.css"/>
 </head><body>
 <header>
-  <div class="brand"><span class="dot"></span><strong>Seven de Burgers</strong><span class="badge">Vista Cocina</span></div>
+  <div class="brand"><span class="dot"></span><strong>Seven de Burgers</strong><span class="badge">Cocina</span></div>
   <nav>
-    <a class="btn ghost" href="../kiosk/">Ir al kiosko</a>
-    <a class="btn ghost" href="../mesero/">Ir a mesero</a>
+    <a class="btn ghost" href="../kiosk/">Kiosko</a>
+    <a class="btn ghost" href="../mesero/">Mesero</a>
+    <a class="btn ghost" href="../admin/">Admin</a>
   </nav>
 </header>
 <div class="container">
   <h2>Pedidos activos</h2>
   <div class="grid cols-3">
-    <section class="card"><h3>Sin pendientes</h3><div id="list-pending" class="stack"></div></section>
-    <section class="card"><h3>En preparación</h3><div id="list-progress" class="stack"></div></section>
-    <section class="card"><h3>Listos</h3><div id="list-ready" class="stack"></div></section>
+    <section class="card"><h3>Sin pendientes</h3><div id="list-pending"></div></section>
+    <section class="card"><h3>En preparación</h3><div id="list-progress"></div></section>
+    <section class="card"><h3>Listos</h3><div id="list-ready"></div></section>
   </div>
-  <p class="hint">Sugerencia: usa <kbd>Tomar</kbd> para iniciar, <kbd>Listo</kbd> para pasar a recolección y <kbd>Entregar</kbd> para cerrar.</p>
+  <p class="hint">Flujo: <kbd>Tomar</kbd> → <kbd>Listo</kbd> → <kbd>Entregar</kbd>. Las tarjetas "Entregado" desaparecen.</p>
 </div>
 <footer>© Seven de Burgers</footer>
 <script type="module" src="./app.js"></script>
