@@ -22,7 +22,8 @@ function card(o){
 }
 
 subscribeActiveOrders((snap)=>{
-  const docs = snap.docs.map(d=>({id:d.id,...d.data()}));
+  const docs = snap.docs.map(d=>({id:d.id,...d.data()}))
+    .sort((a,b)=> (a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
   wrap.innerHTML = docs.length? docs.map(card).join(''):'<div class="empty">Sin pedidos activos</div>';
   const now = new Set(docs.filter(d=>d.status==='READY').map(d=>d.id));
   let newR=false; now.forEach(id=>{ if(!prev.has(id)) newR=true; });
