@@ -1,14 +1,22 @@
-// kiosk/app.js — stub mínimo para renderizar algo
-import { renderKiosk } from './ui.js';
-const card = document.querySelector('.card');
-renderKiosk(card);
-const card = document.querySelector('.card');
-card.innerHTML = `
-  <h1>🍔 Kiosko OK</h1>
-  <p>La app se cargó y ya puedo escribir en el DOM.</p>
-  <button id="goMinis">Minis & Combos</button>
-  <button id="goBig">Hamburguesas grandes</button>
-`;function renderCards(list, host){
+// kiosk/app.js
+import { ensureAuth, createOrder } from "../lib/firebase.js";
+import { SAUCES, EXTRAS, MINIS, MENU } from "../lib/menu.js";
+import { toast, beep } from "../lib/notify.js";
+
+const miniList = document.getElementById('miniList');
+const bigList  = document.getElementById('bigList');
+const modal    = document.getElementById('modal');
+const modalBody= document.getElementById('modalBody');
+const closeBtn = document.getElementById('closeModal');
+const btnMix   = document.getElementById('btnMix');
+
+ensureAuth().then(()=>{
+  renderCards(MINIS, miniList);
+  renderCards(MENU,  bigList);
+  btnMix.onclick = openMixMatch;
+});
+
+function renderCards(list, host){
   host.innerHTML = list.map(p => `
     <div class="card">
       <div class="title">${p.name}</div>
@@ -36,10 +44,6 @@ function renderOpt(opt){
 function renderOptGrid(list){ return `<div class="grid-opts">${list.map(renderOpt).join('')}</div>`; }
 
 function openSingle(product){
-  const modal    = document.getElementById('modal');
-  const modalBody= document.getElementById('modalBody');
-  const closeBtn = document.getElementById('closeModal');
-
   const aderezosHtml = renderOptGrid(SAUCES);
   const extrasHtml   = renderOptGrid(EXTRAS);
 
@@ -124,12 +128,8 @@ function openSingle(product){
   };
 }
 
-// --- Mix & Match de minis ---
+// --- Mix & Match de minis (aplica descuento por cada 3 minis en total) ---
 function openMixMatch(){
-  const modal    = document.getElementById('modal');
-  const modalBody= document.getElementById('modalBody');
-  const closeBtn = document.getElementById('closeModal');
-
   const rows = MINIS.map(m => `
     <div class="mix-row" data-mini="${m.id}">
       <div>${m.name} <span style="opacity:.7">($${m.price})</span></div>
@@ -199,9 +199,10 @@ function openMixMatch(){
     if(counts.length===0){ toast('Elige al menos 1 mini', {icon:'⚠️'}); return; }
     const totalMinis = counts.reduce((s,x)=>s+x.qty,0);
     const discount = Math.floor(totalMinis/3) * 7;
+    const total = counts.reduce((s,x)=> s + x.qty * x.mini.price, 0) + totalMinis*extrasPerUnit() - discount;
+
     const adSel = adChecks.filter(x=>x.checked).map(x=> SAUCES.find(s=>s.id===x.dataset.id)?.name );
     const exSel = exChecks.filter(x=>x.checked).map(x=> EXTRAS.find(s=>s.id===x.dataset.id)?.name );
-    const total = counts.reduce((s,x)=> s + x.qty * x.mini.price, 0) + totalMinis*extrasPerUnit() - discount;
 
     const items = counts.map(x => ({
       id: x.mini.id, name: x.mini.name, qty: x.qty,
@@ -210,7 +211,7 @@ function openMixMatch(){
     }));
 
     await createOrder({ customer, total, items });
-    document.getElementById('modal').classList.add('hidden');
+    modal.classList.add('hidden');
     toast('Pedido enviado.', {icon:'🛎️'});
   };
 }
