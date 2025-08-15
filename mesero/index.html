@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Mesero — Seven de Burgers</title>
+  <link rel="stylesheet" href="../styles.css"/>
+</head>
+<body>
+  <div class="header">
+    <div class="brand"><span>🧑‍💼 Mesero — Seven de Burgers</span></div>
+    <div class="chips">
+      <a class="chip" href="../kiosk/">Kiosko</a>
+      <a class="chip" href="../cocina/">Cocina</a>
+    </div>
+  </div>
+  <div class="container">
+    <h1>Tomar pedido rápido</h1>
+    <div id="form" class="card">
+      <div class="row">
+        <input id="m-name" type="text" placeholder="Nombre cliente (opcional)"/>
+        <input id="m-qty" type="number" value="1" min="1" style="max-width:120px"/>
+      </div>
+      <hr class="sep"/>
+      <div class="row">
+        <select id="m-item"></select>
+        <button id="m-send" class="btn">Enviar</button>
+      </div>
+      <div class="muted small">Este formulario manda directo a cocina (PENDIENTE).</div>
+    </div>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
