@@ -1,40 +1,29 @@
-
 <!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seven de Burgers · Kiosko</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body class="hide-roles">
-  <header>
-    <h1>SEVEN DE BURGERS</h1>
-    <p class="sub">Elige minis (mix & match) o burgers · Confirma · ¡Disfruta!</p>
-  </header>
-
-  <main>
-    <section>
-      <div class="row-head">
-        <h2>Minis</h2>
-        <button id="btnMix" class="ghost">Combo Minis Mix & Match</button>
-      </div>
-      <div id="miniList" class="cards"></div>
-    </section>
-
-    <section>
-      <h2>Hamburguesas</h2>
-      <div id="bigList" class="cards"></div>
-    </section>
-  </main>
-
-  <div id="modal" class="modal hidden">
-    <div class="modal-card">
-      <button id="closeModal" class="close">×</button>
-      <div id="modalBody"></div>
-    </div>
+<html lang="es"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Kiosko — Seven de Burgers</title>
+<link rel="stylesheet" href="../shared/styles.css"></head>
+<body class="shell">
+<div class="container">
+  <div class="row" style="margin-bottom:10px">
+    <div class="badge">Seven de Burgers — Kiosko</div>
+    <a class="right badge" href="../login/">Login</a>
   </div>
-
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+  <div id="menu" class="grid"></div>
+</div>
+<div class="modal" id="modal"><div class="sheet">
+  <div class="row"><h2 id="m-title">Configura tu pedido</h2><button class="btn right" id="m-close">Cerrar</button></div>
+  <form id="orderForm" class="form-grid">
+    <div class="group"><label class="sub">Tu nombre</label><input id="f-name" placeholder="Nombre para avisarte"></div>
+    <div class="group row">
+      <div style="flex:1"><label class="sub">Cantidad</label><input type="number" id="f-qty" min="1" value="1"></div>
+      <div class="right sub">Salsa sugerida: <b id="f-suggest"></b></div>
+    </div>
+    <div class="group"><h3 style="margin:0 0 6px">Aderezos extra</h3><div id="f-aderezos"></div></div>
+    <div class="group"><h3 style="margin:0 0 6px">Ingredientes extra</h3><div id="f-extras"></div></div>
+    <div class="sticky-total"><div class="row"><div class="sub">Total</div><div class="right price" id="f-total">$0</div></div>
+      <button class="btn" id="f-submit" type="submit">Ordenar</button></div>
+  </form>
+</div></div>
+<script type="module" src="./app.js"></script>
+</body></html>
