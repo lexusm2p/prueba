@@ -6,63 +6,34 @@
   <title>Seven de Burgers · Kiosko</title>
   <link rel="stylesheet" href="../shared/styles.css" />
 </head>
-<body>
-<header class="brand">
-  <img src="../shared/logo-seven-pixel.svg" alt="Seven de Burgers"/>
-  <div>
-    <div class="name">Seven de Burgers</div>
-    <div class="tag">Kiosko · Minis-first</div>
-  </div>
-  <div class="nav">
-    <a href="../mesero/">Mesero</a>
-    <a href="../cocina/">Cocina</a>
-    <a href="../admin/">Admin</a>
-  </div>
-</header>
+<body class="kiosk">
+  <header class="topbar">
+    <a class="brand" href="./index.html">Seven de Burgers</a>
+    <nav>
+      <a href="./index.html" class="btn current">Kiosko</a>
+      <a href="../mesero/index.html" class="btn">Mesero</a>
+      <a href="../cocina/index.html" class="btn">Cocina</a>
+      <a href="../admin/index.html" class="btn">Admin</a>
+    </nav>
+  </header>
 
-<main id="app">
-  <div class="container">
-    <section id="home-choice">
-      <h1 class="title">¡Elige tu modo de juego!</h1>
-      <p class="subtitle">Minis por defecto. Si te gustan los retos grandes, también tenemos 😉</p>
-      <div class="grid">
-        <button class="card" id="btnGoMinis">
-          <div class="pixel-border"></div>
-          <h2>Minis & Combos</h2>
-          <p>Starter, Koopa, Fatality… arma 1, 2, 3 o el Combo 7.</p>
-        </button>
-        <button class="card outline" id="btnGoBig">
-          <h2>¿Prefieres los retos más grandes?</h2>
-          <p>Ir a hamburguesas grandes</p>
-        </button>
-      </div>
-    </section>
+  <main class="landing">
+    <h1>¡Elige tu modo de juego!</h1>
 
-    <section id="view-minis" class="hidden">
+    <!-- Card 1: Minis & Combos -->
+    <a class="card big" href="./minis.html">
       <h2>Minis & Combos</h2>
-      <div class="choices">
-        <button data-minis="1" class="chip">1 Mini</button>
-        <button data-minis="2" class="chip">2 Minis</button>
-        <button data-minis="3" class="chip">3 Minis</button>
-        <button data-minis="7" class="chip warn">Combo 7 Minis</button>
-      </div>
-      <div id="miniList" class="cards"></div>
-      <hr/>
-      <div class="pack">
-        <label><input type="checkbox" id="packEnabled" checked> Pack Power-Ups <strong>3×$10</strong> (aplicados directo)</label>
-        <div id="saucePicker" class="sauces"></div>
-        <label class="small"><input type="checkbox" id="vasitos"> Quiero vasitos (+$4 c/u)</label>
-        <label class="small"><input type="checkbox" id="surprise"> ¿Quieres que te sorprendamos con un aderezo nuevo?</label>
-      </div>
-      <div id="orderSummary" class="summary"></div>
-      <div class="actions sticky">
-        <button id="btnConfirmMinis" class="primary">Confirmar pedido</button>
-        <button id="btnBackHome" class="ghost">Volver</button>
-      </div>
-    </section>
-  </div>
-</main>
+      <p>Starter, Koopa, Fatality… arma 1, 2, 3 o el Combo 7.</p>
+    </a>
 
-<script type="module" src="./app.js"></script>
+    <!-- Card 2: Grandes -->
+    <a class="card" href="../index.html">
+      <h2>¿Prefieres los retos más grandes?</h2>
+      <p>Ir a hamburguesas grandes</p>
+    </a>
+  </main>
+
+  <!-- Carga del JS (si falla, igual navega por los <a>) -->
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
