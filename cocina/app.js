@@ -1,75 +1,55 @@
-import { subscribeActiveOrders, setStatus, archiveDelivered } from '../lib/firebase.js';
-import { beep } from '../lib/notify.js';
-import { recipeForById, SAUCE_LOOKUP, EXTRA_LOOKUP } from '../lib/menu.js';
+// cocina/app.js
+import { ensureAuth, subscribeActiveOrders, setStatus } from "../lib/firebase.js";
+import { chime } from "../lib/notify.js";
 
-const elP = document.querySelector('#list-pending');
-const elI = document.querySelector('#list-progress');
-const elR = document.querySelector('#list-ready');
+const $ = (sel)=>document.querySelector(sel);
+const P = $("#pending"), G = $("#progress"), R = $("#ready");
+const seenReady = new Set();
 
-let prev = new Set();
-const human = (ids,map)=> (ids&&ids.length? ids.map(id=>map[id]||id).join(', ') : '—');
+ensureAuth().then(()=>{
+  subscribeActiveOrders(snap => {
+    const list = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    render(list);
+    list.filter(o => o.status==='READY').forEach(o => {
+      if(!seenReady.has(o.id)){ seenReady.add(o.id); chime(); if(navigator.vibrate) navigator.vibrate(50); }
+    });
+  });
+});
 
-function itemCard(it){
-  const size = it.id.startsWith('m_') ? 'mini' : 'grande';
-  const recipe = recipeForById(it.id.replace(/^m_/,'') , size);
-  const recHTML = recipe.map(r=>`<li>${r.item.replace('quesoAmarillo','Queso amarillo').replace('quesoBlanco','Queso blanco').replace(/^./,c=>c.toUpperCase())} <span class="dim">${r.qty}</span> ${r.note?`<em class="dim">${r.note}</em>`:''}</li>`).join('');
+function render(list){
+  P.innerHTML = list.filter(o=>o.status==='PENDING').map(renderCard).join('') || blank();
+  G.innerHTML = list.filter(o=>o.status==='IN_PROGRESS').map(renderCard).join('') || blank();
+  R.innerHTML = list.filter(o=>o.status==='READY').map(renderCard).join('') || blank();
+
+  document.querySelectorAll('[data-a="take"]').forEach(b=> b.onclick = ()=> setStatus(b.dataset.id,'IN_PROGRESS'));
+  document.querySelectorAll('[data-a="ready"]').forEach(b=> b.onclick = ()=> setStatus(b.dataset.id,'READY'));
+  document.querySelectorAll('[data-a="deliver"]').forEach(b=> b.onclick = ()=> setStatus(b.dataset.id,'DELIVERED'));
+}
+
+function blank(){ return '<div class="card" style="opacity:.6">Sin pedidos</div>' }
+
+function renderCard(o){
+  const itemsHtml = (o.items||[]).map(it => {
+    const base = (it.baseIngredients||[]).join(', ');
+    const ads  = (it.aderezos||[]).join(', ') || '—';
+    const ex   = (it.extras||[]).join(', ') || '—';
+    const notes= it.notes || '—';
+    return `<div style="margin:6px 0;padding:6px;border:1px dashed #244a63;border-radius:8px">
+      <div><strong>${it.name}</strong> ×${it.qty||1}</div>
+      <div style="opacity:.85">Base: ${base}</div>
+      <div style="opacity:.85">Aderezos: ${ads}</div>
+      <div style="opacity:.85">Extras: ${ex}</div>
+      <div style="opacity:.85">Notas: ${notes}</div>
+    </div>`;
+  }).join('');
+
   return `<div class="card">
-    <h4>${it.name} <span class="badge">x${it.qty||1}</span></h4>
-    <div class="grid" style="grid-template-columns:1fr 1fr;gap:.75rem">
-      <div><strong>Receta estándar</strong><ul>${recHTML}</ul></div>
-      <div>
-        <strong>Extras/Salsas</strong>
-        <ul>
-          <li>Extras: ${human(it.extras, EXTRA_LOOKUP)}</li>
-          <li>Salsas: ${human(it.sauces, SAUCE_LOOKUP)}</li>
-        </ul>
-      </div>
+    <div><strong>Orden</strong> — <span class="badge">${o.customer||'-'}</span> · $${o.total||0}</div>
+    ${itemsHtml}
+    <div class="actions">
+      ${o.status==='PENDING' ? `<button data-a="take" data-id="${o.id}">Preparar</button>` : ''}
+      ${o.status==='IN_PROGRESS' ? `<button data-a="ready" data-id="${o.id}">Listo</button>` : ''}
+      ${o.status==='READY' ? `<button data-a="deliver" data-id="${o.id}">Entregar</button>` : ''}
     </div>
   </div>`;
 }
-
-function card(o){
-  const items = (o.items||[]).map(itemCard).join('');
-  return `<article class="order" data-id="${o.id}">
-    <div>
-      <h4>Pedido de ${o.customer||'Cliente'} <span class="badge">Estado: ${o.status}</span></h4>
-      ${items}
-      ${o.notes?`<div class="small"><strong>Notas:</strong> ${o.notes}</div>`:''}
-    </div>
-    <div class="actions">
-      ${o.status==='PENDING'?'<button data-a="take">Tomar</button>':''}
-      ${o.status==='IN_PROGRESS'?'<button data-a="ready">Listo</button>':''}
-      ${o.status==='READY'?'<button data-a="deliver">Entregar</button>':''}
-    </div>
-  </article>`;
-}
-
-function render(snap){
-  // 🔧 Ordenamos en cliente por createdAt asc para mantener la fila y evitar índices.
-  const rows = snap.docs.map(d=>({id:d.id, ...d.data()}))
-    .sort((a,b)=> (a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
-
-  const pending = rows.filter(r=>r.status==='PENDING');
-  const progress = rows.filter(r=>r.status==='IN_PROGRESS');
-  const ready = rows.filter(r=>r.status==='READY');
-
-  elP.innerHTML = pending.length? pending.map(card).join('') : '<div class="empty">Sin pendientes</div>';
-  elI.innerHTML = progress.length? progress.map(card).join('') : '<div class="empty">Sin preparación</div>';
-  elR.innerHTML = ready.length? ready.map(card).join('') : '<div class="empty">Sin listos</div>';
-
-  const now = new Set(rows.filter(r=>r.status==='READY').map(r=>r.id));
-  let newR=false; now.forEach(id=>{ if(!prev.has(id)) newR=true; });
-  if(newR) beep(1200,120);
-  prev = now;
-}
-
-subscribeActiveOrders(render);
-
-document.addEventListener('click', async (e)=>{
-  const btn = e.target.closest('button[data-a]'); if(!btn) return;
-  const id = btn.closest('article')?.dataset.id; if(!id) return;
-  const a = btn.dataset.a;
-  if(a==='take') await setStatus(id,'IN_PROGRESS');
-  if(a==='ready'){ await setStatus(id,'READY'); beep(1200,120); }
-  if(a==='deliver'){ await setStatus(id,'DELIVERED'); await archiveDelivered(id); }
-});
