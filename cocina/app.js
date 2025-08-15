@@ -1,5 +1,6 @@
 import { db, onSnapshot, collection, query, where, orderBy, updateDoc, doc, getDocs } from '../lib/firebase.js';
 import { beep } from '../lib/notify.js'; import { toast } from '../lib/toast.js';
+import { RECIPES } from '../lib/recipes.js';
 
 const colPending  = document.getElementById('col-pending');
 const colProgress = document.getElementById('col-progress');
@@ -8,7 +9,7 @@ const colReady    = document.getElementById('col-ready');
 function groupByTicket(rows){
   const map = new Map();
   for(const [id,o] of rows){
-    const k = o.ticketId || id; // compat con pedidos viejos
+    const k = o.ticketId || id;
     if(!map.has(k)) map.set(k, []);
     map.get(k).push([id,o]);
   }
@@ -20,7 +21,6 @@ function sumTicket(list){
   return {total, qty};
 }
 function ticketStatus(list){
-  // si todas READY -> READY; si alguna IN_PROGRESS -> IN_PROGRESS; si todas PENDING -> PENDING
   const statuses = new Set(list.map(([,o])=>o.status));
   if(statuses.has('IN_PROGRESS')) return 'IN_PROGRESS';
   if(statuses.has('PENDING') && !statuses.has('IN_PROGRESS') && !statuses.has('READY')) return 'PENDING';
@@ -28,17 +28,17 @@ function ticketStatus(list){
   if(statuses.has('READY')) return 'IN_PROGRESS';
   return [...statuses][0] || 'PENDING';
 }
-function linesHTML(list){
-  return list.map(([,o])=>{
-    const extras = o.extras?.length? `<div class="sub">Extras: ${o.extras.join(', ')}</div>`:'';
-    const aders  = o.aderezos?.length? `<div class="sub">Aderezos: ${o.aderezos.join(', ')}</div>`:'';
-    const notes  = o.notes? `<div class="sub">Notas: ${o.notes}</div>`:'';
-    return `<div class="card" style="background:#0e1f2c">
-      <div class="row"><strong>${o.product}</strong><span class="right sub">×${o.qty}</span></div>
-      <div class="sub">Sugerida: <b>${o.suggested||'—'}</b></div>
-      ${aders}${extras}${notes}
-    </div>`;
-  }).join('');
+function lineHTML(o){
+  const base = (o.base && o.base.length)? o.base : (RECIPES[o.product]||[]);
+  const extras = o.extras?.length? `<div class="sub">Extras: ${o.extras.join(', ')}</div>`:'';
+  const aders  = o.aderezos?.length? `<div class="sub">Aderezos: ${o.aderezos.join(', ')}</div>`:'';
+  const notes  = o.notes? `<div class="sub">Notas: ${o.notes}</div>`:'';
+  return `<div class="card" style="background:#0e1f2c">
+    <div class="row"><strong>${o.product}</strong><span class="right sub">×${o.qty}</span></div>
+    ${base.length? `<div class="sub"><b>Base:</b> ${base.join(', ')}</div>`:''}
+    <div class="sub">Sugerida: <b>${o.suggested||'—'}</b></div>
+    ${aders}${extras}${notes}
+  </div>`;
 }
 function mountTicket(k, list, into){
   const any = list[0][1];
@@ -52,7 +52,7 @@ function mountTicket(k, list, into){
       <div class="right price">$${Math.round(total)}</div>
     </div>
     <div class="sub">Para: ${who} · Piezas: ${qty}</div>
-    ${linesHTML(list)}
+    ${list.map(([,o])=> lineHTML(o)).join('')}
     <div class="row" style="margin-top:10px">
       ${status==='PENDING'    ? `<button class="btn" data-a="take">Tomar</button>`:''}
       ${status==='IN_PROGRESS'? `<button class="btn" data-a="ready">Listo</button>`:''}
@@ -62,7 +62,6 @@ function mountTicket(k, list, into){
   wrap.addEventListener('click', async e=>{
     const btn = e.target.closest('button[data-a]'); if(!btn) return;
     const a = btn.dataset.a;
-    // batch update por ticket
     const q = query(collection(db,'orders'), where('ticketId','==',k));
     const snap = await getDocs(q);
     const ops = [];
