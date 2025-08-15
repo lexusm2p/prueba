@@ -1,11 +1,18 @@
 import { db, collection, addDoc, serverTimestamp } from '../lib/firebase.js';
 import { toast } from '../lib/toast.js';
 
-const menuEl=document.getElementById('menu'); const modal=document.getElementById('modal');
-const mTitle=document.getElementById('m-title'); const fName=document.getElementById('f-name');
-const fQty=document.getElementById('f-qty'); const fSug=document.getElementById('f-suggest');
-const fAde=document.getElementById('f-aderezos'); const fExt=document.getElementById('f-extras');
-const fTot=document.getElementById('f-total'); document.getElementById('m-close').onclick=()=>modal.classList.remove('open');
+const menuEl = document.getElementById('menu');
+const modal  = document.getElementById('modal');
+const mClose = document.getElementById('m-close');
+
+const fName = document.getElementById('k-name');
+const fQty  = document.getElementById('f-qty');
+const fSug  = document.getElementById('f-suggest');
+const fAde  = document.getElementById('f-aderezos');
+const fExt  = document.getElementById('f-extras');
+const fTot  = document.getElementById('f-total');
+const fNotes= document.getElementById('f-notes');
+
 const EXTRA_ADE_PRICE=5, EXTRA_ING_PRICE=5, COMBO3_DISCOUNT=.07, ROUND_TO_7_END=true;
 
 const aderezos=['Aderezo Cheddar','Aderezo Chipotle','Aderezo Habanero','Salsa Chimichurri','Mostaza dulce','Jalapeño rostizado','Curry suave','Salsa Secreta Seven'];
@@ -29,41 +36,161 @@ const grandes=[
   {name:'Nintendo Nostalgia', price:67, suggest:'Cheddar'},
   {name:'Final Boss Burger', price:97, suggest:'Cheddar'}
 ];
-const all=[{title:'Minis & Combos',items:minis},{title:'Hamburguesas Grandes',items:grandes}];
-let currentProduct=null;
+const sections=[{title:'Minis & Combos',items:minis},{title:'Hamburguesas Grandes',items:grandes}];
 
-function card(p){ const el=document.createElement('div'); el.className='card';
-  el.innerHTML=`<div class="row"><h3>${p.name}</h3><div class="right price">$${p.price}</div></div>
-  <div class="sub">Salsa sugerida: <b>${p.suggest}</b></div>
-  <div class="row" style="margin-top:10px"><button class="btn">Ordenar</button></div>`;
-  el.querySelector('.btn').onclick=()=> openModal(p); return el;
-}
-function renderMenu(){ menuEl.innerHTML=''; all.forEach(sec=>{ const wrap=document.createElement('div'); wrap.className='card';
-  wrap.innerHTML=`<h2>${sec.title}</h2><div class="grid"></div>`; sec.items.forEach(p=>wrap.querySelector('.grid').appendChild(card(p)));
-  menuEl.appendChild(wrap);});
-}
-function buildList(list, price){ const wrap=document.createElement('div');
-  list.forEach(label=>{ const row=document.createElement('label'); row.className='item-row';
-    row.innerHTML=`<input type="checkbox" data-label="${label}" data-price="${price}"><span>${label}</span><span class="sub">+$${price}</span>`;
-    wrap.appendChild(row); }); return wrap;
-}
+let CURRENT=null;
+let CART=[];
+
 function roundTo7(n){ if(!ROUND_TO_7_END) return Math.round(n);
-  const r=Math.round(n), u=r%10; if(u===7) return r; const down=r-((u-7+10)%10), up=r+((7-u+10)%10);
+  const r=Math.round(n), u=r%10;
+  if(u===7) return r;
+  const down=r-((u-7+10)%10), up=r+((7-u+10)%10);
   return (Math.abs(up-n)<Math.abs(n-down))?up:down;
 }
-function recalc(){ const qty=+fQty.value||1; let total=currentProduct.price*qty;
-  const a=[...fAde.querySelectorAll('input:checked')].length; const x=[...fExt.querySelectorAll('input:checked')].length;
-  total += a*EXTRA_ADE_PRICE + x*EXTRA_ING_PRICE; let unlocked=false;
-  if(currentProduct.name.toLowerCase().includes('mini')&&qty>=3){ total=total*(1-COMBO3_DISCOUNT); unlocked=true; }
-  const shown= unlocked? roundTo7(total) : Math.round(total); fTot.textContent=`$${shown}`; return {total:shown,unlocked}; }
-function openModal(p){ currentProduct=p; mTitle.textContent=p.name; fName.value=''; fQty.value=1; fSug.textContent=p.suggest;
+
+function card(p){
+  const el=document.createElement('div'); el.className='card';
+  el.innerHTML=`<div class="row"><h3>${p.name}</h3><div class="right price">$${p.price}</div></div>
+  <div class="sub">Salsa sugerida: <b>${p.suggest}</b></div>
+  <div class="row" style="margin-top:10px"><button class="btn">Agregar</button></div>`;
+  el.querySelector('.btn').onclick=()=> openModal(p);
+  return el;
+}
+function renderMenu(){
+  menuEl.innerHTML='';
+  sections.forEach(sec=>{
+    const wrap=document.createElement('div'); wrap.className='card';
+    wrap.innerHTML=`<h2>${sec.title}</h2><div class="grid"></div>`;
+    sec.items.forEach(p=> wrap.querySelector('.grid').appendChild(card(p)));
+    menuEl.appendChild(wrap);
+  });
+}
+function buildList(list, price){
+  const wrap=document.createElement('div');
+  list.forEach(label=>{
+    const row=document.createElement('label'); row.className='item-row';
+    row.innerHTML=`<input type="checkbox" data-label="${label}" data-price="${price}">
+                   <span>${label}</span><span class="sub">+$${price}</span>`;
+    wrap.appendChild(row);
+  }); return wrap;
+}
+function recalcPieceTotal(p){
+  const qty=+fQty.value||1;
+  const a=[...fAde.querySelectorAll('input:checked')].length;
+  const x=[...fExt.querySelectorAll('input:checked')].length;
+  const sub = p.price*qty + a*EXTRA_ADE_PRICE + x*EXTRA_ING_PRICE;
+  fTot.textContent = `$${Math.round(sub)}`;
+  return Math.round(sub);
+}
+function openModal(p){
+  CURRENT=p; fQty.value=1; fSug.textContent=p.suggest; fNotes.value='';
   fAde.innerHTML=''; fExt.innerHTML=''; fAde.appendChild(buildList(aderezos,5)); fExt.appendChild(buildList(extras,5));
-  modal.classList.add('open'); recalc(); modal.querySelectorAll('input[type="checkbox"], #f-qty').forEach(x=>x.oninput=recalc); }
-async function createOrder(payload){ await addDoc(collection(db,'orders'),{...payload,status:'PENDING',createdAt:serverTimestamp()}); }
-document.getElementById('orderForm').onsubmit=async e=>{ e.preventDefault();
-  const qty=+fQty.value||1; const a=[...fAde.querySelectorAll('input:checked')].map(i=>i.dataset.label);
-  const x=[...fExt.querySelectorAll('input:checked')].map(i=>i.dataset.label); const calc=recalc();
-  await createOrder({ source:'kiosk', customer:fName.value.trim()||'Cliente', product:currentProduct.name, qty,
-    aderezos:a, extras:x, suggested:currentProduct.suggest, total:calc.total });
-  modal.classList.remove('open'); toast(calc.unlocked? '⭐ ¡Desbloqueaste un logro! Combo minis' : '¡Pedido creado!'); };
+  modal.classList.add('open'); recalcPieceTotal(p);
+  modal.querySelectorAll('input[type="checkbox"], #f-qty').forEach(x=> x.oninput=()=>recalcPieceTotal(p));
+}
+mClose.onclick=()=> modal.classList.remove('open');
+
+// ---- Carrito ----
+const cartBar   = document.getElementById('cartBar');
+const cartCount = document.getElementById('cartCount');
+const cartTotal = document.getElementById('cartTotal');
+const cartModal = document.getElementById('cartModal');
+const cartClose = document.getElementById('cartClose');
+const cartList  = document.getElementById('cartList');
+const cartGrand = document.getElementById('cartGrand');
+const openCart  = document.getElementById('openCart');
+const cartClear = document.getElementById('cartClear');
+const cartCheckout=document.getElementById('cartCheckout');
+
+function isMini(name){ return name.toLowerCase().includes('mini'); }
+function cartTotals(){
+  let items=0, total=0, minisQty=0, minisSub=0;
+  for(const it of CART){
+    items += it.qty;
+    const base = it.price*it.qty + it.aderezos.length*EXTRA_ADE_PRICE + it.extras.length*EXTRA_ING_PRICE;
+    total += base;
+    if(isMini(it.name)){ minisQty += it.qty; minisSub += base; }
+  }
+  // Descuento 3-minis MIX & MATCH
+  let unlocked=false;
+  if(minisQty>=3){
+    const disc = minisSub*COMBO3_DISCOUNT;
+    total -= disc;
+    unlocked = true;
+  }
+  const shown = ROUND_TO_7_END ? roundTo7(total) : Math.round(total);
+  return {items, total: shown, unlocked};
+}
+function refreshCartUI(){
+  const t=cartTotals();
+  if(CART.length===0){ cartBar.classList.add('hidden'); }
+  else { cartBar.classList.remove('hidden'); }
+  cartCount.textContent = `${t.items} ítems`;
+  cartTotal.textContent = `$${t.total}`;
+}
+function renderCartModal(){
+  cartList.innerHTML='';
+  if(!CART.length){ cartList.innerHTML='<div class="empty">Tu carrito está vacío</div>'; cartGrand.textContent='$0'; return; }
+  CART.forEach((it,idx)=>{
+    const el=document.createElement('div'); el.className='card';
+    el.innerHTML = `
+      <div class="row">
+        <h3>${it.name} ×${it.qty}</h3>
+        <div class="right"><button class="btn small" data-i="${idx}">Quitar</button></div>
+      </div>
+      <div class="sub">Sugerida: <b>${it.suggest}</b></div>
+      ${it.aderezos.length? `<div class="sub">Aderezos: ${it.aderezos.join(', ')}</div>`:''}
+      ${it.extras.length? `<div class="sub">Extras: ${it.extras.join(', ')}</div>`:''}
+      ${it.notes? `<div class="sub">Notas: ${it.notes}</div>`:''}
+    `;
+    el.querySelector('button[data-i]').onclick=()=>{ CART.splice(idx,1); renderCartModal(); refreshCartUI(); };
+    cartList.appendChild(el);
+  });
+  cartGrand.textContent = `$${cartTotals().total}`;
+}
+openCart.onclick = ()=>{ renderCartModal(); cartModal.classList.add('open'); };
+cartClose.onclick= ()=> cartModal.classList.remove('open');
+cartClear.onclick= ()=>{ CART=[]; renderCartModal(); refreshCartUI(); };
+
+// Agregar pieza al carrito (NO envía aún a Firestore)
+document.getElementById('orderForm').onsubmit=(e)=>{
+  e.preventDefault();
+  const qty=+fQty.value||1;
+  const a=[...fAde.querySelectorAll('input:checked')].map(i=>i.dataset.label);
+  const x=[...fExt.querySelectorAll('input:checked')].map(i=>i.dataset.label);
+  CART.push({
+    name: CURRENT.name, price: CURRENT.price, suggest: CURRENT.suggest,
+    qty, aderezos:a, extras:x, notes: fNotes.value.trim()
+  });
+  modal.classList.remove('open');
+  refreshCartUI();
+  // “logro” si ya se armaron 3 minis en el carrito total
+  const t=cartTotals();
+  toast(t.unlocked ? '⭐ ¡Desbloqueaste un logro! Combo de minis' : 'Agregado al carrito');
+};
+
+// Confirmar y crear ticket
+async function checkout(){
+  if(CART.length===0){ toast('Tu carrito está vacío'); return; }
+  const name = fName.value.trim() || 'Cliente';
+  const ticketId = `T${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
+  const t=cartTotals();
+  const createdAt = serverTimestamp();
+
+  // Guardar cada línea como documento (compatible con Cocina/Admin actuales)
+  for(const it of CART){
+    await addDoc(collection(db,'orders'),{
+      ticketId, source:'kiosk', customer:name,
+      product:it.name, qty:it.qty, aderezos:it.aderezos, extras:it.extras, notes:it.notes,
+      suggested:it.suggest, total: Math.round(it.price*it.qty + it.aderezos.length*EXTRA_ADE_PRICE + it.extras.length*EXTRA_ING_PRICE),
+      status:'PENDING', createdAt
+    });
+  }
+  CART=[]; refreshCartUI(); cartModal.classList.remove('open');
+  toast(t.unlocked ? '⭐ Pedido creado — combo minis aplicado' : '¡Pedido creado!');
+}
+cartCheckout.onclick = checkout;
+
+// Inicial
 renderMenu();
+refreshCartUI();
