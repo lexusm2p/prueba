@@ -1,0 +1,10 @@
+/* === 7.10: alineación y total === */
+.option-grid { display: grid; grid-template-columns: 24px 1fr auto; gap: 10px 12px; align-items: center; }
+.option-grid input[type="checkbox"]{ width:20px; height:20px; accent-color:#ffd54a; }
+.option-grid .price { opacity:.75; font-size:.95rem; }
+.total-bar{
+  position: sticky; bottom: 0; background:#0e2433; border-top:1px solid #244a63;
+  padding: 12px; display:flex; gap:12px; justify-content:space-between; align-items:center;
+}
+.total-bar .sum { font-weight:700; font-size:1.1rem; }
+.hide-roles .role-links{ display:none !important; }
