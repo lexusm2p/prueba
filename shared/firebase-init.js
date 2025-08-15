@@ -7,4 +7,10 @@ export const firebaseConfig = {
   messagingSenderId: "34089845279",
   appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
   measurementId: "G-Q8YQJGL2XY"
+  rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{doc=**} { allow read, write: if request.auth != null; }
+  }
+}
 };
