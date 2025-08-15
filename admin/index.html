@@ -1,19 +1,22 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Admin — Seven de Burgers</title>
-  <link rel="stylesheet" href="../styles.css"/>
-</head>
-<body>
-  <div class="header">
-    <div class="brand"><span>⚙️ Admin — Seven de Burgers</span></div>
-    <div class="chips"><a class="chip" href="../kiosk/">Kiosko</a></div>
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin — Seven de Burgers</title>
+<link rel="stylesheet" href="../styles.css"/>
+</head><body>
+<header>
+  <div class="brand"><span class="dot"></span><strong>Seven de Burgers</strong><span class="badge">Admin</span></div>
+  <nav><a class="btn ghost" href="../kiosk/">Kiosko</a></nav>
+</header>
+<div class="container">
+  <div class="tabbar">
+    <button class="tab active" data-tab="ventas">Ventas</button>
+    <button class="tab" data-tab="inventario">Inventario</button>
+    <button class="tab" data-tab="recetario">Recetario</button>
+    <button class="tab" data-tab="compras">Compras</button>
+    <button class="tab" data-tab="ajustes">Ajustes</button>
   </div>
-  <div class="container">
-    <h1>Panel en construcción</h1>
-    <p class="muted">En la siguiente iteración iremos aquí con Finanzas, Compras e Inventario.</p>
-  </div>
-</body>
-</html>
+  <section id="panel" class="card"></section>
+</div>
+<footer>© Seven de Burgers</footer>
+<script type="module" src="./app.js"></script>
+</body></html>
