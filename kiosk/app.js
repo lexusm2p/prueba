@@ -1,40 +1,11 @@
-// kiosk/app.js (mounted on root index)
-import { ensureAuth, createOrder } from "../lib/firebase.js";
-import { SAUCES, EXTRAS, MINIS, MENU } from "../lib/menu.js";
-import { toast, beep } from "../lib/notify.js";
-
-const app = document.getElementById('app');
-
-ensureAuth().then(()=>{
-  render();
-});
-
-function render(){
-  app.innerHTML = `
-  <header style="display:none"></header>
-  <main>
-    <section>
-      <div class="row-head">
-        <h2>Minis</h2>
-        <button id="btnMix" class="ghost">Combo Minis Mix & Match</button>
-      </div>
-      <div id="miniList" class="cards"></div>
-    </section>
-
-    <section>
-      <h2>Hamburguesas</h2>
-      <div id="bigList" class="cards"></div>
-    </section>
-  </main>`;
-
-  const miniList = document.getElementById('miniList');
-  const bigList  = document.getElementById('bigList');
-  renderCards(MINIS, miniList);
-  renderCards(MENU,  bigList);
-  document.getElementById('btnMix').onclick = openMixMatch;
-}
-
-function renderCards(list, host){
+// kiosk/app.js — stub mínimo para renderizar algo
+const card = document.querySelector('.card');
+card.innerHTML = `
+  <h1>🍔 Kiosko OK</h1>
+  <p>La app se cargó y ya puedo escribir en el DOM.</p>
+  <button id="goMinis">Minis & Combos</button>
+  <button id="goBig">Hamburguesas grandes</button>
+`;function renderCards(list, host){
   host.innerHTML = list.map(p => `
     <div class="card">
       <div class="title">${p.name}</div>
