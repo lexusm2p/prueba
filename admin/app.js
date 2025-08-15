@@ -1,168 +1,116 @@
-import { subscribeRecentOrders, subscribeInventory, setInventoryItem, addPurchase, setConfig, getConfig } from '../lib/firebase.js';
-import { MENU, MINIS, SAUCES, EXTRAS, DEFAULT_COSTS } from '../lib/menu.js';
+// admin/app.js
+import { ensureAuth, subscribeActiveOrders, ordersCol, purchasesCol, addPurchase, inventoryCol, upsertInventory, adjustStock } from "../lib/firebase.js";
+import { RECIPES } from "../lib/recipes.js";
+import { getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-const panel = document.querySelector('#panel');
-const tabs = document.querySelectorAll('.tab');
-tabs.forEach(t=>t.addEventListener('click',()=>{
-  tabs.forEach(x=>x.classList.remove('active'));
-  t.classList.add('active');
-  load(t.dataset.tab);
-}));
+const $ = sel => document.querySelector(sel);
+const tabs = document.querySelectorAll('.tabs button');
+const sections = document.querySelectorAll('.tab');
 
-let ORDERS = [];
-let INV = {};
-let COSTS = {...DEFAULT_COSTS};
+tabs.forEach(b=> b.onclick = ()=>{
+  sections.forEach(s=> s.classList.remove('active'));
+  $('#tab-'+b.dataset.tab).classList.add('active');
+});
 
-// Suscripciones
-subscribeRecentOrders((snap)=>{ ORDERS = snap.docs.map(d=>({id:d.id,...d.data()})); if(current==='ventas') renderVentas(); });
-subscribeInventory((snap)=>{ INV={}; snap.forEach(d=>INV[d.id]=d.data()); if(current==='inventario') renderInventario(); });
+ensureAuth().then(()=>{
+  // Finanzas
+  subscribeActiveOrders(snap => {
+    const list = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    renderFinances(list);
+  });
+  // Inventario
+  loadInventory();
+  $('#inv-add').onclick = saveInventory;
+  // Compras
+  loadPurchases();
+  $('#b-save').onclick = savePurchase;
+  // Recetas
+  renderRecipes();
+});
 
-// Cargar costos desde config
-(async ()=>{
-  const doc = await getConfig('costs');
-  if(doc.exists()) COSTS = { ...COSTS, ...doc.data() };
-})();
+// --- Finanzas: totales por estado & listado corto ---
+function renderFinances(list){
+  const delivered = list.filter(o=>o.status==='DELIVERED');
+  const ready = list.filter(o=>o.status==='READY');
+  const inprog = list.filter(o=>o.status==='IN_PROGRESS');
+  const pending = list.filter(o=>o.status==='PENDING');
+  const sum = a => a.reduce((s,o)=> s + Number(o.total||0), 0);
 
-let current='ventas';
-load('ventas');
-
-function load(tab){
-  current = tab;
-  if(tab==='ventas') renderVentas();
-  if(tab==='inventario') renderInventario();
-  if(tab==='recetario') renderRecetario();
-  if(tab==='compras') renderCompras();
-  if(tab==='ajustes') renderAjustes();
-}
-
-// --------- Ventas ---------
-function sum(arr){ return arr.reduce((a,b)=>a+b,0); }
-function isToday(ts){ if(!ts) return false; const d=new Date(ts.seconds*1000); const n=new Date(); return d.toDateString()===n.toDateString(); }
-function isLast7(ts){ if(!ts) return false; const d=new Date(ts.seconds*1000); const n=new Date(); const diff=(n-d)/86400000; return diff<=7; }
-
-function renderVentas(){
-  const today = ORDERS.filter(o=>isToday(o.createdAt));
-  const week = ORDERS.filter(o=>isLast7(o.createdAt));
-  const totalToday = sum(today.map(o=>o.total||0));
-  const totalWeek = sum(week.map(o=>o.total||0));
-  const ticketsToday = today.length;
-  const avgToday = ticketsToday? (totalToday/ticketsToday).toFixed(2):'0.00';
-
-  const last = ORDERS.slice(0,20).map(o=>`
-    <tr><td>${o.customer||'-'}</td><td>${o.status}</td><td>$${o.total||0}</td><td>${o.createdAt? new Date(o.createdAt.seconds*1000).toLocaleString() : '-'}</td></tr>
-  `).join('');
-
-  panel.innerHTML = `
-    <h3>Resumen de ventas</h3>
-    <div class="grid cols-3">
-      <div class="card"><h4>Hoy</h4><p>$${totalToday.toFixed(2)}</p><p class="small dim">Tickets: ${ticketsToday} · Ticket prom: $${avgToday}</p></div>
-      <div class="card"><h4>Últimos 7 días</h4><p>$${totalWeek.toFixed(2)}</p></div>
-      <div class="card"><h4>Órdenes totales</h4><p>${ORDERS.length}</p></div>
-    </div>
-    <h4>Últimos pedidos</h4>
-    <table class="table"><thead><tr><th>Cliente</th><th>Estado</th><th>Total</th><th>Fecha</th></tr></thead><tbody>${last||'<tr><td colspan="4" class="dim">Sin datos</td></tr>'}</tbody></table>
+  $('#fin-cards').innerHTML = `
+    <div class="card"><div>Ingresos del día (DELIVERED)</div><div class="kpi">$${sum(delivered)}</div></div>
+    <div class="card"><div>Listos por entregar</div><div class="kpi">${ready.length}</div></div>
+    <div class="card"><div>En proceso</div><div class="kpi">${inprog.length}</div></div>
   `;
+
+  $('#fin-list').innerHTML = list.slice(0,10).map(o=>{
+    const count = (o.items||[]).reduce((s,it)=>s+(it.qty||1),0);
+    return `<div class="card">
+      <div><strong>${o.customer||'-'}</strong> · ${o.status} · $${o.total||0}</div>
+      <div style="opacity:.8">${count} items</div>
+    </div>`;
+  }).join('');
 }
 
-// --------- Inventario ---------
-function renderInventario(){
-  const items = Object.entries(INV).map(([id,row])=>`
-    <tr>
-      <td>${id}</td>
-      <td><input type="number" data-id="${id}" data-k="stock" value="${row.stock||0}"></td>
-      <td><input type="number" data-id="${id}" data-k="min" value="${row.min||0}"></td>
-      <td><input type="number" data-id="${id}" data-k="unitCost" value="${row.unitCost||0}"></td>
-    </tr>`).join('');
-  panel.innerHTML = `
-    <h3>Inventario</h3>
-    <p class="small dim">Edita y presiona "Guardar".</p>
-    <table class="table"><thead><tr><th>Item</th><th>Stock</th><th>Mínimo</th><th>Costo unit</th></tr></thead><tbody>${items||'<tr><td colspan="4" class="dim">Sin datos</td></tr>'}</tbody></table>
-    <div class="actions"><button id="seed" class="btn ghost">Cargar básicos</button><button id="save" class="btn">Guardar</button></div>
-  `;
-  panel.querySelector('#save').onclick = async ()=>{
-    const inputs = panel.querySelectorAll('input[data-id]');
-    for(const el of inputs){
-      await setInventoryItem(el.dataset.id, { [el.dataset.k]: Number(el.value) });
-    }
-    alert('Inventario actualizado');
-  };
-  panel.querySelector('#seed').onclick = async ()=>{
-    const basics = {
-      pan:{stock:30,min:12,unitCost:10/6},
-      carne85g:{stock:50,min:20,unitCost:10},
-      quesoAmarillo:{stock:50,min:20,unitCost:195/40},
-      quesoBlanco:{stock:50,min:20,unitCost:12/8},
-      lechuga:{stock:12,min:6,unitCost:30/12},
-      jitomateRodaja:{stock:60,min:24,unitCost:3/6},
-      cebollaAro:{stock:60,min:24,unitCost:10/12},
-      piñaRodaja:{stock:20,min:10,unitCost:2.5},
-      tocinoTira:{stock:80,min:30,unitCost:235/40},
-      jamonReb:{stock:40,min:20,unitCost:3.66},
-      salchichaPorcion:{stock:40,min:20,unitCost:5.5/2},
-      salsaBase20ml:{stock:200,min:80,unitCost:0.5},
-      bote1oz:{stock:100,min:40,unitCost:0.6},
-    };
-    for(const [id,row] of Object.entries(basics)){ await setInventoryItem(id,row); }
-    alert('Básicos cargados');
-  };
+// --- Compras ---
+async function loadPurchases(){
+  const qy = query(purchasesCol(), orderBy('createdAt','desc'));
+  const snap = await getDocs(qy);
+  $('#b-list').innerHTML = snap.docs.map(d=>{
+    const p = d.data();
+    return `<div class="card">${p.item} — ${p.qty} ${p.unit} · $${p.cost}</div>`;
+  }).join('');
+}
+async function savePurchase(){
+  const item = $('#b-item').value.trim();
+  const qty  = Number($('#b-qty').value||0);
+  const unit = $('#b-unit').value.trim();
+  const cost = Number($('#b-cost').value||0);
+  if(!item || !qty || !unit){ alert('Completa la compra'); return; }
+  await addPurchase({ item, qty, unit, cost });
+  $('#b-item').value=''; $('#b-qty').value=''; $('#b-unit').value=''; $('#b-cost').value='';
+  loadPurchases();
 }
 
-// --------- Recetario ---------
-function renderRecetario(){
-  const cards = [...MENU, ...MINIS].map(m=>`
-    <div class="card">
-      <h4>${m.name} <span class="badge">$${m.price}</span></h4>
-      <div class="small dim">${m.ingredients? m.ingredients.join(', ') : m.desc||''}</div>
-    </div>`).join('');
-  panel.innerHTML = `<h3>Recetario / Fichas</h3><div class="grid">${cards}</div>`;
+// --- Inventario ---
+async function loadInventory(){
+  const snap = await getDocs(inventoryCol());
+  $('#inv-list').innerHTML = snap.docs.map(d=>{
+    const it = { id:d.id, ...d.data() };
+    const warn = (it.stock||0) < (it.min||0);
+    return `<div class="card">
+      <div><strong>${it.id}</strong> — stock: <span class="${warn?'bad':'good'}">${it.stock||0}</span> · min:${it.min||0} · max:${it.max||0}</div>
+      <div style="margin-top:6px">
+        <button data-id="${it.id}" data-a="minus">-1</button>
+        <button data-id="${it.id}" data-a="plus">+1</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="card" style="opacity:.7">Sin insumos</div>';
+
+  document.querySelectorAll('[data-a="minus"]').forEach(b=> b.onclick = async()=>{ await adjustStock(b.dataset.id, -1); loadInventory(); });
+  document.querySelectorAll('[data-a="plus"]').forEach(b=> b.onclick = async()=>{ await adjustStock(b.dataset.id, +1); loadInventory(); });
+}
+async function saveInventory(){
+  const id = $('#inv-name').value.trim();
+  const stock = Number($('#inv-stock').value||0);
+  const min = Number($('#inv-min').value||0);
+  const max = Number($('#inv-max').value||0);
+  if(!id){ alert('Pon un nombre/ID de ingrediente'); return; }
+  await upsertInventory(id, { stock, min, max });
+  $('#inv-name').value=''; $('#inv-stock').value=''; $('#inv-min').value=''; $('#inv-max').value='';
+  loadInventory();
 }
 
-// --------- Compras (FIX: uso de stock previo desde INV) ---------
-function renderCompras(){
-  panel.innerHTML = `
-    <h3>Registrar compra</h3>
-    <div class="grid">
-      <label>Item (ID exacto de inventario) <input id="item"></label>
-      <label>Cantidad <input id="qty" type="number" value="1"></label>
-      <label>Costo total <input id="cost" type="number" value="0"></label>
-      <button id="save" class="btn">Registrar y sumar a inventario</button>
-    </div>
-    <p class="small dim">Tip: IDs comunes: pan, carne85g, quesoAmarillo, quesoBlanco, lechuga, jitomateRodaja, cebollaAro, piñaRodaja, tocinoTira, jamonReb, salchichaPorcion, salsaBase20ml, bote1oz.</p>
-  `;
-  panel.querySelector('#save').onclick = async ()=>{
-    const item = panel.querySelector('#item').value.trim();
-    const qty = Number(panel.querySelector('#qty').value||0);
-    const cost = Number(panel.querySelector('#cost').value||0);
-    if(!item || qty<=0){ alert('Completa los datos'); return; }
-
-    // 1) Registrar compra
-    await addPurchase({ item, qty, cost });
-
-    // 2) Sumar a inventario usando el stock que tenemos en memoria (INV)
-    const prev = Number(INV[item]?.stock || 0);
-    const unitCost = qty>0 ? (cost/qty) : 0;
-    await setInventoryItem(item, { stock: prev + qty, unitCost });
-
-    alert('Compra registrada y stock actualizado');
-  };
-}
-
-// --------- Ajustes ---------
-function renderAjustes(){
-  panel.innerHTML = `
-    <h3>Costos y precios</h3>
-    <div class="grid">
-      ${Object.entries(COSTS).map(([k,v])=>`
-        <label>${k} <input data-k="${k}" type="number" step="0.01" value="${Number(v).toFixed(2)}"></label>
-      `).join('')}
-    </div>
-    <div class="actions"><button id="save" class="btn">Guardar</button></div>
-    <p class="small dim">Estos costos se usan para COGS estimado. Puedes afinarlos conforme cambien tus proveedores.</p>
-  `;
-  panel.querySelector('#save').onclick = async ()=>{
-    const inputs = panel.querySelectorAll('input[data-k]');
-    const data = {}; inputs.forEach(i=> data[i.dataset.k] = Number(i.value));
-    await setConfig('costs', data);
-    alert('Costos guardados');
-  };
+// --- Recetario ---
+function renderRecipes(){
+  $('#rec-list').innerHTML = RECIPES.map(r=>{
+    const body = r.versiones.map(v=>{
+      const ing = v.ingredientes.map(i=>`${i.i}: ${i.q}${i.u}`).join('<br>');
+      const pasos = (v.pasos||[]).map(p=>`• ${p}`).join('<br>');
+      return `<div class="card"><div><strong>${v.ml} ml</strong></div><div>${ing}</div><div style="margin-top:6px;opacity:.9">${pasos}</div></div>`;
+    }).join('');
+    return `<div class="card">
+      <div style="font-weight:800">${r.name}</div>
+      <div class="grid">${body}</div>
+    </div>`;
+  }).join('');
 }
