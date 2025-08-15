@@ -2,7 +2,10 @@ import { firebaseConfig } from "../shared/firebase-init.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-
+// kiosk/app.js
+import { beep } from '../lib/notify.js';
+import { createOrder } from '../shared/api.js';
+// OJO: siempre con ./ o ../, nunca "/"
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
