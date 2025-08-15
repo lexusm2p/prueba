@@ -1,40 +1,13 @@
 <!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Seven de Burgers — Kiosko</title>
-  <style>
-    body{margin:0;background:#0c2230;color:#e8f1f8;font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:960px;margin:48px auto;padding:16px}
-    .card{background:#0f2c3a;border:1px solid #164156;border-radius:12px;padding:20px}
-    .muted{opacity:.7}
-    pre{white-space:pre-wrap;word-break:break-word;background:#081c26;padding:12px;border-radius:8px;overflow:auto}
-    a{color:#8dd4ff}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <h1>Seven de Burgers — Kiosko</h1>
-      <div id="boot" class="muted">Cargando kiosko…</div>
-    </div>
-  </div>
-
-  <script type="module">
-    const el = document.getElementById('boot');
-    const showErr = (msg, e) => {
-      el.innerHTML = `<b>Error cargando la app:</b><br><pre>${msg}\n${e?.message||""}</pre>
-      <div class="muted">Revisa que exista <code>/kiosk/app.js</code> y que las rutas sean relativas (<code>./lib/…</code>).</div>`;
-      console.error(e);
-    };
-
-    try {
-      // intenta cargar tu app real
-      import('./kiosk/app.js?v=boot1')
-        .then(() => { el.textContent = 'Kiosko cargado. (Si ves esto, app.js no reemplazó el contenido)'; })
-        .catch(e => showErr('No se pudo importar ./kiosk/app.js', e));
-    } catch(e) { showErr('Excepción durante import()', e); }
-  </script>
-</body>
-</html>
+<html lang="es"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Seven de Burgers — Inicio</title>
+<link rel="stylesheet" href="./shared/styles.css"></head>
+<body class="shell"><div class="container"><div class="card">
+<h1>Seven de Burgers</h1><p>Te estamos llevando al Kiosko…</p>
+<div class="row" style="gap:10px;margin-top:10px">
+<a class="btn" href="./kiosk/">Ir al Kiosko</a>
+<a class="btn" href="./login/">Login</a>
+</div></div></div>
+<script>location.replace('./kiosk/');</script>
+</body></html>
