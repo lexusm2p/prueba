@@ -287,4 +287,23 @@ tbody td:last-child { border-right:1px solid #1b3a50; border-top-right-radius:10
 /* 16) Touch-friendly tweaks para iOS */
 @supports (-webkit-touch-callout: none) {
   input, select, textarea, button { font-size:16px; } /* evita zoom automático en inputs */
+  /* Barra de carrito fija */
+.cart-bar{
+  position:fixed; left:0; right:0; bottom:0;
+  background:linear-gradient(180deg, rgba(0,0,0,0) 0%, #0b1a24 25%);
+  border-top:1px solid #1b3a50;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px;
+  z-index:1000;
+}
+.hidden{ display:none !important; }/* Barra de carrito fija */
+.cart-bar{
+  position:fixed; left:0; right:0; bottom:0;
+  background:linear-gradient(180deg, rgba(0,0,0,0) 0%, #0b1a24 25%);
+  border-top:1px solid #1b3a50;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px;
+  z-index:1000;
+}
+.hidden{ display:none !important; }
 }
