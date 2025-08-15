@@ -1,3 +1,12 @@
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Nunito+Sans:wght@400;600;700;800&family=Press+Start+2P&display=swap');
+
+/* Variables de tipografía */
+:root{
+  --font-display: "Chakra Petch", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-body: "Nunito Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-accent: "Press Start 2P", "Chakra Petch", system-ui, sans-serif;
+}
 :root{
   --bg:#0e1c26;--panel:#112636;--panel-2:#0f2130;--brand:#ffd54a;
   --text:#e6f1ff;--muted:#9bb3c7;--ok:#3ddc97;--warn:#ffcc00;
