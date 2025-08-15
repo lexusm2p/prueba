@@ -1,36 +1,24 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Cocina — Seven de Burgers</title>
-  <link rel="stylesheet" href="../styles.css"/>
-</head>
-<body>
-  <div class="header">
-    <div class="brand"><span>👨‍🍳 Cocina — Seven de Burgers</span></div>
-    <div class="chips">
-      <a class="chip" href="../kiosk/">Ir al kiosko</a>
-      <a class="chip" href="../mesero/">Ir a mesero</a>
-    </div>
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Cocina — Seven de Burgers</title>
+<link rel="stylesheet" href="../styles.css"/>
+</head><body>
+<header>
+  <div class="brand"><span class="dot"></span><strong>Seven de Burgers</strong><span class="badge">Vista Cocina</span></div>
+  <nav>
+    <a class="btn ghost" href="../kiosk/">Ir al kiosko</a>
+    <a class="btn ghost" href="../mesero/">Ir a mesero</a>
+  </nav>
+</header>
+<div class="container">
+  <h2>Pedidos activos</h2>
+  <div class="grid cols-3">
+    <section class="card"><h3>Sin pendientes</h3><div id="list-pending" class="stack"></div></section>
+    <section class="card"><h3>En preparación</h3><div id="list-progress" class="stack"></div></section>
+    <section class="card"><h3>Listos</h3><div id="list-ready" class="stack"></div></section>
   </div>
-  <div class="container">
-    <div class="board">
-      <div class="col">
-        <h3>Sin pendientes</h3>
-        <div id="listPending"></div>
-      </div>
-      <div class="col">
-        <h3>En preparación</h3>
-        <div id="listProgress"></div>
-      </div>
-      <div class="col">
-        <h3>Listos</h3>
-        <div id="listReady"></div>
-      </div>
-    </div>
-  </div>
-
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+  <p class="hint">Sugerencia: usa <kbd>Tomar</kbd> para iniciar, <kbd>Listo</kbd> para pasar a recolección y <kbd>Entregar</kbd> para cerrar.</p>
+</div>
+<footer>© Seven de Burgers</footer>
+<script type="module" src="./app.js"></script>
+</body></html>
