@@ -16,6 +16,7 @@ let COSTS = {...DEFAULT_COSTS};
 // Suscripciones
 subscribeRecentOrders((snap)=>{ ORDERS = snap.docs.map(d=>({id:d.id,...d.data()})); if(current==='ventas') renderVentas(); });
 subscribeInventory((snap)=>{ INV={}; snap.forEach(d=>INV[d.id]=d.data()); if(current==='inventario') renderInventario(); });
+
 // Cargar costos desde config
 (async ()=>{
   const doc = await getConfig('costs');
@@ -116,7 +117,7 @@ function renderRecetario(){
   panel.innerHTML = `<h3>Recetario / Fichas</h3><div class="grid">${cards}</div>`;
 }
 
-// --------- Compras ---------
+// --------- Compras (FIX: uso de stock previo desde INV) ---------
 function renderCompras(){
   panel.innerHTML = `
     <h3>Registrar compra</h3>
@@ -132,11 +133,17 @@ function renderCompras(){
     const item = panel.querySelector('#item').value.trim();
     const qty = Number(panel.querySelector('#qty').value||0);
     const cost = Number(panel.querySelector('#cost').value||0);
-    if(!item || qty<=0) return alert('Completa los datos');
+    if(!item || qty<=0){ alert('Completa los datos'); return; }
+
+    // 1) Registrar compra
     await addPurchase({ item, qty, cost });
-    // actualizar inventario sumando
-    await setInventoryItem(item, { stock: ( (window._invSnap?.[item]?.stock)||0 ) + qty, unitCost: cost/qty });
-    alert('Compra registrada');
+
+    // 2) Sumar a inventario usando el stock que tenemos en memoria (INV)
+    const prev = Number(INV[item]?.stock || 0);
+    const unitCost = qty>0 ? (cost/qty) : 0;
+    await setInventoryItem(item, { stock: prev + qty, unitCost });
+
+    alert('Compra registrada y stock actualizado');
   };
 }
 
