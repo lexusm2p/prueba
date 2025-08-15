@@ -1,19 +1,35 @@
 <!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seven de Burgers · Cocina</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body>
-  <header><h1>Cocina</h1></header>
-  <main class="cols">
-    <section><h2>Pendiente</h2><div id="pending" class="col"></div></section>
-    <section><h2>En proceso</h2><div id="progress" class="col"></div></section>
-    <section><h2>Listo</h2><div id="ready" class="col"></div></section>
-  </main>
-
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+<html lang="es"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin — Seven de Burgers</title>
+<link rel="stylesheet" href="../shared/styles.css"></head>
+<body class="shell"><div class="container">
+<div class="row" style="margin-bottom:10px"><a class="badge" href="../kiosk/">Kiosko</a><div class="right badge">Admin</div></div>
+<div class="card"><div class="row">
+<button class="btn" data-tab="ventas">Ventas</button>
+<button class="btn" data-tab="compras">Compras</button>
+<button class="btn" data-tab="inventario">Inventario</button>
+<button class="btn" data-tab="recetario">Recetario</button>
+</div></div>
+<div id="tab-ventas" class="card" hidden><h2>Ventas</h2>
+<div class="row" style="gap:10px"><label>Desde <input type="date" id="v-from"></label>
+<label>Hasta <input type="date" id="v-to"></label><button class="btn" id="v-refresh">Actualizar</button>
+<div class="right price">Total: $<span id="v-total">0</span></div></div>
+<table class="table" style="margin-top:12px"><thead><tr><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Mesa</th><th>Mesero</th><th>Estado</th><th>Total</th></tr></thead>
+<tbody id="v-rows"></tbody></table></div>
+<div id="tab-compras" class="card" hidden><h2>Compras</h2>
+<form id="p-form" class="row" style="gap:8px;flex-wrap:wrap">
+<input id="p-item" placeholder="Producto / insumo"><input id="p-qty" type="number" min="0" step="0.01" placeholder="Cantidad">
+<input id="p-unit" placeholder="Unidad (kg, pza, ml)"><input id="p-cost" type="number" min="0" step="0.01" placeholder="Costo total">
+<button class="btn" type="submit">Registrar</button></form>
+<table class="table" style="margin-top:12px"><thead><tr><th>Fecha</th><th>Insumo</th><th>Cantidad</th><th>Unidad</th><th>Costo</th></tr></thead><tbody id="p-rows"></tbody></table></div>
+<div id="tab-inventario" class="card" hidden><h2>Inventario</h2>
+<form id="i-form" class="row" style="gap:8px;flex-wrap:wrap">
+<input id="i-item" placeholder="Insumo"><input id="i-qty" type="number" min="0" step="0.01" placeholder="Stock">
+<input id="i-min" type="number" min="0" step="0.01" placeholder="Mín"><input id="i-max" type="number" min="0" step="0.01" placeholder="Máx">
+<input id="i-unit" placeholder="Unidad"><button class="btn" type="submit">Agregar/Actualizar</button></form>
+<table class="table" style="margin-top:12px"><thead><tr><th>Insumo</th><th>Stock</th><th>Mín</th><th>Máx</th><th>Unidad</th><th>Acciones</th></tr></thead><tbody id="i-rows"></tbody></table></div>
+<div id="tab-recetario" class="card" hidden><h2>Recetario (solo lectura)</h2><div id="r-list"></div></div>
+</div>
+<script type="module" src="./app.js"></script>
+</body></html>
