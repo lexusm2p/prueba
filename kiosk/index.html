@@ -1,32 +1,19 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Seven de Burgers — Kiosko</title>
-  <link rel="stylesheet" href="../styles.css"/>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kiosko — Seven de Burgers</title>
+  <link rel="stylesheet" href="../styles.css">
+  <style>.topbar{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:#0b1b27;border-bottom:1px solid #123}.brand{display:flex;align-items:center;gap:.5rem;color:#ffe082;font-weight:800;cursor:pointer}.brand small{color:#9cc1ff;font-weight:600;opacity:.8}</style>
 </head>
 <body>
-  <div class="header">
-    <div class="brand"><span>🍔 Seven de Burgers</span> <span class="badge">Kiosko</span></div>
-    <div class="chips">
-      <a class="chip" href="../cocina/">Cocina</a>
-      <a class="chip" href="../mesero/">Mesero</a>
+  <header class="topbar">
+    <div id="brandTap" class="brand" title="Seven de Burgers">
+      <span>▣</span><span>Seven de Burgers</span><small>Kiosko</small>
     </div>
-  </div>
-  <div class="container">
-    <h1>¡Elige tu modo de juego!</h1>
-    <div class="hero">
-      <div id="tile-minis" class="tile"><h2>Minis & Combos</h2><div class="muted">Arma 1, 2, 3 o el Combo 7.</div></div>
-      <div id="tile-big" class="tile"><h2>¿Prefieres retos más grandes?</h2><div class="muted">Ir a hamburguesas grandes</div></div>
-    </div>
-    <hr class="sep"/>
-    <div id="view"></div>
-    <div class="footer-space"></div>
-  </div>
-
-  <div id="modal" class="modal"><div class="sheet" id="sheet"></div></div>
-
+  </header>
+  <main id="app" class="container"></main>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
