@@ -45,7 +45,10 @@ function card(o){
 }
 
 function render(snap){
-  const rows = snap.docs.map(d=>({id:d.id, ...d.data()}));
+  // 🔧 Ordenamos en cliente por createdAt asc para mantener la fila y evitar índices.
+  const rows = snap.docs.map(d=>({id:d.id, ...d.data()}))
+    .sort((a,b)=> (a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+
   const pending = rows.filter(r=>r.status==='PENDING');
   const progress = rows.filter(r=>r.status==='IN_PROGRESS');
   const ready = rows.filter(r=>r.status==='READY');
