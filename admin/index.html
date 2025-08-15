@@ -1,22 +1,57 @@
-<!doctype html><html lang="es"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Admin — Seven de Burgers</title>
-<link rel="stylesheet" href="../styles.css"/>
-</head><body>
-<header>
-  <div class="brand"><span class="dot"></span><strong>Seven de Burgers</strong><span class="badge">Admin</span></div>
-  <nav><a class="btn ghost" href="../kiosk/">Kiosko</a></nav>
-</header>
-<div class="container">
-  <div class="tabbar">
-    <button class="tab active" data-tab="ventas">Ventas</button>
-    <button class="tab" data-tab="inventario">Inventario</button>
-    <button class="tab" data-tab="recetario">Recetario</button>
-    <button class="tab" data-tab="compras">Compras</button>
-    <button class="tab" data-tab="ajustes">Ajustes</button>
-  </div>
-  <section id="panel" class="card"></section>
-</div>
-<footer>© Seven de Burgers</footer>
-<script type="module" src="./app.js"></script>
-</body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seven de Burgers · Admin</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header><h1>Admin Seven</h1></header>
+  <nav class="tabs">
+    <button data-tab="fin">Finanzas</button>
+    <button data-tab="inv">Inventario</button>
+    <button data-tab="buy">Compras</button>
+    <button data-tab="rec">Recetario</button>
+  </nav>
+
+  <main>
+    <section id="tab-fin" class="tab active">
+      <h2>Finanzas</h2>
+      <div id="fin-cards" class="grid"></div>
+      <div id="fin-list" class="list"></div>
+    </section>
+
+    <section id="tab-inv" class="tab">
+      <h2>Inventario</h2>
+      <div class="row">
+        <input id="inv-name" placeholder="Ingrediente (id único)">
+        <input id="inv-stock" type="number" placeholder="Stock inicial">
+        <input id="inv-min" type="number" placeholder="Mín.">
+        <input id="inv-max" type="number" placeholder="Máx.">
+        <button id="inv-add">Guardar</button>
+      </div>
+      <div id="inv-list" class="list"></div>
+    </section>
+
+    <section id="tab-buy" class="tab">
+      <h2>Compras</h2>
+      <div class="row">
+        <input id="b-item" placeholder="Producto">
+        <input id="b-qty"  type="number" placeholder="Cantidad">
+        <input id="b-unit" placeholder="Unidad (kg, pza)">
+        <input id="b-cost" type="number" placeholder="Costo total">
+        <button id="b-save">Registrar</button>
+      </div>
+      <div id="b-list" class="list"></div>
+    </section>
+
+    <section id="tab-rec" class="tab">
+      <h2>Recetario</h2>
+      <div id="rec-list" class="list"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
