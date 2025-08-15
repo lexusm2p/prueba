@@ -1,4 +1,7 @@
 // kiosk/app.js — stub mínimo para renderizar algo
+import { renderKiosk } from './ui.js';
+const card = document.querySelector('.card');
+renderKiosk(card);
 const card = document.querySelector('.card');
 card.innerHTML = `
   <h1>🍔 Kiosko OK</h1>
