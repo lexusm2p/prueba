@@ -1,130 +1,217 @@
-import { beep } from '../lib/notify.js';
-import { createOrder } from '../lib/firebase.js';
-import { MENU, MINIS, EXTRAS, SAUCES, PRICES } from '../lib/menu.js';
+// kiosk/app.js
+import { ensureAuth, createOrder } from "../lib/firebase.js";
+import { SAUCES, EXTRAS, MINIS, MENU } from "../lib/menu.js";
+import { toast, beep } from "../lib/notify.js";
 
-const app = document.querySelector('#app');
-const $ = s=>document.querySelector(s);
+const miniList = document.getElementById('miniList');
+const bigList  = document.getElementById('bigList');
+const modal    = document.getElementById('modal');
+const modalBody= document.getElementById('modalBody');
+const closeBtn = document.getElementById('closeModal');
+const btnMix   = document.getElementById('btnMix');
 
-// Admin oculto: 5 taps al logo
-(()=>{const el=$('#brandTap');let taps=0,t=null;el.addEventListener('click',()=>{taps++;if(!t)t=setTimeout(()=>{taps=0;t=null},3000);if(taps>=5)location.href='../admin/';});})();
-
-const card = (m, kind='big') => `
-  <div class="card">
-    <h3>${m.name} <span class="price">$${m.price}</span></h3>
-    <p class="muted">${m.desc||''}</p>
-    <div class="row">
-      <button class="btn" data-a="order" data-kind="${kind}" data-id="${m.id}">Ordenar</button>
-    </div>
-  </div>`;
-
-function home(){
-  const miniCards = MINIS.map(m=>card(m,'mini')).join('');
-  const bigCards = MENU.map(m=>card(m,'big')).join('');
-  app.innerHTML = `
-  <section class="hero">
-    <h1>¡Elige tu modo de juego!</h1>
-    <p class="muted">Minis por defecto. ¿Prefieres retos grandes? También tenemos 😉</p>
-  </section>
-  <section class="grid grid-cards">
-    <div class="card" style="outline:2px dashed #ffcc66;outline-offset:4px">
-      <h3>Combo 3 Minis <span class="price">$${PRICES.combo3Minis}</span></h3>
-      <p class="muted">Elige 3 minis diferentes. Precio especial con cierre en 7.</p>
-      <div class="row"><button class="btn" data-a="combo3">Armar combo</button></div>
-    </div>
-    ${miniCards}
-    <div class="divider"></div>
-    <h2>¿Prefieres los retos más grandes?</h2>
-    ${bigCards}
-  </section>`;
-}
-home();
-
-document.addEventListener('click',(e)=>{
-  const b=e.target.closest('button'); if(!b) return;
-  const a=b.dataset.a;
-  if(a==='order') openOrder(b.dataset.id,b.dataset.kind);
-  if(a==='combo3') openCombo3();
+ensureAuth().then(()=>{
+  renderCards(MINIS, miniList);
+  renderCards(MENU,  bigList);
+  btnMix.onclick = openMixMatch;
 });
 
-function optionsList(items, nameKey){
-  return items.map(x=>`
-    <label class="opt">
-      <input type="checkbox" name="${nameKey}" value="${x.id}">
-      <span>${x.name} <small class="muted">(+$${x.price})</small></span>
-    </label>`).join('');
+function renderCards(list, host){
+  host.innerHTML = list.map(p => `
+    <div class="card">
+      <div class="title">${p.name}</div>
+      <div class="price">$${p.price}</div>
+      <button data-id="${p.id}">Ordenar</button>
+    </div>
+  `).join('');
+  host.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      const product = [...MINIS, ...MENU].find(x => x.id===id);
+      openSingle(product);
+    });
+  });
 }
-function sumByIds(ids, list){ return ids.reduce((acc,id)=>{const it=list.find(e=>e.id===id);return acc+(it?it.price:0);},0); }
 
-function openOrder(id, kind){
-  const src = kind==='mini'? MINIS : MENU;
-  const item = src.find(x=>x.id===id); if(!item) return;
-  const modal = document.createElement('div'); modal.className='modal';
-  modal.innerHTML = `
-    <div class="sheet">
-      <h3>${item.name} <span class="price">$${item.price}</span></h3>
-      <label>Tu nombre <input id="custName" placeholder="Nombre para avisarte cuando esté listo"></label>
+function renderOpt(opt){
+  return `
+    <label class="opt">
+      <input type="checkbox" class="opt-input" data-id="${opt.id}" data-price="${opt.price}">
+      <span class="opt-name">${opt.name}</span>
+      <span class="opt-price">+$${opt.price}</span>
+    </label>`;
+}
+function renderOptGrid(list){ return `<div class="grid-opts">${list.map(renderOpt).join('')}</div>`; }
+
+function openSingle(product){
+  const aderezosHtml = renderOptGrid(SAUCES);
+  const extrasHtml   = renderOptGrid(EXTRAS);
+
+  modalBody.innerHTML = `
+    <h3>${product.name}</h3>
+    <div class="row grid">
       <label>Cantidad <input id="qty" type="number" min="1" value="1"></label>
-      <div class="group"><h4>Aderezos extra</h4>${optionsList(SAUCES,'sauces')}</div>
-      <div class="group"><h4>Ingredientes extra</h4>${optionsList(EXTRAS,'extras')}</div>
-      <label class="opt"><input type="checkbox" id="surprise"><span>¿Quieres que te sorprendamos con un aderezo? (+$5)</span></label>
-      <label>Notas a cocina <textarea id="notes" placeholder="sin jitomate, poco picante, etc."></textarea></label>
-      <div class="row end"><button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="send">Confirmar pedido</button></div>
-    </div>`;
-  document.body.appendChild(modal);
-  modal.addEventListener('click', async (ev)=>{
-    const b = ev.target.closest('button'); if(!b) return;
-    if(b.dataset.a==='close'){ modal.remove(); return; }
-    if(b.dataset.a==='send'){
-      const qty = Math.max(1, parseInt(modal.querySelector('#qty').value||'1',10));
-      const customer = modal.querySelector('#custName').value.trim() || 'Cliente';
-      const notes = modal.querySelector('#notes').value.trim();
-      const sauces = [...modal.querySelectorAll('input[name="sauces"]:checked')].map(i=>i.value);
-      const extras = [...modal.querySelectorAll('input[name="extras"]:checked')].map(i=>i.value);
-      const surprise = modal.querySelector('#surprise').checked;
-      const addSauces = sumByIds(sauces, SAUCES);
-      const addExtras = sumByIds(extras, EXTRAS);
-      const unit = item.price + addSauces + addExtras + (surprise?5:0);
-      const line = { id:item.id, name:item.name, kind, unitPrice:unit, basePrice:item.price, qty, sauces, extras, surprise };
-      const total = unit * qty;
-      await createOrder({ customer, items:[line], total, notes });
-      beep();
-      modal.remove();
-      alert('¡Pedido enviado!');
-    }
-  });
+      <label>Tu nombre (opcional) <input id="cust" type="text" placeholder="Jugador 1"></label>
+    </div>
+
+    <div class="row"><strong>¿Quieres que te sorprendamos con una nueva configuración (aderezo)?</strong><br>
+      <label><input type="checkbox" id="surprise"> Sí, sorpréndeme</label>
+    </div>
+
+    <div class="row">
+      <h4>Aderezos extra (+$5 c/u)</h4>
+      ${aderezosHtml}
+    </div>
+    <div class="row">
+      <h4>Ingredientes extra</h4>
+      ${extrasHtml}
+    </div>
+
+    <div class="row"><label>Notas para cocina <input id="notes" type="text" placeholder="Sin jitomate..."></label></div>
+
+    <div id="totalBar" class="totalBar">
+      <div><strong>Total: <span id="liveTotal">$0</span></strong></div>
+      <button id="btnConfirm" class="btn-primary">Confirmar</button>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  closeBtn.onclick = ()=> modal.classList.add('hidden');
+
+  const qtyEl = document.getElementById('qty');
+  const liveTotal = document.getElementById('liveTotal');
+  const surpriseEl= document.getElementById('surprise');
+  const adChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => SAUCES.some(s=>s.id===x.dataset.id));
+  const exChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => EXTRAS.some(s=>s.id===x.dataset.id));
+  let showedCombo = false;
+
+  function extrasPerUnit(){
+    let s = 0;
+    [...adChecks, ...exChecks].forEach(cb => { if(cb.checked) s += Number(cb.dataset.price||0); });
+    return s;
+  }
+  function renderTotal(){
+    const qty = Math.max(1, Number(qtyEl.value||1));
+    const isMini = !!product.isMini;
+    const base = product.price * qty;
+    const extras = extrasPerUnit() * qty;
+    const discount = isMini ? Math.floor(qty/3)*7 : 0;
+    liveTotal.textContent = `$${base + extras - discount}`;
+    if (discount>0 && !showedCombo){ showedCombo=true; toast('¡Logro desbloqueado! Combo 3 minis aplicado', {icon:'⭐'}); beep(); }
+    if (discount===0) showedCombo=false;
+  }
+  [qtyEl, ...adChecks, ...exChecks, surpriseEl].forEach(el => el.addEventListener('input', renderTotal));
+  renderTotal();
+
+  document.getElementById('btnConfirm').onclick = async ()=>{
+    const qty = Math.max(1, Number(qtyEl.value||1));
+    const customer = (document.getElementById('cust').value||'').trim();
+    const notes = (document.getElementById('notes').value||'').trim();
+    const adSel = adChecks.filter(x=>x.checked).map(x=> SAUCES.find(s=>s.id===x.dataset.id)?.name );
+    const exSel = exChecks.filter(x=>x.checked).map(x=> EXTRAS.find(s=>s.id===x.dataset.id)?.name );
+    const isMini = !!product.isMini;
+    const discount = isMini ? Math.floor(qty/3)*7 : 0;
+    const total = product.price*qty + extrasPerUnit()*qty - discount;
+
+    const payload = {
+      customer, total,
+      items: [{
+        id: product.id, name: product.name, qty,
+        baseIngredients: product.base || [],
+        aderezos: adSel, extras: exSel,
+        surprise: !!surpriseEl.checked, notes
+      }]
+    };
+    await createOrder(payload);
+    modal.classList.add('hidden');
+    toast('Pedido enviado.', {icon:'🛎️'});
+  };
 }
 
-function openCombo3(){
-  const modal = document.createElement('div'); modal.className='modal';
-  const opts = MINIS.map(m=>`
-    <label class="opt">
-      <input type="checkbox" name="mini" value="${m.id}">
-      <span>${m.name}</span>
-    </label>`).join('');
-  modal.innerHTML = `
-    <div class="sheet">
-      <h3>Combo 3 Minis <span class="price">$${PRICES.combo3Minis}</span></h3>
-      <p class="muted">Selecciona <b>exactamente 3</b> minis distintas.</p>
-      <div class="group">${opts}</div>
-      <label>Tu nombre <input id="custName" placeholder="Nombre para avisarte cuando esté listo"></label>
-      <div class="row end"><button class="btn ghost" data-a="close">Cancelar</button><button class="btn" data-a="send">Confirmar combo</button></div>
-    </div>`;
-  document.body.appendChild(modal);
-  modal.addEventListener('click', async (ev)=>{
-    const b=ev.target.closest('button'); if(!b) return;
-    if(b.dataset.a==='close'){ modal.remove(); return; }
-    if(b.dataset.a==='send'){
-      const picked = [...modal.querySelectorAll('input[name="mini"]:checked')].map(i=>i.value);
-      if(picked.length!==3){ alert('Debes elegir 3 minis.'); return; }
-      const customer = modal.querySelector('#custName').value.trim() || 'Cliente';
-      const items = picked.map(id=>{
-        const m = MINIS.find(x=>x.id===id);
-        return { id:m.id, name:m.name, kind:'mini', unitPrice:0, basePrice:m.price, qty:1, sauces:[], extras:[], surprise:false };
-      });
-      await createOrder({ customer, items, combo:'3minis', total: PRICES.combo3Minis, notes:'' });
-      beep();
-      modal.remove();
-      alert('¡Combo enviado!');
-    }
-  });
+// --- Mix & Match de minis (aplica descuento por cada 3 minis en total) ---
+function openMixMatch(){
+  const rows = MINIS.map(m => `
+    <div class="mix-row" data-mini="${m.id}">
+      <div>${m.name} <span style="opacity:.7">($${m.price})</span></div>
+      <div class="qty">
+        <label>Cant.</label>
+        <input type="number" min="0" value="0" data-qty>
+      </div>
+    </div>
+  `).join('');
+
+  const aderezosHtml = renderOptGrid(SAUCES);
+  const extrasHtml   = renderOptGrid(EXTRAS);
+
+  modalBody.innerHTML = `
+    <h3>Combo Minis · Mix & Match</h3>
+    <div class="row"><label>Tu nombre (opcional) <input id="cust" type="text" placeholder="Jugador 1"></label></div>
+    <div class="row">${rows}</div>
+
+    <div class="row">
+      <h4>Aderezos extra (se aplican a todas) +$5 c/u</h4>
+      ${aderezosHtml}
+    </div>
+    <div class="row">
+      <h4>Ingredientes extra (se aplican a todas)</h4>
+      ${extrasHtml}
+    </div>
+
+    <div class="row"><label>Notas para cocina <input id="notes" type="text" placeholder="Todas sin jitomate..."></label></div>
+
+    <div id="totalBar" class="totalBar">
+      <div><strong>Total: <span id="liveTotal">$0</span></strong></div>
+      <button id="btnConfirm" class="btn-primary">Confirmar</button>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+  closeBtn.onclick = ()=> modal.classList.add('hidden');
+
+  const qtyEls = [...modalBody.querySelectorAll('[data-qty]')];
+  const adChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => SAUCES.some(s=>s.id===x.dataset.id));
+  const exChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => EXTRAS.some(s=>s.id===x.dataset.id));
+  const liveTotal = document.getElementById('liveTotal');
+  let showedCombo = false;
+
+  function extrasPerUnit(){
+    let s = 0; [...adChecks, ...exChecks].forEach(cb=>{ if(cb.checked) s += Number(cb.dataset.price||0); });
+    return s;
+  }
+  function renderTotal(){
+    const counts = qtyEls.map((el,i)=> ({ mini: MINIS[i], qty: Math.max(0, Number(el.value||0)) }));
+    const totalMinis = counts.reduce((s,x)=>s+x.qty,0);
+    let base = counts.reduce((s,x)=> s + x.qty * x.mini.price, 0);
+    let extras = totalMinis * extrasPerUnit();
+    const discount = Math.floor(totalMinis/3) * 7;
+    liveTotal.textContent = `$${base + extras - discount}`;
+    if (discount>0 && !showedCombo){ showedCombo=true; toast('¡Logro desbloqueado! Combo 3 minis aplicado', {icon:'⭐'}); beep(); }
+    if (discount===0) showedCombo=false;
+  }
+  [...qtyEls, ...adChecks, ...exChecks].forEach(el => el.addEventListener('input', renderTotal));
+  renderTotal();
+
+  document.getElementById('btnConfirm').onclick = async ()=>{
+    const customer = (document.getElementById('cust').value||'').trim();
+    const notes = (document.getElementById('notes').value||'').trim();
+    const counts = qtyEls.map((el,i)=> ({ mini: MINIS[i], qty: Math.max(0, Number(el.value||0)) }))
+                         .filter(x=>x.qty>0);
+    if(counts.length===0){ toast('Elige al menos 1 mini', {icon:'⚠️'}); return; }
+    const totalMinis = counts.reduce((s,x)=>s+x.qty,0);
+    const discount = Math.floor(totalMinis/3) * 7;
+    const total = counts.reduce((s,x)=> s + x.qty * x.mini.price, 0) + totalMinis*extrasPerUnit() - discount;
+
+    const adSel = adChecks.filter(x=>x.checked).map(x=> SAUCES.find(s=>s.id===x.dataset.id)?.name );
+    const exSel = exChecks.filter(x=>x.checked).map(x=> EXTRAS.find(s=>s.id===x.dataset.id)?.name );
+
+    const items = counts.map(x => ({
+      id: x.mini.id, name: x.mini.name, qty: x.qty,
+      baseIngredients: x.mini.base || [],
+      aderezos: adSel, extras: exSel, notes
+    }));
+
+    await createOrder({ customer, total, items });
+    modal.classList.add('hidden');
+    toast('Pedido enviado.', {icon:'🛎️'});
+  };
 }
