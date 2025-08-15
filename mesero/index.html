@@ -1,20 +1,31 @@
-<!doctype html><html lang="es"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Mesero — Seven de Burgers</title>
-<link rel="stylesheet" href="../styles.css"/>
-</head><body>
-<header>
-  <div class="brand"><span class="dot"></span><strong>Seven de Burgers</strong><span class="badge">Mesero</span></div>
-  <nav>
-    <a class="btn ghost" href="../kiosk/">Kiosko</a>
-    <a class="btn ghost" href="../cocina/">Cocina</a>
-    <a class="btn ghost" href="../admin/">Admin</a>
-  </nav>
-</header>
-<div class="container">
-  <h2>Pedidos activos</h2>
-  <div id="orders" class="grid"></div>
-</div>
-<footer>© Seven de Burgers</footer>
-<script type="module" src="./app.js"></script>
-</body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seven de Burgers · Mesero</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header><h1>Panel Mesero</h1></header>
+  <main class="grid">
+    <section>
+      <h2>Nueva orden</h2>
+      <div id="menu" class="cards"></div>
+    </section>
+    <section>
+      <h2>Mis órdenes</h2>
+      <div id="mine" class="list"></div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <button id="closeModal" class="close">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
