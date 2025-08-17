@@ -1,30 +1,10 @@
-<!doctype html>
-<html lang="es"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Mesero — Seven de Burgers</title>
-<link rel="stylesheet" href="../shared/styles.css"></head>
-<body class="shell"><div class="container">
-<div class="row" style="margin-bottom:10px"><div class="badge">Panel Mesero</div><a class="right badge" href="../kiosk/">Kiosko</a></div>
-<div class="card"><div class="row">
-<label class="sub">Mi nombre</label><input id="w-name" placeholder="Mesero(a)">
-<label class="sub right">Mesa</label>
-<select id="w-table"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
-<button class="btn right" id="save-id">Guardar</button></div><div class="sub">Tus pedidos activos aparecerán abajo.</div></div>
-<div class="card"><h2>Tomar pedido rápido</h2><div id="m-menu" class="grid"></div></div>
-<div class="card"><h2>Mis pedidos</h2><div id="m-orders"></div></div>
-</div>
-<div class="modal" id="modal"><div class="sheet">
-  <div class="row"><h2 id="m-title">Nuevo pedido</h2><button class="btn right" id="m-close">Cerrar</button></div>
-  <form id="m-form" class="form-grid">
-    <div class="group row">
-      <div style="flex:1"><label class="sub">Cantidad</label><input type="number" id="m-qty" min="1" value="1"></div>
-      <div class="right sub">Sugerida: <b id="m-suggest"></b></div>
-    </div>
-    <div class="group"><label class="sub">Notas / especificaciones</label><input id="m-notes" placeholder="Sin jitomate, pan bien tostado, etc."></div>
-    <div class="group"><h3 style="margin:0 0 6px">Aderezos extra (+$5)</h3><div id="m-aderezos"></div></div>
-    <div class="group"><h3 style="margin:0 0 6px">Ingredientes extra (+$5)</h3><div id="m-extras"></div></div>
-    <div class="sticky-total row"><div class="sub">Total</div><div class="right price" id="m-total">$0</div><button class="btn" type="submit">Enviar a cocina</button></div>
-  </form>
-</div></div>
-<script type="module" src="./app.js"></script>
-</body></html>
+
+<!doctype html><html lang="es">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="../shared/styles.css"/><title>Mesero — Seven de Burgers</title></head>
+<body>
+<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Vista Mesero</div></div></div>
+<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a><a class="btn ghost small" href="../cocina/index.html">Ir a cocina</a></nav></header>
+<main class="container"><div class="columns"><div class="k-col"><h3 class="k-title">En preparación</h3><div id="colIP"></div></div>
+<div class="k-col"><h3 class="k-title">Listos</h3><div id="colR"></div></div><div class="k-col"><h3 class="k-title">Entregados (hoy)</h3><div id="colD"></div></div></div></main>
+<script type="module" src="./app.js"></script></body></html>
