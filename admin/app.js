@@ -1,13 +1,7 @@
 
-<!doctype html><html lang="es">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="../shared/styles.css"/><title>Admin — Seven de Burgers</title></head>
-<body>
-<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div></div>
-<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a></nav></header>
-<main class="container"><div class="grid" id="adminGrid">
-<div class="card"><h3>Compras rápidas</h3><div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div><div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div><div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div><button class="btn" id="btnAddPurchase">Registrar compra</button><div class="muted small">* Guarda en colección <b>purchases</b>.</div></div>
-<div class="card"><h3>Ingredientes (costos)</h3><div class="field"><label>Nombre</label><input id="iName" type="text"/></div><div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div><button class="btn" id="btnSetIng">Guardar/Actualizar</button><div class="muted small">* Guarda en colección <b>ingredients</b>.</div></div>
-<div class="card"><h3>Recetario (aderezos)</h3><div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div><div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div><div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div><button class="btn" id="btnSaveRecipe">Guardar receta</button><div class="muted small">* Guarda en colección <b>recipes</b>.</div></div>
-</div></main>
-<script type="module" src="./app.js"></script></body></html>
+import { db } from '../shared/db.js';
+import { collection, addDoc, setDoc, doc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { beep, toast } from '../shared/notify.js';
+document.getElementById('btnAddPurchase').onclick=async()=>{ const name=document.getElementById('pName').value.trim(); const qty=+document.getElementById('pQty').value||0; const cost=+document.getElementById('pCost').value||0; if(!name||qty<=0){alert('Completa nombre y cantidad');return;} await addDoc(collection(db,'purchases'),{name,qty,cost,createdAt:serverTimestamp()}); beep(); toast('Compra registrada ✔️'); };
+document.getElementById('btnSetIng').onclick=async()=>{ const name=document.getElementById('iName').value.trim(); const cost=+document.getElementById('iCost').value||0; if(!name){alert('Nombre requerido');return;} await setDoc(doc(db,'ingredients',name.toLowerCase()),{name,cost,updatedAt:serverTimestamp()}); beep(); toast('Ingrediente actualizado ✔️'); };
+document.getElementById('btnSaveRecipe').onclick=async()=>{ const name=document.getElementById('rName').value.trim(); const yieldMl=+document.getElementById('rYield').value||0; const notes=document.getElementById('rNotes').value.trim(); if(!name){alert('Nombre requerido');return;} await addDoc(collection(db,'recipes'),{name,yieldMl,notes,createdAt:serverTimestamp()}); beep(); toast('Receta guardada ✔️'); };
