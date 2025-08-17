@@ -1,30 +1,13 @@
 
-import { subscribeOrders, setStatus, archiveDelivered } from '../shared/db.js';
-import { beep, toast } from '../shared/notify.js';
-const colP=document.getElementById('colP'), colIP=document.getElementById('colIP'), colR=document.getElementById('colR');
-function card(o){
-  const baseTags=(o.baseIngredients||[]).map(x=>`<span class='k-badge'>${x}</span>`).join('');
-  const exTags=[...(o.extras?.sauces||[]).map(x=>`<span class='k-badge'>Aderezo: ${x}</span>`),...(o.extras?.ingredients||[]).map(x=>`<span class='k-badge'>Extra: ${x}</span>`),(o.extras?.surprise?`<span class='k-badge'>Sorpresa</span>`:'')].join('');
-  return `<div class="k-card" data-id="${o.id}"><h4>${o.item?.name||'Producto'} · x${o.qty||1}</h4>
-  <div class="muted small">Cliente: <b>${o.customer||'-'}</b></div>
-  ${o.suggested?`<div class="muted small">Sugerido: ${o.suggested}</div>`:''}
-  ${o.notes?`<div class="muted small">Notas: ${o.notes}</div>`:''}
-  <div class="k-badges" style="margin-top:8px">${baseTags}${exTags}</div>
-  <div class="k-actions"><button class="btn small" data-a="take">Tomar</button>
-  <button class="btn small secondary" data-a="ready">Listo</button>
-  <button class="btn small ghost" data-a="deliver">Entregado</button></div></div>`;
-}
-function render(list){
-  const p=list.filter(x=>x.status==='PENDING'), ip=list.filter(x=>x.status==='IN_PROGRESS'), r=list.filter(x=>x.status==='READY');
-  colP.innerHTML=p.map(card).join('')||'<div class="muted">—</div>';
-  colIP.innerHTML=ip.map(card).join('')||'<div class="muted">—</div>';
-  colR.innerHTML=r.map(card).join('')||'<div class="muted">—</div>';
-}
-subscribeOrders(render);
-document.addEventListener('click', async (e)=>{
-  const btn=e.target.closest('button[data-a]'); if(!btn) return;
-  const card=btn.closest('.k-card'); const id=card.dataset.id, a=btn.dataset.a;
-  if(a==='take'){ await setStatus(id,'IN_PROGRESS'); beep(); toast('Pedido en preparación'); }
-  if(a==='ready'){ await setStatus(id,'READY'); beep(); toast('Pedido listo 🛎️'); }
-  if(a==='deliver'){ await archiveDelivered(id); beep(); toast('Entregado ✔️'); }
-});
+<!doctype html><html lang="es">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="../shared/styles.css"/><title>Admin — Seven de Burgers</title></head>
+<body>
+<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div></div>
+<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a></nav></header>
+<main class="container"><div class="grid" id="adminGrid">
+<div class="card"><h3>Compras rápidas</h3><div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div><div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div><div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div><button class="btn" id="btnAddPurchase">Registrar compra</button><div class="muted small">* Guarda en colección <b>purchases</b>.</div></div>
+<div class="card"><h3>Ingredientes (costos)</h3><div class="field"><label>Nombre</label><input id="iName" type="text"/></div><div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div><button class="btn" id="btnSetIng">Guardar/Actualizar</button><div class="muted small">* Guarda en colección <b>ingredients</b>.</div></div>
+<div class="card"><h3>Recetario (aderezos)</h3><div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div><div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div><div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div><button class="btn" id="btnSaveRecipe">Guardar receta</button><div class="muted small">* Guarda en colección <b>recipes</b>.</div></div>
+</div></main>
+<script type="module" src="./app.js"></script></body></html>
