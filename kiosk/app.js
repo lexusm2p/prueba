@@ -1,102 +1,182 @@
 
-import { beep, toast } from '../shared/notify.js';
 import { createOrder } from '../shared/db.js';
+import { toast, beep } from '../shared/notify.js';
+import { BURGERS, MINIS, EXTRAS_ING, EXTRAS_SAUCES } from '../shared/menu-data.js';
 
-const state = { menu:null, mode:'mini', taps:0 };
-const brand = document.getElementById('brandTap');
-brand.addEventListener('click',()=>{ state.taps++; if(state.taps>=5){ document.getElementById('navRoles').style.display='flex'; } setTimeout(()=>state.taps=0,900); });
+const elList = document.getElementById('list');
+const tabMinis = document.getElementById('tab-minis');
+const tabGrandes = document.getElementById('tab-grandes');
+const fab = document.getElementById('fabCart');
+const fabCount = document.getElementById('fabCount');
+const fabTotal = document.getElementById('fabTotal');
+const fabOpen = document.getElementById('fabOpen');
 
-document.getElementById('btnMinis').onclick = ()=>{state.mode='mini'; renderCards();}
-document.getElementById('btnBig').onclick = ()=>{state.mode='big'; renderCards();}
+const modal = document.getElementById('modal');
+const mBody = document.getElementById('mBody');
+const mTitle = document.getElementById('mTitle');
+const mTotal = document.getElementById('mTotal');
+const mConfirm = document.getElementById('mConfirm');
+const mClose = document.getElementById('mClose');
 
-async function loadMenu(){ const res = await fetch('../data/menu.json'); state.menu = await res.json(); renderCards(); }
-function money(n){ return '$'+n.toFixed(0); }
+const modalCart = document.getElementById('modalCart');
+const cBody = document.getElementById('cBody');
+const cTotal = document.getElementById('cTotal');
+const cConfirm = document.getElementById('cConfirm');
+const cClose = document.getElementById('cClose');
+
+const state = {
+  mode:'minis',
+  cart:[]
+};
+
+function money(n){ return '$'+Number(n||0).toFixed(0); }
+
+function ingredientsOf(b){
+  return b.ingredients?.join(', ') || '';
+}
+function card(item, isMini=false){
+  return `<div class="card">
+    <h3>${item.name}</h3>
+    <div class="small muted">${isMini ? ingredientsOf(BURGERS.find(x=>x.id===item.base)) : ingredientsOf(item)}</div>
+    <div class="row" style="margin-top:8px">
+      <div class="price">${money(item.price)}</div>
+      <button class="btn small" data-open="${item.id}">${isMini?'Elegir mini':'Elegir'}</button>
+    </div>
+  </div>`;
+}
 
 function renderCards(){
-  const grid = document.getElementById('cards'); grid.innerHTML='';
-  const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
-  items.forEach(it=>{
-    const base = it.baseOf ? state.menu.burgers.find(b=>b.id===it.baseOf) : it;
-    const card = document.createElement('div'); card.className='card';
-    card.innerHTML = `
-      <h3>${it.name}</h3>
-      <div class="muted small">${(base.ingredients||[]).join(', ')}</div>
-      <div class="row"><div class="price">${money(it.price)}</div>
-        <div class="row" style="gap:8px">
-          <button class="btn ghost small" data-a="ing">Ingredientes</button>
-          <button class="btn small" data-a="order">Ordenar</button>
-        </div>
-      </div>`;
-    grid.appendChild(card);
-    card.querySelector('[data-a="ing"]').onclick = ()=> alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
-    card.querySelector('[data-a="order"]').onclick = ()=> openModal(it, base);
+  const arr = state.mode==='minis' ? MINIS : BURGERS;
+  elList.innerHTML = arr.map(x=>card(x, state.mode==='minis')).join('');
+  document.querySelectorAll('button[data-open]').forEach(btn=>{
+    btn.onclick = ()=> openProduct(btn.dataset.open);
   });
+  // FAB cart
+  const total = state.cart.reduce((a,it)=>a+it.lineTotal,0);
+  fabCount.textContent = state.cart.length;
+  fabTotal.textContent = money(total);
+  fab.style.display = state.cart.length ? 'flex':'none';
 }
 
-function openModal(item, base){
-  const modal = document.getElementById('modal'); modal.classList.add('open');
-  const body = document.getElementById('mBody');
-  document.getElementById('mTitle').textContent = item.name + ' · ' + money(item.price);
-  document.getElementById('mClose').onclick = ()=> modal.classList.remove('open');
+tabMinis.onclick = ()=>{ tabMinis.classList.add('active'); tabGrandes.classList.remove('active'); state.mode='minis'; renderCards(); };
+tabGrandes.onclick = ()=>{ tabGrandes.classList.add('active'); tabMinis.classList.remove('active'); state.mode='grandes'; renderCards(); };
 
-  const sauces = state.menu.extras.sauces, ingr = state.menu.extras.ingredients;
-  const SP = state.menu.extras.saucePrice, IP = state.menu.extras.ingredientPrice;
+function openProduct(id){
+  const isMini = id.endsWith('_m');
+  let item, base;
+  if(isMini){
+    item = MINIS.find(x=>x.id===id);
+    base = BURGERS.find(x=>x.id===item.base);
+  }else{
+    item = BURGERS.find(x=>x.id===id);
+    base = item;
+  }
+  mTitle.textContent = item.name;
+  const extrasIng = EXTRAS_ING.map(e=>`<label class="small"><input type="checkbox" data-extra="${e.key}" data-price="${e.price}"> ${e.key} (+${money(e.price)})</label>`).join('<br>');
+  const extrasSau = EXTRAS_SAUCES.map(s=>`<label class="small"><input type="checkbox" data-sauce="${s}"> ${s}</label>`).join('<br>');
 
-  body.innerHTML = `
-    <div class="field"><label>Tu nombre</label><input id="cName" type="text" placeholder="Escribe tu nombre" required/></div>
-    <div class="field"><label>Cantidad</label><input id="qty" type="number" min="1" max="9" value="1"/></div>
-    <div class="hr"></div>
-    <div class="field"><label>Aderezos extra</label>
-      <div class="ul-clean" id="sauces">
-        ${sauces.map((s,i)=>`<input type="checkbox" id="s${i}"/><label for="s${i}">${s}</label><span class="tag">(+${money(SP)})</span>`).join('')}
-      </div>
-    </div>
-    <div class="field"><label>Ingredientes extra</label>
-      <div class="ul-clean" id="ingrs">
-        ${ingr.map((s,i)=>`<input type="checkbox" id="e${i}"/><label for="e${i}">${s}</label><span class="tag">(+${money(IP)})</span>`).join('')}
-      </div>
+  mBody.innerHTML = `
+    <div class="muted small">Ingredientes: ${ingredientsOf(base)}</div>
+    <div class="field"><label>Cantidad</label>
+      <input type="number" id="mQty" min="1" value="1">
     </div>
     <div class="field">
-      <label>¿Quieres que te sorprendamos con un aderezo nuevo?</label>
-      <select id="surprise"><option value="no">No, gracias</option><option value="si">Sí, sorpréndeme</option></select>
+      <label>Extras</label>
+      <div class="grid" style="grid-template-columns:repeat(2,1fr)">${extrasIng}</div>
     </div>
-    <div class="field"><label>Comentarios a cocina</label><textarea id="notes" placeholder="sin jitomate, poco picante…"></textarea></div>
+    <div class="field">
+      <label>Aderezos extra (+$5 c/u)</label>
+      <div class="grid" style="grid-template-columns:repeat(2,1fr)">${extrasSau}</div>
+    </div>
+    <div class="field">
+      <label><input type="checkbox" id="mSurprise"> ¿Quieres que te sorprendamos con una nueva configuración (aderezo)?</label>
+    </div>
+    <div class="field"><label>Notas para cocina</label><textarea id="mNotes" placeholder="sin jitomate, bien cocida, etc."></textarea></div>
   `;
 
-  const totalEl = document.getElementById('mTotal');
-  const qtyEl = document.getElementById('qty');
-  const inputs = body.querySelectorAll('input[type=checkbox], #qty');
-  const calc = ()=>{
-    const qty = parseInt(qtyEl.value||'1',10);
-    const extrasS = [...body.querySelectorAll('#sauces input:checked')].length;
-    const extrasI = [...body.querySelectorAll('#ingrs input:checked')].length;
-    const subtotal = item.price*qty + (extrasS*SP + extrasI*IP)*qty;
-    totalEl.textContent = money(subtotal);
-    return {qty, subtotal};
-  };
-  inputs.forEach(i=> i.addEventListener('change', calc)); calc();
+  const basePrice = item.price;
+  const qtyEl = document.getElementById('mQty');
+  function calc(){
+    const qty = Number(qtyEl.value||1);
+    let extras = 0;
+    mBody.querySelectorAll('input[data-price]:checked').forEach(c=> extras += Number(c.dataset.price));
+    let saucesCount = 0;
+    mBody.querySelectorAll('input[data-sauce]:checked').forEach(()=> saucesCount++);
+    extras += saucesCount * 5;
+    const subtotal = (basePrice + extras) * qty;
+    mTotal.textContent = money(subtotal);
+    return { qty, extras, subtotal };
+  }
+  mBody.oninput = calc; calc();
 
-  document.getElementById('mConfirm').onclick = async ()=>{
-    const name = document.getElementById('cName').value.trim();
-    if(!name){ alert('Por favor escribe tu nombre.'); return; }
-    const {qty, subtotal} = calc();
-    const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
-    const ingrSel = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? ingr[i]: null).filter(Boolean);
-    const surprise = document.getElementById('surprise').value==='si';
-    const order = {
-      customer: name, qty, subtotal,
-      item: {id:item.id, name:item.name, price:item.price, mini: !!item.mini},
-      baseIngredients: base.ingredients||[],
-      suggested: base.suggested || item.suggested || null,
-      extras: {sauces: saucesSel, ingredients: ingrSel, surprise},
-      notes: document.getElementById('notes').value.trim()
+  mConfirm.onclick = ()=>{
+    const { qty, subtotal } = calc();
+    const extras = {
+      ingredients: Array.from(mBody.querySelectorAll('input[data-extra]:checked')).map(x=>x.dataset.extra),
+      sauces: Array.from(mBody.querySelectorAll('input[data-sauce]:checked')).map(x=>x.dataset.sauce),
+      surprise: document.getElementById('mSurprise').checked
     };
-    await createOrder(order); beep();
-    if(item.mini && qty>=3){ toast('¡Logro desbloqueado! 3 minis ⭐', '⭐'); }
-    toast('Gracias por tu pedido, '+name+' ✨');
-    document.getElementById('modal').classList.remove('open');
+    const notes = document.getElementById('mNotes').value.trim();
+    const baseIngredients = base.ingredients || [];
+    state.cart.push({
+      item: { id:item.id, name:item.name, price:item.price, mini:isMini },
+      qty, lineTotal: subtotal, baseIngredients, extras, notes
+    });
+    beep();
+    if(isMini && qty>=3){ toast('¡Logro desbloqueado! 3 minis ⭐','⭐'); }
+    toast('Añadido al carrito');
+    modal.classList.remove('open');
+    renderCards();
   };
+
+  mClose.onclick = ()=> modal.classList.remove('open');
+  modal.classList.add('open');
 }
 
-loadMenu();
+function openCart(){
+  const total = state.cart.reduce((a,it)=>a+it.lineTotal,0);
+  const rows = state.cart.map((it,i)=>`
+    <tr>
+      <td>${it.item.name}${it.item.mini?' (mini)':''}</td>
+      <td>x${it.qty}</td>
+      <td>${money(it.lineTotal)}</td>
+      <td><button class="btn ghost small" data-rm="${i}">Quitar</button></td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" class="muted">Tu carrito está vacío</td></tr>';
+  cBody.innerHTML = `
+    <div class="field"><label>Nombre del cliente (obligatorio)</label><input type="text" id="cName" placeholder="Tu nombre"></div>
+    <div class="field"><label>Mensaje general para cocina (opcional)</label><textarea id="cNotes"></textarea></div>
+    <table class="table" style="width:100%">
+      <thead><tr><th>Producto</th><th>Cant.</th><th>Importe</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+  cTotal.textContent = money(total);
+  cBody.querySelectorAll('button[data-rm]').forEach(b=>{
+    b.onclick=()=>{ state.cart.splice(Number(b.dataset.rm),1); modalCart.classList.remove('open'); openCart(); renderCards(); };
+  });
+  cConfirm.onclick = async ()=>{
+    if(!state.cart.length){ toast('Tu carrito está vacío'); return; }
+    const name = document.getElementById('cName').value.trim();
+    if(!name){ toast('Escribe tu nombre'); return; }
+    const noteAll = (document.getElementById('cNotes').value||'').trim();
+    const orderTotal = state.cart.reduce((a,it)=>a+it.lineTotal,0);
+    const order = {
+      customer: name,
+      items: state.cart.map(it=>({ item:it.item, qty:it.qty, lineTotal:it.lineTotal, baseIngredients:it.baseIngredients, extras:it.extras, notes:it.notes })),
+      orderTotal,
+      notes: noteAll
+    };
+    await createOrder(order);
+    state.cart = [];
+    modalCart.classList.remove('open');
+    beep(); toast(`Gracias por tu pedido, ${name}. Te avisamos cuando esté listo ✨`);
+    renderCards();
+  };
+  cClose.onclick = ()=> modalCart.classList.remove('open');
+  modalCart.classList.add('open');
+}
 
+fabOpen.onclick = openCart;
+
+renderCards();
