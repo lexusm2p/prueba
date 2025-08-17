@@ -1,48 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cocina — Seven de Burgers</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <div class="headerbar"><div class="inner"><div class="brand">👨‍🍳 Cocina</div><a class="btn small ghost" href="../kiosk/index.html">Kiosko</a></div></div>
+  <main class="board">
+    <section class="col">
+      <h2>Sin pendientes</h2>
+      <div id="col-pending" class="col-body"></div>
+    </section>
+    <section class="col">
+      <h2>En preparación</h2>
+      <div id="col-progress" class="col-body"></div>
+    </section>
+    <section class="col">
+      <h2>Listos</h2>
+      <div id="col-ready" class="col-body"></div>
+    </section>
+  </main>
 
-<!doctype html><html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cocina · Seven de Burgers</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../shared/styles.css">
-</head><body>
-<div class="container">
-  <div class="headerbar">
-    <div class="logo">SEVEN <b>DE</b> BURGERS</div>
-    <div class="sub">Cocina</div>
-  </div>
+  <div class="modal-overlay" id="loginOverlay"><div class="modal" id="modal" ></div></div>
 
-  <div class="k-columns">
-    <div>
-      <div class="badge">Pendientes</div>
-      <div id="colP"></div>
-    </div>
-    <div>
-      <div class="badge">En preparación</div>
-      <div id="colIP"></div>
-    </div>
-    <div>
-      <div class="badge">Listos</div>
-      <div id="colR"></div>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast" style="display:none"></div>
-
-<!-- Modal edición -->
-<div class="modal" id="modalEdit">
-  <div class="modal-card">
-    <div class="modal-head"><div id="eTitle">Editar pedido</div><button class="btn ghost small" id="eClose">Cerrar</button></div>
-    <div class="modal-body" id="eBody"></div>
-    <div class="modal-foot">
-      <div class="total-bar"><div class="total" id="eTotal">$0</div>
-        <button class="btn danger" id="eDelete">Eliminar pedido</button>
-        <button class="btn" id="eSave">Guardar cambios</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script type="module" src="./app.js"></script>
-</body></html>
+  <script type="module" src="./app.js" defer></script>
+</body>
+</html>
