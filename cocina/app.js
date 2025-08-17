@@ -1,182 +1,146 @@
 
-import { createOrder } from '../shared/db.js';
+import { subscribeOrders, setStatus, archiveDelivered, updateOrder, deleteOrder } from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
-import { BURGERS, MINIS, EXTRAS_ING, EXTRAS_SAUCES } from '../shared/menu-data.js';
-
-const elList = document.getElementById('list');
-const tabMinis = document.getElementById('tab-minis');
-const tabGrandes = document.getElementById('tab-grandes');
-const fab = document.getElementById('fabCart');
-const fabCount = document.getElementById('fabCount');
-const fabTotal = document.getElementById('fabTotal');
-const fabOpen = document.getElementById('fabOpen');
-
-const modal = document.getElementById('modal');
-const mBody = document.getElementById('mBody');
-const mTitle = document.getElementById('mTitle');
-const mTotal = document.getElementById('mTotal');
-const mConfirm = document.getElementById('mConfirm');
-const mClose = document.getElementById('mClose');
-
-const modalCart = document.getElementById('modalCart');
-const cBody = document.getElementById('cBody');
-const cTotal = document.getElementById('cTotal');
-const cConfirm = document.getElementById('cConfirm');
-const cClose = document.getElementById('cClose');
-
-const state = {
-  mode:'minis',
-  cart:[]
-};
 
 function money(n){ return '$'+Number(n||0).toFixed(0); }
+const colP=document.getElementById('colP'), colIP=document.getElementById('colIP'), colR=document.getElementById('colR');
 
-function ingredientsOf(b){
-  return b.ingredients?.join(', ') || '';
+function renderItemRow(it){
+  const baseTags=(it.baseIngredients||[]).map(x=>`<span class='k-badge'>${x}</span>`).join('');
+  const exTags=[
+    ...(it.extras?.sauces||[]).map(x=>`<span class='k-badge'>Aderezo: ${x}</span>`),
+    ...(it.extras?.ingredients||[]).map(x=>`<span class='k-badge'>Extra: ${x}</span>`),
+    (it.extras?.patty?`<span class='k-badge'>Carne extra: ${it.extras.patty}</span>`:''),
+    (it.extras?.surprise?`<span class='k-badge'>Sorpresa</span>`:'')
+  ].join('');
+  return `<div style="margin:8px 0;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px">
+    <div class="row"><b>${it.item?.name||'Producto'}</b><span class="badge">x${it.qty||1}</span></div>
+    <div class="k-badges" style="margin-top:6px">${baseTags}${exTags}</div>
+    ${it.notes?`<div class="muted small">Notas: ${it.notes}</div>`:''}
+  </div>`;
 }
-function card(item, isMini=false){
-  return `<div class="card">
-    <h3>${item.name}</h3>
-    <div class="small muted">${isMini ? ingredientsOf(BURGERS.find(x=>x.id===item.base)) : ingredientsOf(item)}</div>
-    <div class="row" style="margin-top:8px">
-      <div class="price">${money(item.price)}</div>
-      <button class="btn small" data-open="${item.id}">${isMini?'Elegir mini':'Elegir'}</button>
+
+function card(o){
+  const isAgg = Array.isArray(o.items);
+  const total = isAgg ? o.orderTotal : o.subtotal;
+  const header = `<div class='row' style="align-items:end;justify-content:space-between">
+    <h3 style='margin:0'>👤 ${o.customer?o.customer:'Cliente'}</h3>
+    <span class='badge'>${isAgg?'Pedido múltiple':'1 producto'}</span>
+  </div>`;
+  const body = isAgg
+    ? o.items.map(renderItemRow).join('')
+    : renderItemRow({ item:o.item, qty:o.qty, baseIngredients:o.baseIngredients, extras:o.extras, notes:o.notes, suggested:o.suggested });
+  return `<div class="k-card" data-id="${o.id}">
+    ${header}
+    ${o.suggested && !isAgg ? `<div class="muted small">Sugerido: ${o.suggested}</div>` : ''}
+    ${o.notes && !isAgg ? `<div class="muted small">Notas: ${o.notes}</div>` : ''}
+    ${body}
+    <div class="row" style="margin-top:6px"><span class="badge">Total del pedido: <b>${money(total||0)}</b></span></div>
+    <div class="k-actions">
+      <button class="btn small" data-a="take">Tomar</button>
+      <button class="btn small secondary" data-a="ready">Listo</button>
+      <button class="btn small ghost" data-a="deliver">Entregado</button>
+      <button class="btn small" data-a="edit">Editar</button>
+      <button class="btn small danger" data-a="delete">Eliminar</button>
     </div>
   </div>`;
 }
 
-function renderCards(){
-  const arr = state.mode==='minis' ? MINIS : BURGERS;
-  elList.innerHTML = arr.map(x=>card(x, state.mode==='minis')).join('');
-  document.querySelectorAll('button[data-open]').forEach(btn=>{
-    btn.onclick = ()=> openProduct(btn.dataset.open);
-  });
-  // FAB cart
-  const total = state.cart.reduce((a,it)=>a+it.lineTotal,0);
-  fabCount.textContent = state.cart.length;
-  fabTotal.textContent = money(total);
-  fab.style.display = state.cart.length ? 'flex':'none';
+let CURRENT_LIST = [];
+function render(list){
+  CURRENT_LIST = list;
+  const p=list.filter(x=>x.status==='PENDING'), ip=list.filter(x=>x.status==='IN_PROGRESS'), r=list.filter(x=>x.status==='READY');
+  const toHtml = arr => arr.map(card).join('')||'<div class="muted">—</div>';
+  colP.innerHTML=toHtml(p); colIP.innerHTML=toHtml(ip); colR.innerHTML=toHtml(r);
 }
 
-tabMinis.onclick = ()=>{ tabMinis.classList.add('active'); tabGrandes.classList.remove('active'); state.mode='minis'; renderCards(); };
-tabGrandes.onclick = ()=>{ tabGrandes.classList.add('active'); tabMinis.classList.remove('active'); state.mode='grandes'; renderCards(); };
+subscribeOrders(render);
 
-function openProduct(id){
-  const isMini = id.endsWith('_m');
-  let item, base;
-  if(isMini){
-    item = MINIS.find(x=>x.id===id);
-    base = BURGERS.find(x=>x.id===item.base);
-  }else{
-    item = BURGERS.find(x=>x.id===id);
-    base = item;
-  }
-  mTitle.textContent = item.name;
-  const extrasIng = EXTRAS_ING.map(e=>`<label class="small"><input type="checkbox" data-extra="${e.key}" data-price="${e.price}"> ${e.key} (+${money(e.price)})</label>`).join('<br>');
-  const extrasSau = EXTRAS_SAUCES.map(s=>`<label class="small"><input type="checkbox" data-sauce="${s}"> ${s}</label>`).join('<br>');
+document.addEventListener('click', async (e)=>{
+  const btn=e.target.closest('button[data-a]'); if(!btn) return;
+  const card=btn.closest('.k-card'); const id=card.dataset.id; const a=btn.dataset.a;
+  if(a==='take'){ await setStatus(id,'IN_PROGRESS'); beep(); toast('Pedido en preparación'); return; }
+  if(a==='ready'){ await setStatus(id,'READY'); beep(); toast('Pedido listo 🛎️'); return; }
+  if(a==='deliver'){ await archiveDelivered(id); beep(); toast('Entregado ✔️'); return; }
+  if(a==='delete'){ await deleteOrder(id); beep(); toast('Pedido eliminado'); return; }
+  if(a==='edit'){ const order=CURRENT_LIST.find(x=>x.id===id); if(order) openEditModal(order); }
+});
 
-  mBody.innerHTML = `
-    <div class="muted small">Ingredientes: ${ingredientsOf(base)}</div>
-    <div class="field"><label>Cantidad</label>
-      <input type="number" id="mQty" min="1" value="1">
-    </div>
-    <div class="field">
-      <label>Extras</label>
-      <div class="grid" style="grid-template-columns:repeat(2,1fr)">${extrasIng}</div>
-    </div>
-    <div class="field">
-      <label>Aderezos extra (+$5 c/u)</label>
-      <div class="grid" style="grid-template-columns:repeat(2,1fr)">${extrasSau}</div>
-    </div>
-    <div class="field">
-      <label><input type="checkbox" id="mSurprise"> ¿Quieres que te sorprendamos con una nueva configuración (aderezo)?</label>
-    </div>
-    <div class="field"><label>Notas para cocina</label><textarea id="mNotes" placeholder="sin jitomate, bien cocida, etc."></textarea></div>
-  `;
+// ---- Edit modal ----
+const modal = document.getElementById('modalEdit');
+const eBody  = document.getElementById('eBody');
+const eTotal = document.getElementById('eTotal');
+const eClose = document.getElementById('eClose');
+const eSave  = document.getElementById('eSave');
+const eDelete= document.getElementById('eDelete');
+let EDIT_ID = null;
+let EDIT_ITEMS = [];
 
-  const basePrice = item.price;
-  const qtyEl = document.getElementById('mQty');
-  function calc(){
-    const qty = Number(qtyEl.value||1);
-    let extras = 0;
-    mBody.querySelectorAll('input[data-price]:checked').forEach(c=> extras += Number(c.dataset.price));
-    let saucesCount = 0;
-    mBody.querySelectorAll('input[data-sauce]:checked').forEach(()=> saucesCount++);
-    extras += saucesCount * 5;
-    const subtotal = (basePrice + extras) * qty;
-    mTotal.textContent = money(subtotal);
-    return { qty, extras, subtotal };
-  }
-  mBody.oninput = calc; calc();
+function renderEditList(){
+  eBody.innerHTML = EDIT_ITEMS.map((it, idx)=>`
+    <div class="edit-item" style="border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;margin:10px 0">
+      <div class="row"><b>${it.item?.name||'Producto'}</b>
+        <span class="badge">x
+          <input type="number" min="0" value="${it.qty||1}" data-ed-qty="${idx}" style="width:70px">
+        </span>
+      </div>
+      <div class="muted small">Notas:</div>
+      <textarea data-ed-notes="${idx}" placeholder="Notas del ítem">${it.notes||''}</textarea>
+      <div class="row" style="margin-top:6px"><button class="btn ghost small" data-ed-rm="${idx}">Quitar ítem</button></div>
+      <input type="hidden" data-ed-line="${idx}" value="${Number(it.lineTotal||0)}"/>
+    </div>
+  `).join('');
 
-  mConfirm.onclick = ()=>{
-    const { qty, subtotal } = calc();
-    const extras = {
-      ingredients: Array.from(mBody.querySelectorAll('input[data-extra]:checked')).map(x=>x.dataset.extra),
-      sauces: Array.from(mBody.querySelectorAll('input[data-sauce]:checked')).map(x=>x.dataset.sauce),
-      surprise: document.getElementById('mSurprise').checked
+  eBody.querySelectorAll('input[data-ed-qty]').forEach(inp=>{
+    inp.oninput = ()=> recalcEdit();
+  });
+  eBody.querySelectorAll('button[data-ed-rm]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const i=+btn.dataset.edRm; EDIT_ITEMS.splice(i,1);
+      renderEditList(); recalcEdit();
     };
-    const notes = document.getElementById('mNotes').value.trim();
-    const baseIngredients = base.ingredients || [];
-    state.cart.push({
-      item: { id:item.id, name:item.name, price:item.price, mini:isMini },
-      qty, lineTotal: subtotal, baseIngredients, extras, notes
-    });
-    beep();
-    if(isMini && qty>=3){ toast('¡Logro desbloqueado! 3 minis ⭐','⭐'); }
-    toast('Añadido al carrito');
-    modal.classList.remove('open');
-    renderCards();
-  };
+  });
 
-  mClose.onclick = ()=> modal.classList.remove('open');
+  recalcEdit();
+}
+
+function recalcEdit(){
+  eBody.querySelectorAll('input[data-ed-qty]').forEach(inp=>{
+    const i=+inp.dataset.edQty;
+    const qty=Number(inp.value||0);
+    const prevQty=Number(EDIT_ITEMS[i].qty||1);
+    const pUnit= prevQty>0 ? Number(EDIT_ITEMS[i].lineTotal||0)/prevQty : Number(EDIT_ITEMS[i].lineTotal||0);
+    EDIT_ITEMS[i].qty=qty;
+    EDIT_ITEMS[i].lineTotal=Math.max(0, Math.round(pUnit*qty));
+  });
+  eBody.querySelectorAll('textarea[data-ed-notes]').forEach(t=>{
+    const i=+t.dataset.edNotes; EDIT_ITEMS[i].notes=t.value.trim();
+  });
+  const sum = EDIT_ITEMS.reduce((a,it)=>a+Number(it.lineTotal||0),0);
+  eTotal.textContent = money(sum);
+}
+
+function openEditModal(order){
+  EDIT_ID = order.id;
+  const items = Array.isArray(order.items) ? JSON.parse(JSON.stringify(order.items)) : [{
+    item:order.item, qty:order.qty, lineTotal:order.subtotal||0,
+    baseIngredients:order.baseIngredients, extras:order.extras, notes:order.notes
+  }];
+  EDIT_ITEMS = items;
+  document.getElementById('eTitle').textContent = 'Editar: ' + (order.customer || 'Cliente');
+  renderEditList();
   modal.classList.add('open');
+  eClose.onclick = ()=> modal.classList.remove('open');
+  eDelete.onclick = async ()=>{ await deleteOrder(EDIT_ID); beep(); toast('Pedido eliminado'); modal.classList.remove('open'); };
+  eSave.onclick = saveEdits;
 }
 
-function openCart(){
-  const total = state.cart.reduce((a,it)=>a+it.lineTotal,0);
-  const rows = state.cart.map((it,i)=>`
-    <tr>
-      <td>${it.item.name}${it.item.mini?' (mini)':''}</td>
-      <td>x${it.qty}</td>
-      <td>${money(it.lineTotal)}</td>
-      <td><button class="btn ghost small" data-rm="${i}">Quitar</button></td>
-    </tr>
-  `).join('') || '<tr><td colspan="4" class="muted">Tu carrito está vacío</td></tr>';
-  cBody.innerHTML = `
-    <div class="field"><label>Nombre del cliente (obligatorio)</label><input type="text" id="cName" placeholder="Tu nombre"></div>
-    <div class="field"><label>Mensaje general para cocina (opcional)</label><textarea id="cNotes"></textarea></div>
-    <table class="table" style="width:100%">
-      <thead><tr><th>Producto</th><th>Cant.</th><th>Importe</th><th></th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-  cTotal.textContent = money(total);
-  cBody.querySelectorAll('button[data-rm]').forEach(b=>{
-    b.onclick=()=>{ state.cart.splice(Number(b.dataset.rm),1); modalCart.classList.remove('open'); openCart(); renderCards(); };
-  });
-  cConfirm.onclick = async ()=>{
-    if(!state.cart.length){ toast('Tu carrito está vacío'); return; }
-    const name = document.getElementById('cName').value.trim();
-    if(!name){ toast('Escribe tu nombre'); return; }
-    const noteAll = (document.getElementById('cNotes').value||'').trim();
-    const orderTotal = state.cart.reduce((a,it)=>a+it.lineTotal,0);
-    const order = {
-      customer: name,
-      items: state.cart.map(it=>({ item:it.item, qty:it.qty, lineTotal:it.lineTotal, baseIngredients:it.baseIngredients, extras:it.extras, notes:it.notes })),
-      orderTotal,
-      notes: noteAll
-    };
-    await createOrder(order);
-    state.cart = [];
-    modalCart.classList.remove('open');
-    beep(); toast(`Gracias por tu pedido, ${name}. Te avisamos cuando esté listo ✨`);
-    renderCards();
-  };
-  cClose.onclick = ()=> modalCart.classList.remove('open');
-  modalCart.classList.add('open');
+async function saveEdits(){
+  if(!EDIT_ID) return;
+  const items = EDIT_ITEMS.filter(it=>Number(it.qty||0)>0);
+  if(!items.length){ await deleteOrder(EDIT_ID); beep(); toast('Pedido eliminado'); modal.classList.remove('open'); return; }
+  const orderTotal = items.reduce((a,it)=>a+Number(it.lineTotal||0),0);
+  await updateOrder(EDIT_ID, { items, orderTotal });
+  beep(); toast('Pedido actualizado');
+  modal.classList.remove('open');
 }
-
-fabOpen.onclick = openCart;
-
-renderCards();
