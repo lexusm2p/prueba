@@ -1,16 +1,18 @@
 
+let TOAST_T=null;
+export function toast(msg, icon='🔔'){
+  clearTimeout(TOAST_T);
+  const el=document.getElementById('toast'); if(!el) return;
+  el.innerHTML=`<span class="icon">${icon}</span>${msg}`;
+  el.style.display='block';
+  TOAST_T=setTimeout(()=>{el.style.display='none'}, 2500);
+}
 export function beep(){
   try{
-    const a = new (window.AudioContext||window.webkitAudioContext)();
-    const o = a.createOscillator(); const g = a.createGain();
-    o.connect(g); g.connect(a.destination);
-    o.type='triangle'; o.frequency.value=880;
-    o.start(); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + .15);
-    setTimeout(()=>a.close(), 250);
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(); const g=ctx.createGain();
+    o.frequency.value=880; o.type='square';
+    g.gain.value=.03; o.connect(g); g.connect(ctx.destination); o.start();
+    setTimeout(()=>{o.stop(); ctx.close();}, 180);
   }catch(e){}
-}
-export function toast(msg, icon=''){
-  const el = document.querySelector('.toast') || Object.assign(document.body.appendChild(document.createElement('div')), {className:'toast'});
-  el.innerHTML = (icon?`<span style="font-size:18px">${icon}</span>`:'') + `<span>${msg}</span>`;
-  el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 2200);
 }
