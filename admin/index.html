@@ -1,13 +1,84 @@
 
-<!doctype html><html lang="es">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="../shared/styles.css"/><title>Admin — Seven de Burgers</title></head>
-<body>
-<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div></div>
-<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a></nav></header>
-<main class="container"><div class="grid" id="adminGrid">
-<div class="card"><h3>Compras rápidas</h3><div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div><div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div><div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div><button class="btn" id="btnAddPurchase">Registrar compra</button><div class="muted small">* Guarda en colección <b>purchases</b>.</div></div>
-<div class="card"><h3>Ingredientes (costos)</h3><div class="field"><label>Nombre</label><input id="iName" type="text"/></div><div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div><button class="btn" id="btnSetIng">Guardar/Actualizar</button><div class="muted small">* Guarda en colección <b>ingredients</b>.</div></div>
-<div class="card"><h3>Recetario (aderezos)</h3><div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div><div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div><div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div><button class="btn" id="btnSaveRecipe">Guardar receta</button><div class="muted small">* Guarda en colección <b>recipes</b>.</div></div>
-</div></main>
-<script type="module" src="./app.js"></script></body></html>
+<!doctype html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Seven de Burgers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+.tabpanel{display:none}
+.tabpanel.active{display:block}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid var(--border);padding:8px;text-align:left;font-size:14px}
+input.small{max-width:110px}
+
+.table.zebra tr:nth-child(even){background: rgba(255,255,255,0.02)}
+.table thead th{position: sticky; top: 0; background: var(--bg2); z-index: 1}
+</style>
+
+</head><body>
+<div class="container">
+  <div class="headerbar">
+    <div class="logo">SEVEN <b>DE</b> BURGERS</div>
+    <div class="sub">Admin</div><div><a class="btn small ghost" href="../kiosk/index.html">← Volver al Kiosko</a></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="ventas">Ventas del día</div>
+    <div class="tab" data-tab="inventario">Inventario (auto min/max)</div>
+  </div>
+
+  <div id="panel-ventas" class="tabpanel active">
+    <div class="card">
+      <div class="row">
+        <div><b>Hoy (entregados)</b></div>
+        <div class="badge">Pedidos: <span id="vCount">0</span></div>
+        <div class="badge">Total: <span id="vTotal">$0</span></div>
+        <div class="badge">Ticket promedio: <span id="vAvg">$0</span></div>
+      </div>
+      <div id="vList" class="small muted" style="margin-top:8px"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="row">
+        <div><b>En curso</b></div>
+        <div class="badge"><span id="oCount">0</span> pedidos</div>
+      </div>
+      <div id="oList" class="small muted" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div id="panel-inventario" class="tabpanel">
+    <div class="card">
+      <div class="row"><b>Parámetros</b></div>
+      <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="field"><label>Lead time (días)</label><input class="small" type="number" id="pLead" min="0" value="3"></div>
+        <div class="field"><label>Seguridad (días)</label><input class="small" type="number" id="pSafety" min="0" value="2"></div>
+        <div class="field"><label>Revisión (días)</label><input class="small" type="number" id="pReview" min="0" value="4"></div>
+      </div>
+      <div class="row"><button class="btn small" id="pSave">Guardar parámetros</button></div>
+      <div class="small muted">*Usamos consumo promedio de los últimos 14 días (archivo) con minis ponderadas al 50%.</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="row"><b>Inventario</b> <button class="btn small" id="invRefresh">Recalcular</button></div>
+      <div style="overflow:auto">
+        <table class="table zebra" id="invTable">
+          <thead>
+            <tr>
+              <th>Ingrediente</th><th>Unidad</th><th>Stock</th>
+              <th>Consumo prom. diario</th>
+              <th>Min recomendado</th><th>Max recomendado</th>
+              <th>Comprar sugerido</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="invBody"><tr><td colspan="8" class="muted">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" style="display:none"></div>
+<script type="module" src="./app.js"></script>
+</body></html>
