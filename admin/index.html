@@ -1,13 +1,12 @@
 
 <!doctype html><html lang="es">
 <head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="../shared/styles.css"/><title>Admin — Seven de Burgers</title></head>
+<link rel="stylesheet" href="../shared/styles.css"/><title>Cocina — Seven de Burgers</title></head>
 <body>
-<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div></div>
-<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a></nav></header>
-<main class="container"><div class="grid" id="adminGrid">
-<div class="card"><h3>Compras rápidas</h3><div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div><div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div><div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div><button class="btn" id="btnAddPurchase">Registrar compra</button><div class="muted small">* Guarda en colección <b>purchases</b>.</div></div>
-<div class="card"><h3>Ingredientes (costos)</h3><div class="field"><label>Nombre</label><input id="iName" type="text"/></div><div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div><button class="btn" id="btnSetIng">Guardar/Actualizar</button><div class="muted small">* Guarda en colección <b>ingredients</b>.</div></div>
-<div class="card"><h3>Recetario (aderezos)</h3><div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div><div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div><div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div><button class="btn" id="btnSaveRecipe">Guardar receta</button><div class="muted small">* Guarda en colección <b>recipes</b>.</div></div>
-</div></main>
+<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Vista Cocina</div></div></div>
+<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a><a class="btn ghost small" href="../mesero/index.html">Ir a mesero</a></nav></header>
+<main class="container"><h2 style="margin:6px 0 12px 0">Pedidos activos</h2>
+<div class="columns"><div class="k-col"><h3 class="k-title">Sin pendientes</h3><div id="colP"></div></div>
+<div class="k-col"><h3 class="k-title">En preparación</h3><div id="colIP"></div></div>
+<div class="k-col"><h3 class="k-title">Listos</h3><div id="colR"></div></div></div></main>
 <script type="module" src="./app.js"></script></body></html>
