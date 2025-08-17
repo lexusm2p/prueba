@@ -1,35 +1,13 @@
-<!doctype html>
-<html lang="es"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Admin — Seven de Burgers</title>
-<link rel="stylesheet" href="../shared/styles.css"></head>
-<body class="shell"><div class="container">
-<div class="row" style="margin-bottom:10px"><a class="badge" href="../kiosk/">Kiosko</a><div class="right badge">Admin</div></div>
-<div class="card"><div class="row">
-<button class="btn" data-tab="ventas">Ventas</button>
-<button class="btn" data-tab="compras">Compras</button>
-<button class="btn" data-tab="inventario">Inventario</button>
-<button class="btn" data-tab="recetario">Recetario</button>
-</div></div>
-<div id="tab-ventas" class="card" hidden><h2>Ventas</h2>
-<div class="row" style="gap:10px"><label>Desde <input type="date" id="v-from"></label>
-<label>Hasta <input type="date" id="v-to"></label><button class="btn" id="v-refresh">Actualizar</button>
-<div class="right price">Total: $<span id="v-total">0</span></div></div>
-<table class="table" style="margin-top:12px"><thead><tr><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Mesa</th><th>Mesero</th><th>Estado</th><th>Total</th></tr></thead>
-<tbody id="v-rows"></tbody></table></div>
-<div id="tab-compras" class="card" hidden><h2>Compras</h2>
-<form id="p-form" class="row" style="gap:8px;flex-wrap:wrap">
-<input id="p-item" placeholder="Producto / insumo"><input id="p-qty" type="number" min="0" step="0.01" placeholder="Cantidad">
-<input id="p-unit" placeholder="Unidad (kg, pza, ml)"><input id="p-cost" type="number" min="0" step="0.01" placeholder="Costo total">
-<button class="btn" type="submit">Registrar</button></form>
-<table class="table" style="margin-top:12px"><thead><tr><th>Fecha</th><th>Insumo</th><th>Cantidad</th><th>Unidad</th><th>Costo</th></tr></thead><tbody id="p-rows"></tbody></table></div>
-<div id="tab-inventario" class="card" hidden><h2>Inventario</h2>
-<form id="i-form" class="row" style="gap:8px;flex-wrap:wrap">
-<input id="i-item" placeholder="Insumo"><input id="i-qty" type="number" min="0" step="0.01" placeholder="Stock">
-<input id="i-min" type="number" min="0" step="0.01" placeholder="Mín"><input id="i-max" type="number" min="0" step="0.01" placeholder="Máx">
-<input id="i-unit" placeholder="Unidad"><button class="btn" type="submit">Agregar/Actualizar</button></form>
-<table class="table" style="margin-top:12px"><thead><tr><th>Insumo</th><th>Stock</th><th>Mín</th><th>Máx</th><th>Unidad</th><th>Acciones</th></tr></thead><tbody id="i-rows"></tbody></table></div>
-<div id="tab-recetario" class="card" hidden><h2>Recetario (solo lectura)</h2><div id="r-list"></div></div>
-</div>
-<script type="module" src="./app.js"></script>
-</body></html>
+
+<!doctype html><html lang="es">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="../shared/styles.css"/><title>Admin — Seven de Burgers</title></head>
+<body>
+<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div></div>
+<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a></nav></header>
+<main class="container"><div class="grid" id="adminGrid">
+<div class="card"><h3>Compras rápidas</h3><div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div><div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div><div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div><button class="btn" id="btnAddPurchase">Registrar compra</button><div class="muted small">* Guarda en colección <b>purchases</b>.</div></div>
+<div class="card"><h3>Ingredientes (costos)</h3><div class="field"><label>Nombre</label><input id="iName" type="text"/></div><div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div><button class="btn" id="btnSetIng">Guardar/Actualizar</button><div class="muted small">* Guarda en colección <b>ingredients</b>.</div></div>
+<div class="card"><h3>Recetario (aderezos)</h3><div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div><div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div><div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div><button class="btn" id="btnSaveRecipe">Guardar receta</button><div class="muted small">* Guarda en colección <b>recipes</b>.</div></div>
+</div></main>
+<script type="module" src="./app.js"></script></body></html>
