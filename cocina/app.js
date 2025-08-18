@@ -1,96 +1,52 @@
+import { subscribeOrders, setStatus, archiveDelivered, deleteOrder } from '../shared/db.js';
+import { money } from '../shared/util.js';
+import { toast } from '../shared/toast.js';
+import { beep } from '../shared/notify.js';
 
-import { onOrdersSnapshot, setStatus, archiveDelivered, deleteOrder, updateOrder } from '../shared/db.js';
-import { toast, beep } from '../shared/notify.js';
+const $ = s=>document.querySelector(s);
+let CURRENT=[];
 
-const Status={ PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY' };
-let CURRENT_LIST=[];
+function card(o){
+  const items = (o.items||[]).map(it=>{
+    const add = [...(it.extras||[]).map(e=>e.label), ...(it.sauces||[]).map(s=>s.label)].join(', ');
+    return `<div class="small">• ${it.name}${add? ' — '+add : ''}</div>`;
+  }).join('');
 
-onOrdersSnapshot((orders)=>{
-  CURRENT_LIST = orders || [];
-  render(CURRENT_LIST);
-});
+  const guide = (o.items||[])
+    .map(i => `${i.name}: ${Array.isArray(i.ingredients) ? i.ingredients.join(', ') : '—'}`)
+    .join(' | ');
+
+  return `<div class="k-card" data-id="${o.id}">
+    <h4>${o.name} ${o.table?`<span class="badge">Mesa ${o.table}</span>`:''}</h4>
+    <div class="small">Pago: ${o.payMethod} · Total ${money(o.total||0)}</div>
+    <div class="small" style="margin-top:6px"><b>Ingredientes guía:</b> ${guide||'—'}</div>
+    <div style="margin-top:6px">${items}</div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" data-a="take">En preparación</button>
+      <button class="btn" data-a="ready">Listo</button>
+      <button class="btn secondary" data-a="deliver">Entregado</button>
+      <button class="btn secondary" data-a="delete">Eliminar</button>
+    </div>
+  </div>`;
+}
 
 function render(list){
-  const by = list.reduce((acc,o)=>{ const s=o.status||Status.PENDING; (acc[s] ||= []).push(o); return acc; },{});
-
-  const $p  = document.getElementById('col-pending');
-  const $ip = document.getElementById('col-progress');
-  const $r  = document.getElementById('col-ready');
-
-  $p.innerHTML  = (by.PENDING||[]).map(renderCard).join('') || '<div class="empty">Sin pendientes</div>';
-  $ip.innerHTML = (by.IN_PROGRESS||[]).map(renderCard).join('') || '<div class="empty">Sin preparación</div>';
-  $r.innerHTML  = (by.READY||[]).map(renderCard).join('') || '<div class="empty">Sin listos</div>';
+  CURRENT = list || [];
+  const p = CURRENT.filter(x=>x.status==='PENDING').map(card).join('');
+  const ip= CURRENT.filter(x=>x.status==='IN_PROGRESS').map(card).join('');
+  const r = CURRENT.filter(x=>x.status==='READY').map(card).join('');
+  $('#listPending').innerHTML  = p || `<div class="small">Sin pendientes</div>`;
+  $('#listProgress').innerHTML = ip|| `<div class="small">Sin preparación</div>`;
+  $('#listReady').innerHTML    = r || `<div class="small">Sin listos</div>`;
 }
-
-function renderCard(o){
-  const name = o.customerName || '—';
-  const itemsDetail = (o.items||[]).map((it)=>{
-    const ingr = (it.ingredients||[]).length ? `<div class="small">Incluye: ${it.ingredients.join(', ')}</div>` : '';
-    const ex   = (it.extras||[]).length ? `<div class="small">Extras: ${it.extras.map(e=>e.name).join(', ')}</div>` : '';
-    return `<div class="small">• <strong>${it.name}</strong> × ${it.qty||1}${ingr}${ex}</div>`;
-  }).join('');
-  const notes = o.notes ? `<div class="notes">📝 ${escapeHtml(o.notes)}</div>` : '';
-
-  return `
-<article class="k-card" data-id="${o.id}">
-  <header class="k-head">
-    <div class="title">Pedido #${o.id.slice(-5).toUpperCase()}</div>
-    <div class="sub">Cliente: <strong>${escapeHtml(name)}</strong></div>
-  </header>
-  <div class="k-body">
-    ${itemsDetail}
-    ${notes}
-  </div>
-  <footer class="k-actions">
-    ${o.status!==Status.IN_PROGRESS ? `<button class="btn" data-a="take">Tomar</button>` : ''}
-    ${o.status!==Status.READY ? `<button class="btn ok" data-a="ready">Listo</button>` : ''}
-    <button class="btn warn" data-a="deliver">Entregar</button>
-    <button class="btn ghost" data-a="edit">Editar</button>
-    <button class="btn danger" data-a="delete">Eliminar</button>
-  </footer>
-</article>`;
-}
-
-function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+subscribeOrders(render);
 
 document.addEventListener('click', async (e)=>{
   const btn=e.target.closest('button[data-a]'); if(!btn) return;
-  const card=btn.closest('[data-id]'); const id=card?.dataset?.id; if(!id) return;
-  const a=btn.dataset.a; btn.disabled=true;
-  try{
-    if(a==='take'){ await setStatus(id,Status.IN_PROGRESS); beep?.(); toast?.('Pedido en preparación'); return; }
-    if(a==='ready'){ await setStatus(id,Status.READY); beep?.(); toast?.('Pedido listo 🛎️'); return; }
-    if(a==='deliver'){ await archiveDelivered(id); beep?.(); toast?.('Entregado ✔️'); card.remove(); return; }
-    if(a==='delete'){ await deleteOrder(id); beep?.(); toast?.('Pedido eliminado'); card.remove(); return; }
-    if(a==='edit'){ const order=CURRENT_LIST.find(x=>x.id===id); if(order) openEditModal(order); return; }
-  }catch(err){ console.error(err); toast?.('Error al actualizar'); }
-  finally{ btn.disabled=false; }
+  const wrap=btn.closest('.k-card'); const id=wrap? wrap.dataset.id : null; if(!id) return;
+  const a=btn.dataset.a;
+  if(a==='take'){ await setStatus(id,'IN_PROGRESS'); beep(); toast('Pedido en preparación'); }
+  if(a==='ready'){ await setStatus(id,'READY'); beep(); toast('Pedido listo 🛎️'); }
+  if(a==='deliver'){ await archiveDelivered(id); beep(); toast('Entregado ✔️'); }
+  if(a==='delete'){ await deleteOrder(id); beep(); toast('Pedido eliminado'); }
 });
-
-function openEditModal(order){
-  const overlay=document.getElementById('loginOverlay');
-  const modal=document.getElementById('modal');
-  modal.innerHTML = `
-    <div style="position:relative">
-      <button class="closex" id="mdClose">×</button>
-      <h3>Editar pedido</h3>
-      <label class="small muted">Notas para cocina</label>
-      <textarea id="mdNotes" class="input" rows="3">${escapeHtml(order.notes||'')}</textarea>
-      <div class="row" style="justify-content:flex-end;margin-top:8px">
-        <button class="btn ghost" id="mdCancel">Cancelar</button>
-        <button class="btn ok" id="mdSave">Guardar</button>
-      </div>
-    </div>`;
-  overlay.style.display='flex';
-
-  const close=()=>{ overlay.style.display='none'; modal.innerHTML=''; }
-  modal.querySelector('#mdClose').onclick=close;
-  modal.querySelector('#mdCancel').onclick=close;
-  modal.querySelector('#mdSave').onclick=async ()=>{
-    const notes = modal.querySelector('#mdNotes').value.trim();
-    await updateOrder(order.id,{ notes });
-    toast('Notas actualizadas');
-    close();
-  };
-}
-
