@@ -1,124 +1,50 @@
-
-<!doctype html><html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kiosko · Seven de Burgers</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../shared/styles.css">
-</head><body>
-<div class="container">
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kiosko — Seven de Burgers</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
   <div class="headerbar">
-    <div id="secretTouch" aria-hidden="true" title=" "></div>
-    <div class="logo">SEVEN <b>DE</b> BURGERS</div>
-    <div class="sub">Kiosko · Elige y arma tu pedido</div>
-  </div>
-
-  <div class="toolbar">
-    <div class="tabs">
-      <div class="tab active" id="tab-minis">Minis</div>
-      <div class="tab" id="tab-grandes">Grandes</div>
+    <div class="inner">
+      <div class="brand" id="brandTitle">🍔 Seven de Burgers — Kiosko</div>
+      <a id="loginLink" href="../admin/index.html" class="btn small ghost" style="display:none">Login</a>
     </div>
   </div>
-
-  <div id="list" class="grid cards"></div>
-</div>
-
-<div class="fab-cart" id="fabCart" style="display:none">
-  <span class="badge">Carrito: <b id="fabCount">0</b></span>
-  <span class="badge">Total: <b id="fabTotal">$0</b></span>
-  <button class="btn small" id="fabOpen">Finalizar</button>
-</div>
-
-<div class="toast" id="toast" style="display:none"></div>
-
-<!-- Modal producto -->
-<div class="modal" id="modal">
-  <div class="modal-card">
-    <div class="modal-head"><div id="mTitle">Producto</div><button class="btn ghost small" id="mClose">Cerrar</button></div>
-    <div class="modal-body" id="mBody"></div>
-    <div class="modal-foot">
-      <div class="total-bar"><div class="total" id="mTotal">$0</div><button class="btn" id="mConfirm">Añadir al carrito</button></div>
-    </div>
-  </div>
-</div>
-
-<!-- Modal Carrito -->
-<div class="modal" id="modalCart">
-  <div class="modal-card">
-    <div class="modal-head"><div>Tu pedido</div><button class="btn ghost small" id="cClose">Cerrar</button></div>
-    <div class="modal-body" id="cBody"></div>
-    <div class="modal-foot">
-      <div class="total-bar"><div class="total" id="cTotal">$0</div><button class="btn" id="cConfirm">Confirmar pedido</button></div>
-    </div>
-  </div>
-</div>
-
-<script type="module" src="./app.js"></script>
-
-<style>
-#secretTouch{position:absolute; top:0; left:0; width:120px; height:48px; opacity:0;}
-.modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:999}
-.modal{background:var(--bg2,#1a1a1a); border:1px solid var(--border,#333); border-radius:12px; width:min(420px,92vw); padding:16px; box-shadow:0 12px 40px rgba(0,0,0,.5)}
-.modal h3{margin:0 0 12px 0; font-family:inherit; font-size:18px}
-.modal .grid{display:grid; grid-template-columns:1fr; gap:8px}
-.modal .btn-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
-.modal .closex{background:transparent; border:none; color:#bbb; font-size:20px; position:absolute; right:14px; top:8px; cursor:pointer}
-</style>
-<div class="modal-overlay" id="loginOverlay" role="dialog" aria-hidden="true">
-  <div class="modal">
-    <button class="closex" id="loginClose" aria-label="Cerrar">×</button>
-    <h3>Acceso rápido</h3>
-    <div class="grid">
-      <label class="small muted">Elige tu panel:</label>
-      <div class="btn-row">
-        <button class="btn" id="btnMesero">Mesero</button>
-        <button class="btn" id="btnCocina">Cocina</button>
-        <button class="btn ghost" id="btnAdmin">Admin</button>
+  <main>
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr; gap:12px; align-items:end">
+      <div class="grid" style="grid-template-columns:1fr;gap:6px">
+        <label class="small muted">Tu nombre</label>
+        <input id="customerName" class="input" type="text" placeholder="Tu nombre" autocomplete="name">
       </div>
-      <div class="small muted">Tip: Toca 6 veces el área superior de “Kiosko” para abrir este acceso. (MVP, no es seguridad)</div>
+      <div class="grid" style="grid-template-columns:1fr;gap:6px">
+        <label class="small muted">¿Te sorprendemos con un aderezo?</label>
+        <select id="surprise" class="input select">
+          <option value="">No, gracias</option>
+          <option value="yes">Sí, sorpréndeme</option>
+        </select>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button id="btnCheckout" class="btn">Confirmar pedido</button>
+      </div>
+    </div>
+
+    <h2 style="margin-top:14px">Minis — Combos y sueltos</h2>
+    <div id="miniMenu" class="menu"></div>
+
+    <h2 style="margin-top:14px">¿Prefieres los retos grandes?</h2>
+    <div id="bigMenu" class="menu"></div>
+  </main>
+
+  <div class="footerbar">
+    <div class="inner">
+      <div><span class="badge" id="miniCount">0 minis</span> · <span class="badge" id="cartCount">0 items</span></div>
+      <div>Total: <span class="price" id="grandTotal">$0</span></div>
     </div>
   </div>
-</div>
-<script type="module">
-  // hidden login via 6 taps on header
-  const hotspot = document.getElementById('secretTouch') || document.querySelector('.headerbar') || document.body;
-  const overlay = document.getElementById('loginOverlay');
-  const closeBtn = document.getElementById('loginClose');
-  const btnMesero = document.getElementById('btnMesero');
-  const btnCocina = document.getElementById('btnCocina');
-  const btnAdmin  = document.getElementById('btnAdmin');
 
-  let taps = 0, timer = null;
-  function showLogin(){ overlay.style.display='flex'; }
-  function hideLogin(){ overlay.style.display='none'; }
-
-  hotspot.addEventListener('click', ()=>{
-    taps++;
-    if (taps === 1) {
-      timer = setTimeout(()=>{ taps = 0; }, 3500);
-    }
-    if (taps >= 6) {
-      clearTimeout(timer); taps = 0;
-      showLogin();
-    }
-  });
-
-  closeBtn?.addEventListener('click', hideLogin);
-  overlay?.addEventListener('click', (e)=>{ if(e.target===overlay) hideLogin(); });
-
-  function go(role){
-    try{ localStorage.setItem('role', role); }catch(e){}
-    if (role==='mesero') location.href = '../mesero/index.html';
-    else if (role==='cocina') location.href = '../cocina/index.html';
-    else location.href = '../admin/index.html';
-  }
-  btnMesero?.addEventListener('click', ()=>go('mesero'));
-  btnCocina?.addEventListener('click', ()=>go('cocina'));
-  btnAdmin ?.addEventListener('click', ()=>go('admin'));
-
-  // Optional: oculta botones de login visibles si existían
-  const possibleLoginButtons = document.querySelectorAll('[data-role="login"], .login-btn, a[href*="admin"], a[href*="mesero"], a[href*="cocina"]');
-  possibleLoginButtons.forEach(el=>{ el.style.display='none'; });
-</script>
-
-</body></html>
+  <script type="module" src="./app.js" defer></script>
+</body>
+</html>
