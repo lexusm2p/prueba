@@ -1,0 +1,90 @@
+import { PRICES } from '../shared/pricing.js';
+import { analyzeMarginForItem, RECIPES_DEFAULT, costPerMl, portionCostFromRecipe } from '../shared/inventory.js';
+import { startHappyHour, stopHappyHour } from '../shared/happyHour.js';
+import { toast } from '../shared/toast.js';
+
+const $=s=>document.querySelector(s);
+
+$('#hhStart').onclick = async ()=>{ await startHappyHour(60); toast('Happy Hour activo (60 min)'); };
+$('#hhStop').onclick  = async ()=>{ await stopHappyHour(); toast('Happy Hour desactivado'); };
+
+function renderPricing(){
+  const ex = Object.entries(PRICES.extras).map(([k,v])=>{
+    const m = analyzeMarginForItem({price:v.price, cost:v.cost});
+    return `<div class="k-card">
+      <div class="row" style="justify-content:space-between"><div>${v.label}</div>
+      <div>Precio: $${v.price} · Costo: $${v.cost.toFixed(2)} · Margen: ${(m.margin*100|0)}% <span class="badge">${m.label}</span></div></div>
+    </div>`;
+  }).join('');
+  const sc = Object.entries(PRICES.sauces).map(([k,v])=>{
+    const m = analyzeMarginForItem({price:v.price, cost:v.cost});
+    return `<div class="k-card">
+      <div class="row" style="justify-content:space-between"><div>${v.label}</div>
+      <div>Precio: $${v.price} · Costo: $${v.cost.toFixed(2)} · Margen: ${(m.margin*100|0)}% <span class="badge">${m.label}</span></div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('pricing').innerHTML = ex + sc;
+}
+renderPricing();
+
+let RECIPES = structuredClone(RECIPES_DEFAULT);
+function renderRecipes(){
+  document.getElementById('recipes').innerHTML = RECIPES.map((r,i)=>{
+    const cml = costPerMl(r); const c20 = portionCostFromRecipe(r,20);
+    return `<div class="k-card"><b>${r.name}</b> · Rendimiento: ${r.yieldMl} ml · Costo/ml: $${cml.toFixed(2)} · Costo 20ml: $${c20.toFixed(2)}
+      <div class="small">Componentes: ${r.components.map(c=>`${c.name} (${c.qtyUnit} ${c.unit} x $${c.costPerUnit})`).join(', ')}</div>
+      <div class="row" style="margin-top:6px"><button class="btn secondary" data-edit="${i}">Editar</button><button class="btn" data-del="${i}">Eliminar</button></div>
+    </div>`;
+  }).join('') || `<div class="small">Sin recetas</div>`;
+}
+renderRecipes();
+
+document.getElementById('addRecipe').onclick = ()=> openRecipeDialog();
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  if(btn.dataset.edit){ openRecipeDialog(+btn.dataset.edit); }
+  if(btn.dataset.del){ RECIPES.splice(+btn.dataset.del,1); renderRecipes(); }
+});
+
+function openRecipeDialog(idx=-1){
+  const R = idx>=0? RECIPES[idx] : {name:'Nueva receta',yieldMl:1000,components:[]};
+  const dlg = document.createElement('dialog');
+  dlg.innerHTML = `<div class="card" style="max-width:720px">
+    <h3>${idx>=0?'Editar':'Nueva'} receta</h3>
+    <input class="input" id="rName" value="${R.name||''}" placeholder="Nombre del aderezo">
+    <input class="input" id="rYield" type="number" value="${R.yieldMl||1000}" placeholder="Rendimiento (ml)">
+    <div id="rList" class="list" style="margin:8px 0"></div>
+    <button class="btn" id="rAdd">Añadir componente</button>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="rOk">Guardar</button>
+      <button class="btn secondary" id="rCancel">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(dlg); dlg.showModal();
+
+  const rList = dlg.querySelector('#rList');
+  const comps = R.components?.map(c=>({...c})) || [];
+  const paint=()=>{ rList.innerHTML = comps.map((c,i)=>`
+    <div class="row">
+      <input class="input" style="flex:2" placeholder="Nombre" value="${c.name||''}" data-i="${i}" data-k="name">
+      <input class="input" style="flex:1" placeholder="Costo unit." type="number" value="${c.costPerUnit||0}" data-i="${i}" data-k="costPerUnit">
+      <input class="input" style="flex:1" placeholder="Cantidad" type="number" value="${c.qtyUnit||0}" data-i="${i}" data-k="qtyUnit">
+      <input class="input" style="flex:1" placeholder="Unidad (kg/L)" value="${c.unit||'kg'}" data-i="${i}" data-k="unit">
+      <button class="btn" data-rem="${i}">Quitar</button>
+    </div>`).join(''); };
+  paint();
+
+  rList.addEventListener('input', e=>{
+    const i=e.target.dataset.i; const k=e.target.dataset.k;
+    if(i!==undefined){ comps[i][k]= (k==='name'||k==='unit')? e.target.value : +e.target.value; }
+  });
+  rList.addEventListener('click', e=>{ const r=e.target.dataset.rem; if(r!==undefined){ comps.splice(+r,1); paint(); } });
+  dlg.querySelector('#rAdd').onclick = ()=>{ comps.push({name:'Ingrediente',costPerUnit:0,qtyUnit:0,unit:'kg'}); paint(); };
+  dlg.querySelector('#rCancel').onclick = ()=>{ dlg.close(); dlg.remove(); };
+  dlg.querySelector('#rOk').onclick = ()=>{
+    const out={ name: dlg.querySelector('#rName').value.trim(), yieldMl:+dlg.querySelector('#rYield').value, components:comps };
+    if(!out.name||!out.yieldMl){ alert('Completa nombre y rendimiento'); return; }
+    if(idx>=0) RECIPES[idx]=out; else RECIPES.push(out);
+    dlg.close(); dlg.remove(); renderRecipes();
+  };
+}
