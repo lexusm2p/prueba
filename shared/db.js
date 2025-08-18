@@ -1,49 +1,58 @@
-
-import { db, auth } from './firebase.js';
+import { firebaseConfig } from './firebaseConfig.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js';
 import {
-  collection, addDoc, serverTimestamp, onSnapshot, orderBy, query, updateDoc, doc, setDoc, deleteDoc
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+  getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs,
+  onSnapshot, serverTimestamp, query, orderBy, updateDoc, deleteDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js';
 
-const ORDERS = 'orders';
-const ARCHIVE = 'orders_archive';
+export const app = initializeApp(firebaseConfig);
+export const db  = getFirestore(app);
+
+export const colOrders   = collection(db,'orders');
+export const colArchive  = collection(db,'archive_orders');
+export const colSettings = doc(db,'settings','global');
+export const colInventory= collection(db,'inventory');
+export const colRecipes  = collection(db,'recipes');
 
 export async function createOrder(payload){
-  const stamp = serverTimestamp();
-  const ref = await addDoc(collection(db, ORDERS), {
-    ...payload,
-    status:'PENDING',
-    createdAt: stamp,
-    updatedAt: stamp,
-  });
-  return ref.id;
+  payload.createdAt = serverTimestamp();
+  payload.status = 'PENDING';
+  await addDoc(colOrders, payload);
 }
-
-export function onOrdersSnapshot(cb){
-  const q = query(collection(db, ORDERS), orderBy('createdAt','desc'));
-  return onSnapshot(q, (snap)=>{
-    const list = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-    cb(list);
-  });
-}
-
-export async function setStatus(id, status){
-  await updateDoc(doc(db, ORDERS, id), { status, updatedAt: serverTimestamp() });
-}
-
-export async function updateOrder(id, patch){
-  await updateDoc(doc(db, ORDERS, id), { ...patch, updatedAt: serverTimestamp() });
-}
-
+export async function setStatus(id, status){ await updateDoc(doc(colOrders,id), { status }); }
 export async function archiveDelivered(id){
-  const ref = doc(db, ORDERS, id);
-  // read current
-  // Not reading to simplify: just move minimal
-  const now = serverTimestamp();
-  // We'll copy last known fields from client; for robustness this should read first.
-  await setDoc(doc(db, ARCHIVE, id), { archivedAt: now });
-  await deleteDoc(ref);
+  const ref = doc(colOrders,id);
+  const snap = await getDoc(ref);
+  if(snap.exists()){
+    await setDoc(doc(colArchive,id), { ...snap.data(), deliveredAt: serverTimestamp() });
+    await deleteDoc(ref);
+  }
+}
+export async function deleteOrder(id){ await deleteDoc(doc(colOrders,id)); }
+
+export function subscribeOrders(cb){
+  const q = query(colOrders, orderBy('createdAt','asc'));
+  return onSnapshot(q, s=>{ const data=[]; s.forEach(d=>data.push({id:d.id,...d.data()})); cb(data); });
 }
 
-export async function deleteOrder(id){
-  await deleteDoc(doc(db, ORDERS, id));
+export async function setSettings(patch){
+  const snap = await getDoc(colSettings);
+  if(!snap.exists()) await setDoc(colSettings, patch);
+  else await updateDoc(colSettings, patch);
+}
+export async function getSettings(){
+  const snap = await getDoc(colSettings);
+  return snap.exists()? snap.data(): {};
+}
+
+export async function decrementInventory(id, qty=1){
+  const ref = doc(colInventory, id);
+  const snap = await getDoc(ref);
+  if(!snap.exists()) return;
+  const curr = snap.data().stock ?? 0;
+  await updateDoc(ref, { stock: Math.max(0, curr - qty) });
+}
+export async function getInventory(){
+  const s = await getDocs(colInventory); const arr=[];
+  s.forEach(d=>arr.push({id:d.id,...d.data()})); return arr;
 }
