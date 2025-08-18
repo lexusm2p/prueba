@@ -1,33 +1,30 @@
 
-let toastEl=null; let toastTimer=null;
+let toastEl=null, beepEl=null, starEl=null;
 export function toast(msg){
-  if(!toastEl){ toastEl=document.createElement('div'); toastEl.className='toast'; document.body.appendChild(toastEl); }
-  toastEl.textContent=msg; toastEl.style.display='block';
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.style.display='none',2600);
+  clear();
+  toastEl=document.createElement('div');
+  toastEl.className='toast';
+  toastEl.innerHTML=msg;
+  document.body.appendChild(toastEl);
+  setTimeout(clear, 2600);
 }
+function clear(){ if(toastEl){ toastEl.remove(); toastEl=null; } }
 export function beep(){
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator(); const g=ctx.createGain();
-    o.type='square'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.12);
-    o.start(); o.stop(ctx.currentTime+0.14);
-  }catch(e){}
-}
-
-// SFX Estrella (coloca tu archivo en /shared/sounds/star.mp3)
-export const starSfx = (()=>{
-  const a=new Audio();
-  a.preload='auto';
-  a.src='../shared/sounds/star.mp3';
-  let warmed=false;
-  function prewarm(){
-    if(warmed) return;
-    warmed=true;
-    try{ a.muted=true; a.play().then(()=>{ a.pause(); a.currentTime=0; a.muted=false; }).catch(()=>{ warmed=false; }); }catch(e){}
+  if(!beepEl){
+    beepEl = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAABAAAAAAAAgP8AAP//'); // tiny click
   }
-  function play(){ try{ a.currentTime=0; a.play(); }catch(e){} }
-  return { prewarm, play };
-})();
+  try{ beepEl.currentTime=0; beepEl.play(); }catch{}
+}
+export const starSfx = {
+  prewarmed:false,
+  prewarm(){
+    if(this.prewarmed) return;
+    this.el = new Audio('../shared/sounds/star.mp3');
+    this.el.volume = .9;
+    this.prewarmed = true;
+  },
+  play(){
+    if(!this.el){ this.prewarm(); }
+    try{ this.el.currentTime=0; this.el.play(); }catch{}
+  }
+};
