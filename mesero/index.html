@@ -1,33 +1,19 @@
-
-<!doctype html><html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mesero · Seven de Burgers</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../shared/styles.css">
-</head><body>
-<div class="container">
-  <div class="headerbar">
-    <div class="logo">SEVEN <b>DE</b> BURGERS</div>
-    <div class="sub">Mesero</div>
-  </div>
-
-  <div class="k-columns">
-    <div>
-      <div class="badge">En preparación</div>
-      <div id="colIP"></div>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mesero — Seven de Burgers</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <div class="headerbar"><div class="inner"><div class="brand">🧑‍🍳 Mesero</div><a class="btn small ghost" href="../kiosk/index.html">Kiosko</a></div></div>
+  <main class="center">
+    <div class="card">
+      <h2>Mesero MVP</h2>
+      <p>Próximamente: filtro "mis mesas", crear pedidos, alertas READY.</p>
+      <p><a class="btn" href="../kiosk/index.html">Usar Kiosko por ahora</a></p>
     </div>
-    <div>
-      <div class="badge">Listos</div>
-      <div id="colR"></div>
-    </div>
-    <div>
-      <div class="badge">Entregados (sesión)</div>
-      <div id="colD"></div>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast" style="display:none"></div>
-<script type="module" src="./app.js"></script>
-</body></html>
+  </main>
+</body>
+</html>
