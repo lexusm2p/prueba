@@ -24,16 +24,21 @@ function render(list){
 
 function renderCard(o){
   const name = o.customerName || '—';
-  const items = (o.items||[]).map(it=>`${it.name} x${it.qty||1}`).join(' · ');
-  // Si tu data incluye ingredientes base, puedes mostrarlos aquí
+  const itemsDetail = (o.items||[]).map((it)=>{
+    const ingr = (it.ingredients||[]).length ? `<div class="small">Incluye: ${it.ingredients.join(', ')}</div>` : '';
+    const ex   = (it.extras||[]).length ? `<div class="small">Extras: ${it.extras.map(e=>e.name).join(', ')}</div>` : '';
+    return `<div class="small">• <strong>${it.name}</strong> × ${it.qty||1}${ingr}${ex}</div>`;
+  }).join('');
   const notes = o.notes ? `<div class="notes">📝 ${escapeHtml(o.notes)}</div>` : '';
+
   return `
 <article class="k-card" data-id="${o.id}">
   <header class="k-head">
     <div class="title">Pedido #${o.id.slice(-5).toUpperCase()}</div>
-    <div class="sub">Cliente: <strong>${escapeHtml(name)}</strong> — ${items||'—'}</div>
+    <div class="sub">Cliente: <strong>${escapeHtml(name)}</strong></div>
   </header>
   <div class="k-body">
+    ${itemsDetail}
     ${notes}
   </div>
   <footer class="k-actions">
@@ -88,3 +93,4 @@ function openEditModal(order){
     close();
   };
 }
+
