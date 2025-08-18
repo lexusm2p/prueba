@@ -1,39 +1,43 @@
 
-import { subscribeOrders, archiveDelivered } from '../shared/db.js';
+import { onOrdersSnapshot } from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
-function money(n){ return '$'+Number(n||0).toFixed(0); }
-const colIP=document.getElementById('colIP'), colR=document.getElementById('colR'), colD=document.getElementById('colD');
-let deliveredSession = [];
 
-function itemsSummary(o){
-  if(Array.isArray(o.items)){
-    return o.items.map(it=>`${it.item?.name||'Producto'} x${it.qty||1}`).join(', ');
+const Status={ PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY' };
+let LAST_READY_IDS = new Set();
+
+onOrdersSnapshot((orders)=>{
+  const by = orders.reduce((acc,o)=>{ const s=o.status||Status.PENDING; (acc[s] ||= []).push(o); return acc; },{});
+
+  renderList('col-progress', by.IN_PROGRESS||[]);
+  renderList('col-ready', by.READY||[]);
+  renderList('col-pending', by.PENDING||[]);
+
+  const currentReady = new Set((by.READY||[]).map(x=>x.id));
+  for(const id of currentReady){
+    if(!LAST_READY_IDS.has(id)){
+      beep(); toast('Pedido listo para recoger 🛎️');
+    }
   }
-  return `${o.item?.name||'Producto'} x${o.qty||1}`;
-}
-
-function card(o,deliver=false){
-  const total = Array.isArray(o.items) ? o.orderTotal : o.subtotal;
-  return `<div class="k-card" data-id="${o.id}">
-    <h4>${itemsSummary(o)}</h4>
-    <div class="muted small">Cliente: <b>${o.customer||'-'}</b></div>
-    <div class="muted small">Total: <b>${money(total||0)}</b></div>
-    ${o.notes?`<div class="muted small">Notas: ${o.notes}</div>`:''}
-    <div class="k-actions">${deliver?'<button class="btn small secondary" data-a="deliver">Entregar</button>':''}</div>
-  </div>`;
-}
-
-function render(list){
-  const ip=list.filter(x=>x.status==='IN_PROGRESS'), r=list.filter(x=>x.status==='READY');
-  colIP.innerHTML=ip.map(o=>card(o,false)).join('')||'<div class="muted">—</div>';
-  colR.innerHTML=r.map(o=>card(o,true)).join('')||'<div class="muted">—</div>';
-  colD.innerHTML=deliveredSession.map(o=>card(o,false)).join('')||'<div class="muted">—</div>';
-}
-
-subscribeOrders(render);
-document.addEventListener('click', async (e)=>{
-  const btn=e.target.closest('button[data-a="deliver"]'); if(!btn) return;
-  const id=btn.closest('.k-card').dataset.id; deliveredSession.unshift({ id, at:Date.now() });
-  await archiveDelivered(id); beep(); toast('Pedido entregado ✔️');
-  render([]);
+  LAST_READY_IDS = currentReady;
 });
+
+function renderList(containerId, list){
+  const el = document.getElementById(containerId);
+  el.innerHTML = list.map(renderCard).join('') || '<div class="empty">—</div>';
+}
+
+function renderCard(o){
+  const items = (o.items||[]).map((it)=>{
+    const ingr = (it.ingredients||[]).length ? `<div class='small'>Incluye: ${it.ingredients.join(', ')}</div>` : '';
+    const ex   = (it.extras||[]).length ? `<div class='small'>Extras: ${it.extras.map(e=>e.name).join(', ')}</div>` : '';
+    return `<div class='small'>• <strong>${it.name}</strong> × ${it.qty||1}${ingr}${ex}</div>`;
+  }).join('');
+  return `<article class="k-card">
+    <div class="k-head"><div class="title">Pedido #${o.id.slice(-5).toUpperCase()}</div>
+    <div class="sub">Cliente: <strong>${escapeHtml(o.customerName||'—')}</strong></div></div>
+    <div class="k-body">${items || '—'}</div>
+  </article>`;
+}
+
+function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+
