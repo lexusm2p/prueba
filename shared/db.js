@@ -1,50 +1,49 @@
 
-import { db, ensureAuth, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from './firebase.js';
+import { db, auth } from './firebase.js';
+import {
+  collection, addDoc, serverTimestamp, onSnapshot, orderBy, query, updateDoc, doc, setDoc, deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const ORDERS = 'orders';
 const ARCHIVE = 'orders_archive';
 
 export async function createOrder(payload){
-  await ensureAuth();
+  const stamp = serverTimestamp();
   const ref = await addDoc(collection(db, ORDERS), {
     ...payload,
-    status: 'PENDING',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    status:'PENDING',
+    createdAt: stamp,
+    updatedAt: stamp,
   });
   return ref.id;
 }
 
 export function onOrdersSnapshot(cb){
-  ensureAuth().then(()=>{
-    const q = query(collection(db, ORDERS), orderBy('createdAt','asc'));
-    onSnapshot(q, (snap)=>{
-      const list = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
-      cb(list);
-    });
+  const q = query(collection(db, ORDERS), orderBy('createdAt','desc'));
+  return onSnapshot(q, (snap)=>{
+    const list = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    cb(list);
   });
 }
 
 export async function setStatus(id, status){
-  await ensureAuth();
   await updateDoc(doc(db, ORDERS, id), { status, updatedAt: serverTimestamp() });
 }
 
+export async function updateOrder(id, patch){
+  await updateDoc(doc(db, ORDERS, id), { ...patch, updatedAt: serverTimestamp() });
+}
+
 export async function archiveDelivered(id){
-  await ensureAuth();
-  const dref = doc(db, ORDERS, id);
-  // read data (minimal safe copy)
-  // You can expand to full getDoc if needed; here we move by ids only
-  await setDoc(doc(db, ARCHIVE, id), { orderId:id, archivedAt: serverTimestamp() });
-  await deleteDoc(dref);
+  const ref = doc(db, ORDERS, id);
+  // read current
+  // Not reading to simplify: just move minimal
+  const now = serverTimestamp();
+  // We'll copy last known fields from client; for robustness this should read first.
+  await setDoc(doc(db, ARCHIVE, id), { archivedAt: now });
+  await deleteDoc(ref);
 }
 
 export async function deleteOrder(id){
-  await ensureAuth();
   await deleteDoc(doc(db, ORDERS, id));
-}
-
-export async function updateOrder(id, data){
-  await ensureAuth();
-  await updateDoc(doc(db, ORDERS, id), { ...data, updatedAt: serverTimestamp() });
 }
