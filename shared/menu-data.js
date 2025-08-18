@@ -1,34 +1,33 @@
 
-export const BURGERS = [
-  { id:'starter', name:'Starter Burger', price:47, ingredients:['Pan','Carne','Queso amarillo','Queso blanco','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'], sauceSuggestion:null },
-  { id:'koopa', name:'Koopa Crunch', price:57, ingredients:['Pan','Carne','Queso blanco','Piña','Tocino','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'], sauceSuggestion:null },
-  { id:'fatality', name:'Fatality Flame', price:67, ingredients:['Pan','Carne','Salsa Cheddar','Tocino','Salsa Habanero','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'], sauceSuggestion:'Habanero' },
-  { id:'megabyte', name:'Mega Byte', price:77, ingredients:['Pan','Carne','Salsa Cheddar','Queso blanco','Tocino','Salchicha','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'], sauceSuggestion:'Cheddar' },
-  { id:'hadouken', name:'Hadouken', price:77, ingredients:['Pan','Carne','Queso blanco','Queso amarillo','Salchicha','Aderezo Chipotle','Lechuga','Jitomate','Cebolla','Catsup','Mostaza'], sauceSuggestion:'Chipotle' },
-  { id:'nintendo', name:'Nintendo Nostalgia', price:67, ingredients:['Pan','Carne','Queso blanco','Piña','Jamón','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'], sauceSuggestion:null },
-  { id:'finalboss', name:'Final Boss Burger', price:97, ingredients:['Pan','Carne','Salsa Cheddar','Queso blanco','Queso amarillo','Tocino','Jamón','Salchicha','Piña','Salsa Habanero','Aderezo Chipotle','Lechuga','Jitomate','Cebolla','Catsup','Mayonesa','Mostaza'], sauceSuggestion:'Cheddar' }
+// Menú base y minis (precios cliente, ejemplo)
+export const PRODUCTS = [
+  { sku:'STARTER',     name:'Starter Burger',       size:'normal', price:47, ingredients:['Pan','Carne','Queso amarillo','Queso blanco','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
+  { sku:'KOOPA',       name:'Koopa Crunch',         size:'normal', price:57, ingredients:['Pan','Carne','Queso blanco','Piña','Tocino','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
+  { sku:'FLAME',       name:'Fatality Flame',       size:'normal', price:67, ingredients:['Pan','Carne','Salsa Cheddar','Tocino','Salsa Habanero','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
+  { sku:'MEGABYTE',    name:'Mega Byte',            size:'normal', price:77, ingredients:['Pan','Carne','Salsa Cheddar','Queso blanco','Tocino','Salchicha','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup'] },
+  { sku:'HADOUKEN',    name:'Hadouken',             size:'normal', price:77, ingredients:['Pan','Carne','Queso blanco','Queso amarillo','Salchicha','Aderezo Chipotle','Lechuga','Jitomate','Cebolla'] },
+  { sku:'NOSTALGIA',   name:'Nintendo Nostalgia',   size:'normal', price:67, ingredients:['Pan','Carne','Queso blanco','Piña','Jamón','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
+  { sku:'FINALBOSS',   name:'Final Boss Burger',    size:'normal', price:97, ingredients:['Pan','Carne','Salsa Cheddar','Queso blanco','Queso amarillo','Tocino','Jamón','Salchicha','Piña','Salsa Habanero','Aderezo Chipotle'] },
+
+  // minis
+  { sku:'STARTER_MINI',   name:'Starter Mini',       size:'mini', price:27, baseOf:'STARTER' },
+  { sku:'KOOPA_MINI',     name:'Koopa Crunch Mini',  size:'mini', price:27, baseOf:'KOOPA' },
+  { sku:'FLAME_MINI',     name:'Fatality Flame Mini',size:'mini', price:37, baseOf:'FLAME' },
+  { sku:'MEGABYTE_MINI',  name:'Mega Byte Mini',     size:'mini', price:37, baseOf:'MEGABYTE' },
+  { sku:'HADOUKEN_MINI',  name:'Hadouken Mini',      size:'mini', price:37, baseOf:'HADOUKEN' },
+  { sku:'NOSTALGIA_MINI', name:'Nintendo Nostalgia Mini', size:'mini', price:37, baseOf:'NOSTALGIA' },
+  { sku:'FINALBOSS_MINI', name:'Final Boss Mini',    size:'mini', price:47, baseOf:'FINALBOSS' },
 ];
 
-export const MINIS = [
-  { id:'starter_m', name:'Starter Mini', price:27, base:'starter' },
-  { id:'koopa_m', name:'Koopa Mini', price:27, base:'koopa' },
-  { id:'fatality_m', name:'Fatality Mini', price:37, base:'fatality' },
-  { id:'megabyte_m', name:'Mega Byte Mini', price:37, base:'megabyte' },
-  { id:'hadouken_m', name:'Hadouken Mini', price:37, base:'hadouken' },
-  { id:'nintendo_m', name:'Nintendo Mini', price:37, base:'nintendo' },
-  { id:'finalboss_m', name:'Final Boss Mini', price:47, base:'finalboss' }
+export const SAUCES = [
+  'Aderezo de ajo habanero','Aderezo chipotle','Salsa chimichurri','Aderezo cheddar',
+  'Aderezo de mostaza dulce','Aderezo de jalapeño rostizado','Aderezo curry madras','Salsa secreta Seven'
 ];
 
-export const EXTRAS_ING = [
-  { key:'Tocino', price:6 },
-  { key:'Piña', price:5 },
-  { key:'Queso amarillo', price:5 },
-  { key:'Queso blanco', price:5 },
-  { key:'Jamón', price:6 },
-  { key:'Salchicha', price:8 },
-  { key:'Cebolla caramelizada', price:5 }
+export const EXTRAS = [
+  { name:'Tocino', price:6 }, { name:'Piña', price:5 }, { name:'Salsa habanero', price:5 },
+  { name:'Salsa chimichurri', price:5 }, { name:'Jamón', price:5 }, { name:'Salchicha', price:8 },
+  { name:'Salsa cheddar', price:5 }
 ];
 
-export const EXTRAS_SAUCES = [
-  'Aderezo Chipotle','Salsa Habanero','Salsa Cheddar','Salsa Chimichurri','Mostaza dulce','Jalapeño rostizado','Curry','Salsa Secreta Seven'
-];
+export function isMini(item){ return item.size==='mini' || (item.sku||'').includes('_MINI'); }
