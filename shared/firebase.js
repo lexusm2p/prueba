@@ -1,20 +1,27 @@
 
-// Firebase + Firestore
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, doc, updateDoc, deleteDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
-  authDomain: "seven-de-burgers.firebaseapp.com",
-  projectId: "seven-de-burgers",
-  storageBucket: "seven-de-burgers.firebasestorage.app",
-  messagingSenderId: "34089845279",
-  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
-  measurementId: "G-Q8YQJGL2XY"
-};
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-analytics.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
 
 export const app = initializeApp(firebaseConfig);
-export const db  = getFirestore(app);
-export { collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, doc, updateDoc, deleteDoc, getDoc, setDoc };
+try{ getAnalytics(app); }catch(e){}
 
-export { where, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+export async function ensureAuth(){
+  return new Promise((resolve)=>{
+    onAuthStateChanged(auth, async (user)=>{
+      if(user) return resolve(user);
+      try{ const cred = await signInAnonymously(auth); resolve(cred.user); }
+      catch(e){ console.error(e); resolve(null); }
+    });
+  });
+}
+
+export {
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp,
+  query, where, orderBy
+};
