@@ -1,250 +1,153 @@
+import { MENU } from '../shared/products.js';
+import { PRICES } from '../shared/pricing.js';
+import { createOrder, getSettings } from '../shared/db.js';
+import { consumeOnOrder } from '../shared/inventory.js';
+import { money, $ } from '../shared/util.js';
+import { toast } from '../shared/toast.js';
+import { beep, star } from '../shared/notify.js';
 
-import { PRODUCTS, SAUCES, EXTRAS, isMini, getIngredientsForSku, getProductBySku } from '../shared/menu-data.js';
-import { toast, beep, starSfx } from '../shared/notify.js';
-import { createOrder } from '../shared/db.js';
+let cart=[]; let hiddenTaps=0;
 
-// Config combos
-const COMBO_MINI_TRIO_DISCOUNT = 10; // MXN por cada 3 minis
-
-// hidden login: 6 taps
-let taps=0, timer=null;
-const brand=document.getElementById('brandTitle');
-const loginLink=document.getElementById('loginLink');
-brand?.addEventListener('click', ()=>{
-  taps++; clearTimeout(timer); timer=setTimeout(()=>taps=0, 900);
-  if(taps>=6){ loginLink.style.display='inline-block'; toast('🔓 Modo staff'); taps=0; }
-});
-document.addEventListener('pointerdown', ()=>starSfx.prewarm(), {once:true});
-
-const miniMenu=document.getElementById('miniMenu');
-const bigMenu=document.getElementById('bigMenu');
-const grandTotalEl=document.getElementById('grandTotal');
-const cartCountEl=document.getElementById('cartCount');
-const miniCountEl=document.getElementById('miniCount');
-const btnReview=document.getElementById('btnReview');
-const surpriseSel=document.getElementById('surprise');
-
-const productOverlay=document.getElementById('productOverlay');
-const productModal=document.getElementById('productModal');
-const reviewOverlay=document.getElementById('reviewOverlay');
-const reviewModal=document.getElementById('reviewModal');
-
-const cart={ items:[] };
-let starUnlocked=false;
-
-function addToCart(item){
-  const sig = signature(item);
-  const existing = cart.items.find(x=>signature(x)===sig);
-  if(existing){ existing.qty=(existing.qty||1)+item.qty; }
-  else { cart.items.push({...item}); }
-  toast(`Añadido: ${item.name}`);
-  beep();
-  refreshSummary();
+function lineBurger(b){
+  const price = b.base==='mini'? PRICES.burgers.mini : PRICES.burgers.grande;
+  const ing = b.ingredients.join(', ');
+  return `<div class="k-card">
+    <h4>${b.name} <span class="price">${money(price)}</span></h4>
+    <div class="small">Ingredientes: ${ing}. Sugerida: ${b.sugSauce}</div>
+    <div class="row" style="margin-top:8px"><button class="btn" data-id="${b.id}" data-type="${b.base}" data-name="${b.name}">Ordenar</button></div>
+  </div>`;
 }
 
-function signature(it){
-  const extras = (it.extras||[]).map(e=>e.name).sort().join('+');
-  return `${it.sku}|${extras}`;
+function render(){
+  $('#minis').innerHTML   = MENU.minis.map(lineBurger).join('');
+  $('#grandes').innerHTML = MENU.grandes.map(lineBurger).join('');
+  renderCart();
 }
 
-function openProductModal(sku){
-  const p = getProductBySku(sku);
-  if(!p) return;
-  const ingr = getIngredientsForSku(sku);
+function renderCart(){
+  const hh = window._hh || false;
+  const addOn = (it)=> it.extras.reduce((s,e)=> s+e.price,0) + it.sauces.reduce((s,e)=> s+e.price,0);
+  const basePrice = it => (it.type==='mini'?PRICES.burgers.mini:PRICES.burgers.grande);
+  let subtotal = 0;
 
-  const extrasList = EXTRAS.map((ex,i)=>`
-    <label class="row" style="justify-content:space-between;align-items:center">
-      <span>${ex.name}</span>
-      <span class="price">+$${ex.price}</span>
-      <input type="checkbox" data-extra="${i}">
-    </label>
-  `).join('');
-
-  productModal.innerHTML = `
-    <div style="position:relative">
-      <button class="closex" id="pmClose">×</button>
-      <h3>${p.name}</h3>
-      <div class="muted small" style="margin-bottom:8px">${p.size==='mini'?'Mini':'Hamburguesa'}</div>
-      <div class="small"><strong>Incluye:</strong> ${ingr.join(', ') || '—'}</div>
-      <hr style="border-color:#2a2f40;margin:10px 0">
-      <div class="small"><strong>Extras opcionales</strong></div>
-      <div class="grid" style="grid-template-columns:1fr;gap:6px;margin-top:6px">${extrasList}</div>
-      <div class="row" style="justify-content:space-between;margin-top:10px">
-        <label class="small muted">Cantidad</label>
-        <input id="pmQty" class="input" type="number" min="1" value="1" style="max-width:90px;text-align:center">
+  const rows = cart.map((it,i)=>{
+    const p = basePrice(it)+addOn(it);
+    subtotal += p;
+    const extraTxt = [...it.extras.map(e=>e.label), ...it.sauces.map(s=>s.label)].join(', ') || 'Sin extras';
+    return `<div class="k-card">
+      <div class="row" style="justify-content:space-between">
+        <div><b>${it.name}</b><div class="small">${extraTxt}</div></div>
+        <div class="price">${money(p)}</div>
       </div>
-      <div class="row" style="justify-content:flex-end;margin-top:12px">
-        <button class="btn ghost" id="pmCancel">Cancelar</button>
-        <button class="btn ok" id="pmAdd">Agregar</button>
-      </div>
-    </div>`;
-
-  productOverlay.style.display='flex';
-
-  const close = ()=>{ productOverlay.style.display='none'; productModal.innerHTML=''; };
-  productModal.querySelector('#pmClose').onclick=close;
-  productModal.querySelector('#pmCancel').onclick=close;
-  productModal.querySelector('#pmAdd').onclick=()=>{
-    const qty = Math.max(1, parseInt(productModal.querySelector('#pmQty').value||'1',10));
-    const chosen = [...productModal.querySelectorAll('[data-extra]:checked')].map(ch=>EXTRAS[parseInt(ch.dataset.extra,10)]);
-    const addItem = {
-      sku:p.sku, name:p.name, size:p.size, price:p.price, qty,
-      ingredients: ingr,
-      extras: chosen
-    };
-    addToCart(addItem);
-    close();
-  };
-}
-
-function renderMenus(){
-  const minis = PRODUCTS.filter(p=>isMini(p));
-  const bigs  = PRODUCTS.filter(p=>!isMini(p));
-
-  function card(p){
-    const ingr = getIngredientsForSku(p.sku);
-    return `
-    <div class="card item">
-      <div class="row" style="justify-content:space-between;align-items:flex-start">
-        <div>
-          <div>${p.name}</div>
-          <div class="muted small">${p.price} MXN</div>
-          <div class="small muted" style="margin-top:6px">Incluye: ${ingr.join(', ')}</div>
-        </div>
-        <button class="btn small" data-custom="${p.sku}">Agregar</button>
-      </div>
-    </div>`;
-  }
-
-  miniMenu.innerHTML = minis.map(card).join('');
-  bigMenu.innerHTML  = bigs.map(card).join('');
-}
-renderMenus();
-
-document.addEventListener('click', (e)=>{
-  const btnCustom=e.target.closest('[data-custom]');
-  if(btnCustom){ openProductModal(btnCustom.dataset.custom); return; }
-});
-
-function refreshSummary(){
-  const items = cart.items;
-  const count = items.reduce((a,x)=>a+(x.qty||1),0);
-  const minis = items.reduce((a,x)=>a+(isMini(x)?(x.qty||1):0),0);
-  let total   = items.reduce((a,x)=>a + ((x.price + sumExtras(x.extras)) * (x.qty||1)), 0);
-  const trios = Math.floor(minis/3);
-  const discount = trios * COMBO_MINI_TRIO_DISCOUNT;
-  total = Math.max(0, total - discount);
-
-  if(!starUnlocked && minis>=3){
-    starUnlocked=true;
-    starSfx.play();
-    toast('¡Logro desbloqueado! ⭐ Combo 3 minis');
-  }
-
-  grandTotalEl.textContent = `$${total}`;
-  cartCountEl.textContent  = `${count} items`;
-  miniCountEl.textContent  = `${minis} minis`;
-}
-
-function sumExtras(extras){ return (extras||[]).reduce((a,e)=>a+(e.price||0),0); }
-
-btnReview.addEventListener('click', ()=>{
-  if(!cart.items.length){ toast('Agrega productos al carrito'); return; }
-  openReview();
-});
-
-function openReview(){
-  const rows = cart.items.map((it,idx)=>{
-    const ex = it.extras?.length ? `<div class="small">Extras: ${it.extras.map(e=>e.name).join(', ')} (+$${sumExtras(it.extras)})</div>` : '';
-    return `
-    <div class="card" data-idx="${idx}">
-      <div class="row" style="justify-content:space-between;align-items:flex-start">
-        <div>
-          <div><strong>${it.name}</strong> × ${it.qty}</div>
-          <div class="small muted">Incluye: ${ (it.ingredients||[]).join(', ') }</div>
-          ${ex}
-          <div class="small">Precio: $${it.price} c/u</div>
-        </div>
-        <button class="btn danger small" data-remove="${idx}">Quitar</button>
+      <div class="row" style="margin-top:6px">
+        <button class="btn secondary" data-edit="${i}">Editar</button>
+        <button class="btn" data-del="${i}">Quitar</button>
       </div>
     </div>`;
   }).join('');
 
-  const minis = cart.items.reduce((a,x)=>a+( (x.size==='mini') ? (x.qty||1) : 0),0);
-  const trios = Math.floor(minis/3);
-  const discount = trios * COMBO_MINI_TRIO_DISCOUNT;
-  const gross = cart.items.reduce((a,x)=>a + ((x.price + sumExtras(x.extras)) * (x.qty||1)),0);
-  const grand = Math.max(0, gross - discount);
+  const minisCount = cart.filter(x=>x.type==='mini').length;
+  let comboDiscount = 0;
+  if(minisCount>=3){
+    const regular = PRICES.burgers.mini*3;
+    comboDiscount = regular - PRICES.comboMinis3;
+    document.getElementById('hhBanner').style.display='block';
+    document.getElementById('hhBanner').textContent = `¡Combo secreto 3 minis aplicado! $${PRICES.comboMinis3} 🎉`;
+    star();
+  } else {
+    if(!(window._hh)) document.getElementById('hhBanner').style.display='none';
+  }
 
-  reviewModal.innerHTML = `
-    <div style="position:relative">
-      <button class="closex" id="rvClose">×</button>
-      <h3>Revisión de pedido</h3>
-      <div class="grid" style="grid-template-columns:1fr;gap:8px;margin:10px 0">${rows}</div>
-      <div class="row" style="justify-content:space-between;margin:6px 0">
-        <div class="small muted">Subtotal</div><div>$${gross}</div>
-      </div>
-      ${( (trios>0) ? `<div class="row" style="justify-content:space-between;margin:6px 0"><div class="small muted">Descuento combo 3 minis</div><div>- $${discount}</div></div>` : ``)}
-      <div class="row" style="justify-content:space-between;margin:10px 0">
-        <div class="small muted">Total</div><div class="price">$${grand}</div>
-      </div>
-      <div class="row" style="justify-content:flex-end">
-        <button class="btn ghost" id="rvCancel">Seguir agregando</button>
-        <button class="btn ok" id="rvConfirm">Confirmar y enviar</button>
-      </div>
-    </div>`;
+  let hhDiscount = 0;
+  if(hh){ hhDiscount = Math.round((subtotal-comboDiscount)*PRICES.happyHourOff); }
 
-  reviewOverlay.style.display='flex';
-
-  reviewModal.querySelector('#rvClose').onclick=closeReview;
-  reviewModal.querySelector('#rvCancel').onclick=closeReview;
-  reviewModal.querySelector('#rvConfirm').onclick=confirmarPedido;
-
-  reviewModal.addEventListener('click', (e)=>{
-    const btn=e.target.closest('[data-remove]');
-    if(!btn) return;
-    const idx=parseInt(btn.dataset.remove,10);
-    cart.items.splice(idx,1);
-    if(!cart.items.length){ closeReview(); refreshSummary(); return; }
-    openReview();
-  }, { once:true });
+  const total = subtotal - comboDiscount - hhDiscount;
+  document.getElementById('cart').innerHTML = rows || `<div class="small">Tu carrito está vacío.</div>`;
+  document.getElementById('grandTotal').textContent = money(total);
 }
 
-function closeReview(){ reviewOverlay.style.display='none'; reviewModal.innerHTML=''; }
+function openCustomizer(item){
+  const extras = Object.entries(PRICES.extras).map(([k,v])=>`<label class="checkbox"><input type="checkbox" data-ex="${k}" data-price="${v.price}"> ${v.label} (+$${v.price})</label>`).join('');
+  const sauces = Object.entries(PRICES.sauces).map(([k,v])=>`<label class="checkbox"><input type="checkbox" data-sc="${k}" data-price="${v.price}"> ${v.label} (+$${v.price})</label>`).join('');
+  const dlg = document.createElement('dialog');
+  dlg.innerHTML = `<div class="card" style="max-width:680px">
+    <h3>${item.name}</h3>
+    <div class="small">Ingredientes: ${item.ingredients.join(', ')}. Sugerida: ${item.sugSauce}</div>
+    <h4>Aderezos extra</h4>${sauces}
+    <h4>Ingredientes extra</h4>${extras}
+    <div class="row" style="margin-top:10px">
+      <button class="btn" data-ok>Agregar</button>
+      <button class="btn secondary" data-cancel>Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(dlg); dlg.showModal();
 
-async function confirmarPedido(){
-  const nameInput = document.getElementById('customerName');
-  const customerName = (nameInput?.value || '').trim();
-  if(!customerName){ toast('Escribe tu nombre para avisarte cuando esté listo 🙌'); nameInput?.focus(); return; }
-  if(!cart.items.length){ toast('Agrega productos al carrito'); closeReview(); return; }
+  dlg.addEventListener('click', e=>{
+    if(e.target.dataset.cancel!==undefined){ dlg.close(); dlg.remove(); }
+    if(e.target.dataset.ok!==undefined){
+      const selEx=[...dlg.querySelectorAll('input[data-ex]:checked')].map(i=>{ const key=i.dataset.ex; const meta=PRICES.extras[key]; return {key, label:meta.label, price:+i.dataset.price}; });
+      const selSc=[...dlg.querySelectorAll('input[data-sc]:checked')].map(i=>{ const key=i.dataset.sc; const meta=PRICES.sauces[key]; return {key, label:meta.label, price:+i.dataset.price}; });
 
-  const minis = cart.items.reduce((a,x)=>a+( (x.size==='mini') ? (x.qty||1) : 0),0);
-  const trios = Math.floor(minis/3);
-  const discount = trios * COMBO_MINI_TRIO_DISCOUNT;
-  const gross = cart.items.reduce((a,x)=>a+((x.price+sumExtras(x.extras))*(x.qty||1)),0);
-  const net = Math.max(0, gross - discount);
+      if(item.id.includes('starter') && (selEx.length + selSc.length)>=2){
+        toast('¡Desbloqueaste Select Player! ⭐'); star();
+      }
 
-  const payload = {
-    channel:'kiosk',
-    customerName,
-    items: cart.items.map(x=> ({
-      sku:x.sku, name:x.name, size:x.size, qty:x.qty,
-      price:x.price, extras:x.extras || [], ingredients:x.ingredients || []
-    })),
-    notes: '',
-    surprise: surpriseSel.value==='yes',
-    totals: { items: cart.items.length, gross, discount, grandTotal: net }
-  };
-
-  await createOrder(payload);
-  starUnlocked=false;
-  toast(`¡Gracias por tu pedido, ${customerName}}! Te avisaremos cuando esté listo. ✨`.replace('}}','}!'));
-  beep();
-
-  cart.items=[]; refreshSummary(); nameInput.value=''; surpriseSel.value='';
-  closeReview();
+      cart.push({ type:item.base, name:item.name, extras:selEx, sauces:selSc, ingredients:item.ingredients });
+      dlg.close(); dlg.remove(); beep(); renderCart();
+    }
+  });
 }
 
-// Render menus initial
-renderMenus();
-refreshSummary();
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  if(btn.dataset.id){
+    const id = btn.dataset.id;
+    const src = [...MENU.minis, ...MENU.grandes].find(x=>x.id===id);
+    if(src) openCustomizer(src);
+  }
+  if(btn.id==='clearCart'){ cart=[]; renderCart(); }
+  if(btn.dataset.del){ cart.splice(+btn.dataset.del,1); renderCart(); }
+  if(btn.dataset.edit){
+    const idx=+btn.dataset.edit; const src=cart[idx];
+    if(src){
+      openCustomizer({ id:'custom', name:src.name, base:src.type, ingredients:src.ingredients||[], sugSauce:'—' });
+      cart.splice(idx,1);
+    }
+  }
+});
+
+document.getElementById('confirmOrder').onclick = async ()=>{
+  const name = document.getElementById('customerName').value.trim();
+  if(!name){ toast('Pon tu nombre para continuar'); beep(300); return; }
+  if(cart.length===0){ toast('Agrega algo al carrito'); beep(300); return; }
+
+  const settings = await getSettings(); const hh = !!settings.hhActive;
+  const pay = document.getElementById('payMethod').value;
+  const table = document.getElementById('tableSelect').value||null;
+  const total = document.getElementById('grandTotal').textContent.replace('$','')*1;
+
+  const order = { name, table, payMethod:pay, items:cart, happyHour:hh, total };
+  await createOrder(order);
+  try{ await consumeOnOrder(order); }catch(e){ console.warn('consumeOnOrder:',e); }
+
+  cart=[]; renderCart();
+  toast(`Gracias por tu pedido, ${name}. Te avisamos cuando esté listo.`); beep();
+};
+
+(async ()=>{
+  const s = await getSettings();
+  if(s.hhActive){
+    window._hh = true;
+    const el = document.getElementById('hhBanner'); el.style.display='block';
+    const tick=()=>{
+      const left = (s.hhEndAt||0) - Date.now();
+      if(left<=0){ el.style.display='none'; window._hh=false; return; }
+      const m = Math.floor(left/60000), sec = Math.floor((left%60000)/1000);
+      el.textContent = `Happy Hour -10%  ⏱ ${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+      requestAnimationFrame(tick);
+    }; tick();
+  }
+})();
+
+document.getElementById('logoTap').addEventListener('click', ()=>{ window._t=(window._t||0)+1; if(window._t>=7){ location.href='../admin/'; } });
+render();
