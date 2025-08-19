@@ -5,7 +5,11 @@ import { consumeOnOrder } from '../shared/inventory.js';
 import { money, $ } from '../shared/util.js';
 import { toast } from '../shared/toast.js';
 import { beep, star } from '../shared/notify.js';
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import { app } from "../lib/firebase-init.js"; // tu init
 
+const auth = getAuth(app);
+signInAnonymously(auth).catch(console.error);
 let cart=[]; let hiddenTaps=0;
 
 function lineBurger(b){
