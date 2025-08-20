@@ -3,22 +3,39 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <link rel="stylesheet" href="./shared/styles.css"/>
-  <title>Seven de Burgers — POS</title>
+  <link rel="stylesheet" href="../shared/styles.css"/>
+  <script type="module" src="./app.js"></script>
+  <title>Kiosko — POS Seven</title>
 </head>
 <body>
   <header class="header">
-    <h1>Seven de Burgers</h1>
-    <p class="muted">Sistema POS</p>
+    <h1 id="logo">Seven de Burgers</h1>
+    <p class="muted">Haz tu pedido en 3 pasos</p>
   </header>
 
   <main class="container">
-    <div class="grid">
-      <a class="card" href="./kiosk/">Kiosko</a>
-      <a class="card" href="./mesero/">Mesero</a>
-      <a class="card" href="./cocina/">Cocina</a>
-      <a class="card" href="./admin/">Admin</a>
-    </div>
+    <section id="step1">
+      <h2>1. Tu nombre</h2>
+      <input id="customerName" type="text" placeholder="Escribe tu nombre" required>
+      <label>
+        <input type="radio" name="modo" value="mesa" checked> Comer aquí
+      </label>
+      <label>
+        <input type="radio" name="modo" value="pickup"> Para llevar
+      </label>
+    </section>
+
+    <section id="step2">
+      <h2>2. Elige tu hamburguesa</h2>
+      <div id="menu"></div>
+    </section>
+
+    <section id="step3">
+      <h2>3. Revisión y pago</h2>
+      <ul id="cartList"></ul>
+      <label><input type="checkbox" id="surprise"> ¿Te sorprendemos con aderezo?</label>
+      <button id="confirmBtn" class="btn">Confirmar pedido</button>
+    </section>
   </main>
 </body>
 </html>
