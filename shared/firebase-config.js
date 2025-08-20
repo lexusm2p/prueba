@@ -11,7 +11,7 @@
 // Configuración de Firebase
 // 🔑 Sustituye por tus credenciales de Firebase
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "firebase/auth";
 
 const firebaseConfig = {
