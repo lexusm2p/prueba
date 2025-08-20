@@ -1,10 +1,56 @@
-
-<!doctype html><html lang="es">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="../shared/styles.css"/><title>Mesero — Seven de Burgers</title></head>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="../shared/styles.css"/>
+  <title>Kiosko — Seven de Burgers</title>
+</head>
 <body>
-<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Vista Mesero</div></div></div>
-<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a><a class="btn ghost small" href="../cocina/index.html">Ir a cocina</a></nav></header>
-<main class="container"><div class="columns"><div class="k-col"><h3 class="k-title">En preparación</h3><div id="colIP"></div></div>
-<div class="k-col"><h3 class="k-title">Listos</h3><div id="colR"></div></div><div class="k-col"><h3 class="k-title">Entregados (hoy)</h3><div id="colD"></div></div></div></main>
-<script type="module" src="./app.js"></script></body></html>
+<header class="header">
+  <div class="brand" id="brandTap">
+    <span class="dot"></span>
+    <div>
+      <div>Seven de Burgers</div>
+      <div class="title-sub">Kiosko</div>
+    </div>
+  </div>
+  <nav id="navRoles" style="display:none;gap:8px">
+    <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
+    <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
+    <a class="btn ghost small" href="../admin/index.html">Admin</a>
+  </nav>
+</header>
+
+<main class="container">
+  <div class="card" id="mode">
+    <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      <button class="btn" id="btnMinis">Minis & Combos</button>
+      <button class="btn ghost" id="btnBig">Hamburguesas grandes</button>
+    </div>
+  </div>
+
+  <div class="grid" id="cards"></div>
+</main>
+
+<!-- Modal -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="mTitle">Orden</div>
+      <button class="btn ghost small" id="mClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="total" id="mTotal">$0</div>
+        <button class="btn" id="mConfirm">Confirmar pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
