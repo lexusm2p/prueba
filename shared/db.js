@@ -1,38 +1,36 @@
+  // Abstracciones para manejar Firestore
+import { db, ensureAuth } from './firebase.js';
+import {
+  collection, doc, addDoc, updateDoc,
+  onSnapshot, serverTimestamp, orderBy, query
+} from "firebase/firestore";
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, serverTimestamp, deleteDoc, query, orderBy, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
-import { firebaseConfig } from './firebase.js';
+const ORDERS = "orders";
+const ARCHIVE = "orders_archive";
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-
-const ORDERS = 'orders';
-const ARCHIVE = 'orders_archive';
-
+// Crear pedido
 export async function createOrder(payload){
-  payload.createdAt = serverTimestamp();
-  payload.status = 'PENDING';
-  return await addDoc(collection(db, ORDERS), payload);
-}
-
-export function subscribeOrders(cb){
-  const q = query(collection(db, ORDERS), orderBy('createdAt','asc'));
-  return onSnapshot(q, (snap)=>{
-    const arr = []; snap.forEach(d=> arr.push({id:d.id, ...d.data()}));
-    cb(arr);
+  await ensureAuth();
+  return await addDoc(collection(db, ORDERS), {
+    ...payload,
+    status: "PENDING",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   });
 }
 
-export async function setStatus(id, status){
-  return updateDoc(doc(db, ORDERS, id), {status});
+// Escuchar pedidos
+export function onOrdersSnapshot(cb){
+  ensureAuth().then(()=>{
+    const q = query(collection(db, ORDERS), orderBy("createdAt","asc"));
+    onSnapshot(q, (snap)=>{
+      cb(snap.docs.map(d=>({ id:d.id, ...d.data() })));
+    });
+  });
 }
 
-export async function archiveDelivered(id){
-  const ref = doc(db, ORDERS, id);
-  const snap = await getDoc(ref);
-  if(snap.exists()){
-    const data = snap.data();
-    await addDoc(collection(db, ARCHIVE), {...data, deliveredAt: serverTimestamp()});
-    await deleteDoc(ref);
-  }
+// Cambiar estado
+export async function setStatus(id, status){
+  await ensureAuth();
+  await updateDoc(doc(db, ORDERS, id), { status, updatedAt: serverTimestamp() });
 }
