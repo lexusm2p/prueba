@@ -2,36 +2,23 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Mesero — Seven de Burgers</title>
   <link rel="stylesheet" href="../shared/styles.css"/>
-  <script type="module" src="./app.js"></script>
-  <title>Mesero — POS Seven</title>
 </head>
-<body>
-  <header class="header">
-    <h1>Mesero</h1>
-    <p class="muted">Gestión de mesas y pedidos</p>
-  </header>
+<body class="shell">
+  <div class="container">
+    <div class="row" style="margin-bottom:10px">
+      <a class="badge" href="../kiosk/">Kiosko</a>
+      <div class="right badge">Mesero</div>
+    </div>
 
-  <main class="container">
-    <section id="mesa-chooser">
-      <label>Mesa:
-        <select id="mesaSelect">
-          <option value="1">Mesa 1</option>
-          <option value="2">Mesa 2</option>
-          <option value="3">Mesa 3</option>
-          <option value="4">Mesa 4</option>
-        </select>
-      </label>
-    </section>
+    <div class="k-columns">
+      <div class="card"><h2>En preparación</h2><div id="colIP" class="col"></div></div>
+      <div class="card"><h2>Listos</h2><div id="colR" class="col"></div></div>
+    </div>
+  </div>
 
-    <section id="menu"></section>
-
-    <section id="cart">
-      <h2>Carrito</h2>
-      <ul id="cartList"></ul>
-      <button id="confirmBtn" class="btn">Confirmar pedido</button>
-    </section>
-  </main>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
