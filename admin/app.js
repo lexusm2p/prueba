@@ -1,116 +1,68 @@
-// admin/app.js
-import { ensureAuth, subscribeActiveOrders, ordersCol, purchasesCol, addPurchase, inventoryCol, upsertInventory, adjustStock } from "../lib/firebase.js";
-import { RECIPES } from "../lib/recipes.js";
-import { getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import { db, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, doc, getDocs } from '../lib/firebase.js';
+import { toast } from '../lib/toast.js';
 
-const $ = sel => document.querySelector(sel);
-const tabs = document.querySelectorAll('.tabs button');
-const sections = document.querySelectorAll('.tab');
+const tabs=['ventas','compras','inventario','recetario']; function showTab(t){ tabs.forEach(x=> document.getElementById('tab-'+x).hidden=(x!==t)); }
+document.querySelectorAll('[data-tab]').forEach(b=> b.onclick=()=> showTab(b.dataset.tab)); showTab('ventas');
 
-tabs.forEach(b=> b.onclick = ()=>{
-  sections.forEach(s=> s.classList.remove('active'));
-  $('#tab-'+b.dataset.tab).classList.add('active');
+// Ventas
+const vRows=document.getElementById('v-rows'); const vTotal=document.getElementById('v-total');
+function fmt(d){ const dt=d?.toDate?.()||new Date(); return dt.toLocaleString(); }
+function renderVentas(rows){ vRows.innerHTML=''; let total=0;
+  rows.forEach(([id,o])=>{ total+=Number(o.total||0); const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${fmt(o.createdAt)}</td><td>${o.product}</td><td>${o.qty}</td><td>${o.table||''}</td><td>${o.server||o.customer||''}</td><td>${o.status}</td><td>$${o.total||0}</td>`;
+    vRows.appendChild(tr); }); vTotal.textContent=total.toFixed(0);
+}
+onSnapshot(query(collection(db,'orders'), orderBy('createdAt','desc')), snap=>{ const arr=[]; snap.forEach(d=>arr.push([d.id,d.data()])); renderVentas(arr); });
+document.getElementById('v-refresh').onclick=()=>toast('Actualizado');
+
+// Compras
+const pForm=document.getElementById('p-form'); const pRows=document.getElementById('p-rows');
+pForm.onsubmit=async e=>{ e.preventDefault();
+  const item=document.getElementById('p-item').value.trim(); const qty=parseFloat(document.getElementById('p-qty').value||'0');
+  const unit=document.getElementById('p-unit').value.trim(); const cost=parseFloat(document.getElementById('p-cost').value||'0');
+  if(!item||!cost){ toast('Completa insumo y costo'); return; }
+  await addDoc(collection(db,'purchases'),{ item, qty, unit, cost, createdAt:serverTimestamp() });
+  pForm.reset(); toast('Compra registrada');
+};
+onSnapshot(query(collection(db,'purchases'), orderBy('createdAt','desc')), snap=>{
+  pRows.innerHTML=''; snap.forEach(d=>{ const p=d.data(); const tr=document.createElement('tr'); const dt=p.createdAt?.toDate?.()||new Date();
+    tr.innerHTML=`<td>${dt.toLocaleString()}</td><td>${p.item}</td><td>${p.qty||''}</td><td>${p.unit||''}</td><td>$${p.cost||0}</td>`; pRows.appendChild(tr); });
 });
 
-ensureAuth().then(()=>{
-  // Finanzas
-  subscribeActiveOrders(snap => {
-    const list = snap.docs.map(d=>({id:d.id, ...d.data()}));
-    renderFinances(list);
-  });
-  // Inventario
-  loadInventory();
-  $('#inv-add').onclick = saveInventory;
-  // Compras
-  loadPurchases();
-  $('#b-save').onclick = savePurchase;
-  // Recetas
-  renderRecipes();
+// Inventario
+const iForm=document.getElementById('i-form'); const iRows=document.getElementById('i-rows');
+iForm.onsubmit=async e=>{ e.preventDefault();
+  const item=document.getElementById('i-item').value.trim(); const qty=parseFloat(document.getElementById('i-qty').value||'0');
+  const min=parseFloat(document.getElementById('i-min').value||'0'); const max=parseFloat(document.getElementById('i-max').value||'0');
+  const unit=document.getElementById('i-unit').value.trim(); if(!item){ toast('Nombre de insumo requerido'); return; }
+  const snap=await getDocs(collection(db,'inventory')); let id=null; snap.forEach(d=>{ if(d.data().item===item) id=d.id; });
+  if(id){ await updateDoc(doc(db,'inventory',id),{ item, qty, min, max, unit }); } else {
+    await addDoc(collection(db,'inventory'),{ item, qty, min, max, unit, createdAt:serverTimestamp() });
+  }
+  iForm.reset(); toast('Inventario actualizado');
+};
+onSnapshot(query(collection(db,'inventory'), orderBy('item')), snap=>{
+  iRows.innerHTML=''; snap.forEach(d=>{ const it=d.data(); const id=d.id; const tr=document.createElement('tr');
+    const alert=(it.qty||0) < (it.min||0) ? 'style="color:#ffb3b3"' : '';
+    tr.innerHTML=`<td ${alert}>${it.item}</td><td>${it.qty||0}</td><td>${it.min||0}</td><td>${it.max||0}</td><td>${it.unit||''}</td>
+    <td><button class="btn" data-id="${id}" data-a="inc">+1</button> <button class="btn" data-id="${id}" data-a="dec">-1</button></td>`;
+    iRows.appendChild(tr); });
 });
+iRows.addEventListener('click', async e=>{ const b=e.target.closest('button[data-id]'); if(!b) return;
+  const id=b.dataset.id; const a=b.dataset.a; const ref=doc(db,'inventory',id);
+  const row=b.closest('tr'); const current=parseFloat(row.children[1].textContent||'0'); const delta=a==='inc'?1:-1;
+  const next=Math.max(0,current+delta); await updateDoc(ref,{ qty: next });});
 
-// --- Finanzas: totales por estado & listado corto ---
-function renderFinances(list){
-  const delivered = list.filter(o=>o.status==='DELIVERED');
-  const ready = list.filter(o=>o.status==='READY');
-  const inprog = list.filter(o=>o.status==='IN_PROGRESS');
-  const pending = list.filter(o=>o.status==='PENDING');
-  const sum = a => a.reduce((s,o)=> s + Number(o.total||0), 0);
-
-  $('#fin-cards').innerHTML = `
-    <div class="card"><div>Ingresos del día (DELIVERED)</div><div class="kpi">$${sum(delivered)}</div></div>
-    <div class="card"><div>Listos por entregar</div><div class="kpi">${ready.length}</div></div>
-    <div class="card"><div>En proceso</div><div class="kpi">${inprog.length}</div></div>
-  `;
-
-  $('#fin-list').innerHTML = list.slice(0,10).map(o=>{
-    const count = (o.items||[]).reduce((s,it)=>s+(it.qty||1),0);
-    return `<div class="card">
-      <div><strong>${o.customer||'-'}</strong> · ${o.status} · $${o.total||0}</div>
-      <div style="opacity:.8">${count} items</div>
-    </div>`;
-  }).join('');
-}
-
-// --- Compras ---
-async function loadPurchases(){
-  const qy = query(purchasesCol(), orderBy('createdAt','desc'));
-  const snap = await getDocs(qy);
-  $('#b-list').innerHTML = snap.docs.map(d=>{
-    const p = d.data();
-    return `<div class="card">${p.item} — ${p.qty} ${p.unit} · $${p.cost}</div>`;
-  }).join('');
-}
-async function savePurchase(){
-  const item = $('#b-item').value.trim();
-  const qty  = Number($('#b-qty').value||0);
-  const unit = $('#b-unit').value.trim();
-  const cost = Number($('#b-cost').value||0);
-  if(!item || !qty || !unit){ alert('Completa la compra'); return; }
-  await addPurchase({ item, qty, unit, cost });
-  $('#b-item').value=''; $('#b-qty').value=''; $('#b-unit').value=''; $('#b-cost').value='';
-  loadPurchases();
-}
-
-// --- Inventario ---
-async function loadInventory(){
-  const snap = await getDocs(inventoryCol());
-  $('#inv-list').innerHTML = snap.docs.map(d=>{
-    const it = { id:d.id, ...d.data() };
-    const warn = (it.stock||0) < (it.min||0);
-    return `<div class="card">
-      <div><strong>${it.id}</strong> — stock: <span class="${warn?'bad':'good'}">${it.stock||0}</span> · min:${it.min||0} · max:${it.max||0}</div>
-      <div style="margin-top:6px">
-        <button data-id="${it.id}" data-a="minus">-1</button>
-        <button data-id="${it.id}" data-a="plus">+1</button>
-      </div>
-    </div>`;
-  }).join('') || '<div class="card" style="opacity:.7">Sin insumos</div>';
-
-  document.querySelectorAll('[data-a="minus"]').forEach(b=> b.onclick = async()=>{ await adjustStock(b.dataset.id, -1); loadInventory(); });
-  document.querySelectorAll('[data-a="plus"]').forEach(b=> b.onclick = async()=>{ await adjustStock(b.dataset.id, +1); loadInventory(); });
-}
-async function saveInventory(){
-  const id = $('#inv-name').value.trim();
-  const stock = Number($('#inv-stock').value||0);
-  const min = Number($('#inv-min').value||0);
-  const max = Number($('#inv-max').value||0);
-  if(!id){ alert('Pon un nombre/ID de ingrediente'); return; }
-  await upsertInventory(id, { stock, min, max });
-  $('#inv-name').value=''; $('#inv-stock').value=''; $('#inv-min').value=''; $('#inv-max').value='';
-  loadInventory();
-}
-
-// --- Recetario ---
-function renderRecipes(){
-  $('#rec-list').innerHTML = RECIPES.map(r=>{
-    const body = r.versiones.map(v=>{
-      const ing = v.ingredientes.map(i=>`${i.i}: ${i.q}${i.u}`).join('<br>');
-      const pasos = (v.pasos||[]).map(p=>`• ${p}`).join('<br>');
-      return `<div class="card"><div><strong>${v.ml} ml</strong></div><div>${ing}</div><div style="margin-top:6px;opacity:.9">${pasos}</div></div>`;
-    }).join('');
-    return `<div class="card">
-      <div style="font-weight:800">${r.name}</div>
-      <div class="grid">${body}</div>
-    </div>`;
-  }).join('');
-}
+// Recetario (resumen)
+const rList=document.getElementById('r-list');
+const recipes=[
+  {name:'Aderezo de ajo habanero (200ml)', items:['Habanero 25 g','Ajo frito 30 g','Queso crema 50 g','Mayonesa 200 ml','Sal c/n']},
+  {name:'Aderezo chipotle (200ml)', items:['Chipotle 50 g','Queso crema 50 g','Mayonesa 200 ml','Pimienta c/n','Sal c/n']},
+  {name:'Salsa chimichurri (200ml)', items:['Chile de árbol 10 pzas','Ajos 5 pzas','Mostaza 1 cda','Huevos 2','Perejil c/n','Vinagre 1/3 taza','Aceite 3/4 taza','Sal c/n']},
+  {name:'Aderezo cheddar (500ml)', items:['Queso cheddar 200 g','Leche 1 L','Harina 100 g','Mantequilla 100 g','Sal/Pimienta/Menta']},
+  {name:'Mostaza dulce (200ml)', items:['Mostaza 120 ml','Miel 60 ml','Vinagre 20 ml']},
+  {name:'Jalapeño rostizado (200ml)', items:['Jalapeño 100 g','Mayonesa 120 ml','Ajo 1 diente','Sal c/n']},
+  {name:'Curry suave (200ml)', items:['Mayonesa 180 ml','Curry 1 cda','Miel 1 cda','Limón 1 cda','Sal c/n']},
+  {name:'Salsa secreta Seven (200ml)', items:['Mayonesa 150 ml','Kétchup 40 ml','Mostaza 10 ml','Pepinillo 1 cda','Pimentón 1 cdta','Ajo polvo 1/2 cdta']},
+];
+rList.innerHTML=recipes.map(r=>`<div class="card"><h3>${r.name}</h3><div class="sub">${r.items.join(' · ')}</div></div>`).join('');
