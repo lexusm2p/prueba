@@ -1,19 +1,10 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mesero — Seven de Burgers</title>
-  <link rel="stylesheet" href="../shared/styles.css">
-</head>
+
+<!doctype html><html lang="es">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="../shared/styles.css"/><title>Mesero — Seven de Burgers</title></head>
 <body>
-  <div class="headerbar"><div class="inner"><div class="brand">🧑‍🍳 Mesero</div><a class="btn small ghost" href="../kiosk/index.html">Kiosko</a></div></div>
-  <main class="center">
-    <div class="card">
-      <h2>Mesero MVP</h2>
-      <p>Próximamente: filtro "mis mesas", crear pedidos, alertas READY.</p>
-      <p><a class="btn" href="../kiosk/index.html">Usar Kiosko por ahora</a></p>
-    </div>
-  </main>
-</body>
-</html>
+<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Vista Mesero</div></div></div>
+<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a><a class="btn ghost small" href="../cocina/index.html">Ir a cocina</a></nav></header>
+<main class="container"><div class="columns"><div class="k-col"><h3 class="k-title">En preparación</h3><div id="colIP"></div></div>
+<div class="k-col"><h3 class="k-title">Listos</h3><div id="colR"></div></div><div class="k-col"><h3 class="k-title">Entregados (hoy)</h3><div id="colD"></div></div></div></main>
+<script type="module" src="./app.js"></script></body></html>
