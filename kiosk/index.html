@@ -2,40 +2,55 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Kiosko — Seven de Burgers</title>
   <link rel="stylesheet" href="../shared/styles.css"/>
-  <script type="module" src="./app.js"></script>
-  <title>Kiosko — POS Seven</title>
 </head>
 <body>
-  <header class="header">
-    <h1 id="logo">Seven de Burgers</h1>
-    <p class="muted">Haz tu pedido en 3 pasos</p>
-  </header>
+<header class="header">
+  <div class="brand" id="brandTap">
+    <span class="dot"></span>
+    <div>
+      <div>Seven de Burgers</div>
+      <div class="title-sub">Kiosko</div>
+    </div>
+  </div>
+  <nav id="navRoles" style="display:none;gap:8px">
+    <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
+    <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
+    <a class="btn ghost small" href="../admin/index.html">Admin</a>
+  </nav>
+</header>
 
-  <main class="container">
-    <section id="step1">
-      <h2>1. Tu nombre</h2>
-      <input id="customerName" type="text" placeholder="Escribe tu nombre" required>
-      <label>
-        <input type="radio" name="modo" value="mesa" checked> Comer aquí
-      </label>
-      <label>
-        <input type="radio" name="modo" value="pickup"> Para llevar
-      </label>
-    </section>
+<main class="container">
+  <div class="card" id="mode">
+    <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      <button class="btn" id="btnMinis">Minis & Combos</button>
+      <button class="btn ghost" id="btnBig">Hamburguesas grandes</button>
+    </div>
+  </div>
 
-    <section id="step2">
-      <h2>2. Elige tu hamburguesa</h2>
-      <div id="menu"></div>
-    </section>
+  <div class="grid" id="cards"></div>
+</main>
 
-    <section id="step3">
-      <h2>3. Revisión y pago</h2>
-      <ul id="cartList"></ul>
-      <label><input type="checkbox" id="surprise"> ¿Te sorprendemos con aderezo?</label>
-      <button id="confirmBtn" class="btn">Confirmar pedido</button>
-    </section>
-  </main>
+<!-- Modal pedido -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="mTitle">Orden</div>
+      <button class="btn ghost small" id="mClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="total" id="mTotal">$0</div>
+        <button class="btn" id="mConfirm">Confirmar pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
 </body>
 </html>
