@@ -1,31 +1,91 @@
-import { onOrdersSnapshot, setStatus } from "../shared/db.js";
+// cocina/app.js
+// Vista de cocina (Kanban). Escucha pedidos y permite cambiar estados.
+import { onOrdersSnapshot, setStatus, archiveDelivered, deleteOrder, updateOrder } from '../shared/db.js';
+import { toast, beep } from '../shared/notify.js';
 
-// Renderizado de columnas
-function renderOrders(list){
-  ["pending","progress","ready"].forEach(col=>{
-    document.getElementById(`col-${col}`).innerHTML = "";
-  });
+const Status = { PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY' };
+let CURRENT_LIST = [];
 
-  list.forEach(o=>{
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerHTML = `
-      <h3>${o.item.name} x${o.qty}</h3>
-      <div class="muted">Cliente: ${o.customer}</div>
-      <div class="muted">Extras: ${(o.extras.sauces||[]).concat(o.extras.ingredients||[]).join(", ")}</div>
-      <p>${o.notes||""}</p>
-      <button class="btn small" data-next="progress">Preparar</button>
-      <button class="btn small" data-next="ready">Listo</button>
-      <button class="btn ghost small" data-next="delivered">Entregado</button>
-    `;
-    el.querySelectorAll("button").forEach(b=>{
-      b.onclick = ()=> setStatus(o.id, b.dataset.next.toUpperCase());
-    });
+onOrdersSnapshot((orders)=>{
+  CURRENT_LIST = orders || [];
+  render(CURRENT_LIST);
+});
 
-    const col = o.status==="PENDING" ? "pending" :
-                o.status==="PROGRESS" ? "progress" : "ready";
-    document.getElementById(`col-${col}`).appendChild(el);
-  });
+function render(list){
+  const by = list.reduce((acc,o)=>{ const s=o.status||Status.PENDING; (acc[s] ||= []).push(o); return acc; },{});
+  const $p  = document.getElementById('col-pending');
+  const $ip = document.getElementById('col-progress');
+  const $r  = document.getElementById('col-ready');
+  $p.innerHTML  = (by.PENDING||[]).map(renderCard).join('') || '<div class="empty">Sin pendientes</div>';
+  $ip.innerHTML = (by.IN_PROGRESS||[]).map(renderCard).join('') || '<div class="empty">Sin preparación</div>';
+  $r.innerHTML  = (by.READY||[]).map(renderCard).join('') || '<div class="empty">Sin listos</div>';
 }
 
-onOrdersSnapshot(renderOrders);
+function esc(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+
+function renderCard(o){
+  const name  = o.customer || o.customerName || '—';
+  const base  = (o.baseIngredients||[]).map(x=>`<span class="k-badge">${esc(x)}</span>`).join('');
+  const exS   = (o.extras?.sauces||[]).map(x=>`<span class="k-badge">Aderezo: ${esc(x)}</span>`).join('');
+  const exI   = (o.extras?.ingredients||[]).map(x=>`<span class="k-badge">Extra: ${esc(x)}</span>`).join('');
+  const notes = o.notes ? `<div class="notes">📝 ${esc(o.notes)}</div>` : '';
+
+  return `
+<article class="k-card" data-id="${o.id}">
+  <header class="k-head">
+    <div class="title">Pedido #${o.id.slice(-5).toUpperCase()}</div>
+    <div class="sub">Cliente: <strong>${esc(name)}</strong> — ${esc(o.item?.name||'Producto')} x${o.qty||1}</div>
+  </header>
+  <div class="k-body">
+    <div class="k-badges">${base}${exS}${exI}</div>
+    ${o.suggested ? `<div class="muted small">Sugerido: ${esc(o.suggested)}</div>` : ''}
+    ${notes}
+  </div>
+  <footer class="k-actions">
+    ${o.status!==Status.IN_PROGRESS ? `<button class="btn" data-a="take">Tomar</button>` : ''}
+    ${o.status!==Status.READY ? `<button class="btn ok" data-a="ready">Listo</button>` : ''}
+    <button class="btn warn" data-a="deliver">Entregar</button>
+    <button class="btn ghost" data-a="edit">Editar</button>
+    <button class="btn danger" data-a="delete">Eliminar</button>
+  </footer>
+</article>`;
+}
+
+document.addEventListener('click', async (e)=>{
+  const btn=e.target.closest('button[data-a]'); if(!btn) return;
+  const card=btn.closest('[data-id]'); const id=card?.dataset?.id; if(!id) return;
+  const a=btn.dataset.a; btn.disabled=true;
+  try{
+    if(a==='take'){   await setStatus(id,Status.IN_PROGRESS); beep?.(); toast?.('Pedido en preparación'); return; }
+    if(a==='ready'){  await setStatus(id,Status.READY);       beep?.(); toast?.('Pedido listo 🛎️');        return; }
+    if(a==='deliver'){await archiveDelivered(id);              beep?.(); toast?.('Entregado ✔️'); card.remove(); return; }
+    if(a==='delete'){ await deleteOrder(id);                   beep?.(); toast?.('Pedido eliminado');        card.remove(); return; }
+    if(a==='edit'){   const order=CURRENT_LIST.find(x=>x.id===id); if(order) openEditModal(order); return; }
+  }catch(err){ console.error(err); toast?.('Error al actualizar'); }
+  finally{ btn.disabled=false; }
+});
+
+function openEditModal(order){
+  const overlay=document.getElementById('loginOverlay');
+  const modal=document.getElementById('modal');
+  modal.innerHTML = `
+    <div style="position:relative">
+      <button class="closex" id="mdClose">×</button>
+      <h3>Editar pedido</h3>
+      <label class="small muted">Notas para cocina</label>
+      <textarea id="mdNotes" class="input" rows="3">${esc(order.notes||'')}</textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:8px">
+        <button class="btn ghost" id="mdCancel">Cancelar</button>
+        <button class="btn ok" id="mdSave">Guardar</button>
+      </div>
+    </div>`;
+  overlay.style.display='flex';
+  const close=()=>{ overlay.style.display='none'; modal.innerHTML=''; }
+  modal.querySelector('#mdClose').onclick=close;
+  modal.querySelector('#mdCancel').onclick=close;
+  modal.querySelector('#mdSave').onclick=async ()=>{
+    const notes = modal.querySelector('#mdNotes').value.trim();
+    await updateOrder(order.id,{ notes });
+    toast('Notas actualizadas'); close();
+  };
+}
