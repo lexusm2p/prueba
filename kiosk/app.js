@@ -1,69 +1,107 @@
-import { db, collection, addDoc, serverTimestamp } from '../lib/firebase.js';
-import { toast } from '../lib/toast.js';
 
-const menuEl=document.getElementById('menu'); const modal=document.getElementById('modal');
-const mTitle=document.getElementById('m-title'); const fName=document.getElementById('f-name');
-const fQty=document.getElementById('f-qty'); const fSug=document.getElementById('f-suggest');
-const fAde=document.getElementById('f-aderezos'); const fExt=document.getElementById('f-extras');
-const fTot=document.getElementById('f-total'); document.getElementById('m-close').onclick=()=>modal.classList.remove('open');
-const EXTRA_ADE_PRICE=5, EXTRA_ING_PRICE=5, COMBO3_DISCOUNT=.07, ROUND_TO_7_END=true;
+import { PRODUCTS, SAUCES, EXTRAS, isMini } from '../shared/menu-data.js';
+import { toast, beep, starSfx } from '../shared/notify.js';
+import { createOrder } from '../shared/db.js';
 
-const aderezos=['Aderezo Cheddar','Aderezo Chipotle','Aderezo Habanero','Salsa Chimichurri','Mostaza dulce','Jalapeño rostizado','Curry suave','Salsa Secreta Seven'];
-const extras=['Tocino','Piña','Jamón','Salchicha','Cebolla caramelizada','Queso blanco','Queso amarillo'];
+// hidden login: 6 taps
+let taps=0, timer=null;
+const brand=document.getElementById('brandTitle');
+const loginLink=document.getElementById('loginLink');
+brand?.addEventListener('click', ()=>{
+  taps++; clearTimeout(timer); timer=setTimeout(()=>taps=0, 900);
+  if(taps>=6){ loginLink.style.display='inline-block'; toast('🔓 Modo staff'); taps=0; }
+});
+document.addEventListener('pointerdown', ()=>starSfx.prewarm(), {once:true});
 
-const minis=[
-  {name:'Starter Mini', price:27, suggest:'Mostaza dulce'},
-  {name:'Koopa Mini', price:27, suggest:'Cheddar'},
-  {name:'Fatality Mini', price:37, suggest:'Habanero'},
-  {name:'Mega Byte Mini', price:37, suggest:'Cheddar'},
-  {name:'Hadouken Mini', price:37, suggest:'Chipotle'},
-  {name:'Nintendo Mini', price:37, suggest:'Cheddar'},
-  {name:'Final Boss Mini', price:47, suggest:'Cheddar'}
-];
-const grandes=[
-  {name:'Starter Burger', price:47, suggest:'Mostaza dulce'},
-  {name:'Koopa Crunch', price:57, suggest:'Cheddar'},
-  {name:'Fatality Flame', price:67, suggest:'Habanero'},
-  {name:'Mega Byte', price:77, suggest:'Cheddar'},
-  {name:'Hadouken', price:77, suggest:'Chipotle'},
-  {name:'Nintendo Nostalgia', price:67, suggest:'Cheddar'},
-  {name:'Final Boss Burger', price:97, suggest:'Cheddar'}
-];
-const all=[{title:'Minis & Combos',items:minis},{title:'Hamburguesas Grandes',items:grandes}];
-let currentProduct=null;
+const miniMenu=document.getElementById('miniMenu');
+const bigMenu=document.getElementById('bigMenu');
+const grandTotalEl=document.getElementById('grandTotal');
+const cartCountEl=document.getElementById('cartCount');
+const miniCountEl=document.getElementById('miniCount');
+const btnCheckout=document.getElementById('btnCheckout');
+const surpriseSel=document.getElementById('surprise');
 
-function card(p){ const el=document.createElement('div'); el.className='card';
-  el.innerHTML=`<div class="row"><h3>${p.name}</h3><div class="right price">$${p.price}</div></div>
-  <div class="sub">Salsa sugerida: <b>${p.suggest}</b></div>
-  <div class="row" style="margin-top:10px"><button class="btn">Ordenar</button></div>`;
-  el.querySelector('.btn').onclick=()=> openModal(p); return el;
+const cart={ items:[] };
+let starUnlocked=false;
+
+function addToCart(p){
+  const existing = cart.items.find(x=>x.sku===p.sku);
+  if(existing){ existing.qty=(existing.qty||1)+1; }
+  else { cart.items.push({ sku:p.sku, name:p.name, size:p.size, price:p.price, qty:1 }); }
+  toast(`Añadido: ${p.name}`);
+  beep();
+  refreshSummary();
 }
-function renderMenu(){ menuEl.innerHTML=''; all.forEach(sec=>{ const wrap=document.createElement('div'); wrap.className='card';
-  wrap.innerHTML=`<h2>${sec.title}</h2><div class="grid"></div>`; sec.items.forEach(p=>wrap.querySelector('.grid').appendChild(card(p)));
-  menuEl.appendChild(wrap);});
+
+function renderMenus(){
+  const minis = PRODUCTS.filter(p=>isMini(p));
+  const bigs  = PRODUCTS.filter(p=>!isMini(p));
+
+  miniMenu.innerHTML = minis.map(p=>`
+    <div class="card item">
+      <div class="row" style="justify-content:space-between">
+        <div><div>${p.name}</div><div class="muted small">${p.price} MXN</div></div>
+        <button class="btn small" data-add="${p.sku}">Agregar</button>
+      </div>
+    </div>`).join('');
+
+  bigMenu.innerHTML = bigs.map(p=>`
+    <div class="card item">
+      <div class="row" style="justify-content:space-between">
+        <div><div>${p.name}</div><div class="muted small">${p.price} MXN</div></div>
+        <button class="btn small" data-add="${p.sku}">Agregar</button>
+      </div>
+    </div>`).join('');
 }
-function buildList(list, price){ const wrap=document.createElement('div');
-  list.forEach(label=>{ const row=document.createElement('label'); row.className='item-row';
-    row.innerHTML=`<input type="checkbox" data-label="${label}" data-price="${price}"><span>${label}</span><span class="sub">+$${price}</span>`;
-    wrap.appendChild(row); }); return wrap;
+renderMenus();
+
+document.addEventListener('click', (e)=>{
+  const btn=e.target.closest('[data-add]');
+  if(!btn) return;
+  const sku=btn.dataset.add;
+  const p = PRODUCTS.find(x=>x.sku===sku);
+  if(p) addToCart(p);
+});
+
+function refreshSummary(){
+  const items = cart.items;
+  const count = items.reduce((a,x)=>a+(x.qty||1),0);
+  const minis = items.reduce((a,x)=>a+(isMini(x)?(x.qty||1):0),0);
+  let total   = items.reduce((a,x)=>a + (x.price * (x.qty||1)), 0);
+
+  // logro 3 minis
+  if(!starUnlocked && minis>=3){
+    starUnlocked=true;
+    starSfx.play();
+    toast('¡Logro desbloqueado! ⭐ Combo 3 minis');
+    // aquí podrías aplicar precio especial si está configurado
+  }
+
+  grandTotalEl.textContent = `$${total}`;
+  cartCountEl.textContent  = `${count} items`;
+  miniCountEl.textContent  = `${minis} minis`;
 }
-function roundTo7(n){ if(!ROUND_TO_7_END) return Math.round(n);
-  const r=Math.round(n), u=r%10; if(u===7) return r; const down=r-((u-7+10)%10), up=r+((7-u+10)%10);
-  return (Math.abs(up-n)<Math.abs(n-down))?up:down;
-}
-function recalc(){ const qty=+fQty.value||1; let total=currentProduct.price*qty;
-  const a=[...fAde.querySelectorAll('input:checked')].length; const x=[...fExt.querySelectorAll('input:checked')].length;
-  total += a*EXTRA_ADE_PRICE + x*EXTRA_ING_PRICE; let unlocked=false;
-  if(currentProduct.name.toLowerCase().includes('mini')&&qty>=3){ total=total*(1-COMBO3_DISCOUNT); unlocked=true; }
-  const shown= unlocked? roundTo7(total) : Math.round(total); fTot.textContent=`$${shown}`; return {total:shown,unlocked}; }
-function openModal(p){ currentProduct=p; mTitle.textContent=p.name; fName.value=''; fQty.value=1; fSug.textContent=p.suggest;
-  fAde.innerHTML=''; fExt.innerHTML=''; fAde.appendChild(buildList(aderezos,5)); fExt.appendChild(buildList(extras,5));
-  modal.classList.add('open'); recalc(); modal.querySelectorAll('input[type="checkbox"], #f-qty').forEach(x=>x.oninput=recalc); }
-async function createOrder(payload){ await addDoc(collection(db,'orders'),{...payload,status:'PENDING',createdAt:serverTimestamp()}); }
-document.getElementById('orderForm').onsubmit=async e=>{ e.preventDefault();
-  const qty=+fQty.value||1; const a=[...fAde.querySelectorAll('input:checked')].map(i=>i.dataset.label);
-  const x=[...fExt.querySelectorAll('input:checked')].map(i=>i.dataset.label); const calc=recalc();
-  await createOrder({ source:'kiosk', customer:fName.value.trim()||'Cliente', product:currentProduct.name, qty,
-    aderezos:a, extras:x, suggested:currentProduct.suggest, total:calc.total });
-  modal.classList.remove('open'); toast(calc.unlocked? '⭐ ¡Desbloqueaste un logro! Combo minis' : '¡Pedido creado!'); };
-renderMenu();
+refreshSummary();
+
+btnCheckout.addEventListener('click', async ()=>{
+  const nameInput = document.getElementById('customerName');
+  const customerName = (nameInput?.value || '').trim();
+  if(!customerName){ toast('Escribe tu nombre para avisarte cuando esté listo 🙌'); nameInput?.focus(); return; }
+  if(!cart.items.length){ toast('Agrega productos al carrito'); return; }
+
+  const payload = {
+    channel:'kiosk',
+    customerName,
+    items: cart.items,
+    notes: '',
+    surprise: surpriseSel.value==='yes',
+    totals: { items: cart.items.length, grandTotal: cart.items.reduce((a,x)=>a+(x.price*(x.qty||1)),0) }
+  };
+
+  await createOrder(payload);
+  starUnlocked=false;
+  toast(`¡Gracias por tu pedido, ${customerName}! Te avisaremos cuando esté listo. ✨`);
+  beep();
+  // reset
+  cart.items=[]; refreshSummary(); nameInput.value=''; surpriseSel.value='';
+});
