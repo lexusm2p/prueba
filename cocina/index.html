@@ -1,14 +1,28 @@
 <!doctype html>
-<html lang="es"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Cocina — Seven de Burgers</title>
-<link rel="stylesheet" href="../shared/styles.css"></head>
-<body class="shell"><div class="container">
-<div class="row" style="margin-bottom:10px"><a class="badge" href="../kiosk/">Kiosko</a><div class="right badge">Cocina</div></div>
-<div class="k-columns">
-  <div class="card"><h2>Sin pendientes</h2><div id="col-pending" class="col"></div></div>
-  <div class="card"><h2>En preparación</h2><div id="col-progress" class="col"></div></div>
-  <div class="card"><h2>Listos</h2><div id="col-ready" class="col"></div></div>
-</div></div>
-<script type="module" src="./app.js"></script>
-</body></html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Cocina — Seven de Burgers</title>
+  <link rel="stylesheet" href="../shared/styles.css"/>
+</head>
+<body class="shell">
+  <div class="container">
+    <div class="row" style="margin-bottom:10px">
+      <a class="badge" href="../kiosk/">Kiosko</a>
+      <div class="right badge">Cocina</div>
+    </div>
+
+    <div class="k-columns">
+      <div class="card"><h2>Sin pendientes</h2><div id="col-pending" class="col"></div></div>
+      <div class="card"><h2>En preparación</h2><div id="col-progress" class="col"></div></div>
+      <div class="card"><h2>Listos</h2><div id="col-ready" class="col"></div></div>
+    </div>
+  </div>
+
+  <!-- Overlay / Modal edición -->
+  <div id="loginOverlay" class="modal"><div class="modal-card" id="modal"></div></div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
