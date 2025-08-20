@@ -1,242 +1,69 @@
-// kiosk/app.js (mounted on root index)
-import { ensureAuth, createOrder } from "../lib/firebase.js";
-import { SAUCES, EXTRAS, MINIS, MENU } from "../lib/menu.js";
-import { toast, beep } from "../lib/notify.js";
+import { db, collection, addDoc, serverTimestamp } from '../lib/firebase.js';
+import { toast } from '../lib/toast.js';
 
-const app = document.getElementById('app');
+const menuEl=document.getElementById('menu'); const modal=document.getElementById('modal');
+const mTitle=document.getElementById('m-title'); const fName=document.getElementById('f-name');
+const fQty=document.getElementById('f-qty'); const fSug=document.getElementById('f-suggest');
+const fAde=document.getElementById('f-aderezos'); const fExt=document.getElementById('f-extras');
+const fTot=document.getElementById('f-total'); document.getElementById('m-close').onclick=()=>modal.classList.remove('open');
+const EXTRA_ADE_PRICE=5, EXTRA_ING_PRICE=5, COMBO3_DISCOUNT=.07, ROUND_TO_7_END=true;
 
-ensureAuth().then(()=>{
-  render();
-});
+const aderezos=['Aderezo Cheddar','Aderezo Chipotle','Aderezo Habanero','Salsa Chimichurri','Mostaza dulce','Jalapeño rostizado','Curry suave','Salsa Secreta Seven'];
+const extras=['Tocino','Piña','Jamón','Salchicha','Cebolla caramelizada','Queso blanco','Queso amarillo'];
 
-function render(){
-  app.innerHTML = `
-  <header style="display:none"></header>
-  <main>
-    <section>
-      <div class="row-head">
-        <h2>Minis</h2>
-        <button id="btnMix" class="ghost">Combo Minis Mix & Match</button>
-      </div>
-      <div id="miniList" class="cards"></div>
-    </section>
+const minis=[
+  {name:'Starter Mini', price:27, suggest:'Mostaza dulce'},
+  {name:'Koopa Mini', price:27, suggest:'Cheddar'},
+  {name:'Fatality Mini', price:37, suggest:'Habanero'},
+  {name:'Mega Byte Mini', price:37, suggest:'Cheddar'},
+  {name:'Hadouken Mini', price:37, suggest:'Chipotle'},
+  {name:'Nintendo Mini', price:37, suggest:'Cheddar'},
+  {name:'Final Boss Mini', price:47, suggest:'Cheddar'}
+];
+const grandes=[
+  {name:'Starter Burger', price:47, suggest:'Mostaza dulce'},
+  {name:'Koopa Crunch', price:57, suggest:'Cheddar'},
+  {name:'Fatality Flame', price:67, suggest:'Habanero'},
+  {name:'Mega Byte', price:77, suggest:'Cheddar'},
+  {name:'Hadouken', price:77, suggest:'Chipotle'},
+  {name:'Nintendo Nostalgia', price:67, suggest:'Cheddar'},
+  {name:'Final Boss Burger', price:97, suggest:'Cheddar'}
+];
+const all=[{title:'Minis & Combos',items:minis},{title:'Hamburguesas Grandes',items:grandes}];
+let currentProduct=null;
 
-    <section>
-      <h2>Hamburguesas</h2>
-      <div id="bigList" class="cards"></div>
-    </section>
-  </main>`;
-
-  const miniList = document.getElementById('miniList');
-  const bigList  = document.getElementById('bigList');
-  renderCards(MINIS, miniList);
-  renderCards(MENU,  bigList);
-  document.getElementById('btnMix').onclick = openMixMatch;
+function card(p){ const el=document.createElement('div'); el.className='card';
+  el.innerHTML=`<div class="row"><h3>${p.name}</h3><div class="right price">$${p.price}</div></div>
+  <div class="sub">Salsa sugerida: <b>${p.suggest}</b></div>
+  <div class="row" style="margin-top:10px"><button class="btn">Ordenar</button></div>`;
+  el.querySelector('.btn').onclick=()=> openModal(p); return el;
 }
-
-function renderCards(list, host){
-  host.innerHTML = list.map(p => `
-    <div class="card">
-      <div class="title">${p.name}</div>
-      <div class="price">$${p.price}</div>
-      <button data-id="${p.id}">Ordenar</button>
-    </div>
-  `).join('');
-  host.querySelectorAll('button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const id = btn.dataset.id;
-      const product = [...MINIS, ...MENU].find(x => x.id===id);
-      openSingle(product);
-    });
-  });
+function renderMenu(){ menuEl.innerHTML=''; all.forEach(sec=>{ const wrap=document.createElement('div'); wrap.className='card';
+  wrap.innerHTML=`<h2>${sec.title}</h2><div class="grid"></div>`; sec.items.forEach(p=>wrap.querySelector('.grid').appendChild(card(p)));
+  menuEl.appendChild(wrap);});
 }
-
-function renderOpt(opt){
-  return `
-    <label class="opt">
-      <input type="checkbox" class="opt-input" data-id="${opt.id}" data-price="${opt.price}">
-      <span class="opt-name">${opt.name}</span>
-      <span class="opt-price">+$${opt.price}</span>
-    </label>`;
+function buildList(list, price){ const wrap=document.createElement('div');
+  list.forEach(label=>{ const row=document.createElement('label'); row.className='item-row';
+    row.innerHTML=`<input type="checkbox" data-label="${label}" data-price="${price}"><span>${label}</span><span class="sub">+$${price}</span>`;
+    wrap.appendChild(row); }); return wrap;
 }
-function renderOptGrid(list){ return `<div class="grid-opts">${list.map(renderOpt).join('')}</div>`; }
-
-function openSingle(product){
-  const modal    = document.getElementById('modal');
-  const modalBody= document.getElementById('modalBody');
-  const closeBtn = document.getElementById('closeModal');
-
-  const aderezosHtml = renderOptGrid(SAUCES);
-  const extrasHtml   = renderOptGrid(EXTRAS);
-
-  modalBody.innerHTML = `
-    <h3>${product.name}</h3>
-    <div class="row grid">
-      <label>Cantidad <input id="qty" type="number" min="1" value="1"></label>
-      <label>Tu nombre (opcional) <input id="cust" type="text" placeholder="Jugador 1"></label>
-    </div>
-
-    <div class="row"><strong>¿Quieres que te sorprendamos con una nueva configuración (aderezo)?</strong><br>
-      <label><input type="checkbox" id="surprise"> Sí, sorpréndeme</label>
-    </div>
-
-    <div class="row">
-      <h4>Aderezos extra (+$5 c/u)</h4>
-      ${aderezosHtml}
-    </div>
-    <div class="row">
-      <h4>Ingredientes extra</h4>
-      ${extrasHtml}
-    </div>
-
-    <div class="row"><label>Notas para cocina <input id="notes" type="text" placeholder="Sin jitomate..."></label></div>
-
-    <div id="totalBar" class="totalBar">
-      <div><strong>Total: <span id="liveTotal">$0</span></strong></div>
-      <button id="btnConfirm" class="btn-primary">Confirmar</button>
-    </div>
-  `;
-
-  modal.classList.remove('hidden');
-  closeBtn.onclick = ()=> modal.classList.add('hidden');
-
-  const qtyEl = document.getElementById('qty');
-  const liveTotal = document.getElementById('liveTotal');
-  const surpriseEl= document.getElementById('surprise');
-  const adChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => SAUCES.some(s=>s.id===x.dataset.id));
-  const exChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => EXTRAS.some(s=>s.id===x.dataset.id));
-  let showedCombo = false;
-
-  function extrasPerUnit(){
-    let s = 0;
-    [...adChecks, ...exChecks].forEach(cb => { if(cb.checked) s += Number(cb.dataset.price||0); });
-    return s;
-  }
-  function renderTotal(){
-    const qty = Math.max(1, Number(qtyEl.value||1));
-    const isMini = !!product.isMini;
-    const base = product.price * qty;
-    const extras = extrasPerUnit() * qty;
-    const discount = isMini ? Math.floor(qty/3)*7 : 0;
-    liveTotal.textContent = `$${base + extras - discount}`;
-    if (discount>0 && !showedCombo){ showedCombo=true; toast('¡Logro desbloqueado! Combo 3 minis aplicado', {icon:'⭐'}); beep(); }
-    if (discount===0) showedCombo=false;
-  }
-  [qtyEl, ...adChecks, ...exChecks, surpriseEl].forEach(el => el.addEventListener('input', renderTotal));
-  renderTotal();
-
-  document.getElementById('btnConfirm').onclick = async ()=>{
-    const qty = Math.max(1, Number(qtyEl.value||1));
-    const customer = (document.getElementById('cust').value||'').trim();
-    const notes = (document.getElementById('notes').value||'').trim();
-    const adSel = adChecks.filter(x=>x.checked).map(x=> SAUCES.find(s=>s.id===x.dataset.id)?.name );
-    const exSel = exChecks.filter(x=>x.checked).map(x=> EXTRAS.find(s=>s.id===x.dataset.id)?.name );
-    const isMini = !!product.isMini;
-    const discount = isMini ? Math.floor(qty/3)*7 : 0;
-    const total = product.price*qty + extrasPerUnit()*qty - discount;
-
-    const payload = {
-      customer, total,
-      items: [{
-        id: product.id, name: product.name, qty,
-        baseIngredients: product.base || [],
-        aderezos: adSel, extras: exSel,
-        surprise: !!surpriseEl.checked, notes
-      }]
-    };
-    await createOrder(payload);
-    modal.classList.add('hidden');
-    toast('Pedido enviado.', {icon:'🛎️'});
-  };
+function roundTo7(n){ if(!ROUND_TO_7_END) return Math.round(n);
+  const r=Math.round(n), u=r%10; if(u===7) return r; const down=r-((u-7+10)%10), up=r+((7-u+10)%10);
+  return (Math.abs(up-n)<Math.abs(n-down))?up:down;
 }
-
-// --- Mix & Match de minis ---
-function openMixMatch(){
-  const modal    = document.getElementById('modal');
-  const modalBody= document.getElementById('modalBody');
-  const closeBtn = document.getElementById('closeModal');
-
-  const rows = MINIS.map(m => `
-    <div class="mix-row" data-mini="${m.id}">
-      <div>${m.name} <span style="opacity:.7">($${m.price})</span></div>
-      <div class="qty">
-        <label>Cant.</label>
-        <input type="number" min="0" value="0" data-qty>
-      </div>
-    </div>
-  `).join('');
-
-  const aderezosHtml = renderOptGrid(SAUCES);
-  const extrasHtml   = renderOptGrid(EXTRAS);
-
-  modalBody.innerHTML = `
-    <h3>Combo Minis · Mix & Match</h3>
-    <div class="row"><label>Tu nombre (opcional) <input id="cust" type="text" placeholder="Jugador 1"></label></div>
-    <div class="row">${rows}</div>
-
-    <div class="row">
-      <h4>Aderezos extra (se aplican a todas) +$5 c/u</h4>
-      ${aderezosHtml}
-    </div>
-    <div class="row">
-      <h4>Ingredientes extra (se aplican a todas)</h4>
-      ${extrasHtml}
-    </div>
-
-    <div class="row"><label>Notas para cocina <input id="notes" type="text" placeholder="Todas sin jitomate..."></label></div>
-
-    <div id="totalBar" class="totalBar">
-      <div><strong>Total: <span id="liveTotal">$0</span></strong></div>
-      <button id="btnConfirm" class="btn-primary">Confirmar</button>
-    </div>
-  `;
-
-  modal.classList.remove('hidden');
-  closeBtn.onclick = ()=> modal.classList.add('hidden');
-
-  const qtyEls = [...modalBody.querySelectorAll('[data-qty]')];
-  const adChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => SAUCES.some(s=>s.id===x.dataset.id));
-  const exChecks = [...modalBody.querySelectorAll('.opt-input')].filter(x => EXTRAS.some(s=>s.id===x.dataset.id));
-  const liveTotal = document.getElementById('liveTotal');
-  let showedCombo = false;
-
-  function extrasPerUnit(){
-    let s = 0; [...adChecks, ...exChecks].forEach(cb=>{ if(cb.checked) s += Number(cb.dataset.price||0); });
-    return s;
-  }
-  function renderTotal(){
-    const counts = qtyEls.map((el,i)=> ({ mini: MINIS[i], qty: Math.max(0, Number(el.value||0)) }));
-    const totalMinis = counts.reduce((s,x)=>s+x.qty,0);
-    let base = counts.reduce((s,x)=> s + x.qty * x.mini.price, 0);
-    let extras = totalMinis * extrasPerUnit();
-    const discount = Math.floor(totalMinis/3) * 7;
-    liveTotal.textContent = `$${base + extras - discount}`;
-    if (discount>0 && !showedCombo){ showedCombo=true; toast('¡Logro desbloqueado! Combo 3 minis aplicado', {icon:'⭐'}); beep(); }
-    if (discount===0) showedCombo=false;
-  }
-  [...qtyEls, ...adChecks, ...exChecks].forEach(el => el.addEventListener('input', renderTotal));
-  renderTotal();
-
-  document.getElementById('btnConfirm').onclick = async ()=>{
-    const customer = (document.getElementById('cust').value||'').trim();
-    const notes = (document.getElementById('notes').value||'').trim();
-    const counts = qtyEls.map((el,i)=> ({ mini: MINIS[i], qty: Math.max(0, Number(el.value||0)) }))
-                         .filter(x=>x.qty>0);
-    if(counts.length===0){ toast('Elige al menos 1 mini', {icon:'⚠️'}); return; }
-    const totalMinis = counts.reduce((s,x)=>s+x.qty,0);
-    const discount = Math.floor(totalMinis/3) * 7;
-    const adSel = adChecks.filter(x=>x.checked).map(x=> SAUCES.find(s=>s.id===x.dataset.id)?.name );
-    const exSel = exChecks.filter(x=>x.checked).map(x=> EXTRAS.find(s=>s.id===x.dataset.id)?.name );
-    const total = counts.reduce((s,x)=> s + x.qty * x.mini.price, 0) + totalMinis*extrasPerUnit() - discount;
-
-    const items = counts.map(x => ({
-      id: x.mini.id, name: x.mini.name, qty: x.qty,
-      baseIngredients: x.mini.base || [],
-      aderezos: adSel, extras: exSel, notes
-    }));
-
-    await createOrder({ customer, total, items });
-    document.getElementById('modal').classList.add('hidden');
-    toast('Pedido enviado.', {icon:'🛎️'});
-  };
-}
+function recalc(){ const qty=+fQty.value||1; let total=currentProduct.price*qty;
+  const a=[...fAde.querySelectorAll('input:checked')].length; const x=[...fExt.querySelectorAll('input:checked')].length;
+  total += a*EXTRA_ADE_PRICE + x*EXTRA_ING_PRICE; let unlocked=false;
+  if(currentProduct.name.toLowerCase().includes('mini')&&qty>=3){ total=total*(1-COMBO3_DISCOUNT); unlocked=true; }
+  const shown= unlocked? roundTo7(total) : Math.round(total); fTot.textContent=`$${shown}`; return {total:shown,unlocked}; }
+function openModal(p){ currentProduct=p; mTitle.textContent=p.name; fName.value=''; fQty.value=1; fSug.textContent=p.suggest;
+  fAde.innerHTML=''; fExt.innerHTML=''; fAde.appendChild(buildList(aderezos,5)); fExt.appendChild(buildList(extras,5));
+  modal.classList.add('open'); recalc(); modal.querySelectorAll('input[type="checkbox"], #f-qty').forEach(x=>x.oninput=recalc); }
+async function createOrder(payload){ await addDoc(collection(db,'orders'),{...payload,status:'PENDING',createdAt:serverTimestamp()}); }
+document.getElementById('orderForm').onsubmit=async e=>{ e.preventDefault();
+  const qty=+fQty.value||1; const a=[...fAde.querySelectorAll('input:checked')].map(i=>i.dataset.label);
+  const x=[...fExt.querySelectorAll('input:checked')].map(i=>i.dataset.label); const calc=recalc();
+  await createOrder({ source:'kiosk', customer:fName.value.trim()||'Cliente', product:currentProduct.name, qty,
+    aderezos:a, extras:x, suggested:currentProduct.suggest, total:calc.total });
+  modal.classList.remove('open'); toast(calc.unlocked? '⭐ ¡Desbloqueaste un logro! Combo minis' : '¡Pedido creado!'); };
+renderMenu();
