@@ -10,24 +10,34 @@
 //};*/
 // Configuración de Firebase
 // 🔑 Sustituye por tus credenciales de Firebase
-import { initializeApp } from "firebase/app";
+// shared/firebase.js
+// Firebase por CDN (válido para GitHub Pages, sin bundlers).
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "firebase/auth";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+// ⚠️ Usa estos valores (ajustados):
 const firebaseConfig = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
   authDomain: "seven-de-burgers.firebaseapp.com",
   projectId: "seven-de-burgers",
-  storageBucket: "seven-de-burgers.firebasestorage.app",
+  storageBucket: "seven-de-burgers.appspot.com",
   messagingSenderId: "34089845279",
-  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a"
+  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
+  measurementId: "G-Q8YQJGL2XY"
 };
 
-export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const auth = getAuth(app);
+const app  = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
 
-// Autenticación anónima
-export async function ensureAuth(){
-  if(!auth.currentUser){ await signInAnonymously(auth); }
-}
+// Iniciar sesión anónima para permitir reglas con request.auth != null
+signInAnonymously(auth).catch(err => console.error("Auth error:", err));
+
+// (Opcional) Esperar a que exista un usuario antes de operar con Firestore
+onAuthStateChanged(auth, (user) => {
+  if (!user) return;
+  // console.log("Anon user:", user.uid);
+});
+
+export { app, db, auth };
