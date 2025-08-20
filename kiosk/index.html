@@ -1,50 +1,30 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Kiosko — Seven de Burgers</title>
-  <link rel="stylesheet" href="../shared/styles.css">
-</head>
+
+<!doctype html><html lang="es">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="../shared/styles.css"/><title>Kiosko — Seven de Burgers</title></head>
 <body>
-  <div class="headerbar">
-    <div class="inner">
-      <div class="brand" id="brandTitle">🍔 Seven de Burgers — Kiosko</div>
-      <a id="loginLink" href="../admin/index.html" class="btn small ghost" style="display:none">Login</a>
+<header class="header">
+  <div class="brand" id="brandTap"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Kiosko</div></div></div>
+  <nav id="navRoles" style="display:none;gap:8px">
+    <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
+    <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
+    <a class="btn ghost small" href="../admin/index.html">Admin</a>
+  </nav>
+</header>
+<main class="container">
+  <div class="card" id="mode">
+    <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      <button class="btn" id="btnMinis">Minis & Combos</button>
+      <button class="btn ghost" id="btnBig">Hamburguesas grandes</button>
     </div>
   </div>
-  <main>
-    <div class="grid" style="grid-template-columns:1fr 1fr 1fr; gap:12px; align-items:end">
-      <div class="grid" style="grid-template-columns:1fr;gap:6px">
-        <label class="small muted">Tu nombre</label>
-        <input id="customerName" class="input" type="text" placeholder="Tu nombre" autocomplete="name">
-      </div>
-      <div class="grid" style="grid-template-columns:1fr;gap:6px">
-        <label class="small muted">¿Te sorprendemos con un aderezo?</label>
-        <select id="surprise" class="input select">
-          <option value="">No, gracias</option>
-          <option value="yes">Sí, sorpréndeme</option>
-        </select>
-      </div>
-      <div class="row" style="justify-content:flex-end">
-        <button id="btnCheckout" class="btn">Confirmar pedido</button>
-      </div>
-    </div>
-
-    <h2 style="margin-top:14px">Minis — Combos y sueltos</h2>
-    <div id="miniMenu" class="menu"></div>
-
-    <h2 style="margin-top:14px">¿Prefieres los retos grandes?</h2>
-    <div id="bigMenu" class="menu"></div>
-  </main>
-
-  <div class="footerbar">
-    <div class="inner">
-      <div><span class="badge" id="miniCount">0 minis</span> · <span class="badge" id="cartCount">0 items</span></div>
-      <div>Total: <span class="price" id="grandTotal">$0</span></div>
-    </div>
-  </div>
-
-  <script type="module" src="./app.js" defer></script>
-</body>
-</html>
+  <div class="grid" id="cards"></div>
+</main>
+<div class="modal" id="modal"><div class="modal-card">
+  <div class="modal-head"><div id="mTitle">Orden</div><button class="btn ghost small" id="mClose">Cerrar</button></div>
+  <div class="modal-body" id="mBody"></div>
+  <div class="modal-foot"><div class="total-bar"><div class="total" id="mTotal">$0</div><button class="btn" id="mConfirm">Confirmar pedido</button></div></div>
+</div></div>
+<script type="module" src="./app.js"></script>
+</body></html>
