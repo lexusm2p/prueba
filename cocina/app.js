@@ -1,55 +1,33 @@
-// cocina/app.js
-import { ensureAuth, subscribeActiveOrders, setStatus } from "../lib/firebase.js";
-import { chime } from "../lib/notify.js";
+import { db, onSnapshot, collection, query, where, orderBy, updateDoc, doc } from '../lib/firebase.js';
+import { beep } from '../lib/notify.js'; import { toast } from '../lib/toast.js';
 
-const $ = (sel)=>document.querySelector(sel);
-const P = $("#pending"), G = $("#progress"), R = $("#ready");
-const seenReady = new Set();
+const colPending=document.getElementById('col-pending');
+const colProgress=document.getElementById('col-progress');
+const colReady=document.getElementById('col-ready');
 
-ensureAuth().then(()=>{
-  subscribeActiveOrders(snap => {
-    const list = snap.docs.map(d=>({id:d.id, ...d.data()}));
-    render(list);
-    list.filter(o => o.status==='READY').forEach(o => {
-      if(!seenReady.has(o.id)){ seenReady.add(o.id); chime(); if(navigator.vibrate) navigator.vibrate(50); }
-    });
-  });
-});
-
-function render(list){
-  P.innerHTML = list.filter(o=>o.status==='PENDING').map(renderCard).join('') || blank();
-  G.innerHTML = list.filter(o=>o.status==='IN_PROGRESS').map(renderCard).join('') || blank();
-  R.innerHTML = list.filter(o=>o.status==='READY').map(renderCard).join('') || blank();
-
-  document.querySelectorAll('[data-a="take"]').forEach(b=> b.onclick = ()=> setStatus(b.dataset.id,'IN_PROGRESS'));
-  document.querySelectorAll('[data-a="ready"]').forEach(b=> b.onclick = ()=> setStatus(b.dataset.id,'READY'));
-  document.querySelectorAll('[data-a="deliver"]').forEach(b=> b.onclick = ()=> setStatus(b.dataset.id,'DELIVERED'));
-}
-
-function blank(){ return '<div class="card" style="opacity:.6">Sin pedidos</div>' }
-
-function renderCard(o){
-  const itemsHtml = (o.items||[]).map(it => {
-    const base = (it.baseIngredients||[]).join(', ');
-    const ads  = (it.aderezos||[]).join(', ') || '—';
-    const ex   = (it.extras||[]).join(', ') || '—';
-    const notes= it.notes || '—';
-    return `<div style="margin:6px 0;padding:6px;border:1px dashed #244a63;border-radius:8px">
-      <div><strong>${it.name}</strong> ×${it.qty||1}</div>
-      <div style="opacity:.85">Base: ${base}</div>
-      <div style="opacity:.85">Aderezos: ${ads}</div>
-      <div style="opacity:.85">Extras: ${ex}</div>
-      <div style="opacity:.85">Notas: ${notes}</div>
-    </div>`;
-  }).join('');
-
-  return `<div class="card">
-    <div><strong>Orden</strong> — <span class="badge">${o.customer||'-'}</span> · $${o.total||0}</div>
-    ${itemsHtml}
-    <div class="actions">
-      ${o.status==='PENDING' ? `<button data-a="take" data-id="${o.id}">Preparar</button>` : ''}
-      ${o.status==='IN_PROGRESS' ? `<button data-a="ready" data-id="${o.id}">Listo</button>` : ''}
-      ${o.status==='READY' ? `<button data-a="deliver" data-id="${o.id}">Entregar</button>` : ''}
-    </div>
+function card(o,id){ const wrap=document.createElement('div'); wrap.className='card'; wrap.dataset.id=id;
+  wrap.innerHTML=`<div class="row"><h3>${o.product} x${o.qty}</h3><div class="right price">$${o.total||0}</div></div>
+  <div class="sub">Mesa ${o.table||'-'} · ${o.customer||o.server||'Cliente'}</div>
+  <div class="sub">Sugerida: <b>${o.suggested||'—'}</b></div>
+  ${o.aderezos?.length? `<div class="sub">Aderezos: ${o.aderezos.join(', ')}</div>`:''}
+  ${o.extras?.length? `<div class="sub">Extras: ${o.extras.join(', ')}</div>`:''}
+  ${o.notes? `<div class="sub">Notas: ${o.notes}</div>`:''}
+  <div class="row" style="margin-top:10px">
+    ${o.status==='PENDING'? `<button class="btn" data-a="take">Tomar</button>`:''}
+    ${o.status==='IN_PROGRESS'? `<button class="btn" data-a="ready">Listo</button>`:''}
+    ${o.status==='READY'? `<button class="btn" data-a="deliver">Entregar</button>`:''}
   </div>`;
+  wrap.addEventListener('click', async e=>{ const btn=e.target.closest('button[data-a]'); if(!btn) return;
+    const a=btn.dataset.a;
+    if(a==='take')   await updateDoc(doc(db,'orders',id),{status:'IN_PROGRESS'});
+    if(a==='ready')  { await updateDoc(doc(db,'orders',id),{status:'READY'}); beep(); toast('Pedido listo ✅'); }
+    if(a==='deliver'){ await updateDoc(doc(db,'orders',id),{status:'ARCHIVED'}); }
+  });
+  return wrap;
 }
+function mount(list,into){ into.innerHTML=''; if(!list.length){ into.innerHTML='<div class="empty">Sin elementos</div>'; return; } list.forEach(([id,o])=> into.appendChild(card(o,id))); }
+const q=query(collection(db,'orders'), where('status','!=','ARCHIVED'), orderBy('status'), orderBy('createdAt'));
+onSnapshot(q,(snap)=>{ const P=[],I=[],R=[]; snap.forEach(d=>{ const o=d.data();
+  if(o.status==='PENDING') P.push([d.id,o]); else if(o.status==='IN_PROGRESS') I.push([d.id,o]); else if(o.status==='READY') R.push([d.id,o]); });
+  mount(P,colPending); mount(I,colProgress); mount(R,colReady);
+});
