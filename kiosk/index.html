@@ -1,29 +1,50 @@
 <!doctype html>
-<html lang="es"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Kiosko — Seven de Burgers</title>
-<link rel="stylesheet" href="../shared/styles.css"></head>
-<body class="shell">
-<div class="container">
-  <div class="row" style="margin-bottom:10px">
-    <div class="badge">Seven de Burgers — Kiosko</div>
-    <a class="right badge" href="../login/">Login</a>
-  </div>
-  <div id="menu" class="grid"></div>
-</div>
-<div class="modal" id="modal"><div class="sheet">
-  <div class="row"><h2 id="m-title">Configura tu pedido</h2><button class="btn right" id="m-close">Cerrar</button></div>
-  <form id="orderForm" class="form-grid">
-    <div class="group"><label class="sub">Tu nombre</label><input id="f-name" placeholder="Nombre para avisarte"></div>
-    <div class="group row">
-      <div style="flex:1"><label class="sub">Cantidad</label><input type="number" id="f-qty" min="1" value="1"></div>
-      <div class="right sub">Salsa sugerida: <b id="f-suggest"></b></div>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kiosko — Seven de Burgers</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <div class="headerbar">
+    <div class="inner">
+      <div class="brand" id="brandTitle">🍔 Seven de Burgers — Kiosko</div>
+      <a id="loginLink" href="../admin/index.html" class="btn small ghost" style="display:none">Login</a>
     </div>
-    <div class="group"><h3 style="margin:0 0 6px">Aderezos extra</h3><div id="f-aderezos"></div></div>
-    <div class="group"><h3 style="margin:0 0 6px">Ingredientes extra</h3><div id="f-extras"></div></div>
-    <div class="sticky-total"><div class="row"><div class="sub">Total</div><div class="right price" id="f-total">$0</div></div>
-      <button class="btn" id="f-submit" type="submit">Ordenar</button></div>
-  </form>
-</div></div>
-<script type="module" src="./app.js"></script>
-</body></html>
+  </div>
+  <main>
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr; gap:12px; align-items:end">
+      <div class="grid" style="grid-template-columns:1fr;gap:6px">
+        <label class="small muted">Tu nombre</label>
+        <input id="customerName" class="input" type="text" placeholder="Tu nombre" autocomplete="name">
+      </div>
+      <div class="grid" style="grid-template-columns:1fr;gap:6px">
+        <label class="small muted">¿Te sorprendemos con un aderezo?</label>
+        <select id="surprise" class="input select">
+          <option value="">No, gracias</option>
+          <option value="yes">Sí, sorpréndeme</option>
+        </select>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button id="btnCheckout" class="btn">Confirmar pedido</button>
+      </div>
+    </div>
+
+    <h2 style="margin-top:14px">Minis — Combos y sueltos</h2>
+    <div id="miniMenu" class="menu"></div>
+
+    <h2 style="margin-top:14px">¿Prefieres los retos grandes?</h2>
+    <div id="bigMenu" class="menu"></div>
+  </main>
+
+  <div class="footerbar">
+    <div class="inner">
+      <div><span class="badge" id="miniCount">0 minis</span> · <span class="badge" id="cartCount">0 items</span></div>
+      <div>Total: <span class="price" id="grandTotal">$0</span></div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js" defer></script>
+</body>
+</html>
