@@ -2,35 +2,16 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seven de Burgers · Kiosko</title>
-  <link rel="stylesheet" href="./kiosk/styles.css">
-  <style>
-    .hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #1a3950;position:sticky;top:0;background:rgba(11,27,39,.92);backdrop-filter:blur(6px);z-index:5}
-    .hdr .brand{font-weight:800;letter-spacing:.6px;cursor:pointer}
-    .hdr .login{background:#153247;border:1px solid #28506a;color:#cde7f8;padding:8px 10px;border-radius:10px;cursor:pointer}
-  </style>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SevenPOS</title>
+  <link rel="stylesheet" href="./shared/styles.css">
 </head>
-<body>
-  <div class="hdr">
-    <div class="brand" onclick="location.href='.'">SEVEN DE BURGERS</div>
-    <button class="login" id="btnLogin">Login</button>
+<body class="center">
+  <div class="card">
+    <h1>Seven de Burgers — POS</h1>
+    <p>Redirigiendo a Kiosko…</p>
+    <p><a class="btn" href="./kiosk/index.html">Ir al Kiosko</a></p>
   </div>
-
-  <main id="app"></main>
-
-  <div id="modal" class="modal hidden">
-    <div class="modal-card">
-      <button id="closeModal" class="close">×</button>
-      <div id="modalBody"></div>
-    </div>
-  </div>
-
-  <script type="module">
-    import './lib/roles.js';
-    import './kiosk/app.js';
-    import { openLogin } from './lib/roles.js';
-    document.getElementById('btnLogin').onclick = openLogin;
-  </script>
+  <script>location.replace('./kiosk/index.html');</script>
 </body>
 </html>
