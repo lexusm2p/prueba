@@ -4,62 +4,225 @@
       "id": "starter",
       "name": "Starter Burger",
       "price": 47,
-      "ingredients": ["Pan","Carne 85g","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "category": "big",
+      "mini": false,
+      "ingredients": [
+        "Pan",
+        "Carne 85g",
+        "Queso amarillo",
+        "Queso blanco",
+        "Lechuga",
+        "Jitomate",
+        "Cebolla",
+        "Mayonesa",
+        "Catsup",
+        "Mostaza"
+      ],
       "suggested": "Mostaza dulce"
     },
     {
       "id": "koopa",
       "name": "Koopa Crunch",
       "price": 57,
-      "ingredients": ["Pan","Carne","Queso blanco","Piña","Tocino","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
-      "suggested": "Chimichurri"
+      "category": "big",
+      "mini": false,
+      "ingredients": [
+        "Pan",
+        "Carne 85g",
+        "Queso blanco",
+        "Piña",
+        "Tocino",
+        "Lechuga",
+        "Jitomate",
+        "Cebolla",
+        "Mayonesa",
+        "Catsup",
+        "Mostaza"
+      ],
+      "suggested": "Salsa Chimichurri"
     },
     {
       "id": "fatality",
       "name": "Fatality Flame",
       "price": 67,
-      "ingredients": ["Pan","Carne","Salsa Cheddar","Tocino","Salsa habanero","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "category": "big",
+      "mini": false,
+      "ingredients": [
+        "Pan",
+        "Carne 85g",
+        "Salsa Cheddar",
+        "Tocino",
+        "Salsa Habanero",
+        "Lechuga",
+        "Jitomate",
+        "Cebolla",
+        "Mayonesa",
+        "Catsup",
+        "Mostaza"
+      ],
       "suggested": "Habanero"
     },
     {
       "id": "mega",
       "name": "Mega Byte",
       "price": 77,
-      "ingredients": ["Pan","Carne","Salsa Cheddar","Queso blanco","Tocino","Salchicha","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup"],
+      "category": "big",
+      "mini": false,
+      "ingredients": [
+        "Pan",
+        "Carne 85g",
+        "Salsa Cheddar",
+        "Queso blanco",
+        "Tocino",
+        "Salchicha",
+        "Lechuga",
+        "Jitomate",
+        "Cebolla",
+        "Mayonesa",
+        "Catsup"
+      ],
       "suggested": "Cheddar"
     },
     {
       "id": "hadouken",
       "name": "Hadouken",
       "price": 77,
-      "ingredients": ["Pan","Carne","Queso blanco","Queso amarillo","Salchicha","Aderezo chipotle","Lechuga","Jitomate","Cebolla"],
+      "category": "big",
+      "mini": false,
+      "ingredients": [
+        "Pan",
+        "Carne 85g",
+        "Queso blanco",
+        "Queso amarillo",
+        "Salchicha",
+        "Aderezo Chipotle",
+        "Lechuga",
+        "Jitomate",
+        "Cebolla"
+      ],
       "suggested": "Chipotle"
     },
     {
       "id": "nintendo",
       "name": "Nintendo Nostalgia",
       "price": 67,
-      "ingredients": ["Pan","Carne","Queso blanco","Piña","Jamón","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "category": "big",
+      "mini": false,
+      "ingredients": [
+        "Pan",
+        "Carne 85g",
+        "Queso blanco",
+        "Piña",
+        "Jamón",
+        "Lechuga",
+        "Jitomate",
+        "Cebolla",
+        "Mayonesa",
+        "Catsup",
+        "Mostaza"
+      ],
       "suggested": "Mostaza dulce"
     },
     {
       "id": "finalboss",
       "name": "Final Boss Burger",
       "price": 97,
-      "ingredients": ["Pan","Carne","Salsa Cheddar","Queso blanco","Queso amarillo","Tocino","Jamón","Salchicha","Piña","Salsa habanero","Aderezo chipotle"],
+      "category": "big",
+      "mini": false,
+      "ingredients": [
+        "Pan",
+        "Carne 85g",
+        "Salsa Cheddar",
+        "Queso blanco",
+        "Queso amarillo",
+        "Tocino",
+        "Jamón",
+        "Salchicha",
+        "Piña",
+        "Salsa Habanero",
+        "Aderezo Chipotle"
+      ],
       "suggested": "Chipotle"
     }
   ],
   "minis": [
-    { "id":"starter_m",  "name":"Starter Mini",  "price":27, "mini":true, "baseOf":"starter"  },
-    { "id":"koopa_m",    "name":"Koopa Mini",    "price":33, "mini":true, "baseOf":"koopa"    },
-    { "id":"fatality_m", "name":"Fatality Mini", "price":37, "mini":true, "baseOf":"fatality" },
-    { "id":"mega_m",     "name":"Mega Mini",     "price":42, "mini":true, "baseOf":"mega"     }
+    {
+      "id": "starter_m",
+      "name": "Starter Mini",
+      "price": 27,
+      "category": "mini",
+      "mini": true,
+      "baseOf": "starter"
+    },
+    {
+      "id": "koopa_m",
+      "name": "Koopa Mini",
+      "price": 33,
+      "category": "mini",
+      "mini": true,
+      "baseOf": "koopa"
+    },
+    {
+      "id": "fatality_m",
+      "name": "Fatality Mini",
+      "price": 37,
+      "category": "mini",
+      "mini": true,
+      "baseOf": "fatality"
+    },
+    {
+      "id": "mega_m",
+      "name": "Mega Mini",
+      "price": 42,
+      "category": "mini",
+      "mini": true,
+      "baseOf": "mega"
+    },
+    {
+      "id": "hadouken_m",
+      "name": "Hadouken Mini",
+      "price": 37,
+      "category": "mini",
+      "mini": true,
+      "baseOf": "hadouken"
+    },
+    {
+      "id": "nintendo_m",
+      "name": "Nintendo Mini",
+      "price": 37,
+      "category": "mini",
+      "mini": true,
+      "baseOf": "nintendo"
+    },
+    {
+      "id": "finalboss_m",
+      "name": "Final Boss Mini",
+      "price": 47,
+      "category": "mini",
+      "mini": true,
+      "baseOf": "finalboss"
+    }
   ],
   "extras": {
-    "sauces": ["Aderezo Cheddar","Aderezo Chipotle","Aderezo Habanero","Salsa Chimichurri","Mostaza dulce","Jalapeño rostizado","Curry suave","Salsa Secreta Seven"],
+    "sauces": [
+      "Aderezo Cheddar",
+      "Aderezo Chipotle",
+      "Aderezo Habanero",
+      "Salsa Chimichurri",
+      "Mostaza dulce",
+      "Jalapeño rostizado",
+      "Curry suave",
+      "Salsa Secreta Seven"
+    ],
     "saucePrice": 5,
-    "ingredients": ["Tocino","Piña","Jamón","Salchicha","Queso extra","Carne extra"],
-    "ingredientPrice": 5
+    "ingredients": [
+      { "name": "Tocino",               "price": 6  },
+      { "name": "Piña",                 "price": 5  },
+      { "name": "Jamón",                "price": 5  },
+      { "name": "Salchicha",            "price": 8  },
+      { "name": "Queso extra",          "price": 6  },
+      { "name": "Cebolla caramelizada", "price": 5  },
+      { "name": "Carne extra 85g",      "price": 20 }
+    ]
   }
 }
