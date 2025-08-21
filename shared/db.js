@@ -1,4 +1,4 @@
-<!-- /shared/db.js -->
+//<!-- /shared/db.js -->
 <script type="module">
 import { db } from './firebase.js';
 import {
