@@ -73,36 +73,31 @@ signInAnonymously(dbAuth).catch(console.error);
 </script>
 */
 // ✅ firebase.js
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import {
-  getFirestore, collection, doc, addDoc, setDoc, updateDoc,
-  deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+// /shared/firebase.js
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// 🔑 Configuración de Firebase (reemplaza con tus datos reales)
-const firebaseConfig = {apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
-    authDomain: "seven-de-burgers.firebaseapp.com",
-    projectId: "seven-de-burgers",
-    storageBucket: "seven-de-burgers.firebasestorage.app",
-    messagingSenderId: "34089845279",
-    appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
+// ⬇️ PON TU CONFIG AQUÍ
+    
+  apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+  authDomain: "seven-de-burgers.firebaseapp.com",
+  projectId: "seven-de-burgers",
+  storageBucket: "seven-de-burgers.firebasestorage.app",
+  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
 };
 
-// Inicializar
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db   = getFirestore(app);
 
-// 🔐 Autenticación anónima
-export async function ensureAuth() {
-  if (!auth.currentUser) {
-    await signInAnonymously(auth);
-  }
+// Login anónimo inmediato (Kiosko/visores necesitan auth para escribir/leer)
+export async function ensureAnonAuth(){
+  return new Promise((resolve) => {
+    onAuthStateChanged(auth, async (user)=>{
+      if (user) return resolve(user);
+      await signInAnonymously(auth);
+      // onAuthStateChanged se disparará de nuevo y resolverá
+    });
+  });
 }
-
-// Re-exportar Firestore utils
-export {
-  collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
-  onSnapshot, serverTimestamp, query, where, orderBy
-};
