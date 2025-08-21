@@ -3,46 +3,44 @@ import { createOrder } from '../shared/db.js';
 
 const state = { menu:null, mode:'mini', taps:0, coins:0 };
 
-// login oculto: 7 toques al logo
-const brand = document.getElementById('brandTap');
-brand.addEventListener('click', ()=>{
+// 7 taps → muestra roles
+document.getElementById('brandTap').addEventListener('click', ()=>{
   state.taps++;
   if(state.taps >= 7){
-    document.getElementById('navRoles').style.display = 'flex';
+    document.getElementById('navRoles').style.display='flex';
     toast('Modo staff desbloqueado 🔓');
   }
   setTimeout(()=> state.taps = 0, 1000);
 });
 
-// botones modo
 document.getElementById('btnMinis').onclick = ()=>{ state.mode='mini'; renderCards(); };
 document.getElementById('btnBig').onclick  = ()=>{ state.mode='big';  renderCards(); };
 
 const $bubble = document.getElementById('bubble');
 document.getElementById('bClose').onclick = ()=> $bubble.style.display='none';
 
+const money = (n)=>'$'+Number(n||0).toFixed(0);
+
 async function loadMenu(){
   const res = await fetch('../data/menu.json');
   state.menu = await res.json();
   renderCards();
 }
-const $grid = document.getElementById('cards');
-const money = (n)=>'$'+Number(n||0).toFixed(0);
+loadMenu();
 
-// build cards
+const $grid = document.getElementById('cards');
+
 function renderCards(){
   if(!state.menu) return;
   $grid.innerHTML = '';
   const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
 
   items.forEach(it=>{
-    // base del producto (para minis: “baseOf”)
     const base = it.baseOf ? state.menu.burgers.find(b=>b.id===it.baseOf) : it;
     const icon = it.icon || base?.icon || '../img/icons/placeholder.png';
 
     const $card = document.createElement('article');
     $card.className = 'card card-8bit';
-
     $card.innerHTML = `
       <div class="card-media">
         <img class="pixel-icon" src="${icon}" alt="${it.name}" onerror="this.style.display='none'"/>
@@ -51,22 +49,19 @@ function renderCards(){
       <div class="row between">
         <div class="price">${money(it.price)}</div>
         <div class="row gap8">
-          <button class="btn-8bit ghost small" data-a="ing">Ver más</button>
+          <button class="btn-8bit ghost small" data-a="ing">Ingredientes</button>
           <button class="btn-8bit small" data-a="order">Ordenar</button>
         </div>
       </div>
     `;
     $grid.appendChild($card);
 
-    // Bocadillo “Ingredientes”
     $card.querySelector('[data-a="ing"]').onclick = ()=>{
       document.getElementById('bTitle').textContent = it.name;
       const list = (base.ingredients||[]).map(x=>`<li>${x}</li>`).join('');
       document.getElementById('bBody').innerHTML = `<ul class="list-8bit">${list}</ul>`;
-      $bubble.style.display = 'grid';
+      $bubble.style.display='grid';
     };
-
-    // Modal pedido
     $card.querySelector('[data-a="order"]').onclick = ()=> openModal(it, base);
   });
 }
@@ -77,16 +72,12 @@ function openModal(item, base){
   modal.classList.add('open');
 
   document.getElementById('mTitle').textContent = `${item.name} · ${money(item.price)}`;
-  document.getElementById('mClose').onclick = ()=> modal.classList.remove('open');
+  document.getElementById('mClose').onclick    = ()=> modal.classList.remove('open');
 
-  const sauces = state.menu.extras.sauces;
-  const ingr   = state.menu.extras.ingredients;
-  const SP = state.menu.extras.saucePrice;
-  const IP = state.menu.extras.ingredientPrice;
-
-  // DLC de carne grande (solo minis)
-  const showDLC = !!item.mini && !!state.menu.extras.dlc?.meatUpgradePrice;
-  const DLC = state.menu.extras.dlc?.meatUpgradePrice || 0;
+  const sauces = state.menu.extras.sauces;       // [{name,price}, ...]
+  const ingr   = state.menu.extras.ingredients;  // [{name,price}, ...]
+  const showDLC = !!item.mini && !!state.menu.extras?.dlc?.meatUpgradePrice;
+  const DLC = state.menu.extras?.dlc?.meatUpgradePrice || 0;
 
   body.innerHTML = `
     <div class="field">
@@ -100,14 +91,14 @@ function openModal(item, base){
         <input id="qty" type="number" min="1" max="9" value="1"/>
       </div>
       ${showDLC ? `
-        <div class="field flex1">
-          <label class="small">DLC de Carne grande</label>
-          <label class="switch">
-            <input id="dlcMeat" type="checkbox"/>
-            <span class="slider"></span>
-          </label>
-          <div class="muted small">(+${money(DLC)} c/u)</div>
-        </div>` : ``}
+      <div class="field flex1">
+        <label class="small">DLC de Carne grande</label>
+        <label class="switch">
+          <input id="dlcMeat" type="checkbox"/>
+          <span class="slider"></span>
+        </label>
+        <div class="muted small">(+${money(DLC)} c/u)</div>
+      </div>`:''}
     </div>
 
     <div class="hr"></div>
@@ -117,8 +108,8 @@ function openModal(item, base){
       <div class="ul-clean" id="sauces">
         ${sauces.map((s,i)=>`
           <input type="checkbox" id="s${i}"/>
-          <label for="s${i}">${s}</label>
-          <span class="tag">(+${money(SP)})</span>
+          <label for="s${i}">${s.name}</label>
+          <span class="tag">(+${money(s.price)})</span>
         `).join('')}
       </div>
     </div>
@@ -126,10 +117,10 @@ function openModal(item, base){
     <div class="field">
       <label class="small">Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
-        ${ingr.map((s,i)=>`
+        ${ingr.map((x,i)=>`
           <input type="checkbox" id="e${i}"/>
-          <label for="e${i}">${s}</label>
-          <span class="tag">(+${money(IP)})</span>
+          <label for="e${i}">${x.name}</label>
+          <span class="tag">(+${money(x.price)})</span>
         `).join('')}
       </div>
     </div>
@@ -152,28 +143,37 @@ function openModal(item, base){
   const qtyEl   = document.getElementById('qty');
   const dlcEl   = document.getElementById('dlcMeat');
 
-  const inputs = body.querySelectorAll('input[type=checkbox], #qty, #dlcMeat');
   const calc = ()=>{
     const qty = Math.max(1, parseInt(qtyEl.value||'1',10));
-    const extrasS = [...body.querySelectorAll('#sauces input:checked')].length;
-    const extrasI = [...body.querySelectorAll('#ingrs input:checked')].length;
+    const sauceSum = [...document.querySelectorAll('#sauces input:checked')]
+      .reduce((sum, el)=> sum + sauces[Number(el.id.slice(1))].price, 0);
+    const ingrSum = [...document.querySelectorAll('#ingrs input:checked')]
+      .reduce((sum, el)=> sum + ingr[Number(el.id.slice(1))].price, 0);
     const dlc = (showDLC && dlcEl?.checked) ? DLC : 0;
-    const unit = item.price + (extrasS*SP + extrasI*IP) + dlc;
+    const unit = item.price + sauceSum + ingrSum + dlc;
     const subtotal = unit * qty;
     totalEl.textContent = money(subtotal);
-    return {qty, subtotal, dlc: !!(showDLC && dlcEl?.checked), unit};
+    return {qty, subtotal, dlc: !!(showDLC && dlcEl?.checked)};
   };
-  inputs.forEach(el=> el?.addEventListener('change', calc));
-  calc();
+
+  // escuchar cambios y calcular una vez
+  body.addEventListener('change', (e)=>{
+    if(e.target.matches('input, select')) calc();
+  });
+  calc(); // <-- importante para que NO muestre $0 al abrir
 
   document.getElementById('mConfirm').onclick = async ()=>{
     const name = document.getElementById('cName').value.trim();
     if(!name){ alert('Por favor escribe tu nombre.'); return; }
     const {qty, subtotal, dlc} = calc();
-    const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
-    const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? ingr[i]: null).filter(Boolean);
+
+    const saucesSel = [...document.querySelectorAll('#sauces input:checked')]
+      .map(el => sauces[Number(el.id.slice(1))].name);
+    const ingrSel = [...document.querySelectorAll('#ingrs input:checked')]
+      .map(el => ingr[Number(el.id.slice(1))].name);
     const surprise  = document.getElementById('surprise').value==='si';
 
+    const base = item.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item;
     const order = {
       customer: name,
       qty, subtotal,
@@ -186,17 +186,14 @@ function openModal(item, base){
 
     await createOrder(order);
     beep();
-
     if(item.mini && qty>=3){ toast('¡Logro desbloqueado! 3 minis ⭐', {star:true}); addCoin(); }
     toast(`Gracias por tu pedido, ${name} ✨`);
     modal.classList.remove('open');
   };
 }
 
-// HUD monedas
+// HUD
 function addCoin(){
   state.coins = Math.min(99, state.coins+1);
   document.getElementById('hudCoins').textContent = 'x' + String(state.coins).padStart(2,'0');
 }
-
-loadMenu();
