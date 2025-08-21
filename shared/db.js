@@ -6,15 +6,17 @@ import {
 import { db, ensureAnonAuth } from "./firebase.js";
 
 /* =========================================================================
-   CATÁLOGO (para Kiosko y Admin)
-   Estructura esperada (colección "products"):
-   - { id, name, price, type:'big'|'mini'|'combo'|'sauce'|'extra', active:true,
-       baseOf?: 'id-burger-base' (para minis), ingredients:[], salsaDefault, salsasSugeridas:[], icon:'' }
+   CATÁLOGO (Kiosko + Admin)
+   Colección "products" (tipos soportados):
+   - type: 'big' | 'mini' | 'drink' | 'side' | 'combo'
+   - { id, name, price, type, active, baseOf?, ingredients:[], salsaDefault, salsasSugeridas:[], icon:'', hhEligible?: true, comboItems?:[] }
    Extras:
    - /extras/sauces => { items: [{name, price}] }
    - /extras/ingredients => { items: [{name, price}] }
    Settings:
    - /settings/app => { dlcCarneMini:number, saucePrice?:number, ingredientPrice?:number }
+   Happy Hour:
+   - /settings/happyHour => { enabled:boolean, discountPercent:number (0-100), bannerText?:string, applyEligibleOnly?:boolean }
    ======================================================================= */
 
 /** Catálogo → primero intenta Firestore; si no hay datos, fallback a /data/menu.json */
@@ -31,18 +33,21 @@ export async function fetchCatalogWithFallback(){
     // 2) Extras y settings
     const saucesDoc = await getDoc(doc(db, "extras", "sauces"));
     const ingreDoc  = await getDoc(doc(db, "extras", "ingredients"));
-    const settings  = await getDoc(doc(db, "settings", "app"));
+    const appCfgDoc = await getDoc(doc(db, "settings", "app"));
+    const hhDoc     = await getDoc(doc(db, "settings", "happyHour"));
 
     const saucesArr = saucesDoc.exists() ? (saucesDoc.data().items||[]) : [];
     const ingsArr   = ingreDoc.exists()  ? (ingreDoc.data().items||[])  : [];
-    const cfg       = settings.exists()  ? settings.data()              : {};
+    const cfg       = appCfgDoc.exists() ? appCfgDoc.data()             : {};
+    const happyHour = hhDoc.exists()     ? hhDoc.data()                 : { enabled:false, discountPercent:0 };
 
-    // Si hay productos en Firestore, arma la forma que espera Kiosko
     if (products.length) {
       const burgers = products.filter(p=>p.type==='big');
       const minis   = products.filter(p=>p.type==='mini');
+      const drinks  = products.filter(p=>p.type==='drink');
+      const sides   = products.filter(p=>p.type==='side');
+      const combos  = products.filter(p=>p.type==='combo');
 
-      // Precios de extras: si hay precio por ítem, toma promedio; si hay global en settings, usa ese.
       const saucePrice = Number(
         (cfg.saucePrice ?? (
           saucesArr.length ? (saucesArr.reduce((a,it)=>a+(Number(it.price)||0),0)/saucesArr.length) : 0
@@ -60,12 +65,21 @@ export async function fetchCatalogWithFallback(){
       return {
         burgers,
         minis,
+        drinks,
+        sides,
+        combos,
         extras: {
           sauces: saucesArr.map(s=>s.name),
           saucePrice,
           ingredients: ingsArr.map(i=>i.name),
           ingredientPrice,
           dlcCarneMini
+        },
+        happyHour: {
+          enabled: !!happyHour.enabled,
+          discountPercent: Number(happyHour.discountPercent||0),
+          bannerText: happyHour.bannerText || '',
+          applyEligibleOnly: happyHour.applyEligibleOnly!==false // default true
         }
       };
     }
@@ -77,6 +91,12 @@ export async function fetchCatalogWithFallback(){
   const res = await fetch('../data/menu.json');
   const json = await res.json();
   if (!json.extras.dlcCarneMini) json.extras.dlcCarneMini = 12;
+  // Si no trae HH en local:
+  if (!json.happyHour) json.happyHour = { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true };
+  // Para mantener compatibilidad si no trae bebidas/complementos/combos:
+  json.drinks ||= [];
+  json.sides  ||= [];
+  json.combos ||= [];
   return json;
 }
 
@@ -101,13 +121,15 @@ export async function upsertProduct(prod){
   const clean = {
     name: String(prod.name||'').trim(),
     price: Number(prod.price||0),
-    type: prod.type || prod.category || 'big', // por compatibilidad 'category' de UIs
+    type: prod.type || 'big', // 'big' | 'mini' | 'drink' | 'side' | 'combo'
     active: prod.active!==false,
-    baseOf: prod.baseOf || null,
+    baseOf: prod.baseOf || null, // minis: id de la grande
     ingredients: Array.isArray(prod.ingredients) ? prod.ingredients : [],
     salsaDefault: prod.salsaDefault || null,
     salsasSugeridas: Array.isArray(prod.salsasSugeridas) ? prod.salsasSugeridas : [],
-    icon: prod.icon || ''
+    icon: prod.icon || '',
+    hhEligible: prod.hhEligible!==false, // por defecto true
+    comboItems: Array.isArray(prod.comboItems) ? prod.comboItems : []
   };
 
   if (prod.id && String(prod.id||'').trim()){
@@ -135,13 +157,11 @@ export async function deleteProduct(productId){
 export function subscribeExtras(cb){
   const unsub1 = onSnapshot(doc(db,'extras','sauces'), (d1)=>{
     const sauces = d1.exists()? (d1.data().items||[]) : [];
-    // segundo doc dentro, para devolver ambos juntos
     getDoc(doc(db,'extras','ingredients')).then(d2=>{
       const ingredients = d2.exists()? (d2.data().items||[]) : [];
       cb({ sauces, ingredients });
     });
   }, (err)=> console.error('[subscribeExtras:sauces]', err));
-  // devolvemos el unsub del primero; el segundo es getDoc puntual. Suficiente aquí.
   return ()=> unsub1();
 }
 
@@ -176,10 +196,33 @@ export async function setSettings(patch){
   await setDoc(doc(db,'settings','app'), patch, { merge:true });
 }
 
-/* =========================================================================
-   ÓRDENES (lo que ya tenías)
-   ======================================================================= */
+/* ---------------------
+   Happy Hour
+   --------------------- */
 
+/** Suscripción a settings/happyHour */
+export function subscribeHappyHour(cb){
+  return onSnapshot(doc(db,'settings','happyHour'), (d)=>{
+    cb(d.exists()? d.data() : { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true });
+  }, (err)=> console.error('[subscribeHappyHour]', err));
+}
+
+/** Guardar/actualizar settings/happyHour */
+export async function setHappyHour(patch){
+  await ensureAnonAuth();
+  // Normaliza datos
+  const clean = {
+    enabled: !!patch.enabled,
+    discountPercent: Math.max(0, Math.min(100, Number(patch.discountPercent||0))),
+    bannerText: String(patch.bannerText||''),
+    applyEligibleOnly: patch.applyEligibleOnly!==false
+  };
+  await setDoc(doc(db,'settings','happyHour'), clean, { merge:true });
+}
+
+/* =========================================================================
+   ÓRDENES
+   ======================================================================= */
 export async function createOrder(orderDraft){
   await ensureAnonAuth();
   const payload = {
