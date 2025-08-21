@@ -2,62 +2,79 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Kiosko — Seven de Burgers</title>
+
+  <!-- Fuente pixel: Press Start 2P -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../shared/styles.css"/>
-
-  <!-- Estilos mínimos para el icono en tarjeta (sin tocar tu CSS global) -->
-  <style>
-    .card .icon-wrap{display:flex;justify-content:center;align-items:center;margin:6px 0 10px}
-    .card .icon{width:56px;height:56px;image-rendering:pixelated}
-    .pill{display:inline-block;background:#1f2f45;border:1px solid rgba(255,255,255,.12);
-          color:#cfe4ff;border-radius:999px;padding:6px 10px;font-size:12px}
-  </style>
 </head>
-<body>
-<header class="header">
-  <div class="brand" id="brandTap">
-    <span class="dot"></span>
-    <div>
-      <div>Seven de Burgers</div>
-      <div class="title-sub">Kiosko</div>
+<body class="theme-8bit">
+  <header class="header header-8bit">
+    <div class="brand brand-8bit" id="brandTap">
+      <span class="pixel-dot"></span>
+      <div>
+        <div class="brand-title">Seven de Burgers</div>
+        <div class="brand-sub">Kiosko</div>
+      </div>
+    </div>
+
+    <!-- HUD de juego -->
+    <div class="hud">
+      <div class="hud-item"><span class="coin">🟡</span> <span id="hudCoins">x00</span></div>
+      <div class="hud-item hearts" aria-label="vidas">
+        <span>❤</span><span>❤</span><span class="heart-off">❤</span>
+      </div>
+    </div>
+
+    <!-- Menú oculto (aparece tras 7 taps al logo) -->
+    <nav id="navRoles" class="nav-roles" style="display:none">
+      <a class="btn-8bit ghost" href="../mesero/index.html">Mesero</a>
+      <a class="btn-8bit ghost" href="../cocina/index.html">Cocina</a>
+      <a class="btn-8bit ghost" href="../admin/index.html">Admin</a>
+    </nav>
+  </header>
+
+  <main class="container container-8bit">
+    <section class="panel-8bit">
+      <h2 class="title-8bit">¡Elige tu modo de juego!</h2>
+      <div class="row wrap">
+        <button class="btn-8bit" id="btnMinis">Minis & Combos</button>
+        <button class="btn-8bit ghost" id="btnBig">Hamburguesas grandes</button>
+      </div>
+    </section>
+
+    <section class="grid" id="cards"></section>
+  </main>
+
+  <!-- Modal Orden -->
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="modal-card modal-8bit">
+      <div class="modal-head">
+        <div id="mTitle" class="title-8bit">Orden</div>
+        <button class="btn-8bit ghost small" id="mClose" aria-label="Cerrar">Cerrar</button>
+      </div>
+      <div class="modal-body" id="mBody"></div>
+      <div class="modal-foot">
+        <div class="total-bar">
+          <div class="total" id="mTotal">$0</div>
+          <button class="btn-8bit" id="mConfirm">Confirmar pedido</button>
+        </div>
+      </div>
     </div>
   </div>
-  <!-- Oculto; se revela con taps en el logo -->
-  <nav id="navRoles" style="display:none;gap:8px">
-    <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
-    <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
-    <a class="btn ghost small" href="../admin/index.html">Admin</a>
-  </nav>
-</header>
 
-<main class="container">
-  <div class="card" id="mode">
-    <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
-    <div class="row" style="gap:10px;flex-wrap:wrap">
-      <button class="btn" id="btnMinis">Minis & Combos</button>
-      <button class="btn ghost" id="btnBig">Hamburguesas grandes</button>
+  <!-- Modal bocadillo ingredientes -->
+  <div class="bubble" id="bubble" role="dialog" aria-modal="true" style="display:none">
+    <div class="bubble-card">
+      <div class="bubble-head">
+        <div class="title-8bit" id="bTitle">Ingredientes</div>
+        <button class="btn-8bit ghost small" id="bClose">×</button>
+      </div>
+      <div class="bubble-body" id="bBody"></div>
     </div>
   </div>
 
-  <div class="grid" id="cards"></div>
-</main>
-
-<!-- Modal pedido -->
-<div class="modal" id="modal"><div class="modal-card">
-  <div class="modal-head">
-    <div id="mTitle">Orden</div>
-    <button class="btn ghost small" id="mClose">Cerrar</button>
-  </div>
-  <div class="modal-body" id="mBody"></div>
-  <div class="modal-foot">
-    <div class="total-bar">
-      <div class="total" id="mTotal">$0</div>
-      <button class="btn" id="mConfirm">Confirmar pedido</button>
-    </div>
-  </div>
-</div></div>
-
-<script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
