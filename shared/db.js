@@ -1,62 +1,52 @@
-//<!-- /shared/db.js -->
-<script type="module">
-import { db } from './firebase.js';
+// ✅ db.js
 import {
-  collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, setDoc
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+  db, ensureAuth, collection, doc,
+  addDoc, updateDoc, deleteDoc,
+  onSnapshot, serverTimestamp, query, orderBy
+} from "./firebase.js";
 
-const ORDERS = 'orders';
-const ARCH  = 'orders_archive';
+const ORDERS = "orders";
+const ARCHIVE = "orders_archive";
 
-// Crear pedido (Kiosko / Mesero)
-export async function createOrder(payload){
-  // payload: {customer, qty, subtotal, item{...}, baseIngredients[], baseSauce, extras{...}, notes}
+// 📝 Crear pedido
+export async function createOrder(payload) {
+  await ensureAuth();
   const ref = await addDoc(collection(db, ORDERS), {
     ...payload,
-    status: 'PENDING',
-    createdAt: Date.now()
+    status: "PENDING",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   });
   return ref.id;
 }
 
-// Suscripción (Admin/Mesero/Cocina)
-export function onOrdersSnapshot(cb){
-  return onSnapshot(collection(db, ORDERS), (snap)=>{
-    const items = [];
-    snap.forEach(d=> items.push({id:d.id, ...d.data()}));
-    // Ordena por fecha asc
-    items.sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
-    cb(items);
-  });
-}
-
-export async function setStatus(id, status){
-  await updateDoc(doc(db, ORDERS, id), { status });
-}
-
-export async function updateOrder(id, patch){
-  await updateDoc(doc(db, ORDERS, id), patch);
-}
-
-export async function deleteOrder(id){
-  await deleteDoc(doc(db, ORDERS, id));
-}
-
-export async function archiveDelivered(id){
-  const dref = doc(db, ORDERS, id);
-  // obtenemos los datos actuales vía onSnapshot upstream; aquí hacemos un “soft move”:
-  const move = new Promise((resolve,reject)=>{
-    const unsub = onOrdersSnapshot(async (list)=>{
-      const found = list.find(x=>x.id===id);
-      if(!found){ return; }
-      try{
-        await setDoc(doc(db, ARCH, id), {...found, archivedAt:Date.now()});
-        await deleteDoc(dref);
-        unsub();
-        resolve(true);
-      }catch(err){ reject(err); }
+// 🔔 Escuchar pedidos
+export function onOrdersSnapshot(cb) {
+  ensureAuth().then(() => {
+    const q = query(collection(db, ORDERS), orderBy("createdAt", "asc"));
+    onSnapshot(q, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      cb(list);
     });
   });
-  return move;
 }
-</script>
+
+// 🔄 Cambiar estado
+export async function setStatus(id, status) {
+  await ensureAuth();
+  await updateDoc(doc(db, ORDERS, id), {
+    status,
+    updatedAt: serverTimestamp()
+  });
+}
+
+// 📦 Archivar pedidos entregados
+export async function archiveDelivered(id) {
+  await ensureAuth();
+  const ref = doc(db, ORDERS, id);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await setDoc(doc(db, ARCHIVE, id), snap.data());
+    await deleteDoc(ref);
+  }
+}
