@@ -28,7 +28,7 @@ apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
     storageBucket: "seven-de-burgers.firebasestorage.app",
     messagingSenderId: "34089845279",
     appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
-    measurementId: "G-Q8YQJGL2XY
+  //  measurementId: "G-Q8YQJGL2XY
       };
 // ⬆⬆⬆ REEMPLAZA ESTO CON TU CONFIG REAL ⬆⬆⬆
 
