@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Kiosko — Seven de Burgers</title>
 
-  <!-- Estilos mínimos para la barra de carrito (reutiliza tu tema) -->
+  <!-- Estilos mínimos para la barra de carrito -->
   <style>
     .cartbar {
       position: fixed; left: 50%; transform: translateX(-50%);
@@ -25,7 +25,7 @@
 </head>
 <body>
 <header class="header">
-  <!-- Taps al logo: 7 en 2s abre PIN modal -->
+  <!-- 7 taps → PIN -->
   <div class="brand" id="brandTap">
     <span class="dot"></span>
     <div>
@@ -33,7 +33,7 @@
       <div class="title-sub">Kiosko</div>
     </div>
   </div>
-  <!-- (backup) Nav visible si desbloqueas con PIN -->
+  <!-- Nav visible solo si entras con PIN -->
   <nav id="navRoles" style="display:none;gap:8px">
     <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
     <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
@@ -53,7 +53,7 @@
   <div class="grid" id="cards"></div>
 </main>
 
-<!-- Modal de item -->
+<!-- Modal de producto -->
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
   <div class="modal-card">
     <div class="modal-head">
@@ -64,6 +64,7 @@
     <div class="modal-foot">
       <div class="total-bar">
         <div class="total" id="mTotal">$0</div>
+        <!-- IMPORTANTE: este ID lo usa el JS -->
         <button class="btn" id="mAdd">Agregar al pedido</button>
       </div>
     </div>
@@ -94,7 +95,7 @@
   <button class="btn small" id="openCart">Revisar</button>
 </div>
 
-<!-- Modal oculto de PIN para roles -->
+<!-- Modal PIN (roles) -->
 <div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
