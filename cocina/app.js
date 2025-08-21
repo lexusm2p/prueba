@@ -1,9 +1,15 @@
 // /cocina/app.js
-import { subscribeOrders, setStatus, archiveDelivered, updateOrder } from '../shared/db.js';
+import {
+  subscribeOrders, setStatus, archiveDelivered, updateOrder,
+  applyInventoryForOrder
+} from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 
 const Status = { PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY' };
+
 let CURRENT_LIST = [];
+// IDs de órdenes ya "tomadas" en esta sesión (para ocultar el botón sin esperar snapshot)
+const LOCALLY_TAKEN = new Set();
 
 subscribeOrders((orders)=>{
   CURRENT_LIST = orders || [];
@@ -37,7 +43,7 @@ function renderCard(o){
 
   const meta = (o.orderType === 'dinein')
     ? `Mesa: <b>${escapeHtml(o.table||'?')}</b>`
-    : 'Pickup';
+    : (o.orderType === 'pickup' ? 'Pickup' : (o.orderType || '—'));
 
   const itemsHtml = items.map(it=>{
     const ingr = (it.baseIngredients||[]).map(i=>`<div class="k-badge">${escapeHtml(i)}</div>`).join('');
@@ -58,8 +64,10 @@ function renderCard(o){
       </div>`;
   }).join('');
 
+  // Lógica de acciones por estado + protección si ya fue tomada localmente
+  const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
-    (o.status === Status.PENDING)     ? `<button class="btn" data-a="take">Tomar</button>` : '',
+    canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
     (o.status === Status.IN_PROGRESS) ? `<button class="btn ok" data-a="ready">Listo</button>` : '',
     `<button class="btn warn" data-a="deliver">Entregar</button>`,
     (o.status === Status.PENDING || o.status === Status.IN_PROGRESS) ? `<button class="btn ghost" data-a="edit">Editar</button>` : ''
@@ -77,19 +85,65 @@ function renderCard(o){
 document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-a]'); if(!btn) return;
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
-  const a = btn.dataset.a; btn.disabled = true;
+  const a = btn.dataset.a;
+
+  // Evita doble click
+  btn.disabled = true;
+
   try{
-    if (a==='take'){ await setStatus(id,Status.IN_PROGRESS); beep(); toast('En preparación'); return; }
-    if (a==='ready'){ await setStatus(id,Status.READY); beep(); toast('Listo 🛎️'); return; }
-    if (a==='deliver'){ await archiveDelivered(id); beep(); toast('Entregado ✔️'); card.remove(); return; }
+    if (a==='take'){
+      // Marca local para que no vuelva a renderizar "Tomar" aunque todavía no llegue el snapshot
+      LOCALLY_TAKEN.add(id);
+      // Feedback inmediato en UI
+      btn.textContent = 'Tomando…';
+      // Aplica inventario (vasitos por aderezos extra, etc.)
+      const order = CURRENT_LIST.find(x=>x.id===id);
+      if(order){
+        // Asegura que venga el id
+        await applyInventoryForOrder({ ...order, id });
+      }
+      // Cambia estado
+      await setStatus(id, Status.IN_PROGRESS);
+      beep(); toast('En preparación');
+      // Rerender local rápido
+      render(CURRENT_LIST);
+      return;
+    }
+
+    if (a==='ready'){
+      await setStatus(id, Status.READY);
+      beep(); toast('Listo 🛎️');
+      return;
+    }
+
+    if (a==='deliver'){
+      await archiveDelivered(id);
+      beep(); toast('Entregado ✔️');
+      card.remove();
+      return;
+    }
+
     if (a==='edit'){
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const notes = prompt('Editar notas generales para cocina:', order.notes||'');
-      if (notes!==null){ await updateOrder(id,{ notes }); toast('Notas actualizadas'); }
+      if (notes!==null){
+        await updateOrder(id,{ notes });
+        toast('Notas actualizadas');
+      }
       return;
     }
-  }catch(err){ console.error(err); toast('Error al actualizar'); }
-  finally{ btn.disabled=false; }
+  }catch(err){
+    console.error(err);
+    toast('Error al actualizar');
+    // si falló "take", quita la marca local para poder reintentar
+    if(a==='take'){ LOCALLY_TAKEN.delete(id); }
+  }finally{
+    btn.disabled = false;
+  }
 });
 
-function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+function escapeHtml(s=''){
+  return String(s).replace(/[&<>"']/g, m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+  }[m]));
+}
