@@ -79,7 +79,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gsta
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ⬇️ PON TU CONFIG AQUÍ
-    
+const firebaseConfig = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
   authDomain: "seven-de-burgers.firebaseapp.com",
   projectId: "seven-de-burgers",
