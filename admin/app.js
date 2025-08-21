@@ -8,6 +8,8 @@ import {
   upsertSupplier,
   setHappyHour,
   subscribeHappyHour,
+  // 👇 NUEVO: lo usamos para crear el item si no existe
+  upsertInventoryItem,
 } from '../shared/db.js';
 import { toast } from '../shared/notify.js';
 
@@ -29,7 +31,6 @@ const typeEl = document.getElementById('repType');
 const histEl = document.getElementById('repHist');
 document.getElementById('btnRepGen').onclick = runReports;
 
-// default: últimos 7 días
 const today = new Date(); const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
 if (fromEl && toEl) {
   fromEl.value = weekAgo.toISOString().slice(0, 10);
@@ -38,9 +39,9 @@ if (fromEl && toEl) {
 
 async function runReports() {
   try {
-    const from = new Date(fromEl.value + 'T00:00:00');
-    const to   = new Date(toEl.value   + 'T23:59:59');
-    const type = typeEl.value; // all|pickup|dinein
+    const from = new Date((fromEl.value||'') + 'T00:00:00');
+    const to   = new Date((toEl.value||'')   + 'T23:59:59');
+    const type = typeEl?.value || 'all'; // all|pickup|dinein
     const includeArchive = (histEl?.value !== 'No');
 
     const orders = await getOrdersRange({ from, to, includeArchive, orderType: type === 'all' ? null : type });
@@ -104,25 +105,7 @@ function fillTable(id, arr) {
     : '<tr><td colspan="3">—</td></tr>';
 }
 
-/* ============== Compras ============== */
-const btnAddPurchase = document.getElementById('btnAddPurchase');
-btnAddPurchase && (btnAddPurchase.onclick = async () => {
-  const name = (q('#pName').value || '').trim();
-  const qty  = Number(q('#pQty').value || 0);
-  const cost = Number(q('#pCost').value || 0);
-  const vendor = (q('#pVendor')?.value || '').trim();
-  if (!name || qty <= 0 || cost <= 0) { toast('Completa ingrediente, cantidad y costo'); return; }
-
-  try {
-    // Para registrar compra necesitamos el ID del ítem en inventario.
-    // Usaremos el nombre en minúsculas como ID (mismo criterio de db.js para inventory).
-    const itemId = name.toLowerCase();
-    await recordPurchase({ itemId, qty, unitCost: cost, supplierId: vendor || null });
-    toast('Compra registrada');
-  } catch (e) { console.error(e); toast('Error al registrar compra'); }
-});
-
-/* ============== Inventario ============== */
+/* ============== Inventario (suscripción) ============== */
 const invRows = [];
 subscribeInventory(items => {
   invRows.length = 0; invRows.push(...items);
@@ -144,6 +127,45 @@ function renderInventoryTable() {
     </tr>`).join('');
   tb.innerHTML = rows || '<tr><td colspan="5">—</td></tr>';
 }
+
+/* ============== Compras (CORREGIDO) ============== */
+const btnAddPurchase = document.getElementById('btnAddPurchase');
+btnAddPurchase && (btnAddPurchase.onclick = async () => {
+  const name = (q('#pName')?.value || '').trim();
+  const qty  = Number(q('#pQty')?.value || 0);
+  const cost = Number(q('#pCost')?.value || 0);
+  const supplierId = (q('#pVendor')?.value || '').trim() || null; // opcional
+  if (!name || qty <= 0 || cost <= 0) {
+    toast('Completa ingrediente, cantidad y costo');
+    return;
+  }
+
+  try {
+    // 1) Buscar item existente por nombre (insensible a mayúsculas)
+    const norm = (s)=> String(s||'').trim().toLowerCase();
+    const found = invRows.find(it => norm(it.name) === norm(name));
+
+    // 2) Crear si no existe
+    let itemId = found?.id;
+    if (!itemId) {
+      itemId = await upsertInventoryItem({
+        name, unit: 'unit', currentStock: 0, min: 0, max: 0, perish: false
+      });
+      toast('Ingrediente nuevo creado en inventario');
+    }
+
+    // 3) Registrar compra + abonar stock (recordPurchase ya descuenta/abona vía adjustStock)
+    await recordPurchase({ itemId, qty, unitCost: cost, supplierId });
+
+    // 4) Reset UI
+    if (q('#pQty'))  q('#pQty').value = '1';
+    if (q('#pCost')) q('#pCost').value = '0';
+    toast('Compra registrada');
+  } catch (e) {
+    console.error(e);
+    toast('Error al registrar compra');
+  }
+});
 
 /* ============== Proveedores ============== */
 subscribeSuppliers(renderVendors);
@@ -189,5 +211,5 @@ function setTxt(id,v){ const el=document.getElementById(id); if(el) el.textConte
 function setMoney(id,v){ const el=document.getElementById(id); if(el) el.textContent=fmtMoney(v); }
 const fmtMoney = n => '$' + Number(n||0).toFixed(0);
 const esc = s => String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
-// autogenerar un primer reporte al abrir
-runReports();
+
+runReports(); // genera un primer reporte al abrir
