@@ -1,291 +1,177 @@
-/* =====================================================================
-   Seven de Burgers — UI Retro Pixel (alto contraste)
-   Archivo: /shared/styles.css
-   ---------------------------------------------------------------------
-   - Paleta con contraste AA/AAA
-   - Tipografía pixel (Press Start 2P) con fallbacks
-   - Componentes: header, grid/cards, botones, modal, columnas cocina,
-     formularios, toasts, badges, tablas básicas.
-   - Responsive y accesible
-   ===================================================================== */
-
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+/* ===========================
+   Seven de Burgers – UI base
+   Estilo pixel/retro con alto contraste
+   =========================== */
 
 :root{
-  /* Colores base */
-  --bg:#0d0d0d;              /* Fondo arcade */
-  --bg-2:#141414;            /* Panel oscuro */
-  --panel:#1a1a40;           /* Azul violeta retro */
-  --panel-2:#20204a;         /* Panel más claro */
-  --ink:#ffffff;             /* Texto principal */
-  --ink-2:#cfd6e6;           /* Texto secundario */
-  --muted:#b7bfd6;           /* Texto suave (ingredientes) */
-  --pixel:#000000;           /* Sombra pixel */
+  --bg: #0b0f16;
+  --bg-2:#131b28;
+  --panel:#1a2436;
+  --ink:#e9f4ff;
+  --ink-soft:#b8c7db;
+  --brand:#ffd24a;    /* amarillo pixel */
+  --brand-2:#ffb52a;
+  --stroke: rgba(255,255,255,.08);
+  --shadow: 0 10px 24px rgba(0,0,0,.45);
+  --radius: 14px;
 
-  /* Marca */
-  --accent:#ffcc00;          /* Amarillo arcade */
-  --accent-2:#ff8800;        /* Naranja */
-  --link:#7cc9ff;            /* Cian enlaces */
-
-  /* Estados */
-  --ok:#2fd27d;
-  --warn:#f7b500;
-  --danger:#ff6b6b;
-
-  /* Dimensiones */
-  --r:10px;                  /* radio estándar */
-  --gap:16px;                /* espacio estándar */
-  --shadow:3px 3px var(--pixel);
+  /* botones */
+  --btn-bg: linear-gradient(180deg,var(--brand),var(--brand-2));
+  --btn-shadow: 0 6px 0 #c18716, 0 12px 20px rgba(0,0,0,.35);
+  --btn-ghost: #24324a;
+  --ok:#24d07a; --ok-2:#12b062;
+  --warn:#ff944d; --danger:#ff6b6b;
 }
 
-/* Reset mínimo */
 *{box-sizing:border-box}
 html,body{height:100%}
-html{scroll-behavior:smooth}
 body{
   margin:0;
-  background: radial-gradient(1200px 600px at 50% -10%, #172238 0%, #0d0d0d 55%, #0d0d0d 100%);
   color:var(--ink);
-  font-family:'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  font-size:14px;
-  line-height:1.45;
-  text-rendering:optimizeLegibility;
+  background:
+    radial-gradient(1200px 800px at 60% -200px, #1b3657 0%, transparent 60%),
+    linear-gradient(180deg,#0a1018,#090e16 40%, #070b12 100%);
+  font-family: "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  letter-spacing:.2px;
 }
 
-a{color:var(--link); text-decoration:none}
-a:hover{filter:brightness(1.15)}
+/* Accesibilidad: focus visible */
+:focus-visible{outline:2px dashed var(--brand); outline-offset:3px}
 
-/* ===========================
-   Header (barra superior)
-   =========================== */
+/* Enlaces */
+a{color:#7cc9ff; text-decoration:none}
+a:hover{filter:brightness(1.1)}
+
+/* ---------- Header ---------- */
 .header{
-  position:sticky; top:0; z-index:20;
+  position:sticky; top:0; z-index:50;
   display:flex; align-items:center; justify-content:space-between;
-  gap:12px; padding:12px 16px;
-  background:linear-gradient(180deg, #12122a, #0f0f1f);
-  border-bottom:2px solid var(--accent);
-  box-shadow:var(--shadow);
+  padding:12px 16px; background:rgba(9,14,22,.85); backdrop-filter:blur(6px);
+  border-bottom:1px solid var(--stroke)
 }
-.brand{display:flex; align-items:center; gap:10px}
-.brand .dot{
-  width:10px; height:10px; background:var(--accent);
-  border:2px solid var(--pixel); box-shadow:0 0 10px var(--accent);
-  border-radius:2px;
-}
-.title-sub{color:var(--muted); font-size:10px; margin-top:4px}
+.brand{display:flex; align-items:center; gap:10px; font-weight:800}
+.brand .dot{width:10px;height:10px;background:var(--brand);border-radius:2px;box-shadow:0 0 14px var(--brand)}
+.title-sub{font-size:12px;color:var(--ink-soft)}
 
-/* ===========================
-   Contenedor y rejilla
-   =========================== */
-.container{max-width:1080px; margin:0 auto; padding:16px}
+/* ---------- Contenedor ---------- */
+.container{max-width:1080px;margin:0 auto;padding:16px}
 
-.grid{
-  display:grid; gap:var(--gap);
-  grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
-}
+/* ---------- Tipos ---------- */
+h1,h2,h3{margin:0 0 8px 0}
+h2{font-size:28px; text-shadow:0 2px 0 rgba(0,0,0,.35)}
+h3{font-size:20px}
 
-/* ===========================
-   Tarjetas (cards)
-   =========================== */
-.card{
-  background:linear-gradient(180deg, var(--panel), var(--panel-2));
-  border:2px solid var(--accent);
-  border-radius:8px;
-  padding:16px;
-  color:var(--ink-2);
-  box-shadow:var(--shadow);
-}
-.card h2, .card h3{
-  margin:0 0 8px 0; color:var(--accent);
-  text-shadow:1px 1px var(--pixel);
-}
-.card .muted{color:var(--muted)}
-.price{
-  color:var(--accent);
-  font-weight:700;
-  text-shadow:1px 1px var(--pixel);
-}
-
-/* ===========================
-   Botones (pixel)
-   =========================== */
+/* ---------- Botones ---------- */
 .btn{
-  appearance:none; border:none; outline:none;
-  cursor:pointer; user-select:none;
-  font:inherit; color:#000;
-  padding:10px 14px;
-  background:linear-gradient(180deg, var(--accent), var(--accent-2));
-  border:2px solid var(--pixel);
-  border-radius:6px;
-  box-shadow:var(--shadow);
-  transition:transform .08s ease, filter .15s ease;
+  appearance:none; border:none; cursor:pointer; user-select:none;
+  padding:10px 14px; border-radius:12px; color:#0b0f16; font-weight:900;
+  background:var(--btn-bg); box-shadow:var(--btn-shadow); transform:translateY(0);
+  transition:transform .12s ease, filter .12s ease;
 }
-.btn:hover{filter:brightness(1.05)}
-.btn:active{transform:translateY(1px)}
-.btn.ghost{
-  background:#2a2a2a; color:var(--ink);
-  border:2px solid var(--accent);
-}
-.btn.secondary{
-  background:linear-gradient(180deg, #3af08f, #17a15a);
-  color:#03150e;
-  border:2px solid var(--pixel);
-}
-.btn.warn{
-  background:linear-gradient(180deg, #ffe08a, #ffb100);
-}
-.btn.danger{
-  background:linear-gradient(180deg, #ff8d8d, #ff5a5a);
-  color:#1a0000;
-}
-.small{font-size:12px}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn.ghost{background:var(--btn-ghost); color:var(--ink); box-shadow:none; border:1px solid var(--stroke)}
+.btn.ok{background:linear-gradient(180deg,var(--ok),var(--ok-2)); box-shadow:0 6px 0 #0d7d49, 0 12px 20px rgba(0,0,0,.35)}
+.btn.warn{background:linear-gradient(180deg,#ffb277,#ff944d); box-shadow:0 6px 0 #c06d3c, 0 12px 20px rgba(0,0,0,.35)}
+.btn.danger{background:linear-gradient(180deg,#ff8b8b,#ff6b6b); box-shadow:0 6px 0 #b94a4a, 0 12px 20px rgba(0,0,0,.35)}
+.btn.small{padding:8px 10px; font-size:11px}
 
-/* Fila utilitaria */
-.row{display:flex; align-items:center; justify-content:space-between; gap:10px}
-
-/* Badges */
+/* ---------- Badges ---------- */
 .badge{
-  display:inline-block; padding:6px 10px;
-  background:#2e2e2e; color:var(--ink-2);
-  border:2px solid var(--accent);
-  border-radius:999px; box-shadow:var(--shadow);
-  font-size:11px;
+  background:#202c42; color:var(--ink-soft);
+  border:1px solid var(--stroke); border-radius:10px; padding:6px 10px;
 }
 
-/* ===========================
-   Modal (kiosko)
-   =========================== */
-.modal{
-  position:fixed; inset:0; display:none; place-items:center;
-  background:rgba(0,0,0,.6); z-index:50;
+/* ---------- Grid de tarjetas ---------- */
+.grid{
+  display:grid; gap:16px;
+  grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
 }
+
+/* Tarjeta con layout estable */
+.card{
+  background:linear-gradient(180deg, #1b263b, #162235);
+  border:1px solid var(--stroke); border-radius:var(--radius); box-shadow:var(--shadow);
+  display:grid; grid-template-rows:auto 1fr auto; padding:16px; min-height:260px;
+}
+.card h3{line-height:1.2}
+
+/* Cuerpo con ingredientes */
+.card-body{color:var(--ink-soft); overflow:hidden}
+.card-body p{margin:0}
+
+/* “Clamp” por defecto en móviles (3 líneas) */
+.card-body .clamp{
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden;
+}
+.card-body .expanded{-webkit-line-clamp:unset}
+
+/* Footer de acciones */
+.card-actions{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px; flex-wrap:wrap; margin-top:10px;
+}
+.card-actions .left{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.price{color:var(--brand); font-weight:900; font-size:16px}
+
+/* ---------- Modal ---------- */
+.modal{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); z-index:100}
 .modal.open{display:grid}
-.modal-card{
-  width:min(680px, 92vw); max-height:86vh; overflow:auto;
-  background:#0f1230; color:var(--ink);
-  border:2px solid var(--accent); border-radius:8px;
-  box-shadow:var(--shadow);
-}
-.modal-head, .modal-foot{
-  padding:12px 14px; border-bottom:2px solid var(--accent);
-  display:flex; align-items:center; justify-content:space-between; gap:8px;
-}
-.modal-foot{border-bottom:none; border-top:2px solid var(--accent)}
+.modal-card{width:min(640px,92vw); max-height:86vh; overflow:auto; background:#0f1b29;
+  border:1px solid var(--stroke); border-radius:16px; box-shadow:var(--shadow)}
+.modal-head{padding:12px 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--stroke)}
 .modal-body{padding:14px}
-
-/* Campos de formulario */
-.field{margin:12px 0}
-label{display:block; font-size:11px; color:var(--muted); margin-bottom:6px}
-input[type=text], input[type=number], select, textarea{
-  width:100%; padding:12px; color:var(--ink);
-  background:#0b0d22; border:2px solid var(--pixel);
-  border-radius:6px; box-shadow:inset 3px 3px #000;
-}
-textarea{min-height:90px}
-
-/* Lista limpia (aderezos/ingredientes) */
-.ul-clean{
-  display:grid; grid-template-columns:22px 1fr auto;
-  gap:10px 10px; align-items:center; margin:8px 0;
-}
-.ul-clean input[type=checkbox]{width:18px; height:18px; accent-color:var(--accent)}
-.ul-clean .tag{font-size:11px; color:var(--ink-2)}
-
-/* Barra total modal */
+.modal-foot{position:sticky; bottom:0; display:flex; gap:10px; padding:12px; background:#0f1b29; border-top:1px solid var(--stroke)}
 .total-bar{display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%}
-.total{font-size:18px; font-weight:900; color:var(--accent); text-shadow:1px 1px var(--pixel)}
+.total{font-size:18px; font-weight:900; color:var(--brand)}
+.field{margin:10px 0}
+label{display:block; font-size:13px; color:var(--ink-soft); margin-bottom:6px}
+input[type=text],input[type=number],select,textarea{
+  width:100%; padding:12px; border-radius:10px; border:1px solid var(--stroke);
+  background:#0b1522; color:var(--ink);
+}
+textarea{min-height:80px}
 
-/* Separador */
-.hr{height:2px; background:var(--accent); opacity:.25; margin:12px 0}
+/* Listas de extras: 3 columnas (checkbox, label, precio) */
+.ul-clean{list-style:none; margin:8px 0; padding:0;
+  display:grid; grid-template-columns:22px 1fr auto; row-gap:9px; column-gap:10px; align-items:center}
+.ul-clean input[type=checkbox]{width:18px; height:18px; accent-color:var(--brand)}
+.ul-clean .tag{font-size:12px; color:var(--ink-soft)}
 
-/* ===========================
-   Toast (notificaciones)
-   =========================== */
+/* ---------- Cocina/Mesero ---------- */
+.columns, .k-columns{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+.k-col, .col{background:#0f1b29; border:1px solid var(--stroke); border-radius:14px; padding:12px; min-height:300px}
+.k-card{border:1px solid var(--stroke); border-radius:12px; padding:10px; margin:10px 0; background:linear-gradient(180deg,#17243a,#111b2b)}
+.k-card h4{margin:0 0 6px 0}
+.k-badges{display:flex; gap:6px; flex-wrap:wrap}
+.k-badge{background:#202c42; border:1px solid var(--stroke); padding:2px 8px; border-radius:999px; font-size:12px; color:var(--ink-soft)}
+.k-actions{display:flex; gap:8px; margin-top:8px}
+
+/* ---------- Toast ---------- */
 .toast{
-  position:fixed; left:50%; transform:translateX(-50%);
-  bottom:18px; z-index:70;
-  background:#11152f; color:var(--ink);
-  border:2px solid var(--accent); border-radius:6px;
-  padding:12px 14px; display:none; align-items:center; gap:10px;
-  box-shadow:var(--shadow);
+  position:fixed; left:50%; transform:translateX(-50%); bottom:18px; z-index:120;
+  background:#13243a; border:1px solid var(--stroke); padding:12px 14px; border-radius:12px; display:none; align-items:center; gap:10px; box-shadow:var(--shadow)
 }
 .toast.show{display:flex; animation:pop .18s ease-out}
-@keyframes pop{from{transform:translate(-50%,6px);opacity:.3}to{transform:translate(-50%,0);opacity:1}}
+@keyframes pop{from{transform:translate(-50%,6px);opacity:.3} to{transform:translate(-50%,0);opacity:1}}
 
-/* ===========================
-   Columnas — Cocina / Mesero
-   =========================== */
-.k-columns{
-  display:grid; gap:var(--gap);
-  grid-template-columns:repeat(3, minmax(0, 1fr));
-}
-.col{min-height:320px}
-.empty{color:var(--muted); padding:8px 0}
+/* ---------- Responsivo ---------- */
+#mode .row{flex-wrap:wrap}
 
-.k-card{
-  background:linear-gradient(180deg, #172048, #101634);
-  border:2px solid var(--accent);
-  border-radius:8px; padding:12px; margin:12px 0;
-  color:var(--ink-2); box-shadow:var(--shadow);
-}
-.k-head .title{color:var(--accent); text-shadow:1px 1px var(--pixel)}
-.k-head .sub{color:var(--ink-2); font-size:12px}
-.k-badges{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
-.k-badge{
-  background:#2b2b2b; color:var(--ink-2);
-  border:2px solid var(--accent); border-radius:999px;
-  padding:2px 8px; font-size:10px; box-shadow:var(--shadow);
-}
-.k-actions{display:flex; gap:8px; margin-top:10px}
-
-/* Lista de ingredientes vertical (cocina) */
-.k-ingredients{
-  margin:8px 0 0 0; padding-left:18px; color:var(--ink-2);
-}
-.k-ingredients li{margin:3px 0}
-
-/* ===========================
-   Tablas (admin/mesero simples)
-   =========================== */
-.table{width:100%; border-collapse:separate; border-spacing:0}
-.table th, .table td{
-  text-align:left; padding:10px 12px; font-size:12px;
-  border-bottom:1px dashed #3a3a3a;
-}
-.table th{color:var(--accent)}
-.table tr:hover td{background:#181a33}
-
-/* ===========================
-   Utilidades
-   =========================== */
-.right{margin-left:auto}
-.muted{color:var(--muted)}
-.small{font-size:12px}
-.hide{display:none !important}
-
-/* ===========================
-   Responsivo
-   =========================== */
-@media (max-width: 960px){
-  .k-columns{grid-template-columns:1fr}
-  .header{padding:10px}
-  .container{padding:12px}
+@media (max-width: 1024px){
+  .grid{grid-template-columns:repeat(auto-fill, minmax(280px,1fr))}
 }
 
-@media (max-width: 400px){
+@media (max-width: 640px){
   body{font-size:12px}
-  .btn{padding:9px 12px}
   .grid{grid-template-columns:1fr}
+  .card{min-height:unset}
+  .btn{padding:9px 12px}
+  .btn.small{padding:7px 9px; font-size:10px}
+  .price{font-size:15px}
 }
 
-/* ===========================
-   Accesibilidad: enfoque visible
-   =========================== */
-:focus-visible{
-  outline:3px solid #00e1ff;
-  outline-offset:2px;
+@media (max-width: 380px){
+  .btn{padding:8px 10px}
+  .btn.small{padding:6px 8px; font-size:9.5px}
 }
-
-/* ===========================
-   Fin de estilos
-   =========================== */
