@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Admin — Seven de Burgers</title>
+  <style>
+    .grid-admin{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+    .kpi-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+    .kpi{background:#0c1322;border:1px solid var(--stroke);border-radius:12px;padding:10px}
+    .kpi .v{font-size:20px;font-weight:900;color:var(--accent)}
+    .mini-table{width:100%;border-collapse:collapse}
+    .mini-table th,.mini-table td{border-bottom:1px solid var(--stroke);padding:8px 6px;font-size:12px;text-align:left}
+    .mini-table td.num{text-align:right}
+    .row.gap8{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{background:#18243a;color:var(--ink);padding:4px 8px;border-radius:10px;font-size:11px}
+    .muted small code{background:#0c1322;padding:2px 4px;border-radius:6px}
+    .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+  </style>
 </head>
 <body>
 <header class="header">
@@ -16,41 +29,96 @@
     </div>
   </div>
   <nav class="row" style="gap:8px">
-    <a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a>
+    <a class="btn ghost small" href="../kiosk/index.html">Kiosko</a>
+    <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
+    <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
   </nav>
 </header>
 
 <main class="container">
-  <div class="grid" id="adminGrid">
+  <div class="grid-admin">
 
-    <!-- Compras rápidas -->
-    <div class="card">
-      <h3>Compras rápidas</h3>
-      <div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div>
-      <div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div>
-      <div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div>
-      <button class="btn" id="btnAddPurchase">Registrar compra</button>
-      <div class="muted small">* Guarda en colección <b>purchases</b>.</div>
-    </div>
+    <!-- ========== Reportes de ventas ========== -->
+    <section class="card">
+      <h3 style="margin:0 0 10px">Reportes de ventas</h3>
 
-    <!-- Ingredientes -->
-    <div class="card">
-      <h3>Ingredientes (costos)</h3>
-      <div class="field"><label>Nombre</label><input id="iName" type="text"/></div>
-      <div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div>
-      <button class="btn" id="btnSetIng">Guardar/Actualizar</button>
-      <div class="muted small">* Guarda en colección <b>ingredients</b>.</div>
-    </div>
+      <div class="filters">
+        <div class="field">
+          <label>Desde</label>
+          <input type="date" id="fFrom"/>
+        </div>
+        <div class="field">
+          <label>Hasta</label>
+          <input type="date" id="fTo"/>
+        </div>
+        <div class="field">
+          <label>Tipo de pedido</label>
+          <select id="fType">
+            <option value="">Todos</option>
+            <option value="pickup">Pickup</option>
+            <option value="dinein">Mesa</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Incluir archivo histórico</label>
+          <select id="fArchived">
+            <option value="1" selected>Sí</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+        <div class="field" style="align-self:end">
+          <button class="btn" id="btnRunReport">Generar</button>
+        </div>
+      </div>
 
-    <!-- Recetario (aderezos) -->
-    <div class="card">
-      <h3>Recetario (aderezos)</h3>
-      <div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div>
-      <div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div>
-      <div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div>
-      <button class="btn" id="btnSaveRecipe">Guardar receta</button>
-      <div class="muted small">* Guarda en colección <b>recipes</b>.</div>
-    </div>
+      <div class="hr"></div>
+
+      <div class="kpi-wrap">
+        <div class="kpi">
+          <div class="small muted">Órdenes</div>
+          <div id="kpiOrders" class="v">0</div>
+        </div>
+        <div class="kpi">
+          <div class="small muted">Artículos vendidos</div>
+          <div id="kpiItems" class="v">0</div>
+        </div>
+        <div class="kpi">
+          <div class="small muted">Ingresos</div>
+          <div id="kpiRevenue" class="v">$0</div>
+        </div>
+        <div class="kpi">
+          <div class="small muted">Ticket promedio</div>
+          <div id="kpiATP" class="v">$0</div>
+        </div>
+        <div class="kpi">
+          <div class="small muted">Pickup vs Mesa</div>
+          <div id="kpiSplit" class="v">–</div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h4 style="margin:8px 0">Top productos</h4>
+      <table class="mini-table" id="tblTop">
+        <thead><tr><th>Producto</th><th class="num">Unidades</th><th class="num">Ingresos</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h4 style="margin:14px 0 8px">Productos de baja rotación</h4>
+      <table class="mini-table" id="tblLow">
+        <thead><tr><th>Producto</th><th class="num">Unidades</th><th class="num">Ingresos</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h4 style="margin:14px 0 8px">Ventas por hora</h4>
+      <table class="mini-table" id="tblHours">
+        <thead><tr><th>Hora</th><th class="num">Órdenes</th><th class="num">Ingresos</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+    </section>
+
+    <!-- (Tu resto de tarjetas de Admin las puedes dejar debajo, si las usas) -->
 
   </div>
 </main>
