@@ -5,6 +5,23 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Kiosko — Seven de Burgers</title>
+
+  <!-- Estilos mínimos para la barra de carrito (reutiliza tu tema) -->
+  <style>
+    .cartbar {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: 12px; z-index: 60;
+      display: none; align-items: center; gap: 12px;
+      background: #111a2a; border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px; box-shadow: var(--shadow);
+      padding: 10px 12px;
+    }
+    .cartbar .pill { background:#18243a; color:var(--ink); padding:8px 10px; border-radius:10px; font-size:12px;}
+    .cartbar .total { color: var(--accent); font-weight: 900; }
+    @media (max-width:520px){
+      .cartbar{ width: calc(100% - 24px); }
+    }
+  </style>
 </head>
 <body>
 <header class="header">
@@ -16,7 +33,7 @@
       <div class="title-sub">Kiosko</div>
     </div>
   </div>
-  <!-- Nav oculto extra -->
+  <!-- (backup) Nav visible si desbloqueas con PIN -->
   <nav id="navRoles" style="display:none;gap:8px">
     <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
     <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
@@ -27,17 +44,16 @@
 <main class="container">
   <div class="card" id="mode">
     <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
-    <!-- Pestañas accesibles -->
     <div class="tabs" role="tablist" aria-label="Seleccionar categoría">
       <button class="btn tab is-active" id="btnMinis" role="tab" aria-selected="true">Minis & Combos</button>
-      <button class="btn tab"           id="btnBig"   role="tab" aria-selected="false">Hamburguesas grandes</button>
+      <button class="btn tab" id="btnBig" role="tab" aria-selected="false">Hamburguesas grandes</button>
     </div>
   </div>
 
   <div class="grid" id="cards"></div>
 </main>
 
-<!-- Modal de orden -->
+<!-- Modal de item -->
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
   <div class="modal-card">
     <div class="modal-head">
@@ -48,10 +64,34 @@
     <div class="modal-foot">
       <div class="total-bar">
         <div class="total" id="mTotal">$0</div>
-        <button class="btn" id="mConfirm">Confirmar pedido</button>
+        <button class="btn" id="mAdd">Agregar al pedido</button>
       </div>
     </div>
   </div>
+</div>
+
+<!-- Modal Carrito -->
+<div class="modal" id="cartModal" role="dialog" aria-modal="true" aria-labelledby="cartTitle" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="cartTitle">Tu pedido</div>
+      <button class="btn ghost small" id="cartClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body" id="cartBody"></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="total" id="cartTotal">$0</div>
+        <button class="btn" id="cartConfirm">Confirmar pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Barra flotante del carrito -->
+<div id="cartBar" class="cartbar" role="button" aria-label="Revisar pedido">
+  <span class="pill" id="cartCount">0 productos</span>
+  <span class="total" id="cartBarTotal">$0</span>
+  <button class="btn small" id="openCart">Revisar</button>
 </div>
 
 <!-- Modal oculto de PIN para roles -->
@@ -66,9 +106,7 @@
         <label>Ingresa PIN</label>
         <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" />
       </div>
-      <div class="field">
-        <small class="muted">Pistas (temporal): 1111=Mesero · 2222=Cocina · 9999=Admin</small>
-      </div>
+      <div class="field"><small class="muted">Temporal: 1111=Mesero · 2222=Cocina · 9999=Admin</small></div>
     </div>
     <div class="modal-foot">
       <div class="total-bar">
