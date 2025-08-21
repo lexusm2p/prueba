@@ -1,4 +1,3 @@
-<!-- Este archivo es JS ESModule; usa imports por CDN (compatibles con GitHub Pages) -->
 
   //<script type="module">
   // Este script existe solo para evitar que el navegador trate de parsear accidentalmente
