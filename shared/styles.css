@@ -281,5 +281,70 @@ textarea{ min-height:80px }
 
 /* Ajuste lectura */
 .card .muted.small{ line-height:1.35 }
+/* =========================================================
+   Ajustes responsive: Kiosko tarjetas y botones (mobile)
+   ========================================================= */
 
+/* Móviles comunes (≤ 520px) */
+@media (max-width: 520px){
+  .container{ padding:12px; }
+  .grid{ gap:12px; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); }
+
+  .card{
+    padding:12px 12px 86px;       /* espacio al fondo para barra */
+    border-radius:12px;
+    min-height: 220px;
+  }
+
+  .card h3{
+    font-size: clamp(16px, 5.2vw, 20px);
+    line-height: 1.15;
+    margin: 0 0 6px;
+    word-break: break-word;
+  }
+
+  /* Barra inferior interna */
+  .card .row:last-child{
+    left:12px; right:12px; bottom:12px;
+    gap:8px;
+  }
+
+  .card .price{
+    font-size: clamp(16px, 4.6vw, 18px);
+  }
+
+  .card .row:last-child .row{
+    gap:6px;
+    flex-wrap: nowrap;            /* botones en una fila cuando hay espacio */
+    justify-content: flex-end;
+  }
+
+  .card .row:last-child .btn{
+    min-width: auto;              /* que no obligue a crecer demasiado */
+    padding: 10px 12px;
+  }
+
+  .btn{ padding: 10px 12px; border-radius: 12px; }
+  .btn.small{ font-size: 12px; padding: 8px 10px; }
+}
+
+/* Extra pequeño (≤ 370px): apilar mejor la acción */
+@media (max-width: 370px){
+  /* La barra inferior se hace en dos niveles: precio arriba, botones abajo */
+  .card .row:last-child{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .card .row:last-child .row{
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;              /* si no caben, saltan a 2 líneas */
+  }
+
+  .card .row:last-child .btn{
+    flex: 1 1 48%;                /* dos botones por fila si es necesario */
+  }
+}
 /* Fin */
