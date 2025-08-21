@@ -1,37 +1,90 @@
 // /kiosk/app.js
+// Kiosko: catálogo, modal de compra, DLC minis, cambio de salsa sin costo, login oculto por PIN.
 import { beep, toast } from '../shared/notify.js';
 import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
 
-const state = { menu:null, mode:'mini', taps:0 };
+const state = { menu:null, mode:'mini' };
 
+/* -------------------------------------------
+   1) Login oculto: 7 toques al logo en 2s
+--------------------------------------------*/
 const brand = document.getElementById('brandTap');
-brand.addEventListener('click',()=>{
-  state.taps++;
-  if(state.taps>=7){
-    document.getElementById('navRoles').style.display='flex';
+let tapCount = 0;
+let tapTimer = null;
+
+brand.addEventListener('click', ()=>{
+  if (tapTimer) clearTimeout(tapTimer);
+  tapCount++;
+  // ventana de 2 segundos para juntar 7 taps
+  tapTimer = setTimeout(()=> tapCount=0, 2000);
+
+  if (tapCount >= 7) {
+    tapCount = 0;
+    openPinModal();
   }
-  setTimeout(()=>state.taps=0,900);
 });
 
+function openPinModal(){
+  const pinModal = document.getElementById('pinModal');
+  const pinInput = document.getElementById('pinInput');
+  const pinGo    = document.getElementById('pinGo');
+  const pinClose = document.getElementById('pinClose');
+
+  const show = ()=>{ pinModal.style.display='grid'; setTimeout(()=>pinInput.focus(),0); };
+  const hide = ()=>{ pinModal.style.display='none'; pinInput.value=''; };
+
+  const verifyPin = (pin)=>{
+    const map = {
+      '1111':'../mesero/index.html',
+      '2222':'../cocina/index.html',
+      '9999':'../admin/index.html',
+    };
+    return map[pin] || null;
+  };
+
+  const enter = ()=>{
+    const pin = (pinInput.value||'').trim();
+    const route = verifyPin(pin);
+    if (!route) { toast('PIN incorrecto'); return; }
+    hide();
+    // Por seguridad dejamos oculto #navRoles y redirigimos directo
+    location.href = route;
+  };
+
+  show();
+  pinGo.onclick = enter;
+  pinClose.onclick = hide;
+  pinInput.onkeydown = e=>{ if(e.key==='Enter') enter(); };
+}
+
+/* -------------------------------------------
+   2) Cambio de vistas (Minis / Grandes)
+--------------------------------------------*/
 document.getElementById('btnMinis').onclick = ()=>{ state.mode='mini'; renderCards(); }
 document.getElementById('btnBig').onclick  = ()=>{ state.mode='big';  renderCards(); }
 
+/* -------------------------------------------
+   3) Inicialización / Menu
+--------------------------------------------*/
 init();
-
 async function init(){
   state.menu = await fetchCatalogWithFallback();
   renderCards();
 }
-
 function money(n){ return '$'+n.toFixed(0); }
 
+/* -------------------------------------------
+   4) Tarjetas de productos
+--------------------------------------------*/
 function renderCards(){
   const grid = document.getElementById('cards'); grid.innerHTML='';
   const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
 
   items.forEach(it=>{
     const base = it.baseOf ? state.menu.burgers.find(b=>b.id===it.baseOf) : it;
-    const card = document.createElement('div'); card.className='card';
+
+    const card = document.createElement('div'); 
+    card.className='card';
     card.innerHTML = `
       <h3>${it.name}</h3>
       <div class="row">
@@ -43,13 +96,19 @@ function renderCards(){
       </div>`;
     grid.appendChild(card);
 
+    // Ingredientes (como ficha rápida)
     card.querySelector('[data-a="ing"]').onclick = ()=>{
       alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
     };
+
+    // Ordenar
     card.querySelector('[data-a="order"]').onclick = ()=> openModal(it, base);
   });
 }
 
+/* -------------------------------------------
+   5) Modal de orden
+--------------------------------------------*/
 function openModal(item, base){
   const modal = document.getElementById('modal'); modal.classList.add('open');
   const body  = document.getElementById('mBody');
@@ -60,10 +119,11 @@ function openModal(item, base){
   const ingr   = state.menu.extras.ingredients;
   const SP     = state.menu.extras.saucePrice;
   const IP     = state.menu.extras.ingredientPrice;
-  const DLC    = state.menu.extras.dlcCarneMini || 12;
+  const DLC    = state.menu.extras.dlcCarneMini ?? 12; // +12 acordado
 
   body.innerHTML = `
-    <div class="field"><label>Tu nombre</label>
+    <div class="field">
+      <label>Tu nombre</label>
       <input id="cName" type="text" placeholder="Escribe tu nombre" required/>
     </div>
 
@@ -83,28 +143,41 @@ function openModal(item, base){
       <label>Potenciar sabor con un aderezo recomendado (cambio sin costo)</label>
       <select id="swapSauce">
         <option value="">Dejar salsa por defecto</option>
-        ${((base.salsasSugeridas||[base.suggested]).filter(Boolean) || []).map(s=>`<option value="${s}">${s}</option>`).join('')}
+        ${((base.salsasSugeridas || [base.suggested]).filter(Boolean) || [])
+            .map(s=>`<option value="${s}">${s}</option>`).join('')}
       </select>
       <div class="muted small">* Cambio de salsa recomendado sin costo. Extras se cobran aparte.</div>
     </div>
 
-    <div class="field"><label>Aderezos extra</label>
+    <div class="field">
+      <label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
-        ${sauces.map((s,i)=>`<input type="checkbox" id="s${i}"/><label for="s${i}">${s}</label><span class="tag">(+${money(SP)})</span>`).join('')}
+        ${sauces.map((s,i)=>`
+          <input type="checkbox" id="s${i}"/>
+          <label for="s${i}">${s}</label>
+          <span class="tag">(+${money(SP)})</span>
+        `).join('')}
       </div>
     </div>
 
-    <div class="field"><label>Ingredientes extra</label>
+    <div class="field">
+      <label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
-        ${ingr.map((s,i)=>`<input type="checkbox" id="e${i}"/><label for="e${i}">${s}</label><span class="tag">(+${money(IP)})</span>`).join('')}
+        ${ingr.map((s,i)=>`
+          <input type="checkbox" id="e${i}"/>
+          <label for="e${i}">${s}</label>
+          <span class="tag">(+${money(IP)})</span>
+        `).join('')}
       </div>
     </div>
 
-    <div class="field"><label>Cantidad</label>
+    <div class="field">
+      <label>Cantidad</label>
       <input id="qty" type="number" min="1" max="9" value="1"/>
     </div>
 
-    <div class="field"><label>Comentarios a cocina</label>
+    <div class="field">
+      <label>Comentarios a cocina</label>
       <textarea id="notes" placeholder="sin jitomate, poco picante…"></textarea>
     </div>
   `;
@@ -114,10 +187,10 @@ function openModal(item, base){
   const inputs  = body.querySelectorAll('input[type=checkbox], #qty, #swapSauce');
 
   const calc = ()=>{
-    const qty = parseInt(qtyEl.value||'1',10);
+    const qty     = parseInt(qtyEl.value||'1',10);
     const extrasS = [...body.querySelectorAll('#sauces input:checked')].length;
     const extrasI = [...body.querySelectorAll('#ingrs input:checked')].length;
-    const dlcOn  = item.mini && body.querySelector('#dlcCarne')?.checked;
+    const dlcOn   = item.mini && body.querySelector('#dlcCarne')?.checked;
     const extraDlc = dlcOn ? DLC : 0;
     const subtotal = (item.price + extraDlc)*qty + (extrasS*SP + extrasI*IP)*qty;
     totalEl.textContent = money(subtotal);
@@ -129,15 +202,16 @@ function openModal(item, base){
   document.getElementById('mConfirm').onclick = async ()=>{
     const name = document.getElementById('cName').value.trim();
     if(!name){ alert('Por favor escribe tu nombre.'); return; }
-    const { qty, subtotal, dlcOn } = calc();
 
+    const { qty, subtotal, dlcOn } = calc();
     const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
     const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? ingr[i]: null).filter(Boolean);
     const salsaSwap = document.getElementById('swapSauce').value || null;
 
     const order = {
       customer: name,
-      qty, subtotal,
+      qty,
+      subtotal,
       item: { id:item.id, name:item.name, price:item.price, mini: !!item.mini },
       baseIngredients: base.ingredients||[],
       salsaDefault: base.salsaDefault || base.suggested || null,
@@ -148,7 +222,7 @@ function openModal(item, base){
 
     await createOrder(order);
     beep();
-    if(item.mini && qty>=3){ toast('¡Logro desbloqueado! 3 minis', '⭐'); }
+    if(item.mini && qty>=3){ toast('¡Logro desbloqueado! 3 minis ⭐'); }
     toast('Gracias por tu pedido, '+name+' ✨');
     document.getElementById('modal').classList.remove('open');
   };
