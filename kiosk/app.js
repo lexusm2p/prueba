@@ -1,7 +1,6 @@
 // /kiosk/app.js
-// Kiosko con carrito: agrega múltiples productos y confirma en una sola orden.
-// Mantiene: DLC minis, cambio de salsa sin costo, extras, login oculto por PIN,
-// tabs Minis/Grandes, toasts y beep.
+// Kiosko con carrito: varios productos por pedido, DLC minis, cambio de salsa sin costo,
+// extras, login oculto por PIN, tabs Minis/Grandes, toasts y beep.
 
 import { beep, toast } from '../shared/notify.js';
 import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
@@ -9,13 +8,13 @@ import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
 const state = {
   menu: null,
   mode: 'mini',
-  cart: [],            // {name,id,mini,qty,unitPrice,baseIngredients,salsaDefault,salsaCambiada,extras:{sauces,ingredients,dlcCarne}, lineTotal}
-  customerName: ''     // se recuerda entre items
+  cart: [],            // líneas de carrito
+  customerName: ''     // se recuerda entre productos
 };
 
-/* -------------------------------------------
-   1) Login oculto: 7 toques al logo en 2s
---------------------------------------------*/
+/* ─────────────────────────────────────────────
+   1) Login oculto (7 taps en 2s) → PIN → ruta
+   ────────────────────────────────────────────*/
 const brand = document.getElementById('brandTap');
 let tapCount = 0, tapTimer = null;
 
@@ -31,12 +30,10 @@ function openPinModal(){
   const pinInput = document.getElementById('pinInput');
   const pinGo    = document.getElementById('pinGo');
   const pinClose = document.getElementById('pinClose');
-
   const map = {'1111':'../mesero/index.html','2222':'../cocina/index.html','9999':'../admin/index.html'};
 
-  const show = ()=>{ pinModal.style.display='grid'; setTimeout(()=>pinInput.focus(),0); };
+  const show = ()=>{ pinModal.style.display='grid'; setTimeout(()=>pinInput?.focus(),0); };
   const hide = ()=>{ pinModal.style.display='none'; pinInput.value=''; };
-
   const enter = ()=>{
     const pin = (pinInput.value||'').trim();
     const route = map[pin];
@@ -50,9 +47,9 @@ function openPinModal(){
   pinInput.onkeydown = e=>{ if(e.key==='Enter') enter(); };
 }
 
-/* -------------------------------------------
+/* ─────────────────────────────────────────────
    2) Tabs Minis / Grandes
---------------------------------------------*/
+   ────────────────────────────────────────────*/
 document.getElementById('btnMinis').onclick = ()=> setMode('mini');
 document.getElementById('btnBig').onclick  = ()=> setMode('big');
 
@@ -69,9 +66,9 @@ function setActiveTab(mode=state.mode){
   if(mode==='mini'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
 }
 
-/* -------------------------------------------
+/* ─────────────────────────────────────────────
    3) Init y helpers
---------------------------------------------*/
+   ────────────────────────────────────────────*/
 init();
 async function init(){
   state.menu = await fetchCatalogWithFallback();
@@ -81,9 +78,9 @@ async function init(){
 }
 const money = n => '$'+n.toFixed(0);
 
-/* -------------------------------------------
-   4) Render tarjetas
---------------------------------------------*/
+/* ─────────────────────────────────────────────
+   4) Tarjetas de productos
+   ────────────────────────────────────────────*/
 function renderCards(){
   const grid = document.getElementById('cards'); grid.innerHTML='';
   const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
@@ -105,16 +102,18 @@ function renderCards(){
     `;
     grid.appendChild(card);
 
+    // Ingredientes como ficha rápida
     card.querySelector('[data-a="ing"]').onclick = ()=>{
       alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
     };
+    // Abrir modal de item
     card.querySelector('[data-a="order"]').onclick = ()=> openItemModal(it, base);
   });
 }
 
-/* -------------------------------------------
-   5) Modal Item: agrega al carrito (no envía aún)
---------------------------------------------*/
+/* ─────────────────────────────────────────────
+   5) Modal Item: agrega al carrito (NO envía aún)
+   ────────────────────────────────────────────*/
 function openItemModal(item, base){
   const modal = document.getElementById('modal'); modal.classList.add('open');
   const body  = document.getElementById('mBody');
@@ -200,11 +199,12 @@ function openItemModal(item, base){
     const extraDlc = dlcOn ? DLC : 0;
     const subtotal = (item.price + extraDlc)*qty + (extrasS*SP + extrasI*IP)*qty;
     totalEl.textContent = money(subtotal);
-    return { qty, subtotal, dlcOn, extraDlc, extrasS, extrasI };
+    return { qty, subtotal, dlcOn };
   };
   inputs.forEach(i=> i.addEventListener('change', calc));
   calc();
 
+  // Botón correcto (mAdd) — agrega al carrito y cierra
   document.getElementById('mAdd').onclick = ()=>{
     const name = document.getElementById('cName').value.trim();
     if(!name){ alert('Por favor escribe tu nombre.'); return; }
@@ -238,9 +238,9 @@ function openItemModal(item, base){
   };
 }
 
-/* -------------------------------------------
+/* ─────────────────────────────────────────────
    6) Carrito: barra, modal, confirmación
---------------------------------------------*/
+   ────────────────────────────────────────────*/
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart').onclick = openCartModal;
 
@@ -300,7 +300,7 @@ function openCartModal(){
   // Totales
   refreshCartTotals();
 
-  // Handlers líneas
+  // Handlers líneas (se re-enlazan en cada re-render)
   body.addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-a]'); if(!btn) return;
     const card = btn.closest('[data-i]'); const i = parseInt(card.dataset.i,10);
@@ -313,7 +313,7 @@ function openCartModal(){
     // Re-render rápido
     openCartModal();
     updateCartBar();
-  }, { once:true }); // rehacemos listeners al re-render
+  }, { once:true });
 
   // Confirmar
   document.getElementById('cartConfirm').onclick = async ()=>{
@@ -346,7 +346,6 @@ function openCartModal(){
 }
 
 function recomputeLine(line){
-  // Recalcula el total de la línea con su qty y extras
   const DLC = (state.menu?.extras?.dlcCarneMini ?? 12);
   const SP  = state.menu?.extras?.saucePrice ?? 8;
   const IP  = state.menu?.extras?.ingredientPrice ?? 10;
