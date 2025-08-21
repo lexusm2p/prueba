@@ -16,7 +16,7 @@
       <div class="title-sub">Kiosko</div>
     </div>
   </div>
-  <!-- Nav oculto (solo por si quieres mostrarlo manualmente) -->
+  <!-- Nav oculto extra -->
   <nav id="navRoles" style="display:none;gap:8px">
     <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
     <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
@@ -27,9 +27,10 @@
 <main class="container">
   <div class="card" id="mode">
     <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
-    <div class="row" style="gap:10px;flex-wrap:wrap">
-      <button class="btn" id="btnMinis">Minis & Combos</button>
-      <button class="btn ghost" id="btnBig">Hamburguesas grandes</button>
+    <!-- Pestañas accesibles -->
+    <div class="tabs" role="tablist" aria-label="Seleccionar categoría">
+      <button class="btn tab is-active" id="btnMinis" role="tab" aria-selected="true">Minis & Combos</button>
+      <button class="btn tab"           id="btnBig"   role="tab" aria-selected="false">Hamburguesas grandes</button>
     </div>
   </div>
 
