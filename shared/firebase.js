@@ -1,8 +1,10 @@
 <!-- Este archivo es JS ESModule; usa imports por CDN (compatibles con GitHub Pages) -->
-<script type="module">
+
+  //<script type="module">
   // Este script existe solo para evitar que el navegador trate de parsear accidentalmente
   // si abres el archivo directo. No se ejecuta porque lo importamos como módulo real.
-</script>
+
+  //</script>
 // /shared/firebase.js
 // Inicializa Firebase (App, Auth anónima y Firestore) usando el SDK modular por CDN.
 // IMPORTANTE: Sustituye firebaseConfig por los datos de tu proyecto.
