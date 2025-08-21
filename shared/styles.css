@@ -1,310 +1,291 @@
-/* ===========================
-   Seven de Burgers – Retro Pixel UI
-   – Alto contraste y accesibilidad
-   – Responsive-first
-   – Modo oscuro por defecto
-   =========================== */
+/* =====================================================================
+   Seven de Burgers — UI Retro Pixel (alto contraste)
+   Archivo: /shared/styles.css
+   ---------------------------------------------------------------------
+   - Paleta con contraste AA/AAA
+   - Tipografía pixel (Press Start 2P) con fallbacks
+   - Componentes: header, grid/cards, botones, modal, columnas cocina,
+     formularios, toasts, badges, tablas básicas.
+   - Responsive y accesible
+   ===================================================================== */
 
-/* ---------- Variables base (tema) ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
 :root{
-  /* Paleta retro (neón sobre noche azul) */
-  --bg:         #0b0f18;
-  --bg-2:       #0e1524;
-  --panel:      #111c2e;
-  --panel-2:    #0f1a2a;
+  /* Colores base */
+  --bg:#0d0d0d;              /* Fondo arcade */
+  --bg-2:#141414;            /* Panel oscuro */
+  --panel:#1a1a40;           /* Azul violeta retro */
+  --panel-2:#20204a;         /* Panel más claro */
+  --ink:#ffffff;             /* Texto principal */
+  --ink-2:#cfd6e6;           /* Texto secundario */
+  --muted:#b7bfd6;           /* Texto suave (ingredientes) */
+  --pixel:#000000;           /* Sombra pixel */
 
-  --text:       #e9f4ff;
-  --muted:      #9eb4c8;
+  /* Marca */
+  --accent:#ffcc00;          /* Amarillo arcade */
+  --accent-2:#ff8800;        /* Naranja */
+  --link:#7cc9ff;            /* Cian enlaces */
 
-  --accent:     #ffd64d;  /* amarillo 8-bit */
-  --accent-2:   #7cd5ff;  /* cian */
-  --danger:     #ff6b6b;  /* rojo alerta */
-  --ok:         #2fd27d;  /* verde ok */
+  /* Estados */
+  --ok:#2fd27d;
+  --warn:#f7b500;
+  --danger:#ff6b6b;
 
-  --shadow: 0 10px 24px rgba(0,0,0,.45);
-  --radius: 0px;          /* pixel look: esquinas rectas */
-  --gap: 14px;
-  --card-pad: 16px;
-
-  /* Pixel borders */
-  --px: 3px;
-  --px-border: solid var(--px) #243a57;
-  --px-border-soft: solid var(--px) rgba(255,255,255,.06);
-
-  /* Tamaños */
-  --maxw: 1040px;
-
-  /* Transiciones */
-  --t: .15s ease;
-
-  /* Modo escaneo sutil */
-  --scanline: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+  /* Dimensiones */
+  --r:10px;                  /* radio estándar */
+  --gap:16px;                /* espacio estándar */
+  --shadow:3px 3px var(--pixel);
 }
 
-@media (prefers-color-scheme: light){
-  :root{
-    --bg:#f4f7fb; --bg-2:#e9f0f9; --panel:#ffffff; --panel-2:#f5f9ff;
-    --text:#0b1420; --muted:#56657a;
-    --px-border: solid var(--px) #ced9ea;
-    --px-border-soft: solid var(--px) rgba(0,0,0,.05);
-  }
-}
-
-/* ---------- Reset mínimo ---------- */
+/* Reset mínimo */
 *{box-sizing:border-box}
 html,body{height:100%}
+html{scroll-behavior:smooth}
 body{
   margin:0;
-  background:
-    var(--scanline),
-    linear-gradient(180deg, var(--bg), var(--bg-2));
-  background-size: auto 3px, 3px auto, cover;
-  color:var(--text);
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  line-height:1.35;
+  background: radial-gradient(1200px 600px at 50% -10%, #172238 0%, #0d0d0d 55%, #0d0d0d 100%);
+  color:var(--ink);
+  font-family:'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  text-rendering:optimizeLegibility;
 }
 
-/* Títulos con fuente retro (fallback elegante) */
-h1,h2,h3,.brand-title,.pixel{
-  font-family: 'Press Start 2P', Inter, system-ui, sans-serif;
-  letter-spacing:.5px;
-}
+a{color:var(--link); text-decoration:none}
+a:hover{filter:brightness(1.15)}
 
-/* Links */
-a{ color:var(--accent-2); text-decoration:none }
-a:hover{ text-decoration:underline }
-
-/* ---------- Layout general ---------- */
-.container{ max-width:var(--maxw); margin:0 auto; padding: 14px }
-
-/* ---------- Header / Brand ---------- */
+/* ===========================
+   Header (barra superior)
+   =========================== */
 .header{
-  position:sticky; top:0; z-index:10;
+  position:sticky; top:0; z-index:20;
   display:flex; align-items:center; justify-content:space-between;
-  padding:12px 16px;
-  background: rgba(7,12,22,.85);
-  backdrop-filter: blur(6px);
-  border-bottom: var(--px-border-soft);
-  box-shadow: 0 8px 18px rgba(0,0,0,.25);
+  gap:12px; padding:12px 16px;
+  background:linear-gradient(180deg, #12122a, #0f0f1f);
+  border-bottom:2px solid var(--accent);
+  box-shadow:var(--shadow);
 }
-.brand{
-  display:flex; align-items:center; gap:12px;
-  font-weight:800; letter-spacing:.2px;
-  cursor: pointer;
+.brand{display:flex; align-items:center; gap:10px}
+.brand .dot{
+  width:10px; height:10px; background:var(--accent);
+  border:2px solid var(--pixel); box-shadow:0 0 10px var(--accent);
+  border-radius:2px;
 }
-.brand .dot{ width:10px; height:10px; background:var(--accent); box-shadow:0 0 12px var(--accent) }
-.brand .brand-title{ font-size:13px; }
-.title-sub{ font-size:11px; color:var(--muted); margin-top:4px }
+.title-sub{color:var(--muted); font-size:10px; margin-top:4px}
 
-/* ---------- Botones (pixel style) ---------- */
-.btn{
-  appearance:none; border:none; cursor:pointer;
-  padding:12px 14px;
-  color:#061018; font-weight:800; letter-spacing:.3px;
-  background:
-    linear-gradient(180deg, #ffe177, #ffb52d);
-  border: var(--px-border);
-  box-shadow:
-    0 var(--px) 0 #c78714,
-    0 8px 18px rgba(0,0,0,.35);
-  transform: translateY(0);
-  transition: transform var(--t);
-}
-.btn:hover{ transform: translateY(-1px) }
-.btn:active{ transform: translateY(1px) }
-.btn:focus-visible{ outline: var(--px) solid var(--accent-2); outline-offset: 0 }
+/* ===========================
+   Contenedor y rejilla
+   =========================== */
+.container{max-width:1080px; margin:0 auto; padding:16px}
 
-.btn.secondary{
-  background: linear-gradient(180deg, #36e38c, #18b56b);
-  border-color:#0d7e48;
-  box-shadow: 0 var(--px) 0 #0d7e48, 0 8px 18px rgba(0,0,0,.35);
-  color:#05110b;
-}
-.btn.ghost{
-  color:var(--text);
-  background: #0f2331;
-  border: var(--px-border);
-  box-shadow:none;
-}
-.btn.warn{
-  background: linear-gradient(180deg, #ffd2d2, #ff8e8e);
-  border-color:#d25858; color:#3b0f0f;
-  box-shadow: 0 var(--px) 0 #a53a3a, 0 8px 18px rgba(0,0,0,.35);
-}
-.btn.danger{
-  background: linear-gradient(180deg, #ff6b6b, #d94a4a);
-  border-color:#8c2d2d; color:#250808;
-  box-shadow: 0 var(--px) 0 #6a1f1f, 0 8px 18px rgba(0,0,0,.35);
-}
-.small{ font-size:12px; padding:10px 12px }
-
-/* ---------- Chips / Badges ---------- */
-.badge{
-  display:inline-block;
-  background:#11273a; color:var(--muted);
-  border: var(--px-border-soft);
-  padding:6px 10px;
-  font-size:12px;
-}
-
-/* ---------- Cards + Grid ---------- */
 .grid{
   display:grid; gap:var(--gap);
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
 }
-.card{
-  background: linear-gradient(180deg, rgba(19,41,63,.96), rgba(10,26,41,.96));
-  border: var(--px-border);
-  border-color:#243a57;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: var(--card-pad);
-  display:flex; flex-direction:column; gap:10px;
-  position: relative;
-  overflow:hidden;
-}
-.card:before{
-  /* Bisel superior pixel */
-  content:""; position:absolute; inset:0;
-  pointer-events:none;
-  background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 20%);
-}
-.card h3{ margin:0 0 6px 0; font-size:16px; font-family:'Press Start 2P', Inter, sans-serif }
-.row{ display:flex; align-items:center; justify-content:space-between; gap:10px }
-.price{ color:var(--accent); font-weight:900; font-size:18px; text-shadow:0 0 6px rgba(255,214,77,.4) }
-.muted{ color:var(--muted) }
 
-/* ---------- Modal ---------- */
+/* ===========================
+   Tarjetas (cards)
+   =========================== */
+.card{
+  background:linear-gradient(180deg, var(--panel), var(--panel-2));
+  border:2px solid var(--accent);
+  border-radius:8px;
+  padding:16px;
+  color:var(--ink-2);
+  box-shadow:var(--shadow);
+}
+.card h2, .card h3{
+  margin:0 0 8px 0; color:var(--accent);
+  text-shadow:1px 1px var(--pixel);
+}
+.card .muted{color:var(--muted)}
+.price{
+  color:var(--accent);
+  font-weight:700;
+  text-shadow:1px 1px var(--pixel);
+}
+
+/* ===========================
+   Botones (pixel)
+   =========================== */
+.btn{
+  appearance:none; border:none; outline:none;
+  cursor:pointer; user-select:none;
+  font:inherit; color:#000;
+  padding:10px 14px;
+  background:linear-gradient(180deg, var(--accent), var(--accent-2));
+  border:2px solid var(--pixel);
+  border-radius:6px;
+  box-shadow:var(--shadow);
+  transition:transform .08s ease, filter .15s ease;
+}
+.btn:hover{filter:brightness(1.05)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{
+  background:#2a2a2a; color:var(--ink);
+  border:2px solid var(--accent);
+}
+.btn.secondary{
+  background:linear-gradient(180deg, #3af08f, #17a15a);
+  color:#03150e;
+  border:2px solid var(--pixel);
+}
+.btn.warn{
+  background:linear-gradient(180deg, #ffe08a, #ffb100);
+}
+.btn.danger{
+  background:linear-gradient(180deg, #ff8d8d, #ff5a5a);
+  color:#1a0000;
+}
+.small{font-size:12px}
+
+/* Fila utilitaria */
+.row{display:flex; align-items:center; justify-content:space-between; gap:10px}
+
+/* Badges */
+.badge{
+  display:inline-block; padding:6px 10px;
+  background:#2e2e2e; color:var(--ink-2);
+  border:2px solid var(--accent);
+  border-radius:999px; box-shadow:var(--shadow);
+  font-size:11px;
+}
+
+/* ===========================
+   Modal (kiosko)
+   =========================== */
 .modal{
   position:fixed; inset:0; display:none; place-items:center;
-  background:rgba(0,0,0,.55); z-index:50;
+  background:rgba(0,0,0,.6); z-index:50;
 }
-.modal.open{ display:grid }
+.modal.open{display:grid}
 .modal-card{
-  width:min(720px, 94vw);
-  max-height:86vh; overflow:auto;
-  background:#0f2130;
-  border: var(--px-border);
-  border-color:#284469;
-  box-shadow: var(--shadow);
+  width:min(680px, 92vw); max-height:86vh; overflow:auto;
+  background:#0f1230; color:var(--ink);
+  border:2px solid var(--accent); border-radius:8px;
+  box-shadow:var(--shadow);
 }
-.modal-head{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:12px 14px; border-bottom: var(--px-border-soft);
+.modal-head, .modal-foot{
+  padding:12px 14px; border-bottom:2px solid var(--accent);
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
 }
-.modal-body{ padding:14px }
-.modal-foot{
-  position:sticky; bottom:0; display:flex; gap:10px;
-  padding:12px; background:#0f2130; border-top: var(--px-border-soft);
-}
+.modal-foot{border-bottom:none; border-top:2px solid var(--accent)}
+.modal-body{padding:14px}
 
-/* ---------- Formularios ---------- */
-.field{ margin:10px 0 }
-label{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-family:'Press Start 2P', Inter, sans-serif }
-input[type=text],input[type=number],select,textarea{
-  width:100%; padding:12px;
-  border: var(--px-border-soft);
-  background:#0c1b2a; color:var(--text);
-  font-size:14px;
+/* Campos de formulario */
+.field{margin:12px 0}
+label{display:block; font-size:11px; color:var(--muted); margin-bottom:6px}
+input[type=text], input[type=number], select, textarea{
+  width:100%; padding:12px; color:var(--ink);
+  background:#0b0d22; border:2px solid var(--pixel);
+  border-radius:6px; box-shadow:inset 3px 3px #000;
 }
-input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{
-  outline: var(--px) solid var(--accent-2);
-  outline-offset: 0;
-}
-textarea{ min-height:90px }
+textarea{min-height:90px}
 
-/* Checklists alineadas en grilla (checkbox, label, precio) */
+/* Lista limpia (aderezos/ingredientes) */
 .ul-clean{
-  list-style:none; margin:8px 0; padding:0;
-  display:grid;
-  grid-template-columns: 22px 1fr auto;
-  row-gap:10px; column-gap:10px;
-  align-items:center;
+  display:grid; grid-template-columns:22px 1fr auto;
+  gap:10px 10px; align-items:center; margin:8px 0;
 }
-.ul-clean input[type=checkbox]{
-  width:18px; height:18px; accent-color:#ffd24a;
-}
-.ul-clean .tag{ font-size:12px; color:var(--muted); font-family:'Press Start 2P', Inter, sans-serif }
+.ul-clean input[type=checkbox]{width:18px; height:18px; accent-color:var(--accent)}
+.ul-clean .tag{font-size:11px; color:var(--ink-2)}
 
-/* HR */
-.hr{ height:var(--px); background:#294362; margin:12px 0 }
+/* Barra total modal */
+.total-bar{display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%}
+.total{font-size:18px; font-weight:900; color:var(--accent); text-shadow:1px 1px var(--pixel)}
 
-/* ---------- Total bar ---------- */
-.total-bar{ display:flex; align-items:center; justify-content:space-between; gap:12px; width:100% }
-.total{
-  font-size:18px; font-weight:900; color:var(--accent);
-  text-shadow:0 0 8px rgba(255,214,77,.35);
-}
+/* Separador */
+.hr{height:2px; background:var(--accent); opacity:.25; margin:12px 0}
 
-/* ---------- Toast ---------- */
+/* ===========================
+   Toast (notificaciones)
+   =========================== */
 .toast{
   position:fixed; left:50%; transform:translateX(-50%);
-  bottom:18px; z-index:60;
-  background:#0f2840; color:var(--text);
-  border: var(--px-border);
-  padding:12px 14px;
-  display:flex; align-items:center; gap:10px;
-  box-shadow: var(--shadow);
-  animation: pop .18s ease-out;
-  max-width: 92vw;
-  font-family:'Press Start 2P', Inter, sans-serif;
-  font-size:12px;
+  bottom:18px; z-index:70;
+  background:#11152f; color:var(--ink);
+  border:2px solid var(--accent); border-radius:6px;
+  padding:12px 14px; display:none; align-items:center; gap:10px;
+  box-shadow:var(--shadow);
 }
-@keyframes pop{ from{ transform:translate(-50%,6px); opacity:.25 } to{ transform:translate(-50%,0); opacity:1 } }
+.toast.show{display:flex; animation:pop .18s ease-out}
+@keyframes pop{from{transform:translate(-50%,6px);opacity:.3}to{transform:translate(-50%,0);opacity:1}}
 
-/* ---------- Kanban (Cocina / Mesero / Admin) ---------- */
-.k-columns{ display:grid; gap:var(--gap); grid-template-columns: repeat(3, 1fr) }
-@media (max-width: 980px){ .k-columns{ grid-template-columns: 1fr } }
-
-.col{ min-height:320px }
-.k-title{ margin:0 0 6px 0; font-size:12px; color:var(--muted); font-family:'Press Start 2P', Inter, sans-serif }
+/* ===========================
+   Columnas — Cocina / Mesero
+   =========================== */
+.k-columns{
+  display:grid; gap:var(--gap);
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+}
+.col{min-height:320px}
+.empty{color:var(--muted); padding:8px 0}
 
 .k-card{
-  border: var(--px-border);
-  background: linear-gradient(180deg, #142a3b, #0d2131);
-  padding: 12px;
-  margin: 10px 0;
-  box-shadow: var(--shadow);
+  background:linear-gradient(180deg, #172048, #101634);
+  border:2px solid var(--accent);
+  border-radius:8px; padding:12px; margin:12px 0;
+  color:var(--ink-2); box-shadow:var(--shadow);
 }
-.k-card .title{
-  font-family:'Press Start 2P', Inter, sans-serif; font-size:12px;
-  margin-bottom:4px;
-}
-.k-card .sub{ color:var(--muted); font-size:12px }
+.k-head .title{color:var(--accent); text-shadow:1px 1px var(--pixel)}
+.k-head .sub{color:var(--ink-2); font-size:12px}
+.k-badges{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
 .k-badge{
-  display:inline-block; background:#11273a; color:var(--muted);
-  border: var(--px-border-soft);
-  padding:2px 8px; border-radius:0;
-  font-size:12px; margin-right:6px; margin-bottom:6px;
+  background:#2b2b2b; color:var(--ink-2);
+  border:2px solid var(--accent); border-radius:999px;
+  padding:2px 8px; font-size:10px; box-shadow:var(--shadow);
 }
-.k-actions{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap }
+.k-actions{display:flex; gap:8px; margin-top:10px}
 
-.vlist{ margin:0; padding-left:18px }
-.vlist li{ margin:2px 0 }
+/* Lista de ingredientes vertical (cocina) */
+.k-ingredients{
+  margin:8px 0 0 0; padding-left:18px; color:var(--ink-2);
+}
+.k-ingredients li{margin:3px 0}
 
-/* ---------- Utilidades ---------- */
-.right{ margin-left:auto }
-.small{ font-size:12px }
-.badge.right{ float:right }
-.empty{
-  padding:14px; color:var(--muted); border: var(--px-border-soft);
-  background:#0c1c2a; font-size:12px;
+/* ===========================
+   Tablas (admin/mesero simples)
+   =========================== */
+.table{width:100%; border-collapse:separate; border-spacing:0}
+.table th, .table td{
+  text-align:left; padding:10px 12px; font-size:12px;
+  border-bottom:1px dashed #3a3a3a;
+}
+.table th{color:var(--accent)}
+.table tr:hover td{background:#181a33}
+
+/* ===========================
+   Utilidades
+   =========================== */
+.right{margin-left:auto}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.hide{display:none !important}
+
+/* ===========================
+   Responsivo
+   =========================== */
+@media (max-width: 960px){
+  .k-columns{grid-template-columns:1fr}
+  .header{padding:10px}
+  .container{padding:12px}
 }
 
-/* ---------- Accesibilidad extra ---------- */
+@media (max-width: 400px){
+  body{font-size:12px}
+  .btn{padding:9px 12px}
+  .grid{grid-template-columns:1fr}
+}
+
+/* ===========================
+   Accesibilidad: enfoque visible
+   =========================== */
 :focus-visible{
-  outline: var(--px) solid var(--accent-2) !important;
-  outline-offset: 0;
-}
-@media (prefers-reduced-motion: reduce){
-  *{ transition:none !important; animation:none !important }
+  outline:3px solid #00e1ff;
+  outline-offset:2px;
 }
 
-/* ---------- Ajustes responsive ---------- */
-@media (max-width:560px){
-  .grid{ grid-template-columns: 1fr }
-  .btn{ padding:12px }
-  .header{ padding:10px 12px }
-  .brand .brand-title{ font-size:12px }
-}
+/* ===========================
+   Fin de estilos
+   =========================== */
