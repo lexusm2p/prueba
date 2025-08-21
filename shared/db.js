@@ -1,52 +1,84 @@
-// ✅ db.js
+// /shared/db.js
 import {
-  db, ensureAuth, collection, doc,
-  addDoc, updateDoc, deleteDoc,
-  onSnapshot, serverTimestamp, query, orderBy
-} from "./firebase.js";
+  collection, doc, addDoc, getDoc, getDocs, query, where, orderBy,
+  onSnapshot, serverTimestamp, updateDoc, deleteDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { db, ensureAnonAuth } from "./firebase.js";
 
-const ORDERS = "orders";
-const ARCHIVE = "orders_archive";
+// ---------- CATÁLOGO ----------
 
-// 📝 Crear pedido
-export async function createOrder(payload) {
-  await ensureAuth();
-  const ref = await addDoc(collection(db, ORDERS), {
-    ...payload,
-    status: "PENDING",
+export async function fetchCatalogWithFallback(){
+  await ensureAnonAuth();
+
+  // 1) Intentar Firestore
+  const productsCol = collection(db, "products");
+  const q = query(productsCol, where("active","==", true));
+  const snap = await getDocs(q);
+  let products = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+
+  const saucesDoc = await getDoc(doc(db, "extras", "sauces"));
+  const ingreDoc  = await getDoc(doc(db, "extras", "ingredients"));
+  const settings  = await getDoc(doc(db, "settings", "app"));
+
+  const sauces = saucesDoc.exists() ? (saucesDoc.data().items||[]) : [];
+  const ings   = ingreDoc.exists()  ? (ingreDoc.data().items||[])  : [];
+  const cfg    = settings.exists()  ? settings.data()              : { dlcCarneMini: 12 };
+
+  if (products.length) {
+    return {
+      burgers: products.filter(p=>p.type==='big'),
+      minis:   products.filter(p=>p.type==='mini'),
+      extras: {
+        sauces: sauces.map(s=>s.name),
+        saucePrice: sauces[0]?.price ?? 5, // si todas valen lo mismo
+        ingredients: ings.map(i=>i.name),
+        ingredientPrice: 5, // ajusta si difieren por ítem
+        dlcCarneMini: cfg.dlcCarneMini ?? 12
+      }
+    };
+  }
+
+  // 2) Fallback a /data/menu.json
+  const res = await fetch('../data/menu.json');
+  const json = await res.json();
+  // si no trae dlc, añade el acordado
+  if (!json.extras.dlcCarneMini) json.extras.dlcCarneMini = 12;
+  return json;
+}
+
+// ---------- ÓRDENES ----------
+export async function createOrder(orderDraft){
+  await ensureAnonAuth();
+  const payload = {
+    ...orderDraft,
+    status: 'PENDING',
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
+  };
+  const ref = await addDoc(collection(db, 'orders'), payload);
   return ref.id;
 }
 
-// 🔔 Escuchar pedidos
-export function onOrdersSnapshot(cb) {
-  ensureAuth().then(() => {
-    const q = query(collection(db, ORDERS), orderBy("createdAt", "asc"));
-    onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      cb(list);
-    });
+export function subscribeOrders(cb){
+  const q = query(collection(db,'orders'), orderBy('createdAt','asc'));
+  return onSnapshot(q, (snap)=>{
+    const list = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    cb(list);
   });
 }
 
-// 🔄 Cambiar estado
-export async function setStatus(id, status) {
-  await ensureAuth();
-  await updateDoc(doc(db, ORDERS, id), {
-    status,
-    updatedAt: serverTimestamp()
-  });
+export async function setStatus(orderId, status){
+  await updateDoc(doc(db,'orders',orderId), { status });
 }
 
-// 📦 Archivar pedidos entregados
-export async function archiveDelivered(id) {
-  await ensureAuth();
-  const ref = doc(db, ORDERS, id);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    await setDoc(doc(db, ARCHIVE, id), snap.data());
-    await deleteDoc(ref);
-  }
+export async function archiveDelivered(orderId){
+  const ref = doc(db,'orders',orderId);
+  const snap= await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data();
+  await setDoc(doc(db,'orders_archive', orderId), { ...data, archivedAt: serverTimestamp() });
+  await deleteDoc(ref);
+}
+
+export async function updateOrder(orderId, patch){
+  await updateDoc(doc(db,'orders',orderId), patch);
 }
