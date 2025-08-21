@@ -14,14 +14,23 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gsta
 import { getFirestore, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // ⬇⬇⬇ REEMPLAZA ESTO CON TU CONFIG REAL ⬇⬇⬇
+
+//  apiKey: "TU_API_KEY",
+  //authDomain: "TU_PROYECTO.firebaseapp.com",
+ // projectId: "TU_PROYECTO",
+ // storageBucket: "TU_PROYECTO.appspot.com",
+ // messagingSenderId: "XXXXXX",
+ // appId: "1:XXXXXX:web:XXXXXX",
+
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "XXXXXX",
-  appId: "1:XXXXXX:web:XXXXXX",
-};
+apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+    authDomain: "seven-de-burgers.firebaseapp.com",
+    projectId: "seven-de-burgers",
+    storageBucket: "seven-de-burgers.firebasestorage.app",
+    messagingSenderId: "34089845279",
+    appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
+    measurementId: "G-Q8YQJGL2XY
+      };
 // ⬆⬆⬆ REEMPLAZA ESTO CON TU CONFIG REAL ⬆⬆⬆
 
 const app = initializeApp(firebaseConfig);
