@@ -6,21 +6,22 @@
   --bg:#0b0f19;
   --panel:#121a2a;
   --panel-2:#0f1726;
-  --ink:#eaf2ff;
-  --muted:#a8b6cb;
+  --ink:#eef4ff;
+  --muted:#b8c6d8;          /* ↑ contraste */
+  --muted-2:#90a4bd;
   --accent:#ffd24a;
   --accent-2:#7cc9ff;
   --danger:#ff6b6b;
   --ok:#2fd27d;
-  --stroke:rgba(255,255,255,.08);
+  --stroke:rgba(255,255,255,.10);  /* ↑ borde */
   --shadow:0 12px 28px rgba(0,0,0,.35);
   --r:16px;
-  --gap:14px;
+  --gap:16px;
   --pad:16px;
   --font:'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
-/* Font retro (Google Fonts “Press Start 2P”) */
+/* ===== Fuente retro ===== */
 @font-face{
   font-family:'Press Start 2P';
   font-style:normal;
@@ -29,8 +30,9 @@
   src:url("https://fonts.gstatic.com/s/pressstart2p/v15/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2") format("woff2");
 }
 
-*{ box-sizing:border-box; }
-html,body{ height:100%; }
+/* ===== Reset ===== */
+*{ box-sizing:border-box }
+html,body{ height:100% }
 body{
   margin:0;
   font-family:var(--font);
@@ -41,163 +43,43 @@ body{
     var(--bg);
 }
 
-/* Links */
-a{ color:var(--accent-2); text-decoration:none; }
+/* ===== Links ===== */
+a{ color:var(--accent-2); text-decoration:none }
 
-/* Header */
+/* ===== Header ===== */
 .header{
   position:sticky; top:0; z-index:20;
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 14px;
   background:rgba(10,14,24,.85);
-  backdrop-filter: blur(6px);
+  backdrop-filter:blur(6px);
   border-bottom:1px solid var(--stroke);
 }
-.brand{ display:flex; align-items:center; gap:10px; cursor:pointer; }
+.brand{ display:flex; align-items:center; gap:10px; cursor:pointer }
 .brand .dot{
   width:10px; height:10px; background:var(--accent);
-  border-radius:3px; box-shadow:0 0 14px var(--accent);
+  border-radius:3px; box-shadow:0 0 14px var(--accent)
 }
-.title-sub{ font-size:12px; color:var(--muted); }
+.title-sub{ font-size:12px; color:var(--muted) }
 
-/* Container & Grids */
-.container{ max-width:1120px; margin:0 auto; padding:16px; }
+/* ===== Container & Grid ===== */
+.container{ max-width:1120px; margin:0 auto; padding:16px }
 .grid{
-  display:grid; gap:16px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  display:grid; gap:var(--gap);
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
 }
 
-/* Buttons */
+/* ===== Buttons ===== */
 .btn{
   border:2px solid #352600;
-  background: linear-gradient(#ffc83a,#f2a400);
+  background:linear-gradient(#ffc83a,#f2a400);
   color:#1a1200;
   font-weight:700;
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;
-  box-shadow: 0 6px 0 #b37d08, 0 10px 18px rgba(0,0,0,.35);
-  transition: transform .12s ease;
+  box-shadow:0 6px 0 #b37d08, 0 10px 18px rgba(0,0,0,.35);
+  transition:transform .12s ease;
+  white-space:nowrap;
 }
-.btn:hover{ transform: translateY(-1px); }
-.btn:active{ transform: translateY(0); }
-.btn:focus-visible{
-  outline:3px solid var(--accent-2);
-  outline-offset:2px;
-  box-shadow:0 0 0 3px rgba(124,201,255,.3);
-}
-.btn.ghost{
-  border:2px solid #4a5164;
-  background:#1c2436; color:var(--ink);
-  box-shadow:none;
-}
-.btn.small{ font-size:12px; padding:8px 12px; }
-
-/* Cards (retro) */
-.card{
-  position:relative;
-  display:flex; flex-direction:column; gap:10px;
-  min-height:260px;
-  padding:16px 16px 84px;            /* espacio para barra inferior */
-  border:2px solid var(--accent);
-  border-radius:14px;
-  background:
-    linear-gradient(180deg, #161f33, #111a2a);
-  box-shadow: var(--shadow), inset 0 0 0 2px rgba(255,255,255,.05);
-}
-.card h3{
-  margin:0 0 6px; font-size: clamp(18px, 2.2vw, 22px);
-}
-
-/* Icono pixel de la hamburguesa */
-.icon{
-  width:72px; height:72px;
-  image-rendering: pixelated;
-  border-radius:10px;
-  border:2px solid rgba(255,255,255,.07);
-  background:
-    url('data:image/svg+xml;utf8,\
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\
-<rect width="64" height="64" rx="10" fill="%23131d30"/>\
-<rect x="10" y="36" width="44" height="8" fill="%23d18b00"/>\
-<rect x="8" y="28" width="48" height="8" fill="%23f3bd3a"/>\
-<rect x="8" y="22" width="48" height="6" fill="%2398cf4f"/>\
-<rect x="12" y="14" width="40" height="8" fill="%23d18b00"/>\
-<circle cx="20" cy="16" r="1" fill="%23000"/>\
-<circle cx="28" cy="16" r="1" fill="%23000"/>\
-<circle cx="36" cy="16" r="1" fill="%23000"/>\
-</svg>') center/cover no-repeat;
-}
-
-/* Barra inferior fija DENTRO de la tarjeta */
-.card .row:last-child{
-  position:absolute; left:16px; right:16px; bottom:16px;
-  display:flex; align-items:center; gap:10px;
-}
-.card .price{
-  color:var(--accent); font-weight:900;
-  font-size: clamp(16px, 2vw, 18px);
-}
-.card .row:last-child .row{
-  margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;
-}
-.card .row:last-child .btn{ min-width:122px; }
-
-/* Muted */
-.muted{ color:var(--muted); }
-.small{ font-size:12px; }
-
-/* Mode card */
-#mode.card{ padding:16px; min-height:unset; }
-
-/* Modal */
-.modal{
-  position:fixed; inset:0; display:none; place-items:center;
-  background:rgba(0,0,0,.55); z-index:40;
-}
-.modal.open{ display:grid; }
-.modal-card{
-  width:min(680px, 92vw); max-height:86vh; overflow:auto;
-  background:#111a2a; border:1px solid var(--stroke); border-radius:16px;
-  box-shadow: var(--shadow);
-}
-.modal-head{ padding:12px 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--stroke); }
-.modal-body{ padding:14px; }
-.modal-foot{ position:sticky; bottom:0; padding:12px; background:#111a2a; border-top:1px solid var(--stroke); }
-.total-bar{ display:flex; align-items:center; gap:12px; justify-content:space-between; }
-.total{ color:var(--accent); font-weight:900; font-size:18px; }
-
-/* Campos */
-.field{ margin:10px 0; }
-label{ display:block; margin-bottom:6px; color:var(--muted); font-size:12px; }
-input[type=text],input[type=number],select,textarea{
-  width:100%; padding:12px; border-radius:10px; border:1px solid var(--stroke);
-  background:#0c1322; color:var(--ink);
-}
-textarea{ min-height:80px; }
-.hr{ height:1px; background:var(--stroke); margin:12px 0; }
-
-/* Listado 3 columnas para extras */
-.ul-clean{
-  display:grid; grid-template-columns: 28px 1fr auto; gap:9px 10px; align-items:center;
-}
-.ul-clean input[type=checkbox]{ width:18px; height:18px; accent-color: var(--accent); }
-.ul-clean .tag{ font-size:12px; color:var(--muted); }
-
-/* Toast */
-.toast{
-  position:fixed; left:50%; transform:translateX(-50%);
-  bottom:16px; z-index:50;
-  display:none; align-items:center; gap:10px;
-  background:#122038; border:1px solid var(--stroke);
-  padding:12px 14px; border-radius:12px; box-shadow:var(--shadow);
-}
-.toast.show{ display:flex; animation:pop .18s ease-out; }
-@keyframes pop{ from{ transform:translate(-50%,8px); opacity:.3 } to{ transform:translate(-50%,0); opacity:1 } }
-
-/* Responsive tweaks */
-@media (max-width:640px){
-  .card{ padding:14px 14px 90px; }
-  .card .row:last-child{ left:14px; right:14px; bottom:14px; gap:8px; }
-  .card .row:last-child .btn{ min-width:calc(50% - 4px); }
-}
+.btn:hover{ transform
