@@ -1,6 +1,5 @@
 // /kiosk/app.js
-// Kiosko con carrito y meta de pedido (Pickup / Mesa).
-// En el payload se envían: orderType ('pickup'|'dinein') y table (si 'dinein').
+// Kiosko con carrito, edición de líneas y meta de pedido (Pickup / Mesa).
 
 import { beep, toast } from '../shared/notify.js';
 import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
@@ -10,7 +9,7 @@ const state = {
   mode: 'mini',
   cart: [],
   customerName: '',
-  orderMeta: { type:'pickup', table:'' } // NUEVO
+  orderMeta: { type:'pickup', table:'' }
 };
 
 /* 1) Login oculto (7 taps → PIN) */
@@ -62,12 +61,22 @@ async function init(){
 }
 const money = n => '$'+n.toFixed(0);
 
+/* Helpers catálogo */
+function findItemById(id){
+  return state.menu.burgers.find(b=>b.id===id) || state.menu.minis.find(m=>m.id===id) || null;
+}
+function baseOfItem(item){
+  if (!item) return null;
+  return item.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item;
+}
+
 /* 4) Tarjetas */
 function renderCards(){
   const grid = document.getElementById('cards'); grid.innerHTML='';
   const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
+
   items.forEach(it=>{
-    const base = it.baseOf ? state.menu.burgers.find(b=>b.id===it.baseOf) : it;
+    const base = baseOfItem(it);
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
@@ -81,6 +90,7 @@ function renderCards(){
       </div>
     `;
     grid.appendChild(card);
+
     card.querySelector('[data-a="ing"]').onclick = ()=>{
       alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
     };
@@ -88,8 +98,8 @@ function renderCards(){
   });
 }
 
-/* 5) Modal de producto (agrega al carrito) */
-function openItemModal(item, base){
+/* 5) Modal de producto (agrega o edita línea) */
+function openItemModal(item, base, existingIndex=null){
   const modal = document.getElementById('modal'); modal.classList.add('open');
   const body  = document.getElementById('mBody');
   document.getElementById('mTitle').textContent = item.name + ' · ' + money(item.price);
@@ -101,6 +111,16 @@ function openItemModal(item, base){
   const IP     = state.menu.extras.ingredientPrice;
   const DLC    = state.menu.extras.dlcCarneMini ?? 12;
 
+  const editing = existingIndex!==null;
+  const line    = editing ? state.cart[existingIndex] : null;
+
+  const hasSauce = s => editing && line?.extras?.sauces?.includes(s);
+  const hasIngr  = s => editing && line?.extras?.ingredients?.includes(s);
+  const dlcOn    = editing ? !!line?.extras?.dlcCarne : false;
+  const qtyVal   = editing ? (line?.qty||1) : 1;
+  const notesVal = editing ? (line?.notes||'') : '';
+  const swapVal  = editing ? (line?.salsaCambiada||'') : '';
+
   body.innerHTML = `
     <div class="field">
       <label>Tu nombre</label>
@@ -111,7 +131,7 @@ function openItemModal(item, base){
     <div class="field">
       <label>DLC de Carne grande</label>
       <div class="ul-clean">
-        <input type="checkbox" id="dlcCarne"/>
+        <input type="checkbox" id="dlcCarne" ${dlcOn?'checked':''}/>
         <label for="dlcCarne">Cambia a carne 85g</label>
         <span class="tag">(+${money(DLC)})</span>
       </div>
@@ -124,7 +144,7 @@ function openItemModal(item, base){
       <select id="swapSauce">
         <option value="">Dejar salsa por defecto</option>
         ${((base.salsasSugeridas || [base.suggested]).filter(Boolean) || [])
-          .map(s=>`<option value="${s}">${s}</option>`).join('')}
+          .map(s=>`<option value="${s}" ${swapVal===s?'selected':''}>${s}</option>`).join('')}
       </select>
       <div class="muted small">* Cambio de salsa recomendado sin costo. Extras se cobran aparte.</div>
     </div>
@@ -133,7 +153,7 @@ function openItemModal(item, base){
       <label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
         ${sauces.map((s,i)=>`
-          <input type="checkbox" id="s${i}"/>
+          <input type="checkbox" id="s${i}" ${hasSauce(s)?'checked':''}/>
           <label for="s${i}">${s}</label>
           <span class="tag">(+${money(SP)})</span>
         `).join('')}
@@ -144,7 +164,7 @@ function openItemModal(item, base){
       <label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
         ${ingr.map((s,i)=>`
-          <input type="checkbox" id="e${i}"/>
+          <input type="checkbox" id="e${i}" ${hasIngr(s)?'checked':''}/>
           <label for="e${i}">${s}</label>
           <span class="tag">(+${money(IP)})</span>
         `).join('')}
@@ -153,14 +173,18 @@ function openItemModal(item, base){
 
     <div class="field">
       <label>Cantidad</label>
-      <input id="qty" type="number" min="1" max="9" value="1"/>
+      <input id="qty" type="number" min="1" max="9" value="${qtyVal}"/>
     </div>
 
     <div class="field">
       <label>Comentarios a cocina</label>
-      <textarea id="notes" placeholder="sin jitomate, poco picante…"></textarea>
+      <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea>
     </div>
   `;
+
+  // Botón: cambia texto si estamos editando
+  const addBtn = document.getElementById('mAdd');
+  addBtn.textContent = editing ? 'Guardar cambios' : 'Agregar al pedido';
 
   const totalEl = document.getElementById('mTotal');
   const qtyEl   = document.getElementById('qty');
@@ -170,27 +194,27 @@ function openItemModal(item, base){
     const qty     = parseInt(qtyEl.value||'1',10);
     const extrasS = [...body.querySelectorAll('#sauces input:checked')].length;
     const extrasI = [...body.querySelectorAll('#ingrs input:checked')].length;
-    const dlcOn   = item.mini && body.querySelector('#dlcCarne')?.checked;
-    const extraDlc = dlcOn ? DLC : 0;
+    const dlcChk  = item.mini && body.querySelector('#dlcCarne')?.checked;
+    const extraDlc = dlcChk ? DLC : 0;
     const subtotal = (item.price + extraDlc)*qty + (extrasS*SP + extrasI*IP)*qty;
     totalEl.textContent = money(subtotal);
-    return { qty, subtotal, dlcOn };
+    return { qty, subtotal, dlcChk };
   };
   inputs.forEach(i=> i.addEventListener('change', calc));
   calc();
 
-  document.getElementById('mAdd').onclick = ()=>{
+  addBtn.onclick = ()=>{
     const name = document.getElementById('cName').value.trim();
     if(!name){ alert('Por favor escribe tu nombre.'); return; }
     state.customerName = name;
 
-    const { qty, subtotal, dlcOn } = calc();
+    const { qty, subtotal, dlcChk } = calc();
     const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
     const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? ingr[i]: null).filter(Boolean);
     const salsaSwap = document.getElementById('swapSauce').value || null;
     const notes     = document.getElementById('notes').value.trim();
 
-    const line = {
+    const newLine = {
       id: item.id,
       name: item.name,
       mini: !!item.mini,
@@ -199,16 +223,22 @@ function openItemModal(item, base){
       baseIngredients: base.ingredients||[],
       salsaDefault: base.salsaDefault || base.suggested || null,
       salsaCambiada: salsaSwap,
-      extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: dlcOn },
+      extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: dlcChk },
       notes,
       lineTotal: subtotal
     };
 
-    state.cart.push(line);
+    if (existingIndex!==null){
+      state.cart[existingIndex] = newLine;
+      toast('Línea actualizada');
+    }else{
+      state.cart.push(newLine);
+      toast('Agregado al pedido');
+    }
+
     document.getElementById('modal').classList.remove('open');
     updateCartBar();
     beep();
-    toast('Agregado al pedido');
   };
 }
 
@@ -257,22 +287,27 @@ function openCartModal(){
     </div>
 
     <div class="field">
-      ${state.cart.map((l,idx)=>`
+      ${state.cart.map((l,idx)=>{
+        const extrasTxt = [
+          (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
+          ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
+          ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s)
+        ].filter(Boolean).join(', ');
+        return `
         <div class="k-card" style="margin:8px 0" data-i="${idx}">
           <h4>${l.name} · x${l.qty}</h4>
           ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
-          ${l.extras?.dlcCarne ? `<div class="muted small">DLC carne 85g</div>`:''}
-          ${(l.extras?.sauces?.length||0)>0 ? `<div class="muted small">Aderezos extra: ${l.extras.sauces.join(', ')}</div>`:''}
-          ${(l.extras?.ingredients?.length||0)>0 ? `<div class="muted small">Extras: ${l.extras.ingredients.join(', ')}</div>`:''}
+          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
           ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
-          <div class="k-actions">
+          <div class="k-actions" style="gap:6px">
             <button class="btn small ghost" data-a="less">-</button>
             <button class="btn small ghost" data-a="more">+</button>
+            <button class="btn small" data-a="edit">Editar</button>
             <button class="btn small danger" data-a="remove">Eliminar</button>
             <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
           </div>
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     </div>
 
     <div class="field">
@@ -281,7 +316,7 @@ function openCartModal(){
     </div>
   `;
 
-  // Mostrar/ocultar campo mesa al cambiar tipo
+  // Mostrar/ocultar mesa
   const typeSel = document.getElementById('orderType');
   const mesaField = document.getElementById('mesaField');
   typeSel.onchange = ()=>{
@@ -289,10 +324,9 @@ function openCartModal(){
     mesaField.style.display = (typeSel.value==='dinein') ? '' : 'none';
   };
 
-  // Totales
   refreshCartTotals();
 
-  // Handlers líneas
+  // Handlers de líneas
   body.addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-a]'); if(!btn) return;
     const card = btn.closest('[data-i]'); const i = parseInt(card.dataset.i,10);
@@ -301,18 +335,24 @@ function openCartModal(){
     if(btn.dataset.a==='remove'){ state.cart.splice(i,1); }
     if(btn.dataset.a==='more'){ line.qty = Math.min(99, (line.qty||1)+1); recomputeLine(line); }
     if(btn.dataset.a==='less'){ line.qty = Math.max(1, (line.qty||1)-1); recomputeLine(line); }
+    if(btn.dataset.a==='edit'){
+      const item = findItemById(line.id);
+      const base = baseOfItem(item);
+      document.getElementById('cartModal').style.display='none';
+      openItemModal(item, base, i); // abre pre-llenado
+      return;
+    }
 
     openCartModal(); // re-render
     updateCartBar();
   }, { once:true });
 
-  // Confirmar
+  // Confirmar pedido
   document.getElementById('cartConfirm').onclick = async ()=>{
     const name = (document.getElementById('cartName').value||'').trim();
     if(!name){ alert('Escribe tu nombre'); return; }
     state.customerName = name;
 
-    // Guardar meta
     state.orderMeta.type  = document.getElementById('orderType').value;
     state.orderMeta.table = (state.orderMeta.type==='dinein') ? (document.getElementById('tableNum').value||'').trim() : '';
     if(state.orderMeta.type==='dinein' && !state.orderMeta.table){
@@ -324,8 +364,8 @@ function openCartModal(){
 
     const order = {
       customer: state.customerName,
-      orderType: state.orderMeta.type,     // NUEVO
-      table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null, // NUEVO
+      orderType: state.orderMeta.type,
+      table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null,
       items: state.cart.map(l=>({
         id:l.id, name:l.name, mini:l.mini, qty:l.qty, unitPrice:l.unitPrice,
         baseIngredients:l.baseIngredients, salsaDefault:l.salsaDefault,
