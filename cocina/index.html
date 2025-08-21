@@ -1,27 +1,22 @@
 <!doctype html>
-<html lang="es">
-<head>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Cocina — Seven de Burgers</title>
-  <link rel="stylesheet" href="../shared/styles.css"/>
-</head>
-<body>
-  <div class="container">
-    <div class="row" style="margin-bottom:10px">
-      <a class="badge" href="../kiosk/index.html">Kiosko</a>
-      <div class="badge">Cocina</div>
-    </div>
-
-    <div class="k-columns">
-      <div class="card"><h3>Sin pendientes</h3><div id="col-pending" class="col"></div></div>
-      <div class="card"><h3>En preparación</h3><div id="col-progress" class="col"></div></div>
-      <div class="card"><h3>Listos</h3><div id="col-ready" class="col"></div></div>
-    </div>
+<html lang="es"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Cocina — Seven de Burgers</title>
+<link rel="stylesheet" href="../shared/styles.css"></head>
+<body class="shell">
+<div class="container">
+  <div class="row" style="margin-bottom:10px">
+    <a class="badge" href="../kiosk/">Kiosko</a>
+    <div class="right badge">Cocina</div>
   </div>
-
-  <div class="modal" id="loginOverlay" style="display:none"><div class="modal-card" id="modal" style="padding:16px"></div></div>
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+  <div class="k-columns">
+    <div class="card"><h2>Sin pendientes</h2><div id="col-pending" class="col"></div></div>
+    <div class="card"><h2>En preparación</h2><div id="col-progress" class="col"></div></div>
+    <div class="card"><h2>Listos</h2><div id="col-ready" class="col"></div></div>
+  </div>
+</div>
+<script type="module" src="../shared/firebase.js"></script>
+<script type="module" src="../shared/db.js"></script>
+<script type="module" src="../shared/notify.js"></script>
+<script type="module" src="./app.js"></script>
+</body></html>
