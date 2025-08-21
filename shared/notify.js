@@ -1,4 +1,4 @@
-<!-- /shared/notify.js -->
+//<!-- /shared/notify.js -->
 <script type="module">
 export function beep(ms=140, freq=880){
   try{
