@@ -8,7 +8,7 @@
 // Inicializa Firebase (App, Auth anónima y Firestore) usando el SDK modular por CDN.
 // IMPORTANTE: Sustituye firebaseConfig por los datos de tu proyecto.
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+/*import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -39,13 +39,35 @@ const db = getFirestore(app);
 // Asegura sesión anónima antes de usar Firestore.
 async function ensureAnon() {
   return new Promise((resolve, reject) => {
-    onAuthStateChanged(auth, async (user) => {
-      try {
-        if (!user) await signInAnonymously(auth);
-        resolve(auth.currentUser);
-      } catch (e) { reject(e); }
-    });
-  });
-}
+    onAuthStateChanged(auth, async (user) => { */
+      //try {
+        //if (!user) await signInAnonymously(auth);
+       // resolve(auth.currentUser);
+     // } catch (e) { reject(e); }
+    //});
+  //});
+//}
 
-export { app, auth, db, serverTimestamp, ensureAnon };
+//export { app, auth, db, serverTimestamp, ensureAnon };
+//Aqui inicia el nuevo 20/Ago/2025 version 8
+
+<!-- /shared/firebase.js -->
+<script type="module">
+// Carga SDKs desde CDN (funciona en GitHub Pages)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+    authDomain: "seven-de-burgers.firebaseapp.com",
+    projectId: "seven-de-burgers",
+};
+
+export const app = initializeApp(firebaseConfig);
+export const dbAuth = getAuth(app);
+export const db = getFirestore(app);
+
+// Autenticación anónima para permitir reglas
+signInAnonymously(dbAuth).catch(console.error);
+</script>
