@@ -1,13 +1,115 @@
-
 <!doctype html><html lang="es">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="../shared/styles.css"/><title>Admin — Seven de Burgers</title></head>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="../shared/styles.css"/>
+  <title>Admin — Seven de Burgers</title>
+  <style>
+    /* mini tabla */
+    table.cat { width:100%; border-collapse: collapse; }
+    table.cat th, table.cat td { border-bottom:1px solid var(--stroke); padding:8px 6px; text-align:left; }
+    table.cat th { color:var(--muted); font-weight:700; font-size:12px; }
+    .tag { font-size:12px; color:var(--muted); }
+    .row.wrap { display:flex; flex-wrap:wrap; gap:8px; }
+  </style>
+</head>
 <body>
-<header class="header"><div class="brand"><span class="dot"></span><div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div></div>
-<nav class="row" style="gap:8px"><a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a></nav></header>
-<main class="container"><div class="grid" id="adminGrid">
-<div class="card"><h3>Compras rápidas</h3><div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div><div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div><div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div><button class="btn" id="btnAddPurchase">Registrar compra</button><div class="muted small">* Guarda en colección <b>purchases</b>.</div></div>
-<div class="card"><h3>Ingredientes (costos)</h3><div class="field"><label>Nombre</label><input id="iName" type="text"/></div><div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div><button class="btn" id="btnSetIng">Guardar/Actualizar</button><div class="muted small">* Guarda en colección <b>ingredients</b>.</div></div>
-<div class="card"><h3>Recetario (aderezos)</h3><div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div><div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div><div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div><button class="btn" id="btnSaveRecipe">Guardar receta</button><div class="muted small">* Guarda en colección <b>recipes</b>.</div></div>
-</div></main>
-<script type="module" src="./app.js"></script></body></html>
+<header class="header">
+  <div class="brand"><span class="dot"></span>
+    <div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div>
+  </div>
+  <nav class="row" style="gap:8px">
+    <a class="btn ghost small" href="../kiosk/index.html">Ir al kiosko</a>
+  </nav>
+</header>
+
+<main class="container">
+  <div class="grid" id="adminGrid">
+
+    <!-- Compras rápidas (tal cual tenías) -->
+    <div class="card">
+      <h3>Compras rápidas</h3>
+      <div class="field"><label>Ingrediente</label><input id="pName" type="text"/></div>
+      <div class="field"><label>Cantidad</label><input id="pQty" type="number" min="1" value="1"/></div>
+      <div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" value="0"/></div>
+      <button class="btn" id="btnAddPurchase">Registrar compra</button>
+      <div class="muted small">* Guarda en colección <b>purchases</b>.</div>
+    </div>
+
+    <!-- Ingredientes (costos) -->
+    <div class="card">
+      <h3>Ingredientes (costos)</h3>
+      <div class="field"><label>Nombre</label><input id="iName" type="text"/></div>
+      <div class="field"><label>Costo unitario</label><input id="iCost" type="number" min="0"/></div>
+      <button class="btn" id="btnSetIng">Guardar/Actualizar</button>
+      <div class="muted small">* Guarda en colección <b>ingredients</b>.</div>
+    </div>
+
+    <!-- Recetario -->
+    <div class="card">
+      <h3>Recetario (aderezos)</h3>
+      <div class="field"><label>Nombre del aderezo</label><input id="rName" type="text"/></div>
+      <div class="field"><label>Rendimiento (ml)</label><input id="rYield" type="number" min="0"/></div>
+      <div class="field"><label>Notas</label><textarea id="rNotes"></textarea></div>
+      <button class="btn" id="btnSaveRecipe">Guardar receta</button>
+      <div class="muted small">* Guarda en colección <b>recipes</b>.</div>
+    </div>
+
+    <!-- ⬇️ NUEVO: Catálogo (CRUD) -->
+    <div class="card" style="grid-column:1/-1">
+      <h3>Catálogo (productos / combos)</h3>
+      <div class="row wrap">
+        <button class="btn small" id="btnNew">Nuevo producto</button>
+        <span class="tag">* Se guarda en colección <b>catalog</b>. El kiosko lo leerá en vivo.</span>
+      </div>
+
+      <!-- Lista -->
+      <div class="field" style="margin-top:12px">
+        <table class="cat" id="catTable">
+          <thead>
+            <tr>
+              <th>Id</th><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Mini</th><th>Base de</th><th>Activo</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="catRows"><tr><td colspan="8" class="muted">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Formulario -->
+      <div class="hr"></div>
+      <h4 id="formTitle">Nuevo producto</h4>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px">
+        <div class="field"><label>Id (opcional si es nuevo)</label><input id="fId" type="text" placeholder="starter"/></div>
+        <div class="field"><label>Nombre</label><input id="fName" type="text" placeholder="Starter Burger"/></div>
+        <div class="field">
+          <label>Categoría</label>
+          <select id="fCat">
+            <option value="burger">Burger</option>
+            <option value="mini">Mini</option>
+            <option value="sauce">Aderezo</option>
+            <option value="extra">Extra</option>
+            <option value="combo">Combo</option>
+            <option value="config">Config (precios extras)</option>
+          </select>
+        </div>
+        <div class="field"><label>Precio</label><input id="fPrice" type="number" min="0" step="1"/></div>
+        <div class="field"><label>¿Es mini?</label><select id="fMini"><option value="false">No</option><option value="true">Sí</option></select></div>
+        <div class="field"><label>Base de (si mini)</label><input id="fBaseOf" type="text" placeholder="id de burger base"/></div>
+        <div class="field"><label>Salsa por defecto</label><input id="fSalsaDef" type="text" placeholder="Mostaza dulce"/></div>
+        <div class="field"><label>Salsas sugeridas (coma)</label><input id="fSalsasSug" type="text" placeholder="Chipotle, Chimichurri"/></div>
+        <div class="field" style="grid-column:1/-1"><label>Ingredientes (uno por línea)</label><textarea id="fIngr" rows="4" placeholder="Pan&#10;Carne 85g&#10;Queso..."></textarea></div>
+        <div class="field"><label>Icono (URL opcional)</label><input id="fIcon" type="url" placeholder="https://..."/></div>
+        <div class="field"><label>Activo</label><select id="fActive"><option value="true">Sí</option><option value="false">No</option></select></div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end; gap:8px; margin-top:10px">
+        <button class="btn ghost" id="btnFormCancel">Cancelar</button>
+        <button class="btn" id="btnFormSave">Guardar</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script type="module" src="./app.js"></script>
+</body></html>
