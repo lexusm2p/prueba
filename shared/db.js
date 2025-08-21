@@ -256,5 +256,36 @@ export async function archiveDelivered(orderId){
 }
 
 export async function updateOrder(orderId, patch){
-  await updateDoc(doc(db,'orders',orderId), patch);
+  await updateDoc(doc(db,'orders',orderId), /* ========================
+   Consulta de órdenes por rango (reportes)
+   ======================== */
+export async function getOrdersRange({ from, to, includeArchive = true, orderType = null }){
+  await ensureAnonAuth();
+
+  // Helper para consultar una colección (orders u orders_archive)
+  async function runOne(colName){
+    let qBase = query(collection(db, colName), orderBy('createdAt', 'asc'));
+
+    if (from)      qBase = query(qBase, where('createdAt', '>=', from));
+    if (to)        qBase = query(qBase, where('createdAt', '<=', to));
+    if (orderType) qBase = query(qBase, where('orderType', '==', orderType));
+
+    const snap = await getDocs(qBase);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  const live = await runOne('orders');
+  if (!includeArchive) return live;
+
+  const arch = await runOne('orders_archive');
+
+  // Unimos y ordenamos por fecha
+  const all = [...live, ...arch].sort((a, b) => {
+    const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+    const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+    return ta - tb;
+  });
+
+  return all;
+}
 }
