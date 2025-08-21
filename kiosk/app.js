@@ -1,5 +1,7 @@
 // /kiosk/app.js
-// Kiosko: catálogo, modal de compra, DLC minis, cambio de salsa sin costo, login oculto por PIN.
+// Kiosko: catálogo, modal de compra, DLC minis, cambio de salsa sin costo, login oculto por PIN,
+// y pestañas (Minis/Grandes) con resaltado del modo activo.
+
 import { beep, toast } from '../shared/notify.js';
 import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
 
@@ -17,7 +19,6 @@ brand.addEventListener('click', ()=>{
   tapCount++;
   // ventana de 2 segundos para juntar 7 taps
   tapTimer = setTimeout(()=> tapCount=0, 2000);
-
   if (tapCount >= 7) {
     tapCount = 0;
     openPinModal();
@@ -47,7 +48,7 @@ function openPinModal(){
     const route = verifyPin(pin);
     if (!route) { toast('PIN incorrecto'); return; }
     hide();
-    // Por seguridad dejamos oculto #navRoles y redirigimos directo
+    // Redirigimos directo
     location.href = route;
   };
 
@@ -58,10 +59,27 @@ function openPinModal(){
 }
 
 /* -------------------------------------------
-   2) Cambio de vistas (Minis / Grandes)
+   2) Cambio de vistas (Minis / Grandes) + resaltar tab activa
 --------------------------------------------*/
-document.getElementById('btnMinis').onclick = ()=>{ state.mode='mini'; renderCards(); }
-document.getElementById('btnBig').onclick  = ()=>{ state.mode='big';  renderCards(); }
+document.getElementById('btnMinis').onclick = ()=> setMode('mini');
+document.getElementById('btnBig').onclick  = ()=> setMode('big');
+
+function setMode(mode){
+  state.mode = mode;
+  renderCards();
+  setActiveTab(mode);
+}
+
+function setActiveTab(mode = state.mode){
+  const btnMinis = document.getElementById('btnMinis');
+  const btnBig   = document.getElementById('btnBig');
+
+  const on  = (el)=>{ el.classList.add('is-active');  el.setAttribute('aria-selected','true');  };
+  const off = (el)=>{ el.classList.remove('is-active'); el.setAttribute('aria-selected','false'); };
+
+  if(mode === 'mini'){ on(btnMinis); off(btnBig); }
+  else { on(btnBig); off(btnMinis); }
+}
 
 /* -------------------------------------------
    3) Inicialización / Menu
@@ -70,6 +88,7 @@ init();
 async function init(){
   state.menu = await fetchCatalogWithFallback();
   renderCards();
+  setActiveTab('mini'); // estado inicial
 }
 function money(n){ return '$'+n.toFixed(0); }
 
