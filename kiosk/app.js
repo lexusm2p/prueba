@@ -12,7 +12,7 @@ function renderMenu() {
 
   MENU.forEach(item => {
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card pixel-card";
 
     card.innerHTML = `
       <h3>${item.nombre}</h3>
@@ -122,7 +122,7 @@ async function confirmarPedido(item) {
   };
 
   await createOrder(pedido);
-  toast("Pedido agregado", "✅");
+  toast("Pedido agregado", {star:true});
   beep();
   closeModal();
 }
