@@ -1,107 +1,104 @@
-// kiosk/app.js
+// /kiosk/app.js
+// Kiosko: catálogo, modal de compra y creación de pedidos
 import { beep, toast } from '../shared/notify.js';
 import { createOrder } from '../shared/db.js';
 
-const state = { menu: null, mode: 'mini', taps: 0, tapTimer: null };
-
-// --------- BRAND SECRET (7 taps) ----------
+const state = { menu:null, mode:'mini', taps:0 };
 const brand = document.getElementById('brandTap');
-brand.addEventListener('click', () => {
+
+// 7 toques para revelar navegación oculta (roles)
+brand.addEventListener('click',()=>{
   state.taps++;
-  if (state.tapTimer) clearTimeout(state.tapTimer);
-  state.tapTimer = setTimeout(() => { state.taps = 0; }, 2000);
-  if (state.taps >= 7) {
-    document.getElementById('navRoles').style.display = 'flex';
-    toast('Modo staff desbloqueado 🔓');
-    state.taps = 0;
+  if(state.taps>=7){
+    document.getElementById('navRoles').style.display='flex';
   }
+  setTimeout(()=>state.taps=0,1000);
 });
 
-// --------- SWITCH DE MODO ----------
-document.getElementById('btnMinis').onclick = () => { state.mode = 'mini'; renderCards(); }
-document.getElementById('btnBig').onclick   = () => { state.mode = 'big';  renderCards(); }
+document.getElementById('btnMinis').onclick = ()=>{state.mode='mini'; renderCards();}
+document.getElementById('btnBig').onclick = ()=>{state.mode='big'; renderCards();}
 
-// --------- CARGA MENÚ ----------
-async function loadMenu() {
-  const res = await fetch('../data/menu.json', { cache: 'no-store' });
+async function loadMenu(){
+  const res = await fetch('../data/menu.json');
   state.menu = await res.json();
   renderCards();
 }
-function money(n) { return '$' + Number(n || 0).toFixed(0); }
 
-// --------- LISTA DE TARJETAS ----------
-function renderCards() {
-  const grid = document.getElementById('cards'); grid.innerHTML = '';
-  if (!state.menu) return;
+function money(n){ return '$'+Number(n||0).toFixed(0); }
 
-  const items = state.mode === 'mini' ? state.menu.minis : state.menu.burgers;
+function renderCards(){
+  const grid = document.getElementById('cards');
+  grid.innerHTML='';
+  if(!state.menu) return;
 
-  items.forEach(it => {
-    const base = it.baseOf ? state.menu.burgers.find(b => b.id === it.baseOf) : it;
-    const card = document.createElement('div'); card.className = 'card';
-
-    const ingPreview = (base.ingredients || []).join(', ');
-    const preview = ingPreview.length > 120 ? (ingPreview.slice(0, 117) + '…') : ingPreview;
-
+  const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
+  items.forEach(it=>{
+    const base = it.baseOf ? state.menu.burgers.find(b=>b.id===it.baseOf) : it;
+    const card = document.createElement('div'); 
+    card.className='card';
     card.innerHTML = `
       <h3>${it.name}</h3>
-      <div class="muted small">${preview}</div>
+      <div class="muted small">${(base.ingredients||[]).join(', ')}</div>
       <div class="row">
         <div class="price">${money(it.price)}</div>
         <div class="row" style="gap:8px">
           <button class="btn ghost small" data-a="ing">Ingredientes</button>
           <button class="btn small" data-a="order">Ordenar</button>
         </div>
-      </div>
-    `;
+      </div>`;
     grid.appendChild(card);
 
-    card.querySelector('[data-a="ing"]').onclick   = () => alert(`${base.name || it.name}\n\nIngredientes:\n- ${(base.ingredients || []).join('\n- ')}`);
-    card.querySelector('[data-a="order"]').onclick = () => openModal(it, base);
+    card.querySelector('[data-a="ing"]').onclick = ()=> {
+      alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
+    };
+    card.querySelector('[data-a="order"]').onclick = ()=> openModal(it, base);
   });
 }
 
-// --------- MODAL DE ORDEN ----------
-function openModal(item, base) {
-  const modal = document.getElementById('modal'); modal.classList.add('open');
-  const body  = document.getElementById('mBody');
-  document.getElementById('mTitle').textContent = `${item.name} · ${money(item.price)}`;
-  document.getElementById('mClose').onclick     = () => modal.classList.remove('open');
+function openModal(item, base){
+  const modal = document.getElementById('modal'); 
+  modal.classList.add('open');
+
+  const body = document.getElementById('mBody');
+  document.getElementById('mTitle').textContent = item.name + ' · ' + money(item.price);
+  document.getElementById('mClose').onclick = ()=> modal.classList.remove('open');
 
   const sauces = state.menu.extras.sauces;
-  const ingr   = state.menu.extras.ingredients; // [{name,price}]
-  const SP     = state.menu.extras.saucePrice;
-  const DLC    = state.menu.extras.dlcPattyPrice || 20; // DLC Carne grande
+  const ingr   = state.menu.extras.ingredients;
+  const SP     = Number(state.menu.extras.saucePrice||5);
+  const IP     = Number(state.menu.extras.ingredientPrice||5);
+
+  // DLC solo para MINIS (UX gamer). Regla: +$20 por unidad.
+  const DLC_PRICE = 20;
+  const dlcBlock = item.mini ? `
+    <div class="field">
+      <label>DLC de Carne grande</label>
+      <div class="ul-clean" style="grid-template-columns:28px 1fr;">
+        <input type="checkbox" id="dlcCarne"/>
+        <label for="dlcCarne">Añadir carne de 85g (+${money(DLC_PRICE)}/mini)</label>
+      </div>
+    </div>` : ``;
 
   body.innerHTML = `
     <div class="field">
       <label>Tu nombre</label>
-      <input id="cName" type="text" placeholder="Escribe tu nombre" required />
+      <input id="cName" type="text" placeholder="Escribe tu nombre" required/>
     </div>
 
     <div class="field">
       <label>Cantidad</label>
-      <input id="qty" type="number" min="1" max="9" value="1" />
+      <input id="qty" type="number" min="1" max="9" value="1"/>
     </div>
 
-    ${item.mini ? `
-      <div class="field">
-        <label>Mejora (DLC)</label>
-        <div class="ul-clean">
-          <input type="checkbox" id="dlcPatty" />
-          <label for="dlcPatty">DLC de Carne grande</label>
-          <span class="tag">(+${money(DLC)})</span>
-        </div>
-      </div>
-    ` : ''}
+    ${dlcBlock}
 
     <div class="hr"></div>
 
     <div class="field">
       <label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
-        ${sauces.map((s, i) => `
-          <input type="checkbox" id="s${i}" />
+        ${sauces.map((s,i)=>`
+          <input type="checkbox" id="s${i}"/>
           <label for="s${i}">${s}</label>
           <span class="tag">(+${money(SP)})</span>
         `).join('')}
@@ -111,10 +108,10 @@ function openModal(item, base) {
     <div class="field">
       <label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
-        ${ingr.map((o, i) => `
-          <input type="checkbox" id="e${i}" data-price="${o.price}" />
-          <label for="e${i}">${o.name}</label>
-          <span class="tag">(+${money(o.price)})</span>
+        ${ingr.map((s,i)=>`
+          <input type="checkbox" id="e${i}"/>
+          <label for="e${i}">${s}</label>
+          <span class="tag">(+${money(IP)})</span>
         `).join('')}
       </div>
     </div>
@@ -135,72 +132,54 @@ function openModal(item, base) {
 
   const totalEl = document.getElementById('mTotal');
   const qtyEl   = document.getElementById('qty');
-  const inputs  = body.querySelectorAll('input[type=checkbox], #qty');
+  const dlcEl   = document.getElementById('dlcCarne');
 
-  const calc = () => {
-    const qty = parseInt(qtyEl.value || '1', 10);
+  const inputs = body.querySelectorAll('input[type=checkbox], #qty');
+  const calc = ()=>{
+    const qty = parseInt(qtyEl.value||'1',10);
+    const extrasS = [...body.querySelectorAll('#sauces input:checked')].length;
+    const extrasI = [...body.querySelectorAll('#ingrs input:checked')].length;
 
-    // DLC de carne grande (solo minis)
-    const dlc = item.mini && body.querySelector('#dlcPatty')?.checked ? DLC : 0;
-
-    // Suma de aderezos extra (precio fijo SP)
-    const extrasS = [...body.querySelectorAll('#sauces input:checked')].length * SP;
-
-    // Suma de ingredientes extra por precio individual
-    const extrasI = [...body.querySelectorAll('#ingrs input:checked')]
-      .reduce((sum, el) => sum + Number(el.dataset.price || 0), 0);
-
-    const subtotalUnit = item.price + dlc + extrasS + extrasI;
-    const subtotal     = subtotalUnit * qty;
+    let subtotal = item.price*qty + (extrasS*SP + extrasI*IP)*qty;
+    if (item.mini && dlcEl?.checked) subtotal += DLC_PRICE * qty;
 
     totalEl.textContent = money(subtotal);
-    return { qty, subtotal, dlcApplied: dlc > 0 };
+    return {qty, subtotal};
   };
-
-  inputs.forEach(i => i.addEventListener('change', calc));
+  inputs.forEach(i=> i.addEventListener('change', calc)); 
   calc();
 
-  document.getElementById('mConfirm').onclick = async () => {
+  document.getElementById('mConfirm').onclick = async ()=>{
     const name = document.getElementById('cName').value.trim();
-    if (!name) { alert('Por favor escribe tu nombre.'); return; }
+    if(!name){ alert('Por favor escribe tu nombre.'); return; }
 
-    const { qty, subtotal, dlcApplied } = calc();
-
-    const saucesSel = [...body.querySelectorAll('#sauces input')]
-      .map((el, i) => el.checked ? sauces[i] : null)
-      .filter(Boolean);
-
-    const ingrSel = [...body.querySelectorAll('#ingrs input')]
-      .map((el, i) => el.checked ? { name: ingr[i].name, price: ingr[i].price } : null)
-      .filter(Boolean);
-
-    const surprise = document.getElementById('surprise').value === 'si';
+    const {qty, subtotal} = calc();
+    const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
+    const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? ingr[i]: null).filter(Boolean);
+    const surprise  = document.getElementById('surprise').value==='si';
+    const dlcOn     = item.mini && !!dlcEl?.checked;
 
     const order = {
       customer: name,
-      items: [{
-        id: item.id,
-        name: dlcApplied && item.mini ? `${item.name} (DLC carne grande)` : item.name,
-        price: item.price,
-        qty,
-        mini: !!item.mini
-      }],
-      baseIngredients: base.ingredients || [],
+      qty, subtotal,
+      item: { id:item.id, name:item.name, price:item.price, mini: !!item.mini },
+      baseIngredients: base.ingredients||[],
       suggested: base.suggested || item.suggested || null,
-      extras: {
-        sauces: saucesSel,
-        ingredients: ingrSel,
-        surprise,
-        dlc: dlcApplied ? { name: 'DLC de Carne grande', price: DLC } : null
-      },
-      notes: document.getElementById('notes').value.trim(),
-      total: subtotal
+      extras: { sauces: saucesSel, ingredients: ingrSel, surprise, dlcCarneGrande: dlcOn },
+      notes: document.getElementById('notes').value.trim()
     };
 
     await createOrder(order);
     beep();
-    if (item.mini && qty >= 3) { toast('¡Logro desbloqueado! 3 minis ⭐', '⭐'); }
-    toast('Gracias por tu pedido, ' + name + ' ✨');
+
+    if(item.mini && qty>=3){
+      toast('¡Logro desbloqueado! 3 minis ⭐','⭐');
+    }
+    if(dlcOn){
+      toast('🔓 ¡Has desbloqueado el DLC de Carne grande!');
+    }
+
+    toast('Gracias por tu pedido, '+name+' ✨');
     document.getElementById('modal').classList.remove('open');
   };
 }
