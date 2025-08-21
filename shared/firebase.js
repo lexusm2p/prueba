@@ -51,7 +51,7 @@ async function ensureAnon() {
 //export { app, auth, db, serverTimestamp, ensureAnon };
 //Aqui inicia el nuevo 20/Ago/2025 version 8
 
-<!-- /shared/firebase.js -->
+//<!-- /shared/firebase.js -->
 <script type="module">
 // Carga SDKs desde CDN (funciona en GitHub Pages)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
