@@ -1,6 +1,6 @@
 // /kiosk/app.js
-// Kiosko con carrito: varios productos por pedido, DLC minis, cambio de salsa sin costo,
-// extras, login oculto por PIN, tabs Minis/Grandes, toasts y beep.
+// Kiosko con carrito y meta de pedido (Pickup / Mesa).
+// En el payload se envían: orderType ('pickup'|'dinein') y table (si 'dinein').
 
 import { beep, toast } from '../shared/notify.js';
 import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
@@ -8,30 +8,26 @@ import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
 const state = {
   menu: null,
   mode: 'mini',
-  cart: [],            // líneas de carrito
-  customerName: ''     // se recuerda entre productos
+  cart: [],
+  customerName: '',
+  orderMeta: { type:'pickup', table:'' } // NUEVO
 };
 
-/* ─────────────────────────────────────────────
-   1) Login oculto (7 taps en 2s) → PIN → ruta
-   ────────────────────────────────────────────*/
+/* 1) Login oculto (7 taps → PIN) */
 const brand = document.getElementById('brandTap');
 let tapCount = 0, tapTimer = null;
-
 brand.addEventListener('click', ()=>{
   if (tapTimer) clearTimeout(tapTimer);
   tapCount++;
   tapTimer = setTimeout(()=> tapCount=0, 2000);
   if (tapCount >= 7) { tapCount = 0; openPinModal(); }
 });
-
 function openPinModal(){
   const pinModal = document.getElementById('pinModal');
   const pinInput = document.getElementById('pinInput');
   const pinGo    = document.getElementById('pinGo');
   const pinClose = document.getElementById('pinClose');
   const map = {'1111':'../mesero/index.html','2222':'../cocina/index.html','9999':'../admin/index.html'};
-
   const show = ()=>{ pinModal.style.display='grid'; setTimeout(()=>pinInput?.focus(),0); };
   const hide = ()=>{ pinModal.style.display='none'; pinInput.value=''; };
   const enter = ()=>{
@@ -40,24 +36,14 @@ function openPinModal(){
     if(!route){ toast('PIN incorrecto'); return; }
     hide(); location.href = route;
   };
-
-  show();
-  pinGo.onclick = enter;
-  pinClose.onclick = hide;
+  show(); pinGo.onclick = enter; pinClose.onclick = hide;
   pinInput.onkeydown = e=>{ if(e.key==='Enter') enter(); };
 }
 
-/* ─────────────────────────────────────────────
-   2) Tabs Minis / Grandes
-   ────────────────────────────────────────────*/
+/* 2) Tabs */
 document.getElementById('btnMinis').onclick = ()=> setMode('mini');
 document.getElementById('btnBig').onclick  = ()=> setMode('big');
-
-function setMode(mode){
-  state.mode = mode;
-  renderCards();
-  setActiveTab(mode);
-}
+function setMode(mode){ state.mode = mode; renderCards(); setActiveTab(mode); }
 function setActiveTab(mode=state.mode){
   const btnMinis = document.getElementById('btnMinis');
   const btnBig   = document.getElementById('btnBig');
@@ -66,9 +52,7 @@ function setActiveTab(mode=state.mode){
   if(mode==='mini'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
 }
 
-/* ─────────────────────────────────────────────
-   3) Init y helpers
-   ────────────────────────────────────────────*/
+/* 3) Init */
 init();
 async function init(){
   state.menu = await fetchCatalogWithFallback();
@@ -78,16 +62,12 @@ async function init(){
 }
 const money = n => '$'+n.toFixed(0);
 
-/* ─────────────────────────────────────────────
-   4) Tarjetas de productos
-   ────────────────────────────────────────────*/
+/* 4) Tarjetas */
 function renderCards(){
   const grid = document.getElementById('cards'); grid.innerHTML='';
   const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
-
   items.forEach(it=>{
     const base = it.baseOf ? state.menu.burgers.find(b=>b.id===it.baseOf) : it;
-
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
@@ -101,19 +81,14 @@ function renderCards(){
       </div>
     `;
     grid.appendChild(card);
-
-    // Ingredientes como ficha rápida
     card.querySelector('[data-a="ing"]').onclick = ()=>{
       alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
     };
-    // Abrir modal de item
     card.querySelector('[data-a="order"]').onclick = ()=> openItemModal(it, base);
   });
 }
 
-/* ─────────────────────────────────────────────
-   5) Modal Item: agrega al carrito (NO envía aún)
-   ────────────────────────────────────────────*/
+/* 5) Modal de producto (agrega al carrito) */
 function openItemModal(item, base){
   const modal = document.getElementById('modal'); modal.classList.add('open');
   const body  = document.getElementById('mBody');
@@ -204,7 +179,6 @@ function openItemModal(item, base){
   inputs.forEach(i=> i.addEventListener('change', calc));
   calc();
 
-  // Botón correcto (mAdd) — agrega al carrito y cierra
   document.getElementById('mAdd').onclick = ()=>{
     const name = document.getElementById('cName').value.trim();
     if(!name){ alert('Por favor escribe tu nombre.'); return; }
@@ -238,9 +212,7 @@ function openItemModal(item, base){
   };
 }
 
-/* ─────────────────────────────────────────────
-   6) Carrito: barra, modal, confirmación
-   ────────────────────────────────────────────*/
+/* 6) Carrito */
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart').onclick = openCartModal;
 
@@ -265,11 +237,23 @@ function openCartModal(){
     return;
   }
 
-  // Render líneas
   body.innerHTML = `
     <div class="field">
       <label>Nombre del cliente</label>
       <input id="cartName" type="text" required value="${state.customerName||''}" />
+    </div>
+
+    <div class="field">
+      <label>Tipo de pedido</label>
+      <select id="orderType">
+        <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
+        <option value="dinein" ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
+      </select>
+    </div>
+
+    <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
+      <label>Número de mesa</label>
+      <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
     </div>
 
     <div class="field">
@@ -297,10 +281,18 @@ function openCartModal(){
     </div>
   `;
 
+  // Mostrar/ocultar campo mesa al cambiar tipo
+  const typeSel = document.getElementById('orderType');
+  const mesaField = document.getElementById('mesaField');
+  typeSel.onchange = ()=>{
+    state.orderMeta.type = typeSel.value;
+    mesaField.style.display = (typeSel.value==='dinein') ? '' : 'none';
+  };
+
   // Totales
   refreshCartTotals();
 
-  // Handlers líneas (se re-enlazan en cada re-render)
+  // Handlers líneas
   body.addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-a]'); if(!btn) return;
     const card = btn.closest('[data-i]'); const i = parseInt(card.dataset.i,10);
@@ -310,8 +302,7 @@ function openCartModal(){
     if(btn.dataset.a==='more'){ line.qty = Math.min(99, (line.qty||1)+1); recomputeLine(line); }
     if(btn.dataset.a==='less'){ line.qty = Math.max(1, (line.qty||1)-1); recomputeLine(line); }
 
-    // Re-render rápido
-    openCartModal();
+    openCartModal(); // re-render
     updateCartBar();
   }, { once:true });
 
@@ -321,11 +312,20 @@ function openCartModal(){
     if(!name){ alert('Escribe tu nombre'); return; }
     state.customerName = name;
 
+    // Guardar meta
+    state.orderMeta.type  = document.getElementById('orderType').value;
+    state.orderMeta.table = (state.orderMeta.type==='dinein') ? (document.getElementById('tableNum').value||'').trim() : '';
+    if(state.orderMeta.type==='dinein' && !state.orderMeta.table){
+      alert('Indica el número de mesa.'); return;
+    }
+
     const generalNotes = (document.getElementById('cartNotes').value||'').trim();
     const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
 
     const order = {
       customer: state.customerName,
+      orderType: state.orderMeta.type,     // NUEVO
+      table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null, // NUEVO
       items: state.cart.map(l=>({
         id:l.id, name:l.name, mini:l.mini, qty:l.qty, unitPrice:l.unitPrice,
         baseIngredients:l.baseIngredients, salsaDefault:l.salsaDefault,
@@ -349,11 +349,9 @@ function recomputeLine(line){
   const DLC = (state.menu?.extras?.dlcCarneMini ?? 12);
   const SP  = state.menu?.extras?.saucePrice ?? 8;
   const IP  = state.menu?.extras?.ingredientPrice ?? 10;
-
   const extrasS = line.extras?.sauces?.length || 0;
   const extrasI = line.extras?.ingredients?.length || 0;
   const dlcOn   = !!(line.extras?.dlcCarne);
-
   const extraDlc = dlcOn ? DLC : 0;
   const unitTotal = (line.unitPrice + extraDlc) + (extrasS*SP + extrasI*IP);
   line.lineTotal = unitTotal * (line.qty||1);
