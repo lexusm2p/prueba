@@ -1,20 +1,29 @@
-<!doctype html><html lang="es">
+<!doctype html>
+<html lang="es">
 <head>
-  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Kiosko — Seven de Burgers</title>
 </head>
 <body>
 <header class="header">
-  <div class="brand" id="brandTap"><span class="dot"></span>
-    <div><div>Seven de Burgers</div><div class="title-sub">Kiosko</div></div>
+  <!-- Taps al logo: 7 en 2s abre PIN modal -->
+  <div class="brand" id="brandTap">
+    <span class="dot"></span>
+    <div>
+      <div>Seven de Burgers</div>
+      <div class="title-sub">Kiosko</div>
+    </div>
   </div>
+  <!-- Nav oculto (solo por si quieres mostrarlo manualmente) -->
   <nav id="navRoles" style="display:none;gap:8px">
     <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
     <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
     <a class="btn ghost small" href="../admin/index.html">Admin</a>
   </nav>
 </header>
+
 <main class="container">
   <div class="card" id="mode">
     <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
@@ -23,16 +32,52 @@
       <button class="btn ghost" id="btnBig">Hamburguesas grandes</button>
     </div>
   </div>
+
   <div class="grid" id="cards"></div>
 </main>
 
-<div class="modal" id="modal"><div class="modal-card">
-  <div class="modal-head"><div id="mTitle">Orden</div><button class="btn ghost small" id="mClose">Cerrar</button></div>
-  <div class="modal-body" id="mBody"></div>
-  <div class="modal-foot">
-    <div class="total-bar"><div class="total" id="mTotal">$0</div><button class="btn" id="mConfirm">Confirmar pedido</button></div>
+<!-- Modal de orden -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="mTitle">Orden</div>
+      <button class="btn ghost small" id="mClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="total" id="mTotal">$0</div>
+        <button class="btn" id="mConfirm">Confirmar pedido</button>
+      </div>
+    </div>
   </div>
-</div></div>
+</div>
+
+<!-- Modal oculto de PIN para roles -->
+<div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="pinTitle">Acceso</div>
+      <button class="btn ghost small" id="pinClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Ingresa PIN</label>
+        <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" />
+      </div>
+      <div class="field">
+        <small class="muted">Pistas (temporal): 1111=Mesero · 2222=Cocina · 9999=Admin</small>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div></div>
+        <button class="btn" id="pinGo">Entrar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script type="module" src="./app.js"></script>
-</body></html>
+</body>
+</html>
