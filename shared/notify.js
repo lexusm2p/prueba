@@ -1,17 +1,19 @@
-// ✅ notify.js
-export function toast(msg, icon = "🍔") {
-  const el = document.createElement("div");
-  el.className = "toast";
-  el.innerHTML = `${icon} ${msg}`;
-  document.body.appendChild(el);
-  setTimeout(() => el.classList.add("show"), 50);
-  setTimeout(() => {
-    el.classList.remove("show");
-    setTimeout(() => el.remove(), 300);
-  }, 3000);
+// /shared/notify.js
+export function beep(ms=140, freq=880){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type='square'; o.frequency.value=freq; g.gain.value=.06;
+    o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, ms);
+  }catch{}
 }
 
-export function beep() {
-  const audio = new Audio("../shared/sounds/star.mp3");
-  audio.play();
+export function toast(msg, icon=''){
+  const t = document.createElement('div');
+  t.className='toast';
+  t.innerHTML = icon ? `<span style="margin-right:6px">${icon}</span>${msg}` : msg;
+  document.body.appendChild(t);
+  t.classList.add('show');
+  setTimeout(()=> t.remove(), 2400);
 }
