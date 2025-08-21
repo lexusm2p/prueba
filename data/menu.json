@@ -6,18 +6,9 @@
       "price": 47,
       "category": "big",
       "mini": false,
-      "ingredients": [
-        "Pan",
-        "Carne 85g",
-        "Queso amarillo",
-        "Queso blanco",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla",
-        "Mayonesa",
-        "Catsup",
-        "Mostaza"
-      ],
+      "ingredients": ["Pan","Carne 85g","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "defaultSauce": "Mostaza",
+      "altSauces": ["Mostaza dulce"],
       "suggested": "Mostaza dulce"
     },
     {
@@ -26,20 +17,10 @@
       "price": 57,
       "category": "big",
       "mini": false,
-      "ingredients": [
-        "Pan",
-        "Carne 85g",
-        "Queso blanco",
-        "Piña",
-        "Tocino",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla",
-        "Mayonesa",
-        "Catsup",
-        "Mostaza"
-      ],
-      "suggested": "Chimichurri"
+      "ingredients": ["Pan","Carne 85g","Queso blanco","Piña","Tocino","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "defaultSauce": "Salsa Chimichurri",
+      "altSauces": ["Curry suave"],
+      "suggested": "Curry suave"
     },
     {
       "id": "fatality",
@@ -47,20 +28,10 @@
       "price": 67,
       "category": "big",
       "mini": false,
-      "ingredients": [
-        "Pan",
-        "Carne 85g",
-        "Salsa Cheddar",
-        "Tocino",
-        "Salsa habanero",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla",
-        "Mayonesa",
-        "Catsup",
-        "Mostaza"
-      ],
-      "suggested": "Habanero"
+      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Tocino","Salsa Habanero","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "defaultSauce": "Salsa Cheddar",
+      "altSauces": ["Aderezo Habanero"],
+      "suggested": "Aderezo Habanero"
     },
     {
       "id": "mega",
@@ -68,20 +39,10 @@
       "price": 77,
       "category": "big",
       "mini": false,
-      "ingredients": [
-        "Pan",
-        "Carne 85g",
-        "Salsa Cheddar",
-        "Queso blanco",
-        "Tocino",
-        "Salchicha",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla",
-        "Mayonesa",
-        "Catsup"
-      ],
-      "suggested": "Cheddar"
+      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Queso blanco","Tocino","Salchicha","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup"],
+      "defaultSauce": "Salsa Cheddar",
+      "altSauces": ["Aderezo Chipotle"],
+      "suggested": "Aderezo Chipotle"
     },
     {
       "id": "hadouken",
@@ -89,18 +50,10 @@
       "price": 77,
       "category": "big",
       "mini": false,
-      "ingredients": [
-        "Pan",
-        "Carne 85g",
-        "Queso blanco",
-        "Queso amarillo",
-        "Salchicha",
-        "Aderezo chipotle",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla"
-      ],
-      "suggested": "Chipotle"
+      "ingredients": ["Pan","Carne 85g","Queso blanco","Queso amarillo","Salchicha","Aderezo Chipotle","Lechuga","Jitomate","Cebolla"],
+      "defaultSauce": "Aderezo Chipotle",
+      "altSauces": ["Aderezo Habanero"],
+      "suggested": "Aderezo Habanero"
     },
     {
       "id": "nintendo",
@@ -108,19 +61,9 @@
       "price": 67,
       "category": "big",
       "mini": false,
-      "ingredients": [
-        "Pan",
-        "Carne 85g",
-        "Queso blanco",
-        "Piña",
-        "Jamón",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla",
-        "Mayonesa",
-        "Catsup",
-        "Mostaza"
-      ],
+      "ingredients": ["Pan","Carne 85g","Queso blanco","Piña","Jamón","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "defaultSauce": "Mostaza",
+      "altSauces": ["Mostaza dulce"],
       "suggested": "Mostaza dulce"
     },
     {
@@ -129,59 +72,17 @@
       "price": 97,
       "category": "big",
       "mini": false,
-      "ingredients": [
-        "Pan",
-        "Carne 85g",
-        "Salsa Cheddar",
-        "Queso blanco",
-        "Queso amarillo",
-        "Tocino",
-        "Jamón",
-        "Salchicha",
-        "Piña",
-        "Salsa habanero",
-        "Aderezo chipotle"
-      ],
-      "suggested": "Chipotle"
+      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Queso blanco","Queso amarillo","Tocino","Jamón","Salchicha","Piña","Salsa Habanero","Aderezo Chipotle"],
+      "defaultSauce": "Salsa Cheddar",
+      "altSauces": ["Aderezo Chipotle","Aderezo Habanero"],
+      "suggested": "Aderezo Chipotle"
     }
   ],
   "minis": [
-    {
-      "id": "starter_m",
-      "name": "Starter Mini",
-      "price": 27,
-      "category": "mini",
-      "mini": true,
-      "allowDLC": true,
-      "baseOf": "starter"
-    },
-    {
-      "id": "koopa_m",
-      "name": "Koopa Mini",
-      "price": 33,
-      "category": "mini",
-      "mini": true,
-      "allowDLC": true,
-      "baseOf": "koopa"
-    },
-    {
-      "id": "fatality_m",
-      "name": "Fatality Mini",
-      "price": 37,
-      "category": "mini",
-      "mini": true,
-      "allowDLC": true,
-      "baseOf": "fatality"
-    },
-    {
-      "id": "mega_m",
-      "name": "Mega Mini",
-      "price": 42,
-      "category": "mini",
-      "mini": true,
-      "allowDLC": true,
-      "baseOf": "mega"
-    }
+    { "id": "starter_m",  "name": "Starter Mini",   "price": 27, "category": "mini", "mini": true, "baseOf": "starter"  },
+    { "id": "koopa_m",    "name": "Koopa Mini",     "price": 33, "category": "mini", "mini": true, "baseOf": "koopa"    },
+    { "id": "fatality_m", "name": "Fatality Mini",  "price": 37, "category": "mini", "mini": true, "baseOf": "fatality" },
+    { "id": "mega_m",     "name": "Mega Mini",      "price": 42, "category": "mini", "mini": true, "baseOf": "mega"     }
   ],
   "extras": {
     "sauces": [
@@ -196,17 +97,15 @@
     ],
     "saucePrice": 5,
     "ingredients": [
-      { "name": "Tocino", "price": 6 },
-      { "name": "Piña", "price": 5 },
-      { "name": "Jamón", "price": 5 },
-      { "name": "Salchicha", "price": 8 },
-      { "name": "Cebolla caramelizada", "price": 5 },
-      { "name": "Carne extra 85g", "price": 20 }
+      {"name":"Tocino","price":6},
+      {"name":"Piña","price":5},
+      {"name":"Jamón","price":5},
+      {"name":"Salchicha","price":8},
+      {"name":"Cebolla caramelizada","price":5},
+      {"name":"Queso extra","price":5},
+      {"name":"Carne extra 85g","price":20},
+      {"name":"DLC carne grande","price":12}
     ],
-    "ingredientPriceDefault": 5
-  },
-  "dlc": {
-    "label": "DLC de carne grande (85g)",
-    "price": 12
+    "ingredientPrice": 5
   }
 }
