@@ -1,33 +1,139 @@
+export const MENU = [
+  // --- Hamburguesas Mini ---
+  {
+    id: "mini-starter",
+    nombre: "Mini Starter",
+    tipo: "mini",
+    precio: 37,
+    ingredientes: ["Pan", "Carne 50g", "Queso amarillo", "Lechuga", "Jitomate", "Cebolla"],
+    salsaSugerida: "Chipotle"
+  },
+  {
+    id: "mini-koopa",
+    nombre: "Mini Koopa Crunch",
+    tipo: "mini",
+    precio: 47,
+    ingredientes: ["Pan", "Carne 50g", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate"],
+    salsaSugerida: "Chimichurri"
+  },
+  {
+    id: "mini-fatality",
+    nombre: "Mini Fatality Flame",
+    tipo: "mini",
+    precio: 57,
+    ingredientes: ["Pan", "Carne 50g", "Queso amarillo", "Tocino", "Jalapeño", "Cebolla"],
+    salsaSugerida: "Habanero"
+  },
+  {
+    id: "mini-zelda",
+    nombre: "Mini Triforce Zelda",
+    tipo: "mini",
+    precio: 47,
+    ingredientes: ["Pan", "Carne 50g", "Queso blanco", "Jamón", "Lechuga", "Jitomate"],
+    salsaSugerida: "Curry Cremoso"
+  },
+  {
+    id: "mini-sonic",
+    nombre: "Mini Sonic Boom",
+    tipo: "mini",
+    precio: 52,
+    ingredientes: ["Pan", "Carne 50g", "Queso cheddar", "Salchicha", "Cebolla", "Pepinillos"],
+    salsaSugerida: "Mostaza dulce"
+  },
+  {
+    id: "mini-kombat",
+    nombre: "Mini Kombat Boss",
+    tipo: "mini",
+    precio: 62,
+    ingredientes: ["Pan", "Carne 50g", "Queso amarillo", "Queso blanco", "Tocino", "Piña"],
+    salsaSugerida: "Secreta Seven"
+  },
+  {
+    id: "mini-mk64",
+    nombre: "Mini MK64 Deluxe",
+    tipo: "mini",
+    precio: 67,
+    ingredientes: ["Pan", "Carne 50g", "Queso cheddar", "Queso blanco", "Jamón", "Salchicha", "Cebolla"],
+    salsaSugerida: "Jalapeño rostizado"
+  },
 
-// Menú base y minis (precios cliente, ejemplo)
-export const PRODUCTS = [
-  { sku:'STARTER',     name:'Starter Burger',       size:'normal', price:47, ingredients:['Pan','Carne','Queso amarillo','Queso blanco','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
-  { sku:'KOOPA',       name:'Koopa Crunch',         size:'normal', price:57, ingredients:['Pan','Carne','Queso blanco','Piña','Tocino','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
-  { sku:'FLAME',       name:'Fatality Flame',       size:'normal', price:67, ingredients:['Pan','Carne','Salsa Cheddar','Tocino','Salsa Habanero','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
-  { sku:'MEGABYTE',    name:'Mega Byte',            size:'normal', price:77, ingredients:['Pan','Carne','Salsa Cheddar','Queso blanco','Tocino','Salchicha','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup'] },
-  { sku:'HADOUKEN',    name:'Hadouken',             size:'normal', price:77, ingredients:['Pan','Carne','Queso blanco','Queso amarillo','Salchicha','Aderezo Chipotle','Lechuga','Jitomate','Cebolla'] },
-  { sku:'NOSTALGIA',   name:'Nintendo Nostalgia',   size:'normal', price:67, ingredients:['Pan','Carne','Queso blanco','Piña','Jamón','Lechuga','Jitomate','Cebolla','Mayonesa','Cátsup','Mostaza'] },
-  { sku:'FINALBOSS',   name:'Final Boss Burger',    size:'normal', price:97, ingredients:['Pan','Carne','Salsa Cheddar','Queso blanco','Queso amarillo','Tocino','Jamón','Salchicha','Piña','Salsa Habanero','Aderezo Chipotle'] },
-
-  // minis
-  { sku:'STARTER_MINI',   name:'Starter Mini',       size:'mini', price:27, baseOf:'STARTER' },
-  { sku:'KOOPA_MINI',     name:'Koopa Crunch Mini',  size:'mini', price:27, baseOf:'KOOPA' },
-  { sku:'FLAME_MINI',     name:'Fatality Flame Mini',size:'mini', price:37, baseOf:'FLAME' },
-  { sku:'MEGABYTE_MINI',  name:'Mega Byte Mini',     size:'mini', price:37, baseOf:'MEGABYTE' },
-  { sku:'HADOUKEN_MINI',  name:'Hadouken Mini',      size:'mini', price:37, baseOf:'HADOUKEN' },
-  { sku:'NOSTALGIA_MINI', name:'Nintendo Nostalgia Mini', size:'mini', price:37, baseOf:'NOSTALGIA' },
-  { sku:'FINALBOSS_MINI', name:'Final Boss Mini',    size:'mini', price:47, baseOf:'FINALBOSS' },
+  // --- Hamburguesas Grandes ---
+  {
+    id: "starter",
+    nombre: "Starter Burger",
+    tipo: "grande",
+    precio: 47,
+    ingredientes: ["Pan", "Carne 85g", "Queso amarillo", "Lechuga", "Jitomate", "Cebolla"],
+    salsaSugerida: "Chipotle"
+  },
+  {
+    id: "koopa",
+    nombre: "Koopa Crunch",
+    tipo: "grande",
+    precio: 57,
+    ingredientes: ["Pan", "Carne 85g", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate"],
+    salsaSugerida: "Chimichurri"
+  },
+  {
+    id: "fatality",
+    nombre: "Fatality Flame",
+    tipo: "grande",
+    precio: 67,
+    ingredientes: ["Pan", "Carne 85g", "Queso amarillo", "Tocino", "Jalapeño", "Cebolla"],
+    salsaSugerida: "Habanero"
+  },
+  {
+    id: "zelda",
+    nombre: "Triforce Zelda",
+    tipo: "grande",
+    precio: 57,
+    ingredientes: ["Pan", "Carne 85g", "Queso blanco", "Jamón", "Lechuga", "Jitomate"],
+    salsaSugerida: "Curry Cremoso"
+  },
+  {
+    id: "sonic",
+    nombre: "Sonic Boom",
+    tipo: "grande",
+    precio: 62,
+    ingredientes: ["Pan", "Carne 85g", "Queso cheddar", "Salchicha", "Cebolla", "Pepinillos"],
+    salsaSugerida: "Mostaza dulce"
+  },
+  {
+    id: "kombat",
+    nombre: "Kombat Boss",
+    tipo: "grande",
+    precio: 72,
+    ingredientes: ["Pan", "Carne 85g", "Queso amarillo", "Queso blanco", "Tocino", "Piña"],
+    salsaSugerida: "Secreta Seven"
+  },
+  {
+    id: "mk64",
+    nombre: "MK64 Deluxe",
+    tipo: "grande",
+    precio: 77,
+    ingredientes: ["Pan", "Carne 85g", "Queso cheddar", "Queso blanco", "Jamón", "Salchicha", "Cebolla"],
+    salsaSugerida: "Jalapeño rostizado"
+  }
 ];
 
-export const SAUCES = [
-  'Aderezo de ajo habanero','Aderezo chipotle','Salsa chimichurri','Aderezo cheddar',
-  'Aderezo de mostaza dulce','Aderezo de jalapeño rostizado','Aderezo curry madras','Salsa secreta Seven'
+// --- Opciones globales ---
+MENU.salsas = [
+  "Chipotle",
+  "Chimichurri",
+  "Habanero",
+  "Curry Cremoso",
+  "Mostaza dulce",
+  "Jalapeño rostizado",
+  "Secreta Seven"
 ];
 
-export const EXTRAS = [
-  { name:'Tocino', price:6 }, { name:'Piña', price:5 }, { name:'Salsa habanero', price:5 },
-  { name:'Salsa chimichurri', price:5 }, { name:'Jamón', price:5 }, { name:'Salchicha', price:8 },
-  { name:'Salsa cheddar', price:5 }
+MENU.aderezos = [
+  "Cheddar",
+  "Chimichurri",
+  "Chipotle",
+  "Mostaza dulce",
+  "Curry Cremoso",
+  "Jalapeño rostizado",
+  "Ajo Habanero",
+  "Salsa Secreta Seven"
 ];
-
-export function isMini(item){ return item.size==='mini' || (item.sku||'').includes('_MINI'); }
