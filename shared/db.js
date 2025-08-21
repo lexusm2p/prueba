@@ -1,69 +1,62 @@
-// /shared/db.js
-// Abstracciones para Firestore (orders y orders_archive).
-
+<!-- /shared/db.js -->
+<script type="module">
+import { db } from './firebase.js';
 import {
-  collection, addDoc, onSnapshot, orderBy, query,
-  doc, updateDoc, deleteDoc, getDoc, setDoc
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import { db, serverTimestamp, ensureAnon } from './firebase.js';
+  collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-// Garantiza auth antes de operar
-await ensureAnon();
+const ORDERS = 'orders';
+const ARCH  = 'orders_archive';
 
-const colOrders  = collection(db, 'orders');
-const colArchive = collection(db, 'orders_archive');
-
-// Crear pedido (desde Kiosko)
-export async function createOrder(order) {
-  const payload = {
-    ...order,
+// Crear pedido (Kiosko / Mesero)
+export async function createOrder(payload){
+  // payload: {customer, qty, subtotal, item{...}, baseIngredients[], baseSauce, extras{...}, notes}
+  const ref = await addDoc(collection(db, ORDERS), {
+    ...payload,
     status: 'PENDING',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-  const ref = await addDoc(colOrders, payload);
+    createdAt: Date.now()
+  });
   return ref.id;
 }
 
-// Suscripción a orders (tiempo real)
-export function onOrdersSnapshot(cb) {
-  const q = query(colOrders, orderBy('createdAt', 'asc'));
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    cb(list);
+// Suscripción (Admin/Mesero/Cocina)
+export function onOrdersSnapshot(cb){
+  return onSnapshot(collection(db, ORDERS), (snap)=>{
+    const items = [];
+    snap.forEach(d=> items.push({id:d.id, ...d.data()}));
+    // Ordena por fecha asc
+    items.sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
+    cb(items);
   });
 }
 
-// Cambiar estado
-export async function setStatus(id, status) {
-  await updateDoc(doc(db, 'orders', id), { status, updatedAt: serverTimestamp() });
+export async function setStatus(id, status){
+  await updateDoc(doc(db, ORDERS, id), { status });
 }
 
-// Editar campos puntuales
-export async function updateOrder(id, patch) {
-  await updateDoc(doc(db, 'orders', id), { ...patch, updatedAt: serverTimestamp() });
+export async function updateOrder(id, patch){
+  await updateDoc(doc(db, ORDERS, id), patch);
 }
 
-// Eliminar de orders
-export async function deleteOrder(id) {
-  await deleteDoc(doc(db, 'orders', id));
+export async function deleteOrder(id){
+  await deleteDoc(doc(db, ORDERS, id));
 }
 
-// Archivar al entregar (mueve a orders_archive)
-export async function archiveDelivered(id) {
-  const srcRef = doc(db, 'orders', id);
-  const snap = await getDoc(srcRef);
-  if (!snap.exists()) return;
-
-  const data = snap.data();
-  const dstRef = doc(colArchive); // id auto
-  await setDoc(dstRef, {
-    ...data,
-    deliveredAt: serverTimestamp(),
-    finalStatus: data.status || 'READY',
+export async function archiveDelivered(id){
+  const dref = doc(db, ORDERS, id);
+  // obtenemos los datos actuales vía onSnapshot upstream; aquí hacemos un “soft move”:
+  const move = new Promise((resolve,reject)=>{
+    const unsub = onOrdersSnapshot(async (list)=>{
+      const found = list.find(x=>x.id===id);
+      if(!found){ return; }
+      try{
+        await setDoc(doc(db, ARCH, id), {...found, archivedAt:Date.now()});
+        await deleteDoc(dref);
+        unsub();
+        resolve(true);
+      }catch(err){ reject(err); }
+    });
   });
-  await deleteDoc(srcRef);
+  return move;
 }
-
-// Atajo simple: lee lista una sola vez (si lo necesitas en admin/reportes)
-export function subscribeOrders(cb) { return onOrdersSnapshot(cb); }
+</script>
