@@ -1,5 +1,6 @@
 // /kiosk/app.js
-// Kiosko con carrito, edición de líneas y meta de pedido (Pickup / Mesa).
+// Kiosko con carrito, edición de líneas, meta de pedido (Pickup / Mesa)
+// y laterales de desktop (HH/branding a la izq., upsell/promos a la der).
 
 import { beep, toast } from '../shared/notify.js';
 import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
@@ -58,12 +59,17 @@ async function init(){
   renderCards();
   setActiveTab('mini');
   updateCartBar();
+  setupSidebars();                // 👈 llena laterales
 }
 const money = n => '$'+n.toFixed(0);
 
 /* Helpers catálogo */
 function findItemById(id){
-  return state.menu.burgers.find(b=>b.id===id) || state.menu.minis.find(m=>m.id===id) || null;
+  return state.menu.burgers.find(b=>b.id===id)
+      || state.menu.minis.find(m=>m.id===id)
+      || state.menu.drinks?.find(d=>d.id===id)
+      || state.menu.sides?.find(s=>s.id===id)
+      || null;
 }
 function baseOfItem(item){
   if (!item) return null;
@@ -182,7 +188,6 @@ function openItemModal(item, base, existingIndex=null){
     </div>
   `;
 
-  // Botón: cambia texto si estamos editando
   const addBtn = document.getElementById('mAdd');
   addBtn.textContent = editing ? 'Guardar cambios' : 'Agregar al pedido';
 
@@ -339,7 +344,7 @@ function openCartModal(){
       const item = findItemById(line.id);
       const base = baseOfItem(item);
       document.getElementById('cartModal').style.display='none';
-      openItemModal(item, base, i); // abre pre-llenado
+      openItemModal(item, base, i);
       return;
     }
 
@@ -403,3 +408,79 @@ function refreshCartTotals(){
 }
 
 function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+
+/* ===== Laterales: Happy Hour + Upsell/Promos ===== */
+function setupSidebars(){
+  const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
+  const pill = document.getElementById('hhPill');
+  const txt  = document.getElementById('hhText');
+  const msg  = document.getElementById('hhMsg');
+  if (pill && txt){
+    pill.classList.toggle('on', !!hh.enabled);
+    txt.textContent = hh.enabled ? `Happy Hour – ${hh.discountPercent}%` : 'HH OFF';
+    if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
+  }
+  const eta = document.getElementById('etaTime');
+  if (eta) eta.textContent = '7–10 min';
+
+  // Upsell: drinks/sides si existen; si no, minis
+  const upsell = document.getElementById('upsellList');
+  if (upsell){
+    const picks = [];
+    if (state.menu?.drinks?.length) picks.push(...state.menu.drinks.slice(0,2));
+    if (state.menu?.sides?.length)  picks.push(...state.menu.sides.slice(0,2));
+    if (!picks.length) picks.push(...(state.menu.minis||[]).slice(0,3));
+    upsell.innerHTML = picks.map(p => `
+      <li>
+        <div style="flex:1 1 auto; min-width:0">
+          <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${p.name}</div>
+          <div class="muted small">${(p.type||'').toUpperCase()}</div>
+        </div>
+        <div class="price">${money(p.price||0)}</div>
+        <button class="btn tiny" data-add="${p.id}">Agregar</button>
+      </li>
+    `).join('');
+  }
+
+  // Promos
+  const promo = document.getElementById('promoList');
+  if (promo){
+    promo.innerHTML = hh.enabled
+      ? `<li><div style="flex:1">Combos con descuento</div><div class="price">-${hh.discountPercent}%</div></li>`
+      : `<li><div style="flex:1">Prueba nuestras minis ⭐</div><div class="price">Desde ${money((state.menu.minis?.[0]?.price)||0)}</div></li>`;
+  }
+
+  // Ranking placeholder (puedes cambiar por top real)
+  const rank = document.getElementById('rankToday');
+  if (rank){
+    const pool = (state.menu.minis||[]).slice(0,3).concat((state.menu.burgers||[]).slice(0,2));
+    rank.innerHTML = pool.map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`).join('');
+  }
+}
+
+// Click “Agregar” en upsells
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-add]'); if(!btn) return;
+  const id = btn.getAttribute('data-add');
+  const all = [
+    ...(state.menu?.drinks||[]),
+    ...(state.menu?.sides||[]),
+    ...(state.menu?.minis||[]),
+    ...(state.menu?.burgers||[])
+  ];
+  const item = all.find(x=>x.id===id);
+  if(!item) return;
+
+  if (item.type==='drink' || item.type==='side'){
+    state.cart.push({
+      id:item.id, name:item.name, mini:false, qty:1,
+      unitPrice:item.price, baseIngredients:[], salsaDefault:null, salsaCambiada:null,
+      extras:{ sauces:[], ingredients:[], dlcCarne:false },
+      notes:'', lineTotal:item.price
+    });
+    updateCartBar();
+    beep(); toast(`${item.name} agregado`);
+  } else {
+    openItemModal(item, item.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item);
+  }
+}, false);
