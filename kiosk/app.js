@@ -1,19 +1,19 @@
 // /kiosk/app.js
-// Kiosko con carrito, edición de líneas, meta de pedido (Pickup / Mesa)
-// y laterales de desktop (HH/branding a la izq., upsell/promos a la der).
+// Kiosko con carrito, edición de líneas, meta de pedido y laterales (incluye feed de “Listos”).
 
 import { beep, toast } from '../shared/notify.js';
-import { createOrder, fetchCatalogWithFallback } from '../shared/db.js';
+import { createOrder, fetchCatalogWithFallback, subscribeOrders } from '../shared/db.js';
 
 const state = {
   menu: null,
   mode: 'mini',
   cart: [],
   customerName: '',
-  orderMeta: { type:'pickup', table:'' }
+  orderMeta: { type:'pickup', table:'' },
+  unsubReady: null
 };
 
-/* 1) Login oculto (7 taps → PIN) */
+/* 1) Login oculto */
 const brand = document.getElementById('brandTap');
 let tapCount = 0, tapTimer = null;
 brand.addEventListener('click', ()=>{
@@ -59,28 +59,24 @@ async function init(){
   renderCards();
   setActiveTab('mini');
   updateCartBar();
-  setupSidebars();                // 👈 llena laterales
+  setupSidebars();
+  setupReadyFeed(); // <- feed en vivo
 }
 const money = n => '$'+n.toFixed(0);
 
-/* Helpers catálogo */
+/* Helpers */
 function findItemById(id){
   return state.menu.burgers.find(b=>b.id===id)
       || state.menu.minis.find(m=>m.id===id)
       || state.menu.drinks?.find(d=>d.id===id)
-      || state.menu.sides?.find(s=>s.id===id)
-      || null;
+      || state.menu.sides?.find(s=>s.id===id) || null;
 }
-function baseOfItem(item){
-  if (!item) return null;
-  return item.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item;
-}
+function baseOfItem(item){ return item?.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item; }
 
 /* 4) Tarjetas */
 function renderCards(){
   const grid = document.getElementById('cards'); grid.innerHTML='';
   const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
-
   items.forEach(it=>{
     const base = baseOfItem(it);
     const card = document.createElement('div');
@@ -93,10 +89,8 @@ function renderCards(){
           <button class="btn ghost small" data-a="ing">Ingredientes</button>
           <button class="btn small" data-a="order">Ordenar</button>
         </div>
-      </div>
-    `;
+      </div>`;
     grid.appendChild(card);
-
     card.querySelector('[data-a="ing"]').onclick = ()=>{
       alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
     };
@@ -104,7 +98,7 @@ function renderCards(){
   });
 }
 
-/* 5) Modal de producto (agrega o edita línea) */
+/* 5) Modal producto (add/edit) */
 function openItemModal(item, base, existingIndex=null){
   const modal = document.getElementById('modal'); modal.classList.add('open');
   const body  = document.getElementById('mBody');
@@ -128,65 +122,31 @@ function openItemModal(item, base, existingIndex=null){
   const swapVal  = editing ? (line?.salsaCambiada||'') : '';
 
   body.innerHTML = `
-    <div class="field">
-      <label>Tu nombre</label>
-      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/>
-    </div>
-
+    <div class="field"><label>Tu nombre</label>
+      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/></div>
     ${item.mini ? `
-    <div class="field">
-      <label>DLC de Carne grande</label>
-      <div class="ul-clean">
-        <input type="checkbox" id="dlcCarne" ${dlcOn?'checked':''}/>
-        <label for="dlcCarne">Cambia a carne 85g</label>
-        <span class="tag">(+${money(DLC)})</span>
-      </div>
-    </div>` : ''}
-
+    <div class="field"><label>DLC de Carne grande</label>
+      <div class="ul-clean"><input type="checkbox" id="dlcCarne" ${dlcOn?'checked':''}/>
+      <label for="dlcCarne">Cambia a carne 85g</label><span class="tag">(+${money(DLC)})</span></div></div>`:''}
     <div class="hr"></div>
-
-    <div class="field">
-      <label>Potenciar sabor con un aderezo recomendado (cambio sin costo)</label>
-      <select id="swapSauce">
-        <option value="">Dejar salsa por defecto</option>
+    <div class="field"><label>Potenciar sabor (cambio sin costo)</label>
+      <select id="swapSauce"><option value="">Dejar salsa por defecto</option>
         ${((base.salsasSugeridas || [base.suggested]).filter(Boolean) || [])
           .map(s=>`<option value="${s}" ${swapVal===s?'selected':''}>${s}</option>`).join('')}
-      </select>
-      <div class="muted small">* Cambio de salsa recomendado sin costo. Extras se cobran aparte.</div>
-    </div>
-
-    <div class="field">
-      <label>Aderezos extra</label>
+      </select><div class="muted small">* Extras se cobran aparte.</div></div>
+    <div class="field"><label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
-        ${sauces.map((s,i)=>`
-          <input type="checkbox" id="s${i}" ${hasSauce(s)?'checked':''}/>
-          <label for="s${i}">${s}</label>
-          <span class="tag">(+${money(SP)})</span>
-        `).join('')}
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Ingredientes extra</label>
+        ${sauces.map((s,i)=>`<input type="checkbox" id="s${i}" ${hasSauce(s)?'checked':''}/>
+          <label for="s${i}">${s}</label><span class="tag">(+${money(SP)})</span>`).join('')}
+      </div></div>
+    <div class="field"><label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
-        ${ingr.map((s,i)=>`
-          <input type="checkbox" id="e${i}" ${hasIngr(s)?'checked':''}/>
-          <label for="e${i}">${s}</label>
-          <span class="tag">(+${money(IP)})</span>
-        `).join('')}
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Cantidad</label>
-      <input id="qty" type="number" min="1" max="9" value="${qtyVal}"/>
-    </div>
-
-    <div class="field">
-      <label>Comentarios a cocina</label>
-      <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea>
-    </div>
-  `;
+        ${ingr.map((s,i)=>`<input type="checkbox" id="e${i}" ${hasIngr(s)?'checked':''}/>
+          <label for="e${i}">${s}</label><span class="tag">(+${money(IP)})</span>`).join('')}
+      </div></div>
+    <div class="field"><label>Cantidad</label><input id="qty" type="number" min="1" max="9" value="${qtyVal}"/></div>
+    <div class="field"><label>Comentarios a cocina</label>
+      <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea></div>`;
 
   const addBtn = document.getElementById('mAdd');
   addBtn.textContent = editing ? 'Guardar cambios' : 'Agregar al pedido';
@@ -205,8 +165,7 @@ function openItemModal(item, base, existingIndex=null){
     totalEl.textContent = money(subtotal);
     return { qty, subtotal, dlcChk };
   };
-  inputs.forEach(i=> i.addEventListener('change', calc));
-  calc();
+  inputs.forEach(i=> i.addEventListener('change', calc)); calc();
 
   addBtn.onclick = ()=>{
     const name = document.getElementById('cName').value.trim();
@@ -220,30 +179,19 @@ function openItemModal(item, base, existingIndex=null){
     const notes     = document.getElementById('notes').value.trim();
 
     const newLine = {
-      id: item.id,
-      name: item.name,
-      mini: !!item.mini,
-      qty,
-      unitPrice: item.price,
-      baseIngredients: base.ingredients||[],
+      id: item.id, name: item.name, mini: !!item.mini, qty,
+      unitPrice: item.price, baseIngredients: base.ingredients||[],
       salsaDefault: base.salsaDefault || base.suggested || null,
       salsaCambiada: salsaSwap,
       extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: dlcChk },
-      notes,
-      lineTotal: subtotal
+      notes, lineTotal: subtotal
     };
 
-    if (existingIndex!==null){
-      state.cart[existingIndex] = newLine;
-      toast('Línea actualizada');
-    }else{
-      state.cart.push(newLine);
-      toast('Agregado al pedido');
-    }
+    if (existingIndex!==null){ state.cart[existingIndex] = newLine; toast('Línea actualizada'); }
+    else { state.cart.push(newLine); toast('Agregado al pedido'); }
 
     document.getElementById('modal').classList.remove('open');
-    updateCartBar();
-    beep();
+    updateCartBar(); beep();
   };
 }
 
@@ -273,24 +221,16 @@ function openCartModal(){
   }
 
   body.innerHTML = `
-    <div class="field">
-      <label>Nombre del cliente</label>
-      <input id="cartName" type="text" required value="${state.customerName||''}" />
-    </div>
-
-    <div class="field">
-      <label>Tipo de pedido</label>
+    <div class="field"><label>Nombre del cliente</label>
+      <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
+    <div class="field"><label>Tipo de pedido</label>
       <select id="orderType">
         <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
-        <option value="dinein" ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
-      </select>
-    </div>
-
+        <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
+      </select></div>
     <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
-      <label>Número de mesa</label>
-      <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
+      <label>Número de mesa</label><input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
     </div>
-
     <div class="field">
       ${state.cart.map((l,idx)=>{
         const extrasTxt = [
@@ -311,27 +251,17 @@ function openCartModal(){
             <button class="btn small danger" data-a="remove">Eliminar</button>
             <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
           </div>
-        </div>`;
-      }).join('')}
+        </div>`;}).join('')}
     </div>
+    <div class="field"><label>Comentarios generales</label>
+      <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea></div>`;
 
-    <div class="field">
-      <label>Comentarios generales</label>
-      <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea>
-    </div>
-  `;
-
-  // Mostrar/ocultar mesa
   const typeSel = document.getElementById('orderType');
   const mesaField = document.getElementById('mesaField');
-  typeSel.onchange = ()=>{
-    state.orderMeta.type = typeSel.value;
-    mesaField.style.display = (typeSel.value==='dinein') ? '' : 'none';
-  };
+  typeSel.onchange = ()=>{ state.orderMeta.type = typeSel.value; mesaField.style.display = (typeSel.value==='dinein') ? '' : 'none'; };
 
   refreshCartTotals();
 
-  // Handlers de líneas
   body.addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-a]'); if(!btn) return;
     const card = btn.closest('[data-i]'); const i = parseInt(card.dataset.i,10);
@@ -340,19 +270,11 @@ function openCartModal(){
     if(btn.dataset.a==='remove'){ state.cart.splice(i,1); }
     if(btn.dataset.a==='more'){ line.qty = Math.min(99, (line.qty||1)+1); recomputeLine(line); }
     if(btn.dataset.a==='less'){ line.qty = Math.max(1, (line.qty||1)-1); recomputeLine(line); }
-    if(btn.dataset.a==='edit'){
-      const item = findItemById(line.id);
-      const base = baseOfItem(item);
-      document.getElementById('cartModal').style.display='none';
-      openItemModal(item, base, i);
-      return;
-    }
+    if(btn.dataset.a==='edit'){ const item = findItemById(line.id); const base = baseOfItem(item); document.getElementById('cartModal').style.display='none'; openItemModal(item, base, i); return; }
 
-    openCartModal(); // re-render
-    updateCartBar();
+    openCartModal(); updateCartBar();
   }, { once:true });
 
-  // Confirmar pedido
   document.getElementById('cartConfirm').onclick = async ()=>{
     const name = (document.getElementById('cartName').value||'').trim();
     if(!name){ alert('Escribe tu nombre'); return; }
@@ -360,9 +282,7 @@ function openCartModal(){
 
     state.orderMeta.type  = document.getElementById('orderType').value;
     state.orderMeta.table = (state.orderMeta.type==='dinein') ? (document.getElementById('tableNum').value||'').trim() : '';
-    if(state.orderMeta.type==='dinein' && !state.orderMeta.table){
-      alert('Indica el número de mesa.'); return;
-    }
+    if(state.orderMeta.type==='dinein' && !state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
 
     const generalNotes = (document.getElementById('cartNotes').value||'').trim();
     const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
@@ -377,16 +297,12 @@ function openCartModal(){
         salsaCambiada:l.salsaCambiada, extras:l.extras, notes:l.notes||null,
         lineTotal:l.lineTotal
       })),
-      subtotal,
-      notes: generalNotes
+      subtotal, notes: generalNotes
     };
 
     await createOrder(order);
-    beep();
-    toast('¡Pedido enviado! ✨');
-    state.cart = [];
-    updateCartBar();
-    close();
+    beep(); toast('¡Pedido enviado! ✨');
+    state.cart = []; updateCartBar(); close();
   };
 }
 
@@ -401,15 +317,13 @@ function recomputeLine(line){
   const unitTotal = (line.unitPrice + extraDlc) + (extrasS*SP + extrasI*IP);
   line.lineTotal = unitTotal * (line.qty||1);
 }
-
 function refreshCartTotals(){
   const total = state.cart.reduce((a,l)=>a + (l.lineTotal||0), 0);
   document.getElementById('cartTotal').textContent = money(total);
 }
-
 function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
 
-/* ===== Laterales: Happy Hour + Upsell/Promos ===== */
+/* ===== Laterales ===== */
 function setupSidebars(){
   const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
   const pill = document.getElementById('hhPill');
@@ -420,10 +334,8 @@ function setupSidebars(){
     txt.textContent = hh.enabled ? `Happy Hour – ${hh.discountPercent}%` : 'HH OFF';
     if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
   }
-  const eta = document.getElementById('etaTime');
-  if (eta) eta.textContent = '7–10 min';
+  const eta = document.getElementById('etaTime'); if (eta) eta.textContent = '7–10 min';
 
-  // Upsell: drinks/sides si existen; si no, minis
   const upsell = document.getElementById('upsellList');
   if (upsell){
     const picks = [];
@@ -432,17 +344,15 @@ function setupSidebars(){
     if (!picks.length) picks.push(...(state.menu.minis||[]).slice(0,3));
     upsell.innerHTML = picks.map(p => `
       <li>
-        <div style="flex:1 1 auto; min-width:0">
-          <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${p.name}</div>
+        <div style="flex:1 1 auto;min-width:0">
+          <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
           <div class="muted small">${(p.type||'').toUpperCase()}</div>
         </div>
         <div class="price">${money(p.price||0)}</div>
         <button class="btn tiny" data-add="${p.id}">Agregar</button>
-      </li>
-    `).join('');
+      </li>`).join('');
   }
 
-  // Promos
   const promo = document.getElementById('promoList');
   if (promo){
     promo.innerHTML = hh.enabled
@@ -450,7 +360,6 @@ function setupSidebars(){
       : `<li><div style="flex:1">Prueba nuestras minis ⭐</div><div class="price">Desde ${money((state.menu.minis?.[0]?.price)||0)}</div></li>`;
   }
 
-  // Ranking placeholder (puedes cambiar por top real)
   const rank = document.getElementById('rankToday');
   if (rank){
     const pool = (state.menu.minis||[]).slice(0,3).concat((state.menu.burgers||[]).slice(0,2));
@@ -458,28 +367,52 @@ function setupSidebars(){
   }
 }
 
-// Click “Agregar” en upsells
+/* Feed de “Listos” (en vivo) */
+function setupReadyFeed(){
+  if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
+  const container = document.getElementById('readyFeed'); if (!container) return;
+  state.unsubReady = subscribeOrders(list=>{
+    // Filtra READY, mezcla con archivo si lo estás suscribiendo también
+    const ready = (list||[]).filter(o=> (o.status||'')==='READY')
+      .sort((a,b)=>{
+        const ta = a.createdAt?.toMillis?.() ?? new Date(a.createdAt||0).getTime();
+        const tb = b.createdAt?.toMillis?.() ?? new Date(b.createdAt||0).getTime();
+        return tb - ta; // recientes primero
+      }).slice(0,6);
+
+    const rows = ready.map(o=>{
+      const items = (o.items||[]);
+      const count = items.reduce((n,i)=>n+(i.qty||1),0);
+      const names = items.map(i=>i.name).slice(0,2).join(', ');
+      return `<li>
+        <div style="flex:1;min-width:0">
+          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${escapeHtml(o.customer||'—')}</b> · ${count} it.</div>
+          <div class="muted small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(names)}</div>
+        </div>
+        <div class="price">🛎️</div>
+      </li>`;
+    }).join('');
+    container.innerHTML = rows || '<li><div class="muted small">—</div></li>';
+  });
+}
+
+/* Upsell: agregar rápido */
 document.addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-add]'); if(!btn) return;
   const id = btn.getAttribute('data-add');
   const all = [
-    ...(state.menu?.drinks||[]),
-    ...(state.menu?.sides||[]),
-    ...(state.menu?.minis||[]),
-    ...(state.menu?.burgers||[])
+    ...(state.menu?.drinks||[]), ...(state.menu?.sides||[]),
+    ...(state.menu?.minis||[]),  ...(state.menu?.burgers||[])
   ];
-  const item = all.find(x=>x.id===id);
-  if(!item) return;
+  const item = all.find(x=>x.id===id); if(!item) return;
 
   if (item.type==='drink' || item.type==='side'){
     state.cart.push({
       id:item.id, name:item.name, mini:false, qty:1,
       unitPrice:item.price, baseIngredients:[], salsaDefault:null, salsaCambiada:null,
-      extras:{ sauces:[], ingredients:[], dlcCarne:false },
-      notes:'', lineTotal:item.price
+      extras:{ sauces:[], ingredients:[], dlcCarne:false }, notes:'', lineTotal:item.price
     });
-    updateCartBar();
-    beep(); toast(`${item.name} agregado`);
+    updateCartBar(); beep(); toast(`${item.name} agregado`);
   } else {
     openItemModal(item, item.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item);
   }
