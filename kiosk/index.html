@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Kiosko — Seven de Burgers</title>
 
-  <!-- Estilos mínimos para la barra de carrito -->
+  <!-- Estilos: barra de carrito + laterales -->
   <style>
     .cartbar {
       position: fixed; left: 50%; transform: translateX(-50%);
@@ -18,9 +18,47 @@
     }
     .cartbar .pill { background:#18243a; color:var(--ink); padding:8px 10px; border-radius:10px; font-size:12px;}
     .cartbar .total { color: var(--accent); font-weight: 900; }
-    @media (max-width:520px){
-      .cartbar{ width: calc(100% - 24px); }
+    @media (max-width:520px){ .cartbar{ width: calc(100% - 24px); } }
+
+    /* Laterales (solo desktop ≥1280px) */
+    .side{
+      position:fixed; top:88px; bottom:16px; width:280px; z-index:20;
+      display:flex; align-items:flex-start; pointer-events:auto;
     }
+    .side-left{  left:16px; }
+    .side-right{ right:16px; }
+    .s-card{
+      width:100%; height:100%; overflow:auto; scrollbar-width:thin;
+      background:#0f182a; border:1px solid rgba(255,255,255,.08);
+      border-radius:14px; box-shadow:var(--shadow); padding:14px;
+    }
+    .s-title{ font-weight:800; margin-bottom:6px; }
+    .s-sub{ color:var(--muted); margin-bottom:10px; }
+    .s-mini{ color:var(--muted); font-size:12px; }
+    .s-eta{ font-size:22px; font-weight:900; color:var(--accent); margin:4px 0 8px; }
+    .s-divider{ height:1px; background:rgba(255,255,255,.08); margin:10px 0; }
+    .s-note{ color:var(--ink); opacity:.8; font-size:13px; }
+
+    .s-list{ list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:8px; }
+    .s-list li{
+      display:flex; gap:8px; align-items:center; justify-content:space-between;
+      background:#131f33; border:1px solid rgba(255,255,255,.07);
+      border-radius:10px; padding:8px 10px;
+    }
+    .s-list .price{ color:var(--accent); font-weight:800; }
+    .s-list .btn.tiny{ padding:4px 8px; font-size:12px; border-radius:8px; }
+
+    .hh-pill{
+      display:inline-flex; align-items:center; gap:8px;
+      background:#1b2438; border:1px solid rgba(255,255,255,.1);
+      border-radius:999px; padding:6px 10px; margin:8px 0;
+    }
+    .hh-pill .dot{ width:8px; height:8px; border-radius:50%; background:#777; }
+    .hh-pill.on{ border-color:#2fe38b; box-shadow:0 0 0 2px rgba(47,227,139,.12); }
+    .hh-pill.on .dot{ background:#2fe38b; }
+    .hh-pill.on #hhText{ color:#2fe38b; }
+
+    @media (max-width:1280px){ .side{ display:none; } }
   </style>
 </head>
 <body>
@@ -33,7 +71,6 @@
       <div class="title-sub">Kiosko</div>
     </div>
   </div>
-  <!-- Nav visible solo si entras con PIN -->
   <nav id="navRoles" style="display:none;gap:8px">
     <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
     <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
@@ -41,7 +78,40 @@
   </nav>
 </header>
 
-<main class="container">
+<!-- LATERAL IZQUIERDO -->
+<aside class="side side-left" id="sideLeft" aria-label="Branding y ambiente">
+  <div class="s-card">
+    <div class="s-title">🎮 Seven de Burgers</div>
+    <div class="s-sub">Insert coin for flavor</div>
+
+    <div class="hh-pill" id="hhPill" aria-live="polite">
+      <span class="dot"></span><span id="hhText">HH OFF</span>
+    </div>
+    <div class="s-note" id="hhMsg"></div>
+
+    <div class="s-divider"></div>
+    <div class="s-mini">Tiempo estimado</div>
+    <div class="s-eta" id="etaTime">7–10 min</div>
+
+    <div class="s-divider"></div>
+    <div class="s-mini">Ranking hoy</div>
+    <ul class="s-list" id="rankToday"></ul>
+  </div>
+</aside>
+
+<!-- LATERAL DERECHO -->
+<aside class="side side-right" id="sideRight" aria-label="Promos y sugerencias">
+  <div class="s-card">
+    <div class="s-title">Sugerencias</div>
+    <ul class="s-list" id="upsellList"></ul>
+
+    <div class="s-divider"></div>
+    <div class="s-title">Promos</div>
+    <ul class="s-list" id="promoList"></ul>
+  </div>
+</aside>
+
+<main class="container" aria-live="polite">
   <div class="card" id="mode">
     <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
     <div class="tabs" role="tablist" aria-label="Seleccionar categoría">
@@ -76,47 +146,4 @@
     <div class="modal-head">
       <div id="cartTitle">Tu pedido</div>
       <button class="btn ghost small" id="cartClose" aria-label="Cerrar">Cerrar</button>
-    </div>
-    <div class="modal-body" id="cartBody"></div>
-    <div class="modal-foot">
-      <div class="total-bar">
-        <div class="total" id="cartTotal">$0</div>
-        <button class="btn" id="cartConfirm">Confirmar pedido</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Barra flotante del carrito -->
-<div id="cartBar" class="cartbar" role="button" aria-label="Revisar pedido">
-  <span class="pill" id="cartCount">0 productos</span>
-  <span class="total" id="cartBarTotal">$0</span>
-  <button class="btn small" id="openCart">Revisar</button>
-</div>
-
-<!-- Modal PIN (roles) -->
-<div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div id="pinTitle">Acceso</div>
-      <button class="btn ghost small" id="pinClose" aria-label="Cerrar">Cerrar</button>
-    </div>
-    <div class="modal-body">
-      <div class="field">
-        <label>Ingresa PIN</label>
-        <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" />
-      </div>
-      <div class="field"><small class="muted">Temporal: 1111=Mesero · 2222=Cocina · 9999=Admin</small></div>
-    </div>
-    <div class="modal-foot">
-      <div class="total-bar">
-        <div></div>
-        <button class="btn" id="pinGo">Entrar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script type="module" src="./app.js"></script>
-</body>
-</html>
+    </div
