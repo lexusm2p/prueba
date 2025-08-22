@@ -351,4 +351,27 @@ textarea{ min-height:80px }
     margin-left:auto;
     margin-right:auto;
   }
+   /* === Kiosko: área de imagen dentro de la tarjeta === */
+.card .media{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:140px;
+  margin-top:4px;
+}
+
+.icon-img{
+  width:128px;
+  height:128px;
+  image-rendering: pixelated;      /* nítido estilo pixel */
+  border-radius:10px;
+  border:2px solid rgba(255,255,255,.08);
+  background:#0e1626;
+}
+
+/* Responsive */
+@media (max-width:520px){
+  .card .media{ height:120px; }
+  .icon-img{ width:112px; height:112px; }
+}
 }
