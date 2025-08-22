@@ -61,7 +61,8 @@
     @media (max-width:1280px){ .side{ display:none; } }
   </style>
 </head>
-<body>
+
+<body class="has-sidebars">
 <header class="header">
   <!-- 7 taps → PIN -->
   <div class="brand" id="brandTap">
@@ -108,6 +109,12 @@
     <div class="s-divider"></div>
     <div class="s-title">Promos</div>
     <ul class="s-list" id="promoList"></ul>
+
+    <!-- Si quieres mostrar los últimos “Listos”, descomenta
+    <div class="s-divider"></div>
+    <div class="s-title">Listos 🛎️</div>
+    <ul class="s-list" id="readyFeed"></ul>
+    -->
   </div>
 </aside>
 
@@ -146,4 +153,47 @@
     <div class="modal-head">
       <div id="cartTitle">Tu pedido</div>
       <button class="btn ghost small" id="cartClose" aria-label="Cerrar">Cerrar</button>
-    </div
+    </div>
+    <div class="modal-body" id="cartBody"></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="total" id="cartTotal">$0</div>
+        <button class="btn" id="cartConfirm">Confirmar pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Barra flotante del carrito -->
+<div id="cartBar" class="cartbar" role="button" aria-label="Revisar pedido">
+  <span class="pill" id="cartCount">0 productos</span>
+  <span class="total" id="cartBarTotal">$0</span>
+  <button class="btn small" id="openCart">Revisar</button>
+</div>
+
+<!-- Modal PIN (roles) -->
+<div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="pinTitle">Acceso</div>
+      <button class="btn ghost small" id="pinClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Ingresa PIN</label>
+        <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" />
+      </div>
+      <div class="field"><small class="muted">Temporal: 1111=Mesero · 2222=Cocina · 9999=Admin</small></div>
+    </div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div></div>
+        <button class="btn" id="pinGo">Entrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
