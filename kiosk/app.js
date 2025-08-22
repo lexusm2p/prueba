@@ -13,6 +13,19 @@ const state = {
   unsubReady: null
 };
 
+/* === ÍCONOS: asigna aquí la ruta a las imágenes de cada burger base ===
+   (para minis se usa la imagen de su baseOf)
+*/
+const ICONS = {
+  starter:   "../shared/img/burgers/starter.png",
+  koopa:     "../shared/img/burgers/koopa.png",
+  fatality:  "../shared/img/burgers/fatality.png",
+  mega:      "../shared/img/burgers/mega.png",
+  hadouken:  "../shared/img/burgers/hadouken.png",
+  nintendo:  "../shared/img/burgers/nintendo.png",
+  finalboss: "../shared/img/burgers/finalboss.png"
+};
+
 /* 1) Login oculto */
 const brand = document.getElementById('brandTap');
 let tapCount = 0, tapTimer = null;
@@ -73,16 +86,29 @@ function findItemById(id){
 }
 function baseOfItem(item){ return item?.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item; }
 
-/* 4) Tarjetas */
+/* 4) Tarjetas (con imagen) */
 function renderCards(){
-  const grid = document.getElementById('cards'); grid.innerHTML='';
+  const grid = document.getElementById('cards'); 
+  grid.innerHTML='';
+
   const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
+
   items.forEach(it=>{
     const base = baseOfItem(it);
+    const baseId = base?.id || it.id;
+    const iconSrc = ICONS[baseId] || null; // si no hay, se usa placeholder .icon
+
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
       <h3>${it.name}</h3>
+
+      <div class="media">
+        ${iconSrc 
+          ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
+          : `<div class="icon" aria-hidden="true"></div>`}
+      </div>
+
       <div class="row">
         <div class="price">${money(it.price)}</div>
         <div class="row" style="gap:8px">
@@ -91,6 +117,7 @@ function renderCards(){
         </div>
       </div>`;
     grid.appendChild(card);
+
     card.querySelector('[data-a="ing"]').onclick = ()=>{
       alert(`${base.name||it.name}\n\nIngredientes:\n- ${(base.ingredients||[]).join('\n- ')}`);
     };
