@@ -9,7 +9,8 @@ const state = {
   mode: 'mini',
   cart: [],
   customerName: '',
-  orderMeta: { type:'pickup', table:'' },
+  // ➕ añadimos phone en orderMeta
+  orderMeta: { type:'pickup', table:'', phone:'' },
   unsubReady: null
 };
 
@@ -234,6 +235,11 @@ function updateCartBar(){
   cartBar.style.display = count>0 ? 'flex' : 'none';
 }
 
+// limpia teléfono a solo dígitos
+function normalizePhone(raw=''){
+  return String(raw).replace(/\D+/g,'').slice(0,15); // aceptamos hasta 15 por si E.164, validamos 10+ MX
+}
+
 function openCartModal(){
   const m = document.getElementById('cartModal');
   const body = document.getElementById('cartBody');
@@ -255,9 +261,20 @@ function openCartModal(){
         <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
         <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
       </select></div>
+
+    <!-- Teléfono (solo para Pickup) -->
+    <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
+      <label>Teléfono de contacto (Pickup)</label>
+      <input id="phoneNum" type="tel" inputmode="tel" placeholder="10 dígitos" 
+             pattern="\\d{10,}" value="${state.orderMeta.phone||''}" />
+      <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
+    </div>
+
+    <!-- Mesa (solo Dine-in) -->
     <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
       <label>Número de mesa</label><input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
     </div>
+
     <div class="field">
       ${state.cart.map((l,idx)=>{
         const extrasTxt = [
@@ -285,7 +302,23 @@ function openCartModal(){
 
   const typeSel = document.getElementById('orderType');
   const mesaField = document.getElementById('mesaField');
-  typeSel.onchange = ()=>{ state.orderMeta.type = typeSel.value; mesaField.style.display = (typeSel.value==='dinein') ? '' : 'none'; };
+  const phoneField = document.getElementById('phoneField');
+  const phoneInput = document.getElementById('phoneNum');
+
+  // normaliza conforme se escribe
+  if (phoneInput){
+    phoneInput.addEventListener('input', ()=>{
+      const pos = phoneInput.selectionStart;
+      phoneInput.value = normalizePhone(phoneInput.value);
+      phoneInput.setSelectionRange(pos, pos);
+    });
+  }
+
+  typeSel.onchange = ()=>{
+    state.orderMeta.type = typeSel.value;
+    mesaField.style.display = (typeSel.value==='dinein') ? '' : 'none';
+    phoneField.style.display = (typeSel.value==='pickup') ? '' : 'none';
+  };
 
   refreshCartTotals();
 
@@ -308,8 +341,22 @@ function openCartModal(){
     state.customerName = name;
 
     state.orderMeta.type  = document.getElementById('orderType').value;
-    state.orderMeta.table = (state.orderMeta.type==='dinein') ? (document.getElementById('tableNum').value||'').trim() : '';
-    if(state.orderMeta.type==='dinein' && !state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
+
+    // valida según tipo
+    if(state.orderMeta.type==='dinein'){
+      state.orderMeta.table = (document.getElementById('tableNum').value||'').trim();
+      if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
+      state.orderMeta.phone = ''; // limpiamos por claridad
+    } else { // pickup
+      const raw = document.getElementById('phoneNum').value || '';
+      const norm = normalizePhone(raw);
+      if(norm.length < 10){
+        alert('Para Pickup, ingresa un teléfono de 10 dígitos.'); 
+        return;
+      }
+      state.orderMeta.phone = norm;
+      state.orderMeta.table = '';
+    }
 
     const generalNotes = (document.getElementById('cartNotes').value||'').trim();
     const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
@@ -318,6 +365,7 @@ function openCartModal(){
       customer: state.customerName,
       orderType: state.orderMeta.type,
       table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null,
+      phone: state.orderMeta.type==='pickup' ? state.orderMeta.phone : null,
       items: state.cart.map(l=>({
         id:l.id, name:l.name, mini:l.mini, qty:l.qty, unitPrice:l.unitPrice,
         baseIngredients:l.baseIngredients, salsaDefault:l.salsaDefault,
@@ -399,12 +447,11 @@ function setupReadyFeed(){
   if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
   const container = document.getElementById('readyFeed'); if (!container) return;
   state.unsubReady = subscribeOrders(list=>{
-    // Filtra READY, mezcla con archivo si lo estás suscribiendo también
     const ready = (list||[]).filter(o=> (o.status||'')==='READY')
       .sort((a,b)=>{
         const ta = a.createdAt?.toMillis?.() ?? new Date(a.createdAt||0).getTime();
         const tb = b.createdAt?.toMillis?.() ?? new Date(b.createdAt||0).getTime();
-        return tb - ta; // recientes primero
+        return tb - ta;
       }).slice(0,6);
 
     const rows = ready.map(o=>{
