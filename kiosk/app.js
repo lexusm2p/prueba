@@ -1,6 +1,4 @@
-No se ven los ingredientes extras
 
-Este es mi kiosk/app.js
 
 // /kiosk/app.js
 // Kiosko con carrito, edición de líneas, meta de pedido y laterales (incluye feed de “Listos”).
