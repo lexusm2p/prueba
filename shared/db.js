@@ -226,7 +226,7 @@ export async function createOrder(orderDraft){
     createdAt: serverTimestamp(),
   };
   const ref = await addDoc(collection(db, 'orders'), payload);
-  return ref.id;
+  return ref.id; // devolvemos el id para poder referenciarlo desde clientes
 }
 
 export function subscribeOrders(cb){
@@ -464,10 +464,7 @@ function addStockFlags(it){
   if (it.min!=null && it.currentStock<=it.min){ flags.low = true; flags.ok=false; }
   if (it.min!=null && it.currentStock<=Math.max(0, it.min*0.5)){ flags.critical = true; flags.low=true; flags.ok=false; }
   if (it.perish && it.expiryDays){
-    // Asumimos "expiryDays" como vida útil aproximada desde la compra/producción;
-    // si quieres fecha exacta por lote, lleva lotes en purchases y muestra la más próxima a vencer.
-    // Aquí solo marcamos "expiring" si hay vida < 3 días (heurística).
-    // (Puedes mejorar guardando expiryDate por lote y calculando con precisión)
+    // Aquí podrías marcar expiring/expired si manejas fechas por lote.
   }
   return { ...it, flags };
 }
@@ -499,8 +496,58 @@ export async function applyInventoryForOrder(order){
   }catch(e){ console.warn('[applyInventoryForOrder] cups', e); }
 
   // 2) (Opcional) Descuento por ingredientes base / carne / pan
-  //    Para activarlo deberías mantener un mapeo productId -> [{itemId, qty, unit}]
-  //    y multiplicar por qty. Lo dejamos listo para extender.
+}
+
+/* =============================================================================
+   CLIENTES (por teléfono)
+   - Documento en 'customers/{phone}' donde {phone} es el número normalizado.
+   ========================================================================== */
+function normalizePhoneForId(raw=''){
+  return String(raw).replace(/\D+/g,'').slice(0,15); // igual que en kiosko
+}
+
+export async function fetchCustomer(phone){
+  await ensureAnonAuth();
+  const id = normalizePhoneForId(phone);
+  if (!id) return null;
+  const snap = await getDoc(doc(db, 'customers', id));
+  return snap.exists() ? { id, ...snap.data() } : null;
+}
+
+export async function upsertCustomerFromOrder(order){
+  await ensureAnonAuth();
+  const phoneId = normalizePhoneForId(order?.phone||'');
+  if (!phoneId) return;
+  const ref = doc(db, 'customers', phoneId);
+  const now = serverTimestamp();
+  const snap = await getDoc(ref);
+  if (!snap.exists()){
+    await setDoc(ref, {
+      phone: phoneId,
+      name: order.customer || '',
+      firstSeenAt: now,
+      lastSeenAt: now,
+      ordersCount: 1,
+      lastOrderRef: null
+    }, { merge: true });
+  } else {
+    await updateDoc(ref, {
+      name: order.customer || snap.data().name || '',
+      lastSeenAt: now,
+      ordersCount: increment(1)
+    });
+  }
+  return ref;
+}
+
+export async function attachLastOrderRef(phone, orderId){
+  await ensureAnonAuth();
+  const id = normalizePhoneForId(phone);
+  if (!id || !orderId) return;
+  await setDoc(doc(db, 'customers', id), {
+    lastOrderRef: doc(db, 'orders', orderId),
+    lastSeenAt: serverTimestamp()
+  }, { merge:true });
 }
 
 /* =============================================================================
