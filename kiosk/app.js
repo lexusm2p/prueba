@@ -224,7 +224,7 @@ function openItemModal(item, base, existingIndex=null){
     const qty     = parseInt(qtyEl.value||'1', 10);
     const saucesChecked = [...body.querySelectorAll('#sauces input:checked')].length;
     const ingrChecked   = [...body.querySelectorAll('#ingrs input:checked')].map(el=>{
-      const idx = Number(el.id.slice(1)); // e0,e1...
+      const idx = Number(el.id.slice(1)); // e0, e1...
       return extrasIngr[idx]?.price || 0;
     });
     const costS = saucesChecked * SP;
@@ -290,11 +290,20 @@ function openCartModal(){
   document.getElementById('cartClose').onclick = close;
   m.style.display='grid';
 
+  const confirmBtn = document.getElementById('cartConfirm');
+  const totalEl    = document.getElementById('cartTotal');
+
+  // ======= Carrito vacío =======
   if(state.cart.length===0){
-    body.innerHTML = '<div class="muted">Tu carrito está vacío.</div>';
-    document.getElementById('cartTotal').textContent = '$0';
+    body.innerHTML = '<div class="muted">Tu carrito está vacío, elige un personaje de sabor.</div>';
+    if (confirmBtn) confirmBtn.style.display = 'none';
+    if (totalEl) totalEl.style.display = 'none';
     return;
   }
+
+  // Hay artículos: aseguramos mostrar total y confirmar
+  if (confirmBtn) confirmBtn.style.display = '';
+  if (totalEl) totalEl.style.display = '';
 
   body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
@@ -366,7 +375,7 @@ function openCartModal(){
 
   refreshCartTotals();
 
-  // Handler de clicks persistente (no "once")
+  // Handler de clicks persistente (reemplaza cualquier anterior)
   body.onclick = (e)=>{
     const btn = e.target.closest('button[data-a]');
     if (!btn) return;
@@ -382,7 +391,7 @@ function openCartModal(){
     if (act === 'remove') {
       state.cart.splice(i, 1);
       updateCartBar();
-      openCartModal();
+      openCartModal(); // re-render; si queda vacío, se muestra mensaje vacío
       return;
     }
 
@@ -462,8 +471,6 @@ function recomputeLine(line){
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
 
   // costo ingredientes por nombre
-  theExtras:
-  null;
   const extrasIngr = normalizeExtraIngredients();
   const priceByName = new Map(extrasIngr.map(x=>[x.name, x.price]));
   const costI = (line.extras?.ingredients||[]).reduce((sum, name)=>{
@@ -479,7 +486,11 @@ function recomputeLine(line){
 }
 function refreshCartTotals(){
   const total = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
-  document.getElementById('cartTotal').textContent = money(total);
+  const totalEl = document.getElementById('cartTotal');
+  if (totalEl){
+    totalEl.textContent = money(total);
+    totalEl.style.display = state.cart.length ? '' : 'none';
+  }
 }
 function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
