@@ -324,15 +324,19 @@ function renderRecipeModal(){
 
 function openRecipeModal(r){
   CURRENT_R = r;
+  // usa la porción rápida seleccionada (incluye 250 ml)
   CURRENT_OUT_QTY = Number(document.getElementById('rcpQuickPort')?.value || 100);
   rcpModal.style.display='grid';
   renderRecipeModal();
 }
 
+// Botones rápidos del modal
 document.getElementById('rcpScale500')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=500; renderRecipeModal(); });
+document.getElementById('rcpScale250')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=250; renderRecipeModal(); });
 document.getElementById('rcpScale200')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=200; renderRecipeModal(); });
 document.getElementById('rcpScale100')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=100; renderRecipeModal(); });
 
+// Input manual en el modal
 document.getElementById('rcpBody')?.addEventListener('input', (e)=>{
   if (e.target && e.target.id==='rcpOutQty'){
     const v = Number(e.target.value||0);
@@ -353,7 +357,7 @@ document.getElementById('rcpPrepare')?.addEventListener('click', async ()=>{
 
     // 2) Vasitos 2oz (opcional)
     const cups = Number(document.getElementById('rcpCups')?.value || 0);
-    const cupId = (await (async()=>APP_SETTINGS?.sauceCupItemId||null) )();
+    const cupId = APP_SETTINGS?.sauceCupItemId || null;
     if (cupId && cups>0){
       await adjustStock(cupId, -cups, 'use', { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty });
     }
@@ -380,6 +384,10 @@ function q(sel){ return document.querySelector(sel); }
 function setTxt(id,v){ const el=document.getElementById(id); if(el) el.textContent=String(v); }
 function setMoney(id,v){ const el=document.getElementById(id); if(el) el.textContent=fmtMoney(v); }
 const fmtMoney = n => '$' + Number(n||0).toFixed(0);
-const esc = s => String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
+function esc(s=''){
+  return String(s).replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+  }[m]));
+}
 
 runReports(); // genera un primer reporte al abrir
