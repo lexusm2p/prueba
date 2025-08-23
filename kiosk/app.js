@@ -96,6 +96,13 @@ function baseOfItem(item){
   return item?.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item;
 }
 
+// Helpers para extras (por si vienen como string u objeto)
+function ingrName(x){ return (typeof x === 'string') ? x : (x?.name ?? ''); }
+function ingrPrice(x, fallback){
+  const p = (typeof x === 'object' && x && typeof x.price !== 'undefined') ? Number(x.price) : NaN;
+  return Number.isFinite(p) ? p : Number(fallback ?? 0);
+}
+
 /* 4) Tarjetas (con imagen) */
 function renderCards(){
   const grid = document.getElementById('cards');
@@ -142,10 +149,13 @@ function openItemModal(item, base, existingIndex=null){
 
   // Defaults defensivos para extras
   const sauces = state.menu?.extras?.sauces ?? [];
-  const ingr   = state.menu?.extras?.ingredients ?? [];
-  const SP     = Number(state.menu?.extras?.saucePrice ?? 0);
-  const IP     = Number(state.menu?.extras?.ingredientPrice ?? 0);
-  const DLC    = Number(state.menu?.extras?.dlcCarneMini ?? 12);
+  const ingrRaw = state.menu?.extras?.ingredients ?? [];
+  const SP      = Number(state.menu?.extras?.saucePrice ?? 0);   // precio por aderezo extra (fijo)
+  const IPdef   = Number(state.menu?.extras?.ingredientPrice ?? 0); // fallback si un ingrediente no trae price
+  const DLC     = Number(state.menu?.extras?.dlcCarneMini ?? 12);
+
+  // Normalizamos ingredientes a {name, price}
+  const ingr = ingrRaw.map(x => ({ name: ingrName(x), price: ingrPrice(x, IPdef) }));
 
   const editing = (existingIndex !== null);
   const line    = editing ? state.cart[existingIndex] : null;
@@ -186,10 +196,10 @@ function openItemModal(item, base, existingIndex=null){
     </div>
     <div class="field"><label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
-        ${ingr.map((s,i)=>`
-          <input type="checkbox" id="e${i}" ${hasIngr(s)?'checked':''}/>
-          <label for="e${i}">${s}</label>
-          <span class="tag">(+${money(IP)})</span>`).join('')}
+        ${ingr.map((o,i)=>`
+          <input type="checkbox" id="e${i}" ${hasIngr(o.name)?'checked':''}/>
+          <label for="e${i}">${o.name}</label>
+          <span class="tag">(+${money(o.price)})</span>`).join('')}
       </div>
     </div>
     <div class="field"><label>Cantidad</label>
@@ -208,15 +218,27 @@ function openItemModal(item, base, existingIndex=null){
 
   const calc = ()=>{
     const qty     = parseInt(qtyEl.value||'1', 10);
-    const extrasS = [...body.querySelectorAll('#sauces input:checked')].length;
-    const extrasI = [...body.querySelectorAll('#ingrs input:checked')].length;
+
+    // Aderezos extra (precio fijo por cada uno)
+    const extrasSCount = [...body.querySelectorAll('#sauces input:checked')].length;
+    const saucesTotal  = extrasSCount * SP;
+
+    // Ingredientes extra (precio **individual**)
+    const ingChecked = [...body.querySelectorAll('#ingrs input:checked')].map(el=> Number(el.id.slice(1))); // índices
+    const ingTotal   = ingChecked.reduce((sum, idx)=> sum + (ingr[idx]?.price ?? IPdef), 0);
+
+    // DLC de carne
     const dlcChk  = item.mini && body.querySelector('#dlcCarne')?.checked;
     const extraDlc = dlcChk ? DLC : 0;
-    const subtotal = (Number(item.price||0) + extraDlc)*qty + (extrasS*SP + extrasI*IP)*qty;
+
+    const unit = Number(item.price||0) + extraDlc + saucesTotal + ingTotal;
+    const subtotal = unit * qty;
+
     totalEl.textContent = money(subtotal);
-    return { qty, subtotal, dlcChk };
+    return { qty, subtotal, dlcChk, ingChecked };
   };
-  inputs.forEach(i=> i.addEventListener('change', calc)); calc();
+  inputs.forEach(i=> i.addEventListener('change', calc)); 
+  calc();
 
   addBtn.onclick = ()=>{
     const name = document.getElementById('cName').value.trim();
@@ -225,7 +247,7 @@ function openItemModal(item, base, existingIndex=null){
 
     const { qty, subtotal, dlcChk } = calc();
     const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
-    const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? ingr[i]: null).filter(Boolean);
+    const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? ingr[i].name : null).filter(Boolean);
     const salsaSwap = document.getElementById('swapSauce').value || null;
     const notes     = document.getElementById('notes').value.trim();
 
@@ -411,21 +433,35 @@ function openCartModal(){
   };
 }
 
-function recomputeLine(line){
+function computeUnitTotal(line){
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
-  const IP  = Number(state.menu?.extras?.ingredientPrice ?? 0);
-  const extrasS = line.extras?.sauces?.length || 0;
-  const extrasI = line.extras?.ingredients?.length || 0;
-  const dlcOn   = !!(line.extras?.dlcCarne);
-  const extraDlc = dlcOn ? DLC : 0;
-  const unitTotal = (Number(line.unitPrice||0) + extraDlc) + (extrasS*SP + extrasI*IP);
+
+  // Mapeo rápido nombre->precio desde el menú
+  const ingrRaw = state.menu?.extras?.ingredients ?? [];
+  const priceByName = new Map(
+    ingrRaw.map(x => [ingrName(x), ingrPrice(x, state.menu?.extras?.ingredientPrice ?? 0)])
+  );
+
+  const extrasS = (line.extras?.sauces?.length || 0) * SP;
+  const extrasI = (line.extras?.ingredients || []).reduce(
+    (sum, name)=> sum + (priceByName.get(name) ?? 0), 0
+  );
+  const extraDlc = line.extras?.dlcCarne ? DLC : 0;
+
+  return Number(line.unitPrice||0) + extraDlc + extrasS + extrasI;
+}
+
+function recomputeLine(line){
+  const unitTotal = computeUnitTotal(line);
   line.lineTotal = unitTotal * (line.qty||1);
 }
+
 function refreshCartTotals(){
   const total = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
   document.getElementById('cartTotal').textContent = money(total);
 }
+
 function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
@@ -528,3 +564,4 @@ document.addEventListener('click', (e)=>{
     openItemModal(item, item.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item);
   }
 }, false);
+```0
