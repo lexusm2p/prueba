@@ -84,7 +84,7 @@ function renderCard(o={}){
     `<button class="btn warn" data-a="deliver">Entregar</button>`,
     (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
       ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
-    // Cancelar (marca CANCELLED y archiva)
+    // Cancelar (marca CANCELLED y archiva con motivo)
     (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
       ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
@@ -145,12 +145,23 @@ document.addEventListener('click', async (e)=>{
       return;
     }
 
-    // Cancelar: marca como CANCELLED y archiva (para mantener historial)
+    // Cancelar: pide motivo (obligatorio), marca CANCELLED, guarda motivo y archiva
     if (a==='cancel'){
-      const ok = confirm('¿Eliminar este pedido? Se archivará como CANCELLED.');
-      if (!ok) return;
-      await updateOrder(id, { status: Status.CANCELLED });
-      await archiveDelivered(id); // mover a orders_archive
+      const confirmDelete = confirm('¿Eliminar este pedido? Pasará a CANCELLED y se archivará.');
+      if (!confirmDelete) return;
+
+      const reason = prompt('Motivo de cancelación (obligatorio):', '');
+      if (reason === null) return; // usuario canceló
+      const trimmed = String(reason).trim();
+      if (!trimmed) { alert('Por favor escribe un motivo.'); return; }
+
+      await updateOrder(id, {
+        status: Status.CANCELLED,
+        cancelReason: trimmed,
+        cancelledAt: new Date(),
+        cancelledBy: 'kitchen'
+      });
+      await archiveDelivered(id); // mover a orders_archive conservando los campos
       beep(); toast('Pedido eliminado');
       card.remove();
       return;
