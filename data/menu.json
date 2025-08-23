@@ -79,8 +79,14 @@
       "Mostaza dulce","Jalapeño rostizado","Curry suave","Salsa Secreta Seven"
     ],
     "saucePrice": 5,
-    "ingredients": ["Tocino","Piña","Jamón","Salchicha","Cebolla caramelizada","Carne extra 85g"],
-    "ingredientPrice": 5,
+    "ingredients": [
+      { "id":"tocino", "name":"Tocino", "price":6 },
+      { "id":"piña", "name":"Piña", "price":5 },
+      { "id":"jamon", "name":"Jamón", "price":5 },
+      { "id":"salchicha", "name":"Salchicha", "price":12 },
+      { "id":"cebolla-caram", "name":"Cebolla caramelizada", "price":5 },
+      { "id":"carne-extra", "name":"Carne extra 85g", "price":22 }
+    ],
     "dlcCarneMini": 12
   }
 }
