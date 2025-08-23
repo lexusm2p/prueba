@@ -8,8 +8,12 @@ import {
   upsertSupplier,
   setHappyHour,
   subscribeHappyHour,
-  // 👇 NUEVO: lo usamos para crear el item si no existe
   upsertInventoryItem,
+  // === Recetario / Producción ===
+  subscribeRecipes,
+  produceBatch,
+  adjustStock,
+  subscribeSettings
 } from '../shared/db.js';
 import { toast } from '../shared/notify.js';
 
@@ -204,6 +208,127 @@ q('#btnSaveHappy')?.addEventListener('click', async () => {
   try { await setHappyHour({ enabled, discountPercent, bannerText }); toast('Happy Hour guardada'); }
   catch (e) { console.error(e); toast('No se pudo guardar HH'); }
 });
+
+/* ============== RECETARIO (nuevo) ============== */
+let RECIPES = [];
+let CURRENT_RECIPE = null;
+let APP_SETTINGS = {};
+subscribeSettings(s => { APP_SETTINGS = s || {}; }); // para sauceCupItemId
+
+subscribeRecipes(rows => {
+  RECIPES = rows || [];
+  const sel = q('#rcRecipe'); if (!sel) return;
+  sel.innerHTML = RECIPES.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('') || '<option value="">—</option>';
+  if (RECIPES.length && !CURRENT_RECIPE) {
+    sel.value = RECIPES[0].id;
+    setCurrentRecipe(RECIPES[0]);
+  } else if (CURRENT_RECIPE) {
+    sel.value = CURRENT_RECIPE.id;
+  }
+  renderRecipe();
+});
+
+q('#rcRecipe')?.addEventListener('change', (e)=>{
+  const r = RECIPES.find(x => x.id === e.target.value);
+  setCurrentRecipe(r);
+  renderRecipe();
+});
+
+document.querySelectorAll('[data-portion]')?.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    q('#rcOut').value = btn.getAttribute('data-portion');
+    renderRecipe();
+  });
+});
+q('#rcApply')?.addEventListener('click', ()=>{ // aplica custom
+  const v = Number(q('#rcCustom').value || 0);
+  if (v>0) { q('#rcOut').value = String(v); renderRecipe(); }
+});
+q('#rcOut')?.addEventListener('input', renderRecipe);
+
+q('#rcMake')?.addEventListener('click', onMakeBatch);
+
+function setCurrentRecipe(r){
+  CURRENT_RECIPE = r || null;
+  // Mostrar producto de salida
+  const outName = q('#rcOutputName');
+  const outId   = q('#rcOutputId');
+  if (outName) outName.value = r?.outputItemId ? (findInvName(r.outputItemId) || 'Item de inventario') : '—';
+  if (outId) outId.textContent = r?.outputItemId || '—';
+}
+
+function renderRecipe(){
+  const r = CURRENT_RECIPE; if (!r) { fillIngr([]); return; }
+  const targetMl = Number(q('#rcOut')?.value || 0);
+  const baseYield = Number(r.yieldQty || 0);
+  const factor = baseYield ? (targetMl / baseYield) : 0;
+
+  // Ingredientes escalados
+  const rows = (r.ingredients || []).map(ing => {
+    const qty = Number(ing.qty || 0) * factor;
+    return { name: invName(ing.itemId) || ing.itemId, qty, unit: ing.unit || '' };
+  });
+  fillIngr(rows);
+
+  // Producto de salida (nombre si lo tenemos en el cache invRows)
+  const outName = findInvName(r.outputItemId) || 'Producto terminado';
+  if (q('#rcOutputName')) q('#rcOutputName').value = outName;
+  if (q('#rcOutputId'))   q('#rcOutputId').textContent = r.outputItemId || '—';
+}
+
+function fillIngr(arr){
+  const tb = q('#rcIngr tbody');
+  tb.innerHTML = (arr && arr.length)
+    ? arr.map(i => `<tr><td>${esc(i.name)}</td><td>${Number(i.qty||0).toFixed(2)}</td><td>${esc(i.unit||'')}</td></tr>`).join('')
+    : '<tr><td colspan="3">—</td></tr>';
+}
+
+function invName(id){
+  const it = invRows.find(x => x.id === id);
+  return it?.name || null;
+}
+function findInvName(id){
+  return invRows.find(x=>x.id===id)?.name || null;
+}
+
+async function onMakeBatch(){
+  const r = CURRENT_RECIPE;
+  if (!r?.id) { toast('Selecciona una receta'); return; }
+  const outMl = Number(q('#rcOut')?.value || 0);
+  if (!(outMl > 0)) { toast('Ingresa una salida válida (ml)'); return; }
+
+  const cups = Math.max(0, Number(q('#rcCupCount')?.value || 0));       // vasitos 2oz
+  const store = (q('#rcStore')?.value === 'si');
+  const storeQty = Math.max(0, Number(q('#rcStoreQty')?.value || 0));   // ml almacenados
+
+  try{
+    // 1) Ejecuta producción (descuenta ingredientes y abona output)
+    await produceBatch({ recipeId: r.id, outputQty: outMl });
+
+    // 2) Si envasó en vasos 2oz, descuenta vasitos del inventario (si está configurado)
+    const cupId = APP_SETTINGS?.sauceCupItemId || null;
+    if (cupId && cups > 0) {
+      await adjustStock(cupId, -cups, 'use', { reason: 'packaging_2oz', recipeId: r.id, outputQtyMl: outMl, cups2oz: cups });
+    }
+
+    // 3) Si marcó almacenar, registra metadata (movimiento neutro) sobre el producto de salida
+    if (store && r.outputItemId) {
+      await adjustStock(r.outputItemId, 0, 'production_meta', {
+        recipeId: r.id, stored: true, storedQtyMl: storeQty, outputQtyMl: outMl
+      });
+    }
+
+    // 4) Limpieza UI
+    if (q('#rcCupCount')) q('#rcCupCount').value = '0';
+    if (q('#rcStore')) q('#rcStore').value = 'no';
+    if (q('#rcStoreQty')) q('#rcStoreQty').value = '0';
+
+    toast('Lote preparado y registrado');
+  }catch(e){
+    console.error(e);
+    toast('No se pudo registrar la producción');
+  }
+}
 
 /* ---------------- helpers ---------------- */
 function q(sel){ return document.querySelector(sel); }
