@@ -9,8 +9,8 @@ const state = {
   mode: 'mini',
   cart: [],
   customerName: '',
-  // ➕ añadimos phone en orderMeta
-  orderMeta: { type:'pickup', table:'', phone:'' },
+  // teléfono agregado para pickup
+  orderMeta: { type: 'pickup', table: '', phone: '' },
   unsubReady: null
 };
 
@@ -33,7 +33,7 @@ let tapCount = 0, tapTimer = null;
 brand.addEventListener('click', ()=>{
   if (tapTimer) clearTimeout(tapTimer);
   tapCount++;
-  tapTimer = setTimeout(()=> tapCount=0, 2000);
+  tapTimer = setTimeout(()=> tapCount = 0, 2000);
   if (tapCount >= 7) { tapCount = 0; openPinModal(); }
 });
 function openPinModal(){
@@ -41,13 +41,17 @@ function openPinModal(){
   const pinInput = document.getElementById('pinInput');
   const pinGo    = document.getElementById('pinGo');
   const pinClose = document.getElementById('pinClose');
-  const map = {'1111':'../mesero/index.html','2222':'../cocina/index.html','9999':'../admin/index.html'};
+  const map = {
+    '1111':'../mesero/index.html',
+    '2222':'../cocina/index.html',
+    '9999':'../admin/index.html'
+  };
   const show = ()=>{ pinModal.style.display='grid'; setTimeout(()=>pinInput?.focus(),0); };
   const hide = ()=>{ pinModal.style.display='none'; pinInput.value=''; };
   const enter = ()=>{
     const pin = (pinInput.value||'').trim();
     const route = map[pin];
-    if(!route){ toast('PIN incorrecto'); return; }
+    if (!route){ toast('PIN incorrecto'); return; }
     hide(); location.href = route;
   };
   show(); pinGo.onclick = enter; pinClose.onclick = hide;
@@ -76,40 +80,43 @@ async function init(){
   setupSidebars();
   setupReadyFeed(); // <- feed en vivo
 }
-const money = n => '$'+n.toFixed(0);
+
+// dinero robusto (no revienta si llega undefined/null)
+const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 
 /* Helpers */
 function findItemById(id){
   return state.menu.burgers.find(b=>b.id===id)
       || state.menu.minis.find(m=>m.id===id)
       || state.menu.drinks?.find(d=>d.id===id)
-      || state.menu.sides?.find(s=>s.id===id) || null;
+      || state.menu.sides?.find(s=>s.id===id)
+      || null;
 }
-function baseOfItem(item){ return item?.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item; }
+function baseOfItem(item){
+  return item?.baseOf ? state.menu.burgers.find(b=>b.id===item.baseOf) : item;
+}
 
 /* 4) Tarjetas (con imagen) */
 function renderCards(){
-  const grid = document.getElementById('cards'); 
-  grid.innerHTML='';
+  const grid = document.getElementById('cards');
+  grid.innerHTML = '';
 
-  const items = state.mode==='mini' ? state.menu.minis : state.menu.burgers;
+  const items = state.mode==='mini' ? (state.menu.minis||[]) : (state.menu.burgers||[]);
 
   items.forEach(it=>{
     const base = baseOfItem(it);
     const baseId = base?.id || it.id;
-    const iconSrc = ICONS[baseId] || null; // si no hay, se usa placeholder .icon
+    const iconSrc = ICONS[baseId] || null;
 
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
       <h3>${it.name}</h3>
-
       <div class="media">
-        ${iconSrc 
+        ${iconSrc
           ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
           : `<div class="icon" aria-hidden="true"></div>`}
       </div>
-
       <div class="row">
         <div class="price">${money(it.price)}</div>
         <div class="row" style="gap:8px">
@@ -130,16 +137,17 @@ function renderCards(){
 function openItemModal(item, base, existingIndex=null){
   const modal = document.getElementById('modal'); modal.classList.add('open');
   const body  = document.getElementById('mBody');
-  document.getElementById('mTitle').textContent = item.name + ' · ' + money(item.price);
+  document.getElementById('mTitle').textContent = `${item.name} · ${money(item.price)}`;
   document.getElementById('mClose').onclick = ()=> modal.classList.remove('open');
 
-  const sauces = state.menu.extras.sauces;
-  const ingr   = state.menu.extras.ingredients;
-  const SP     = state.menu.extras.saucePrice;
-  const IP     = state.menu.extras.ingredientPrice;
-  const DLC    = state.menu.extras.dlcCarneMini ?? 12;
+  // Defaults defensivos para extras
+  const sauces = state.menu?.extras?.sauces ?? [];
+  const ingr   = state.menu?.extras?.ingredients ?? [];
+  const SP     = Number(state.menu?.extras?.saucePrice ?? 0);
+  const IP     = Number(state.menu?.extras?.ingredientPrice ?? 0);
+  const DLC    = Number(state.menu?.extras?.dlcCarneMini ?? 12);
 
-  const editing = existingIndex!==null;
+  const editing = (existingIndex !== null);
   const line    = editing ? state.cart[existingIndex] : null;
 
   const hasSauce = s => editing && line?.extras?.sauces?.includes(s);
@@ -152,29 +160,44 @@ function openItemModal(item, base, existingIndex=null){
   body.innerHTML = `
     <div class="field"><label>Tu nombre</label>
       <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/></div>
-    ${item.mini ? `
+    ${ item.mini && (DLC > 0) ? `
     <div class="field"><label>DLC de Carne grande</label>
-      <div class="ul-clean"><input type="checkbox" id="dlcCarne" ${dlcOn?'checked':''}/>
-      <label for="dlcCarne">Cambia a carne 85g</label><span class="tag">(+${money(DLC)})</span></div></div>`:''}
+      <div class="ul-clean">
+        <input type="checkbox" id="dlcCarne" ${dlcOn?'checked':''}/>
+        <label for="dlcCarne">Cambia a carne 85g</label>
+        <span class="tag">(+${money(DLC)})</span>
+      </div>
+    </div>` : '' }
     <div class="hr"></div>
     <div class="field"><label>Potenciar sabor (cambio sin costo)</label>
       <select id="swapSauce"><option value="">Dejar salsa por defecto</option>
         ${((base.salsasSugeridas || [base.suggested]).filter(Boolean) || [])
           .map(s=>`<option value="${s}" ${swapVal===s?'selected':''}>${s}</option>`).join('')}
-      </select><div class="muted small">* Extras se cobran aparte.</div></div>
+      </select>
+      <div class="muted small">* Extras se cobran aparte.</div>
+    </div>
     <div class="field"><label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
-        ${sauces.map((s,i)=>`<input type="checkbox" id="s${i}" ${hasSauce(s)?'checked':''}/>
-          <label for="s${i}">${s}</label><span class="tag">(+${money(SP)})</span>`).join('')}
-      </div></div>
+        ${sauces.map((s,i)=>`
+          <input type="checkbox" id="s${i}" ${hasSauce(s)?'checked':''}/>
+          <label for="s${i}">${s}</label>
+          <span class="tag">(+${money(SP)})</span>`).join('')}
+      </div>
+    </div>
     <div class="field"><label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
-        ${ingr.map((s,i)=>`<input type="checkbox" id="e${i}" ${hasIngr(s)?'checked':''}/>
-          <label for="e${i}">${s}</label><span class="tag">(+${money(IP)})</span>`).join('')}
-      </div></div>
-    <div class="field"><label>Cantidad</label><input id="qty" type="number" min="1" max="9" value="${qtyVal}"/></div>
+        ${ingr.map((s,i)=>`
+          <input type="checkbox" id="e${i}" ${hasIngr(s)?'checked':''}/>
+          <label for="e${i}">${s}</label>
+          <span class="tag">(+${money(IP)})</span>`).join('')}
+      </div>
+    </div>
+    <div class="field"><label>Cantidad</label>
+      <input id="qty" type="number" min="1" max="9" value="${qtyVal}"/>
+    </div>
     <div class="field"><label>Comentarios a cocina</label>
-      <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea></div>`;
+      <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea>
+    </div>`;
 
   const addBtn = document.getElementById('mAdd');
   addBtn.textContent = editing ? 'Guardar cambios' : 'Agregar al pedido';
@@ -184,12 +207,12 @@ function openItemModal(item, base, existingIndex=null){
   const inputs  = body.querySelectorAll('input[type=checkbox], #qty, #swapSauce');
 
   const calc = ()=>{
-    const qty     = parseInt(qtyEl.value||'1',10);
+    const qty     = parseInt(qtyEl.value||'1', 10);
     const extrasS = [...body.querySelectorAll('#sauces input:checked')].length;
     const extrasI = [...body.querySelectorAll('#ingrs input:checked')].length;
     const dlcChk  = item.mini && body.querySelector('#dlcCarne')?.checked;
     const extraDlc = dlcChk ? DLC : 0;
-    const subtotal = (item.price + extraDlc)*qty + (extrasS*SP + extrasI*IP)*qty;
+    const subtotal = (Number(item.price||0) + extraDlc)*qty + (extrasS*SP + extrasI*IP)*qty;
     totalEl.textContent = money(subtotal);
     return { qty, subtotal, dlcChk };
   };
@@ -208,10 +231,11 @@ function openItemModal(item, base, existingIndex=null){
 
     const newLine = {
       id: item.id, name: item.name, mini: !!item.mini, qty,
-      unitPrice: item.price, baseIngredients: base.ingredients||[],
+      unitPrice: Number(item.price||0),
+      baseIngredients: base.ingredients||[],
       salsaDefault: base.salsaDefault || base.suggested || null,
       salsaCambiada: salsaSwap,
-      extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: dlcChk },
+      extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk },
       notes, lineTotal: subtotal
     };
 
@@ -237,7 +261,7 @@ function updateCartBar(){
 
 // limpia teléfono a solo dígitos
 function normalizePhone(raw=''){
-  return String(raw).replace(/\D+/g,'').slice(0,15); // aceptamos hasta 15 por si E.164, validamos 10+ MX
+  return String(raw).replace(/\D+/g,'').slice(0,15);
 }
 
 function openCartModal(){
@@ -265,14 +289,15 @@ function openCartModal(){
     <!-- Teléfono (solo para Pickup) -->
     <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
       <label>Teléfono de contacto (Pickup)</label>
-      <input id="phoneNum" type="tel" inputmode="tel" placeholder="10 dígitos" 
+      <input id="phoneNum" type="tel" inputmode="tel" placeholder="10 dígitos"
              pattern="\\d{10,}" value="${state.orderMeta.phone||''}" />
       <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
     </div>
 
     <!-- Mesa (solo Dine-in) -->
     <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
-      <label>Número de mesa</label><input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
+      <label>Número de mesa</label>
+      <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
     </div>
 
     <div class="field">
@@ -300,7 +325,7 @@ function openCartModal(){
     <div class="field"><label>Comentarios generales</label>
       <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea></div>`;
 
-  const typeSel = document.getElementById('orderType');
+  const typeSel   = document.getElementById('orderType');
   const mesaField = document.getElementById('mesaField');
   const phoneField = document.getElementById('phoneField');
   const phoneInput = document.getElementById('phoneNum');
@@ -308,9 +333,9 @@ function openCartModal(){
   // normaliza conforme se escribe
   if (phoneInput){
     phoneInput.addEventListener('input', ()=>{
-      const pos = phoneInput.selectionStart;
+      const pos = phoneInput.selectionStart ?? phoneInput.value.length;
       phoneInput.value = normalizePhone(phoneInput.value);
-      phoneInput.setSelectionRange(pos, pos);
+      try { phoneInput.setSelectionRange(pos, pos); } catch {}
     });
   }
 
@@ -330,7 +355,12 @@ function openCartModal(){
     if(btn.dataset.a==='remove'){ state.cart.splice(i,1); }
     if(btn.dataset.a==='more'){ line.qty = Math.min(99, (line.qty||1)+1); recomputeLine(line); }
     if(btn.dataset.a==='less'){ line.qty = Math.max(1, (line.qty||1)-1); recomputeLine(line); }
-    if(btn.dataset.a==='edit'){ const item = findItemById(line.id); const base = baseOfItem(item); document.getElementById('cartModal').style.display='none'; openItemModal(item, base, i); return; }
+    if(btn.dataset.a==='edit'){
+      const item = findItemById(line.id);
+      const base = baseOfItem(item);
+      document.getElementById('cartModal').style.display='none';
+      openItemModal(item, base, i); return;
+    }
 
     openCartModal(); updateCartBar();
   }, { once:true });
@@ -346,12 +376,12 @@ function openCartModal(){
     if(state.orderMeta.type==='dinein'){
       state.orderMeta.table = (document.getElementById('tableNum').value||'').trim();
       if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
-      state.orderMeta.phone = ''; // limpiamos por claridad
+      state.orderMeta.phone = '';
     } else { // pickup
       const raw = document.getElementById('phoneNum').value || '';
       const norm = normalizePhone(raw);
       if(norm.length < 10){
-        alert('Para Pickup, ingresa un teléfono de 10 dígitos.'); 
+        alert('Para Pickup, ingresa un teléfono de 10 dígitos.');
         return;
       }
       state.orderMeta.phone = norm;
@@ -382,21 +412,25 @@ function openCartModal(){
 }
 
 function recomputeLine(line){
-  const DLC = (state.menu?.extras?.dlcCarneMini ?? 12);
-  const SP  = state.menu?.extras?.saucePrice ?? 8;
-  const IP  = state.menu?.extras?.ingredientPrice ?? 10;
+  const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
+  const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
+  const IP  = Number(state.menu?.extras?.ingredientPrice ?? 0);
   const extrasS = line.extras?.sauces?.length || 0;
   const extrasI = line.extras?.ingredients?.length || 0;
   const dlcOn   = !!(line.extras?.dlcCarne);
   const extraDlc = dlcOn ? DLC : 0;
-  const unitTotal = (line.unitPrice + extraDlc) + (extrasS*SP + extrasI*IP);
+  const unitTotal = (Number(line.unitPrice||0) + extraDlc) + (extrasS*SP + extrasI*IP);
   line.lineTotal = unitTotal * (line.qty||1);
 }
 function refreshCartTotals(){
-  const total = state.cart.reduce((a,l)=>a + (l.lineTotal||0), 0);
+  const total = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
   document.getElementById('cartTotal').textContent = money(total);
 }
-function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+function escapeHtml(s=''){
+  return String(s).replace(/[&<>"']/g, m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+  }[m]));
+}
 
 /* ===== Laterales ===== */
 function setupSidebars(){
@@ -447,6 +481,7 @@ function setupReadyFeed(){
   if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
   const container = document.getElementById('readyFeed'); if (!container) return;
   state.unsubReady = subscribeOrders(list=>{
+    // Filtra READY, recientes primero
     const ready = (list||[]).filter(o=> (o.status||'')==='READY')
       .sort((a,b)=>{
         const ta = a.createdAt?.toMillis?.() ?? new Date(a.createdAt||0).getTime();
@@ -456,7 +491,7 @@ function setupReadyFeed(){
 
     const rows = ready.map(o=>{
       const items = (o.items||[]);
-      const count = items.reduce((n,i)=>n+(i.qty||1),0);
+      const count = items.reduce((n,i)=> n + (i.qty||1), 0);
       const names = items.map(i=>i.name).slice(0,2).join(', ');
       return `<li>
         <div style="flex:1;min-width:0">
@@ -483,8 +518,10 @@ document.addEventListener('click', (e)=>{
   if (item.type==='drink' || item.type==='side'){
     state.cart.push({
       id:item.id, name:item.name, mini:false, qty:1,
-      unitPrice:item.price, baseIngredients:[], salsaDefault:null, salsaCambiada:null,
-      extras:{ sauces:[], ingredients:[], dlcCarne:false }, notes:'', lineTotal:item.price
+      unitPrice:Number(item.price||0),
+      baseIngredients:[], salsaDefault:null, salsaCambiada:null,
+      extras:{ sauces:[], ingredients:[], dlcCarne:false },
+      notes:'', lineTotal:Number(item.price||0)
     });
     updateCartBar(); beep(); toast(`${item.name} agregado`);
   } else {
