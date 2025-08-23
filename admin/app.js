@@ -111,9 +111,12 @@ function fillTable(id, arr) {
 
 /* ============== Inventario (suscripción) ============== */
 const invRows = [];
+const invMap  = new Map();
 subscribeInventory(items => {
   invRows.length = 0; invRows.push(...items);
+  invMap.clear(); items.forEach(it => invMap.set(it.id, it));
   renderInventoryTable();
+  renderRecipeTable(); // refresca nombres en recetario
 });
 q('#btnInvRefresh')?.addEventListener('click', renderInventoryTable);
 q('#invSearch')?.addEventListener('input', renderInventoryTable);
@@ -132,7 +135,7 @@ function renderInventoryTable() {
   tb.innerHTML = rows || '<tr><td colspan="5">—</td></tr>';
 }
 
-/* ============== Compras (CORREGIDO) ============== */
+/* ============== Compras ============== */
 const btnAddPurchase = document.getElementById('btnAddPurchase');
 btnAddPurchase && (btnAddPurchase.onclick = async () => {
   const name = (q('#pName')?.value || '').trim();
@@ -158,7 +161,7 @@ btnAddPurchase && (btnAddPurchase.onclick = async () => {
       toast('Ingrediente nuevo creado en inventario');
     }
 
-    // 3) Registrar compra + abonar stock (recordPurchase ya descuenta/abona vía adjustStock)
+    // 3) Registrar compra + abonar stock
     await recordPurchase({ itemId, qty, unitCost: cost, supplierId });
 
     // 4) Reset UI
@@ -185,7 +188,7 @@ function renderVendors(arr = []) {
   tb.innerHTML = arr.map(v => `<tr><td>${esc(v.name)}</td><td>${esc(v.contact || '-')}</td><td>${v.id}</td></tr>`).join('') || '<tr><td colspan="3">—</td></tr>';
 }
 
-/* ============== Productos / Combos (solo lectura por ahora) ============== */
+/* ============== Productos (solo lectura) ============== */
 subscribeProducts(renderProducts);
 function renderProducts(items = []) {
   const tb = q('#tblProducts tbody');
@@ -209,126 +212,168 @@ q('#btnSaveHappy')?.addEventListener('click', async () => {
   catch (e) { console.error(e); toast('No se pudo guardar HH'); }
 });
 
-/* ============== RECETARIO (nuevo) ============== */
-let RECIPES = [];
-let CURRENT_RECIPE = null;
+/* ============== Ajustes para vasitos 2oz ============== */
 let APP_SETTINGS = {};
-subscribeSettings(s => { APP_SETTINGS = s || {}; }); // para sauceCupItemId
+subscribeSettings(s => { APP_SETTINGS = s || {}; });
 
-subscribeRecipes(rows => {
-  RECIPES = rows || [];
-  const sel = q('#rcRecipe'); if (!sel) return;
-  sel.innerHTML = RECIPES.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('') || '<option value="">—</option>';
-  if (RECIPES.length && !CURRENT_RECIPE) {
-    sel.value = RECIPES[0].id;
-    setCurrentRecipe(RECIPES[0]);
-  } else if (CURRENT_RECIPE) {
-    sel.value = CURRENT_RECIPE.id;
+/* ============== RECETARIO (LISTADO + MODAL) ============== */
+let RECIPES = [];
+subscribeRecipes(list => {
+  RECIPES = list || [];
+  renderRecipeTable();
+});
+q('#rcpSearch')?.addEventListener('input', renderRecipeTable);
+
+function renderRecipeTable(){
+  const tb = q('#tblRecipes tbody'); if (!tb) return;
+  const term = (q('#rcpSearch')?.value || '').toLowerCase().trim();
+  const rows = (RECIPES||[])
+    .filter(r=>{
+      if(!term) return true;
+      const name = (r.name||'').toLowerCase();
+      const ing  = (r.ingredients||[]).map(i=> (invMap.get(i.itemId)?.name || i.itemId)).join(' ').toLowerCase();
+      return name.includes(term) || ing.includes(term);
+    })
+    .map(r=>{
+      const outName = invMap.get(r.outputItemId)?.name || r.outputItemId || '—';
+      const count = (r.ingredients||[]).length;
+      return `<tr data-id="${r.id}">
+        <td><b>${esc(r.name||'Receta')}</b></td>
+        <td>${Number(r.yieldQty||0)} ${esc(r.yieldUnit||'ml')}</td>
+        <td>${esc(outName)}</td>
+        <td>${count}</td>
+        <td class="right"><button class="btn small ghost" data-a="view">Ver</button></td>
+      </tr>`;
+    }).join('');
+  tb.innerHTML = rows || '<tr><td colspan="5">—</td></tr>';
+}
+
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('#tblRecipes [data-a="view"]'); if(!btn) return;
+  const tr  = btn.closest('tr'); const id = tr?.dataset?.id;
+  const r   = RECIPES.find(x=>x.id===id); if(!r) return;
+  openRecipeModal(r);
+});
+
+/* ---- Modal de receta ---- */
+const rcpModal = document.getElementById('rcpModal');
+document.getElementById('rcpClose')?.addEventListener('click', ()=> rcpModal.style.display='none');
+
+let CURRENT_R = null;
+let CURRENT_OUT_QTY = 100;
+
+function scaleIngredients(r, outQty){
+  const base = Number(r.yieldQty||0) || 1;
+  const factor = Number(outQty)/base;
+  return (r.ingredients||[]).map(ing => ({
+    ...ing,
+    qtyScaled: Number(ing.qty||0)*factor,
+  }));
+}
+
+function renderRecipeModal(){
+  if(!CURRENT_R) return;
+  const outItem = invMap.get(CURRENT_R.outputItemId)?.name || CURRENT_R.outputItemId || '—';
+  const list = scaleIngredients(CURRENT_R, CURRENT_OUT_QTY);
+  const body = document.getElementById('rcpBody');
+  const hint = document.getElementById('rcpHint');
+
+  body.innerHTML = `
+    <div class="field"><label>Receta</label>
+      <div><b>${esc(CURRENT_R.name||'Receta')}</b></div>
+      <div class="muted small">Rinde base: ${Number(CURRENT_R.yieldQty||0)} ${esc(CURRENT_R.yieldUnit||'ml')}</div>
+      <div class="muted small">Producto terminado: ${esc(outItem)}</div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
+      <div class="field">
+        <label>Porción (ml)</label>
+        <input id="rcpOutQty" type="number" min="10" step="10" value="${CURRENT_OUT_QTY}"/>
+      </div>
+      <div class="field">
+        <label>Vasos 2oz usados (opcional)</label>
+        <input id="rcpCups" type="number" min="0" step="1" placeholder="0"/>
+        <div class="muted small">Si configuraste <code>sauceCupItemId</code> en settings, se descuentan.</div>
+      </div>
+      <div class="field">
+        <label>Guardar para almacenar</label>
+        <select id="rcpStore"><option value="no">No</option><option value="si">Sí</option></select>
+      </div>
+      <div class="field">
+        <label>Cantidad almacenada (ml)</label>
+        <input id="rcpStoreQty" type="number" min="0" step="10" value="${CURRENT_OUT_QTY}"/>
+      </div>
+    </div>
+
+    <div class="field"><label>Ingredientes escalados</label>
+      <div style="max-height:320px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px">
+        ${list.map(ing=>{
+          const name = invMap.get(ing.itemId)?.name || ing.itemId;
+          const unit = ing.unit || 'ml';
+          return `<div class="row" style="gap:8px; justify-content:space-between">
+            <div style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${esc(name)}</div>
+            <div>${ing.qtyScaled.toFixed(1)} ${esc(unit)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  hint.textContent = `Salida: ${CURRENT_OUT_QTY} ml`;
+  document.getElementById('rcpTitle').textContent = CURRENT_R.name || 'Receta';
+}
+
+function openRecipeModal(r){
+  CURRENT_R = r;
+  CURRENT_OUT_QTY = Number(document.getElementById('rcpQuickPort')?.value || 100);
+  rcpModal.style.display='grid';
+  renderRecipeModal();
+}
+
+document.getElementById('rcpScale500')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=500; renderRecipeModal(); });
+document.getElementById('rcpScale200')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=200; renderRecipeModal(); });
+document.getElementById('rcpScale100')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=100; renderRecipeModal(); });
+
+document.getElementById('rcpBody')?.addEventListener('input', (e)=>{
+  if (e.target && e.target.id==='rcpOutQty'){
+    const v = Number(e.target.value||0);
+    CURRENT_OUT_QTY = Math.max(10, v||10);
+    renderRecipeModal();
   }
-  renderRecipe();
 });
 
-q('#rcRecipe')?.addEventListener('change', (e)=>{
-  const r = RECIPES.find(x => x.id === e.target.value);
-  setCurrentRecipe(r);
-  renderRecipe();
-});
-
-document.querySelectorAll('[data-portion]')?.forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    q('#rcOut').value = btn.getAttribute('data-portion');
-    renderRecipe();
-  });
-});
-q('#rcApply')?.addEventListener('click', ()=>{ // aplica custom
-  const v = Number(q('#rcCustom').value || 0);
-  if (v>0) { q('#rcOut').value = String(v); renderRecipe(); }
-});
-q('#rcOut')?.addEventListener('input', renderRecipe);
-
-q('#rcMake')?.addEventListener('click', onMakeBatch);
-
-function setCurrentRecipe(r){
-  CURRENT_RECIPE = r || null;
-  // Mostrar producto de salida
-  const outName = q('#rcOutputName');
-  const outId   = q('#rcOutputId');
-  if (outName) outName.value = r?.outputItemId ? (findInvName(r.outputItemId) || 'Item de inventario') : '—';
-  if (outId) outId.textContent = r?.outputItemId || '—';
-}
-
-function renderRecipe(){
-  const r = CURRENT_RECIPE; if (!r) { fillIngr([]); return; }
-  const targetMl = Number(q('#rcOut')?.value || 0);
-  const baseYield = Number(r.yieldQty || 0);
-  const factor = baseYield ? (targetMl / baseYield) : 0;
-
-  // Ingredientes escalados
-  const rows = (r.ingredients || []).map(ing => {
-    const qty = Number(ing.qty || 0) * factor;
-    return { name: invName(ing.itemId) || ing.itemId, qty, unit: ing.unit || '' };
-  });
-  fillIngr(rows);
-
-  // Producto de salida (nombre si lo tenemos en el cache invRows)
-  const outName = findInvName(r.outputItemId) || 'Producto terminado';
-  if (q('#rcOutputName')) q('#rcOutputName').value = outName;
-  if (q('#rcOutputId'))   q('#rcOutputId').textContent = r.outputItemId || '—';
-}
-
-function fillIngr(arr){
-  const tb = q('#rcIngr tbody');
-  tb.innerHTML = (arr && arr.length)
-    ? arr.map(i => `<tr><td>${esc(i.name)}</td><td>${Number(i.qty||0).toFixed(2)}</td><td>${esc(i.unit||'')}</td></tr>`).join('')
-    : '<tr><td colspan="3">—</td></tr>';
-}
-
-function invName(id){
-  const it = invRows.find(x => x.id === id);
-  return it?.name || null;
-}
-function findInvName(id){
-  return invRows.find(x=>x.id===id)?.name || null;
-}
-
-async function onMakeBatch(){
-  const r = CURRENT_RECIPE;
-  if (!r?.id) { toast('Selecciona una receta'); return; }
-  const outMl = Number(q('#rcOut')?.value || 0);
-  if (!(outMl > 0)) { toast('Ingresa una salida válida (ml)'); return; }
-
-  const cups = Math.max(0, Number(q('#rcCupCount')?.value || 0));       // vasitos 2oz
-  const store = (q('#rcStore')?.value === 'si');
-  const storeQty = Math.max(0, Number(q('#rcStoreQty')?.value || 0));   // ml almacenados
+/* Preparar lote desde el modal */
+document.getElementById('rcpPrepare')?.addEventListener('click', async ()=>{
+  if (!CURRENT_R) return;
+  const outQty = Number(document.getElementById('rcpOutQty')?.value || CURRENT_OUT_QTY || 0);
+  if (!outQty || outQty<=0){ toast('Indica cantidad de salida en ml'); return; }
 
   try{
-    // 1) Ejecuta producción (descuenta ingredientes y abona output)
-    await produceBatch({ recipeId: r.id, outputQty: outMl });
+    // 1) Producción principal
+    await produceBatch({ recipeId: CURRENT_R.id, outputQty: outQty });
 
-    // 2) Si envasó en vasos 2oz, descuenta vasitos del inventario (si está configurado)
-    const cupId = APP_SETTINGS?.sauceCupItemId || null;
-    if (cupId && cups > 0) {
-      await adjustStock(cupId, -cups, 'use', { reason: 'packaging_2oz', recipeId: r.id, outputQtyMl: outMl, cups2oz: cups });
+    // 2) Vasitos 2oz (opcional)
+    const cups = Number(document.getElementById('rcpCups')?.value || 0);
+    const cupId = (await (async()=>APP_SETTINGS?.sauceCupItemId||null) )();
+    if (cupId && cups>0){
+      await adjustStock(cupId, -cups, 'use', { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty });
     }
 
-    // 3) Si marcó almacenar, registra metadata (movimiento neutro) sobre el producto de salida
-    if (store && r.outputItemId) {
-      await adjustStock(r.outputItemId, 0, 'production_meta', {
-        recipeId: r.id, stored: true, storedQtyMl: storeQty, outputQtyMl: outMl
+    // 3) Meta de almacenamiento (opcional)
+    const store = (document.getElementById('rcpStore')?.value === 'si');
+    const storeQty = Number(document.getElementById('rcpStoreQty')?.value || 0);
+    if (store && CURRENT_R.outputItemId){
+      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', {
+        recipeId: CURRENT_R.id, stored: true, storedQtyMl: storeQty, outputQtyMl: outQty
       });
     }
 
-    // 4) Limpieza UI
-    if (q('#rcCupCount')) q('#rcCupCount').value = '0';
-    if (q('#rcStore')) q('#rcStore').value = 'no';
-    if (q('#rcStoreQty')) q('#rcStoreQty').value = '0';
-
-    toast('Lote preparado y registrado');
+    toast('Lote preparado');
+    document.getElementById('rcpClose')?.click();
   }catch(e){
     console.error(e);
-    toast('No se pudo registrar la producción');
+    toast('No se pudo preparar el lote');
   }
-}
+});
 
 /* ---------------- helpers ---------------- */
 function q(sel){ return document.querySelector(sel); }
