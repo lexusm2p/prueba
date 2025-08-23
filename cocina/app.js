@@ -5,7 +5,12 @@ import {
 } from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 
-const Status = { PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY' };
+const Status = {
+  PENDING: 'PENDING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  READY: 'READY',
+  CANCELLED: 'CANCELLED'
+};
 
 let CURRENT_LIST = [];
 // IDs de órdenes ya "tomadas" en esta sesión (para ocultar el botón sin esperar snapshot)
@@ -41,9 +46,16 @@ function renderCard(o){
         salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||''
       }] : []);
 
-  const meta = (o.orderType === 'dinein')
-    ? `Mesa: <b>${escapeHtml(o.table||'?')}</b>`
-    : (o.orderType === 'pickup' ? 'Pickup' : (o.orderType || '—'));
+  // META visible: mesa o pickup con teléfono
+  let meta = '—';
+  if (o.orderType === 'dinein') {
+    meta = `Mesa: <b>${escapeHtml(o.table||'?')}</b>`;
+  } else if (o.orderType === 'pickup') {
+    const phone = (o.phone || '').toString();
+    meta = `Pickup${phone ? ` · Tel: <b>${escapeHtml(phone)}</b>` : ''}`;
+  } else if (o.orderType) {
+    meta = escapeHtml(o.orderType);
+  }
 
   const itemsHtml = items.map(it=>{
     const ingr = (it.baseIngredients||[]).map(i=>`<div class="k-badge">${escapeHtml(i)}</div>`).join('');
@@ -70,7 +82,11 @@ function renderCard(o){
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
     (o.status === Status.IN_PROGRESS) ? `<button class="btn ok" data-a="ready">Listo</button>` : '',
     `<button class="btn warn" data-a="deliver">Entregar</button>`,
-    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS) ? `<button class="btn ghost" data-a="edit">Editar</button>` : ''
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
+      ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
+    // Eliminar (cancelar y archivar)
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
+      ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
 
   return `
@@ -132,6 +148,18 @@ document.addEventListener('click', async (e)=>{
       }
       return;
     }
+
+    // Cancelar: marca como CANCELLED y archiva (para mantener historial)
+    if (a==='cancel'){
+      const ok = confirm('¿Eliminar este pedido? Se archivará como CANCELLED.');
+      if (!ok) return;
+      await updateOrder(id, { status: Status.CANCELLED });
+      await archiveDelivered(id); // lo mueve a orders_archive
+      beep(); toast('Pedido eliminado');
+      card.remove();
+      return;
+    }
+
   }catch(err){
     console.error(err);
     toast('Error al actualizar');
