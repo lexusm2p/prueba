@@ -2,7 +2,15 @@
 // Kiosko con carrito, edición de líneas, meta de pedido y laterales (incluye feed de “Listos”).
 
 import { beep, toast } from '../shared/notify.js';
-import { createOrder, fetchCatalogWithFallback, subscribeOrders } from '../shared/db.js';
+import {
+  createOrder,
+  fetchCatalogWithFallback,
+  subscribeOrders,
+  // NUEVO: helpers de cliente por teléfono
+  fetchCustomer,
+  upsertCustomerFromOrder,
+  attachLastOrderRef,
+} from '../shared/db.js';
 
 const state = {
   menu: null,
@@ -365,6 +373,18 @@ function openCartModal(){
       phoneInput.value = normalizePhone(phoneInput.value);
       try { phoneInput.setSelectionRange(pos, pos); } catch {}
     });
+
+    // Autocompletar nombre por teléfono (si existe cliente)
+    phoneInput.addEventListener('change', async ()=>{
+      const p = normalizePhone(phoneInput.value);
+      if (p.length >= 10){
+        const c = await fetchCustomer(p);
+        if (c?.name){
+          const nameEl = document.getElementById('cartName');
+          if (nameEl && !nameEl.value) nameEl.value = c.name;
+        }
+      }
+    });
   }
 
   typeSel.onchange = ()=>{
@@ -460,7 +480,13 @@ function openCartModal(){
       subtotal, notes: generalNotes
     };
 
-    await createOrder(order);
+    // Crea pedido y actualiza/crea cliente por teléfono
+    const orderId = await createOrder(order);   // asegura que createOrder devuelve el id
+    if (order.phone) {
+      await upsertCustomerFromOrder(order);
+      await attachLastOrderRef(order.phone, orderId);
+    }
+
     beep(); toast('¡Pedido enviado! ✨');
     state.cart = []; updateCartBar(); close();
   };
