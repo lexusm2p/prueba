@@ -10,7 +10,10 @@ import { db, ensureAnonAuth } from "./firebase.js";
    Colección "products" (tipos soportados):
    - type: 'big' | 'mini' | 'drink' | 'side' | 'combo'
    - { id, name, price, type, active, baseOf?, ingredients:[], salsaDefault,
-       salsasSugeridas:[], icon:'', hhEligible?: true, comboItems?:[] }
+       salsasSugeridas:[], icon:'', hhEligible?: true, comboItems?:[],
+       // opcional para control de stock por pieza:
+       // stockItemId?:string, stockPerUnit?:number, stockMap?:[{itemId,qty,unit}]
+     }
    Extras:
    - /extras/sauces => { items: [{name, price}] }
    - /extras/ingredients => { items: [{name, price}] }
@@ -134,7 +137,10 @@ export async function upsertProduct(prod){
     salsasSugeridas: Array.isArray(prod.salsasSugeridas) ? prod.salsasSugeridas : [],
     icon: prod.icon || '',
     hhEligible: prod.hhEligible!==false,
-    comboItems: Array.isArray(prod.comboItems) ? prod.comboItems : []
+    comboItems: Array.isArray(prod.comboItems) ? prod.comboItems : [],
+    stockItemId: prod.stockItemId || null,
+    stockPerUnit: (prod.stockPerUnit!=null) ? Number(prod.stockPerUnit) : null,
+    stockMap: Array.isArray(prod.stockMap) ? prod.stockMap : []
   };
   if (prod.id && String(prod.id||'').trim()){
     const id = String(prod.id).trim();
@@ -383,6 +389,14 @@ export async function recordPurchase({ itemId, qty, unitCost, supplierId=null, e
   await adjustStock(itemId, Number(qty||0), 'purchase', { supplierId, unitCost, channel, expiryDate });
 }
 
+/** Versión con proveedor + descuento y costo final calculado */
+export async function recordPurchasePro({ itemId, qty, unitCost, supplierId=null, discountPercent=0, expiryDate=null, channel=null }){
+  await ensureAnonAuth();
+  const priceAfterDiscount = Number(unitCost||0) * (1 - Math.max(0, Math.min(100, discountPercent))/100);
+  await recordPurchase({ itemId, qty, unitCost: priceAfterDiscount, supplierId, expiryDate, channel });
+  return { finalUnitCost: priceAfterDiscount };
+}
+
 /* --- Recipes & Production --- */
 export function subscribeRecipes(cb){
   const qy = query(collection(db,'recipes'), orderBy('name','asc'));
@@ -454,31 +468,83 @@ export async function getSupplierPrices(itemId){
   const snap = await getDocs(qy);
   return snap.docs.map(d=>({ id:d.id, ...d.data() })).sort((a,b)=> a.price - b.price);
 }
+/** Mejor oferta (menor precio) para un ítem de inventario */
+export async function getBestSupplierOffer(itemId){
+  const rows = await getSupplierPrices(itemId);
+  return rows.length ? rows[0] : null;
+}
 
 /* =============================================================================
    UTILIDADES DE INVENTARIO
    ========================================================================== */
 function addStockFlags(it){
-  const now = new Date();
   const flags = { low:false, critical:false, ok:true, expired:false, expiring:false };
   if (it.min!=null && it.currentStock<=it.min){ flags.low = true; flags.ok=false; }
   if (it.min!=null && it.currentStock<=Math.max(0, it.min*0.5)){ flags.critical = true; flags.low=true; flags.ok=false; }
-  if (it.perish && it.expiryDays){
-    // Aquí podrías marcar expiring/expired si manejas fechas por lote.
-  }
+  // (Si manejas expiry por lote, puedes calcular expiring/expired)
   return { ...it, flags };
 }
 
+/** Snapshot simple del inventario para front no-admin */
+export async function getInventorySnapshot(){
+  const snap = await getDocs(collection(db,'inventory'));
+  const rows = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+  return rows.reduce((map, it)=>{ map[it.id]=it; return map; }, {});
+}
+
+/** Disponibilidad estimada para un producto (si usa stockItemId) */
+export async function getProductAvailableUnits(product){
+  if (!product?.stockItemId) return { type:'infinite', units: Infinity };
+  try{
+    const inv = await getDoc(doc(db,'inventory', product.stockItemId));
+    if (!inv.exists()) return { type:'none', units: 0 };
+    const it = inv.data();
+    const per = Number(product.stockPerUnit ?? 1) || 1;
+    const units = Math.floor(Number(it.currentStock||0) / per);
+    return { type:'finite', units };
+  }catch(e){
+    console.warn('[getProductAvailableUnits]', e);
+    return { type:'none', units: 0 };
+  }
+}
+
 /* =============================================================================
-   APLICAR INVENTARIO A UN PEDIDO (opcional)
-   - Descuenta vasitos por aderezo extra (si settings.app.sauceCupItemId)
-   - (Opcional) Podrías mapear ingredientes base por producto para descargo automático.
-   Llamar esto desde Cocina cuando pase a IN_PROGRESS o READY.
+   APLICAR INVENTARIO A UN PEDIDO
+   - Vasitos por aderezo extra (settings.app.sauceCupItemId)
+   - Descargo por producto (stockItemId/stockMap)
    ========================================================================== */
+async function applyStockForLine(line){
+  if (!line?.id) return;
+  try{
+    const prodSnap = await getDoc(doc(db,'products', line.id));
+    if (!prodSnap.exists()) return;
+    const prod = prodSnap.data() || {};
+    const qty = Number(line.qty||1);
+
+    // 1) Descuento simple por pieza
+    if (prod.stockItemId){
+      const per = Number(prod.stockPerUnit ?? 1);
+      if (per > 0){
+        await adjustStock(prod.stockItemId, -(per*qty), 'use', { reason:'product_sale', productId: line.id });
+      }
+    }
+    // 2) Descuento receta por pieza
+    if (Array.isArray(prod.stockMap) && prod.stockMap.length){
+      for (const ing of prod.stockMap){
+        const dQty = Number(ing.qty||0) * qty;
+        if (ing.itemId && dQty>0){
+          await adjustStock(ing.itemId, -dQty, 'use', { reason:'product_recipe_sale', productId: line.id });
+        }
+      }
+    }
+  }catch(e){ console.warn('[applyStockForLine]', e); }
+}
+
 export async function applyInventoryForOrder(order){
   await ensureAnonAuth();
   if(!order) return;
-  // 1) Vasitos por aderezos extra (no cuenta cambios sin costo)
+
+  // 0) Vasitos por aderezos extra
   try{
     const appCfgDoc = await getDoc(doc(db, "settings", "app"));
     const cfg = appCfgDoc.exists()? appCfgDoc.data() : {};
@@ -495,7 +561,58 @@ export async function applyInventoryForOrder(order){
     }
   }catch(e){ console.warn('[applyInventoryForOrder] cups', e); }
 
-  // 2) (Opcional) Descuento por ingredientes base / carne / pan
+  // 1) Descargo por producto
+  try{
+    for (const l of (order.items||[])){
+      await applyStockForLine(l);
+    }
+  }catch(e){ console.warn('[applyInventoryForOrder] product stock', e); }
+}
+
+/* =============================================================================
+   PAR (sugerencia por día/hora) – cálculo simple
+   ========================================================================== */
+export async function computeParSuggestion({ productId, hourBucket=2, weeksBack=8, date=new Date() }){
+  await ensureAnonAuth();
+
+  const to = new Date(date);
+  const from = new Date(date); from.setDate(from.getDate() - weeksBack*7);
+  const rows = await getOrdersRange({ from, to, includeArchive: true });
+
+  const day = date.getDay();
+  const bucketOf = (dt)=>{
+    const h = (dt?.toDate ? dt.toDate() : (dt instanceof Date ? dt : new Date(dt))).getHours();
+    return Math.floor(h / hourBucket);
+  };
+  const nowBucket = bucketOf(date);
+
+  let totalQty = 0, n = 0;
+  for (const o of rows){
+    const t = o.createdAt?.toDate ? o.createdAt.toDate() : new Date(o.createdAt);
+    if (t.getDay() !== day) continue;
+    if (bucketOf(t) !== nowBucket) continue;
+    for (const it of (o.items||[])){
+      if (it.id === productId) { totalQty += Number(it.qty||1); n++; }
+    }
+  }
+  const avg = n ? (totalQty / n) : 0;
+
+  const ymd = toISOStringYMD(date);
+  const isSpecial = await isSpecialDay(ymd);
+  const factor = isSpecial ? 1.2 : 1.0;
+
+  return Math.ceil(avg * factor);
+}
+function toISOStringYMD(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${da}`;
+}
+/** Marca/consulta día especial en colección 'special_days' ({ id:YYYY-MM-DD, reason }) */
+export async function isSpecialDay(ymd){
+  try{
+    const ref = await getDoc(doc(db,'special_days', ymd));
+    return ref.exists();
+  }catch{ return false; }
 }
 
 /* =============================================================================
