@@ -366,23 +366,50 @@ function openCartModal(){
 
   refreshCartTotals();
 
-  body.addEventListener('click', (e)=>{
-    const btn = e.target.closest('button[data-a]'); if(!btn) return;
-    const card = btn.closest('[data-i]'); const i = parseInt(card.dataset.i,10);
-    const line = state.cart[i]; if(!line) return;
+  // Handler de clicks persistente (no "once")
+  body.onclick = (e)=>{
+    const btn = e.target.closest('button[data-a]');
+    if (!btn) return;
 
-    if(btn.dataset.a==='remove'){ state.cart.splice(i,1); }
-    if(btn.dataset.a==='more'){ line.qty = Math.min(99, (line.qty||1)+1); recomputeLine(line); }
-    if(btn.dataset.a==='less'){ line.qty = Math.max(1, (line.qty||1)-1); recomputeLine(line); }
-    if(btn.dataset.a==='edit'){
+    const card = btn.closest('[data-i]');
+    if (!card) return;
+    const i = parseInt(card.dataset.i, 10);
+    const line = state.cart[i];
+    if (!line) return;
+
+    const act = btn.dataset.a;
+
+    if (act === 'remove') {
+      state.cart.splice(i, 1);
+      updateCartBar();
+      openCartModal();
+      return;
+    }
+
+    if (act === 'more') {
+      line.qty = Math.min(99, (line.qty || 1) + 1);
+      recomputeLine(line);
+      updateCartBar();
+      openCartModal();
+      return;
+    }
+
+    if (act === 'less') {
+      line.qty = Math.max(1, (line.qty || 1) - 1);
+      recomputeLine(line);
+      updateCartBar();
+      openCartModal();
+      return;
+    }
+
+    if (act === 'edit') {
       const item = findItemById(line.id);
       const base = baseOfItem(item);
       document.getElementById('cartModal').style.display='none';
-      openItemModal(item, base, i); return;
+      openItemModal(item, base, i);
+      return;
     }
-
-    openCartModal(); updateCartBar();
-  }, { once:true });
+  };
 
   document.getElementById('cartConfirm').onclick = async ()=>{
     const name = (document.getElementById('cartName').value||'').trim();
@@ -435,6 +462,8 @@ function recomputeLine(line){
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
 
   // costo ingredientes por nombre
+  theExtras:
+  null;
   const extrasIngr = normalizeExtraIngredients();
   const priceByName = new Map(extrasIngr.map(x=>[x.name, x.price]));
   const costI = (line.extras?.ingredients||[]).reduce((sum, name)=>{
