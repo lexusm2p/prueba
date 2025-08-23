@@ -141,73 +141,60 @@
       <div class="muted small">WIP — podrás seleccionar productos/combos con descuento exclusivo durante HH.</div>
     </section>
 
-    <!-- RECETARIO -->
-    <section class="panel" id="panel-recetas">
-      <h3>Recetario de aderezos</h3>
-      <div class="rc-grid">
-        <div class="field">
-          <label>Receta</label>
-          <select id="rcRecipe"></select>
-          <div class="muted sm">* Las recetas vienen de la colección <b>recipes</b>.</div>
-        </div>
-        <div class="field">
-          <label>Porción</label>
-          <div class="row" style="gap:6px; flex-wrap:wrap">
-            <button class="btn ghost small" data-portion="100">100 ml</button>
-            <button class="btn ghost small" data-portion="200">200 ml</button>
-            <button class="btn ghost small" data-portion="500">500 ml</button>
-            <input id="rcCustom" type="number" min="1" step="1" placeholder="ml (custom)" style="width:140px">
-            <button class="btn small" id="rcApply">Aplicar</button>
-          </div>
-        </div>
-        <div class="field">
-          <label>Salida (ml)</label>
-          <input id="rcOut" type="number" min="1" step="1" value="100">
-          <div class="muted sm">Rinde del lote a preparar.</div>
+  <!-- RECETARIO (LISTADO) -->
+<section class="panel" id="panel-recetas">
+  <h3>Recetario de aderezos</h3>
+
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:8px">
+    <div class="field">
+      <label>Buscar</label>
+      <input id="rcpSearch" type="text" placeholder="nombre o ingrediente…">
+    </div>
+    <div class="field">
+      <label>Porción rápida</label>
+      <select id="rcpQuickPort">
+        <option value="500">500 ml</option>
+        <option value="200">200 ml</option>
+        <option value="100" selected>100 ml</option>
+      </select>
+    </div>
+  </div>
+
+  <table class="k-table" id="tblRecipes">
+    <thead>
+      <tr>
+        <th>Receta</th>
+        <th>Rinde base</th>
+        <th>Producto terminado</th>
+        <th>#Ingr.</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<!-- Modal Receta (ver + escalar + preparar) -->
+<div class="modal small" id="rcpModal" role="dialog" aria-modal="true" aria-labelledby="rcpTitle" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="rcpTitle">Receta</div>
+      <button class="btn ghost small" id="rcpClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body" id="rcpBody"><!-- se llena por JS --></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="muted small mono" id="rcpHint"></div>
+        <div class="row" style="gap:8px">
+          <button class="btn ghost" id="rcpScale500">500 ml</button>
+          <button class="btn ghost" id="rcpScale200">200 ml</button>
+          <button class="btn ghost" id="rcpScale100">100 ml</button>
+          <button class="btn" id="rcpPrepare">Preparar</button>
         </div>
       </div>
-
-      <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px; margin-top:12px">
-        <div>
-          <h4>Ingredientes escalados</h4>
-          <div class="rc-ingredients">
-            <table class="k-table" id="rcIngr"><thead><tr><th>Ingrediente</th><th>Cant.</th><th>UM</th></tr></thead><tbody></tbody></table>
-          </div>
-        </div>
-        <div>
-          <h4>Producción</h4>
-          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
-            <div class="field">
-              <label>Producto terminado (inventario)</label>
-              <input id="rcOutputName" type="text" disabled>
-              <div class="muted sm">ID: <span id="rcOutputId">—</span></div>
-            </div>
-            <div class="field">
-              <label>Envasado en vaso 2oz (opcional)</label>
-              <div class="row" style="gap:8px">
-                <input id="rcCupCount" type="number" min="0" step="1" value="0" style="width:120px">
-                <span class="muted sm">* Descuenta vasitos del inventario si está configurado.</span>
-              </div>
-            </div>
-            <div class="field">
-              <label>Guardar para almacenamiento</label>
-              <div class="row" style="gap:8px">
-                <select id="rcStore"><option value="no">No</option><option value="si">Sí</option></select>
-                <input id="rcStoreQty" type="number" min="0" step="1" value="0" style="width:120px">
-              </div>
-              <div class="muted sm">Si es “Sí”, guarda meta con cantidad almacenada (ml).</div>
-            </div>
-            <div class="field" style="align-self:end">
-              <button class="btn" id="rcMake">Preparar lote</button>
-            </div>
-          </div>
-          <div class="muted sm" style="margin-top:6px">
-            Al preparar: descuenta ingredientes, abona salida en inventario, registra fecha/hora; si indicas vasos 2oz, descuenta vasitos; si es para almacenar, registra la cantidad.
-          </div>
-        </div>
-      </div>
-    </section>
-
+    </div>
+  </div>
+</div>
   </div>
 </main>
 
