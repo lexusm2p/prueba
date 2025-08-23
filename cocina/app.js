@@ -16,14 +16,14 @@ let CURRENT_LIST = [];
 // IDs de órdenes ya "tomadas" en esta sesión (para ocultar el botón sin esperar snapshot)
 const LOCALLY_TAKEN = new Set();
 
-subscribeOrders((orders)=>{
-  CURRENT_LIST = orders || [];
+subscribeOrders((orders = [])=>{
+  CURRENT_LIST = Array.isArray(orders) ? orders : [];
   render(CURRENT_LIST);
 });
 
 function render(list){
-  const by = list.reduce((acc,o)=>{
-    const s = o.status || Status.PENDING;
+  const by = (list||[]).reduce((acc,o)=>{
+    const s = o?.status || Status.PENDING;
     (acc[s] ||= []).push(o);
     return acc;
   },{});
@@ -34,10 +34,10 @@ function render(list){
 
 function setCol(id, arr){
   const el = document.getElementById(id);
-  el.innerHTML = arr.map(renderCard).join('') || '<div class="empty">—</div>';
+  el.innerHTML = (arr||[]).map(renderCard).join('') || '<div class="empty">—</div>';
 }
 
-function renderCard(o){
+function renderCard(o={}){
   const items = Array.isArray(o.items) && o.items.length
     ? o.items
     : (o.item ? [{
@@ -76,7 +76,7 @@ function renderCard(o){
       </div>`;
   }).join('');
 
-  // Lógica de acciones por estado + protección si ya fue tomada localmente
+  // Acciones por estado + protección si ya fue tomada localmente
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
@@ -84,7 +84,7 @@ function renderCard(o){
     `<button class="btn warn" data-a="deliver">Entregar</button>`,
     (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
       ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
-    // Eliminar (cancelar y archivar)
+    // Cancelar (marca CANCELLED y archiva)
     (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
       ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
@@ -110,19 +110,15 @@ document.addEventListener('click', async (e)=>{
     if (a==='take'){
       // Marca local para que no vuelva a renderizar "Tomar" aunque todavía no llegue el snapshot
       LOCALLY_TAKEN.add(id);
-      // Feedback inmediato en UI
       btn.textContent = 'Tomando…';
       // Aplica inventario (vasitos por aderezos extra, etc.)
       const order = CURRENT_LIST.find(x=>x.id===id);
       if(order){
-        // Asegura que venga el id
-        await applyInventoryForOrder({ ...order, id });
+        await applyInventoryForOrder({ ...order, id }); // asegura incluir id
       }
-      // Cambia estado
       await setStatus(id, Status.IN_PROGRESS);
       beep(); toast('En preparación');
-      // Rerender local rápido
-      render(CURRENT_LIST);
+      render(CURRENT_LIST); // rerender rápido
       return;
     }
 
@@ -154,7 +150,7 @@ document.addEventListener('click', async (e)=>{
       const ok = confirm('¿Eliminar este pedido? Se archivará como CANCELLED.');
       if (!ok) return;
       await updateOrder(id, { status: Status.CANCELLED });
-      await archiveDelivered(id); // lo mueve a orders_archive
+      await archiveDelivered(id); // mover a orders_archive
       beep(); toast('Pedido eliminado');
       card.remove();
       return;
@@ -163,7 +159,6 @@ document.addEventListener('click', async (e)=>{
   }catch(err){
     console.error(err);
     toast('Error al actualizar');
-    // si falló "take", quita la marca local para poder reintentar
     if(a==='take'){ LOCALLY_TAKEN.delete(id); }
   }finally{
     btn.disabled = false;
