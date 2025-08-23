@@ -6,7 +6,6 @@
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Kiosko — Seven de Burgers</title>
 
-  <!-- Estilos: barra de carrito + laterales -->
   <style>
     .cartbar {
       position: fixed; left: 50%; transform: translateX(-50%);
@@ -20,7 +19,6 @@
     .cartbar .total { color: var(--accent); font-weight: 900; }
     @media (max-width:520px){ .cartbar{ width: calc(100% - 24px); } }
 
-    /* Laterales (solo desktop ≥1280px) */
     .side{
       position:fixed; top:88px; bottom:16px; width:280px; z-index:20;
       display:flex; align-items:flex-start; pointer-events:auto;
@@ -64,7 +62,6 @@
 
 <body class="has-sidebars">
 <header class="header">
-  <!-- 7 taps → PIN -->
   <div class="brand" id="brandTap">
     <span class="dot"></span>
     <div>
@@ -79,7 +76,6 @@
   </nav>
 </header>
 
-<!-- LATERAL IZQUIERDO -->
 <aside class="side side-left" id="sideLeft" aria-label="Branding y ambiente">
   <div class="s-card">
     <div class="s-title">🎮 Seven de Burgers</div>
@@ -100,7 +96,6 @@
   </div>
 </aside>
 
-<!-- LATERAL DERECHO -->
 <aside class="side side-right" id="sideRight" aria-label="Promos y sugerencias">
   <div class="s-card">
     <div class="s-title">Sugerencias</div>
@@ -110,11 +105,9 @@
     <div class="s-title">Promos</div>
     <ul class="s-list" id="promoList"></ul>
 
-    <!-- Si quieres mostrar los últimos “Listos”, descomenta
     <div class="s-divider"></div>
     <div class="s-title">Listos 🛎️</div>
     <ul class="s-list" id="readyFeed"></ul>
-    -->
   </div>
 </aside>
 
@@ -130,7 +123,6 @@
   <div class="grid" id="cards"></div>
 </main>
 
-<!-- Modal de producto -->
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
   <div class="modal-card">
     <div class="modal-head">
@@ -147,7 +139,6 @@
   </div>
 </div>
 
-<!-- Modal Carrito (el campo de teléfono se inserta desde app.js si es Pickup) -->
 <div class="modal" id="cartModal" role="dialog" aria-modal="true" aria-labelledby="cartTitle" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
@@ -164,14 +155,12 @@
   </div>
 </div>
 
-<!-- Barra flotante del carrito -->
 <div id="cartBar" class="cartbar" role="button" aria-label="Revisar pedido">
   <span class="pill" id="cartCount">0 productos</span>
   <span class="total" id="cartBarTotal">$0</span>
   <button class="btn small" id="openCart">Revisar</button>
 </div>
 
-<!-- Modal PIN (roles) -->
 <div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
