@@ -1,86 +1,149 @@
-{
-  "burgers": [
-    {
-      "id": "starter",
-      "name": "Starter Burger",
-      "price": 47,
-      "category": "big",
-      "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
-      "suggested": "Mostaza dulce"
-    },
-    {
-      "id": "koopa",
-      "name": "Koopa Crunch",
-      "price": 57,
-      "category": "big",
-      "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso blanco","Piña","Tocino","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
-      "suggested": "Chimichurri"
-    },
-    {
-      "id": "fatality",
-      "name": "Fatality Flame",
-      "price": 67,
-      "category": "big",
-      "mini": false,
-      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Tocino","Salsa habanero","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
-      "suggested": "Habanero"
-    },
-    {
-      "id": "mega",
-      "name": "Mega Byte",
-      "price": 77,
-      "category": "big",
-      "mini": false,
-      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Queso blanco","Tocino","Salchicha","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup"],
-      "suggested": "Cheddar"
-    },
-    {
-      "id": "hadouken",
-      "name": "Hadouken",
-      "price": 77,
-      "category": "big",
-      "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso blanco","Queso amarillo","Salchicha","Aderezo chipotle","Lechuga","Jitomate","Cebolla"],
-      "suggested": "Chipotle"
-    },
-    {
-      "id": "nintendo",
-      "name": "Nintendo Nostalgia",
-      "price": 67,
-      "category": "big",
-      "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso blanco","Piña","Jamón","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
-      "suggested": "Mostaza dulce"
-    },
-    {
-      "id": "finalboss",
-      "name": "Final Boss Burger",
-      "price": 97,
-      "category": "big",
-      "mini": false,
-      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Queso blanco","Queso amarillo","Tocino","Jamón","Salchicha","Piña","Salsa habanero","Aderezo chipotle"],
-      "suggested": "Chipotle"
-    }
-  ],
-  "minis": [
-    { "id": "starter_m",  "name": "Starter Mini",   "price": 27, "category": "mini", "mini": true, "baseOf": "starter" },
-    { "id": "koopa_m",    "name": "Koopa Mini",     "price": 33, "category": "mini", "mini": true, "baseOf": "koopa" },
-    { "id": "fatality_m", "name": "Fatality Mini",  "price": 37, "category": "mini", "mini": true, "baseOf": "fatality" },
-    { "id": "mega_m",     "name": "Mega Mini",      "price": 42, "category": "mini", "mini": true, "baseOf": "mega" },
-    { "id": "hadouken_m", "name": "Hadouken Mini",  "price": 37, "category": "mini", "mini": true, "baseOf": "hadouken" },
-    { "id": "nintendo_m", "name": "Nintendo Mini",  "price": 37, "category": "mini", "mini": true, "baseOf": "nintendo" },
-    { "id": "final_m",    "name": "Final Boss Mini","price": 47, "category": "mini", "mini": true, "baseOf": "finalboss" }
-  ],
-  "extras": {
-    "sauces": [
-      "Aderezo Cheddar","Aderezo Chipotle","Aderezo Habanero","Salsa Chimichurri",
-      "Mostaza dulce","Jalapeño rostizado","Curry suave","Salsa Secreta Seven"
-    ],
-    "saucePrice": 5,
-    "ingredients": ["Tocino","Piña","Jamón","Salchicha","Cebolla caramelizada","Carne extra 85g"],
-    "ingredientPrice": 5,
-    "dlcCarneMini": 12
+export const MENU = [
+  // --- Hamburguesas Mini ---
+  {
+    id: "mini-starter",
+    nombre: "Mini Starter",
+    tipo: "mini",
+    precio: 37,
+    ingredientes: ["Pan", "Carne 50g", "Queso amarillo", "Lechuga", "Jitomate", "Cebolla"],
+    salsaSugerida: "Chipotle"
+  },
+  {
+    id: "mini-koopa",
+    nombre: "Mini Koopa Crunch",
+    tipo: "mini",
+    precio: 47,
+    ingredientes: ["Pan", "Carne 50g", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate"],
+    salsaSugerida: "Chimichurri"
+  },
+  {
+    id: "mini-fatality",
+    nombre: "Mini Fatality Flame",
+    tipo: "mini",
+    precio: 57,
+    ingredientes: ["Pan", "Carne 50g", "Queso amarillo", "Tocino", "Jalapeño", "Cebolla"],
+    salsaSugerida: "Habanero"
+  },
+  {
+    id: "mini-zelda",
+    nombre: "Mini Triforce Zelda",
+    tipo: "mini",
+    precio: 47,
+    ingredientes: ["Pan", "Carne 50g", "Queso blanco", "Jamón", "Lechuga", "Jitomate"],
+    salsaSugerida: "Curry Cremoso"
+  },
+  {
+    id: "mini-sonic",
+    nombre: "Mini Sonic Boom",
+    tipo: "mini",
+    precio: 52,
+    ingredientes: ["Pan", "Carne 50g", "Queso cheddar", "Salchicha", "Cebolla", "Pepinillos"],
+    salsaSugerida: "Mostaza dulce"
+  },
+  {
+    id: "mini-kombat",
+    nombre: "Mini Kombat Boss",
+    tipo: "mini",
+    precio: 62,
+    ingredientes: ["Pan", "Carne 50g", "Queso amarillo", "Queso blanco", "Tocino", "Piña"],
+    salsaSugerida: "Secreta Seven"
+  },
+  {
+    id: "mini-mk64",
+    nombre: "Mini MK64 Deluxe",
+    tipo: "mini",
+    precio: 67,
+    ingredientes: ["Pan", "Carne 50g", "Queso cheddar", "Queso blanco", "Jamón", "Salchicha", "Cebolla"],
+    salsaSugerida: "Jalapeño rostizado"
+  },
+
+  // --- Hamburguesas Grandes ---
+  {
+    id: "starter",
+    nombre: "Starter Burger",
+    tipo: "grande",
+    precio: 47,
+    ingredientes: ["Pan", "Carne 85g", "Queso amarillo", "Lechuga", "Jitomate", "Cebolla"],
+    salsaSugerida: "Chipotle"
+  },
+  {
+    id: "koopa",
+    nombre: "Koopa Crunch",
+    tipo: "grande",
+    precio: 57,
+    ingredientes: ["Pan", "Carne 85g", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate"],
+    salsaSugerida: "Chimichurri"
+  },
+  {
+    id: "fatality",
+    nombre: "Fatality Flame",
+    tipo: "grande",
+    precio: 67,
+    ingredientes: ["Pan", "Carne 85g", "Queso amarillo", "Tocino", "Jalapeño", "Cebolla"],
+    salsaSugerida: "Habanero"
+  },
+  {
+    id: "zelda",
+    nombre: "Triforce Zelda",
+    tipo: "grande",
+    precio: 57,
+    ingredientes: ["Pan", "Carne 85g", "Queso blanco", "Jamón", "Lechuga", "Jitomate"],
+    salsaSugerida: "Curry Cremoso"
+  },
+  {
+    id: "sonic",
+    nombre: "Sonic Boom",
+    tipo: "grande",
+    precio: 62,
+    ingredientes: ["Pan", "Carne 85g", "Queso cheddar", "Salchicha", "Cebolla", "Pepinillos"],
+    salsaSugerida: "Mostaza dulce"
+  },
+  {
+    id: "kombat",
+    nombre: "Kombat Boss",
+    tipo: "grande",
+    precio: 72,
+    ingredientes: ["Pan", "Carne 85g", "Queso amarillo", "Queso blanco", "Tocino", "Piña"],
+    salsaSugerida: "Secreta Seven"
+  },
+  {
+    id: "mk64",
+    nombre: "MK64 Deluxe",
+    tipo: "grande",
+    precio: 77,
+    ingredientes: ["Pan", "Carne 85g", "Queso cheddar", "Queso blanco", "Jamón", "Salchicha", "Cebolla"],
+    salsaSugerida: "Jalapeño rostizado"
   }
-}
+];
+
+// --- Opciones globales ---
+MENU.salsas = [
+  "Chipotle",
+  "Chimichurri",
+  "Habanero",
+  "Curry Cremoso",
+  "Mostaza dulce",
+  "Jalapeño rostizado",
+  "Secreta Seven"
+];
+
+MENU.aderezos = [
+  "Cheddar",
+  "Chimichurri",
+  "Chipotle",
+  "Mostaza dulce",
+  "Curry Cremoso",
+  "Jalapeño rostizado",
+  "Ajo Habanero",
+  "Salsa Secreta Seven"
+];
+
+// --- Costos y precios oficiales de extras ---
+MENU.extras = {
+  piña: { precio: 5 },
+  tocino: { precio: 6 },
+  cebollaEspecial: { precio: 5 },
+  salchicha: { precio: 12 },
+  carneExtra: { precio: 22 },
+  aderezos: { precio: 5 } // todos iguales por ahora
+};
