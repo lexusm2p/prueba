@@ -9,6 +9,7 @@ const Status = {
   PENDING: 'PENDING',
   IN_PROGRESS: 'IN_PROGRESS',
   READY: 'READY',
+  DELIVERED: 'DELIVERED',   // <- nuevo: entregado, pendiente de cobro
   CANCELLED: 'CANCELLED'
 };
 
@@ -30,11 +31,29 @@ function render(list){
   setCol('col-pending',  by.PENDING||[]);
   setCol('col-progress', by.IN_PROGRESS||[]);
   setCol('col-ready',    by.READY||[]);
+  // Por cobrar: entregados y no pagados
+  const bill = (by.DELIVERED||[]).filter(o => !o.paid);
+  setCol('col-bill',     bill);
 }
 
 function setCol(id, arr){
   const el = document.getElementById(id);
   el.innerHTML = (arr||[]).map(renderCard).join('') || '<div class="empty">—</div>';
+}
+
+function calcSubtotal(o={}){
+  if (typeof o.subtotal === 'number') return Number(o.subtotal)||0;
+  const items = Array.isArray(o.items) ? o.items : [];
+  return items.reduce((s,it)=>{
+    const up = Number(it.unitPrice||0);
+    const q  = Number(it.qty||1);
+    return s + up*q;
+  },0);
+}
+function calcTotal(o={}){
+  const sub = calcSubtotal(o);
+  const tip = Number(o.tip||0);
+  return sub + tip; // comisión no se cobra al cliente
 }
 
 function renderCard(o={}){
@@ -56,6 +75,9 @@ function renderCard(o={}){
   } else if (o.orderType) {
     meta = escapeHtml(o.orderType);
   }
+
+  const total = calcTotal(o);
+  const phoneTxt = o.phone ? ` · Tel: <b>${escapeHtml(String(o.phone))}</b>` : '';
 
   const itemsHtml = items.map(it=>{
     const ingr = (it.baseIngredients||[]).map(i=>`<div class="k-badge">${escapeHtml(i)}</div>`).join('');
@@ -81,17 +103,24 @@ function renderCard(o={}){
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
     (o.status === Status.IN_PROGRESS) ? `<button class="btn ok" data-a="ready">Listo</button>` : '',
-    `<button class="btn warn" data-a="deliver">Entregar</button>`,
-    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
+    // Entregar: pasa a DELIVERED (no archiva)
+    (o.status === Status.READY) ? `<button class="btn ok" data-a="deliver">Entregar</button>` : '',
+    // Cobrar: sólo si está entregada y no pagada
+    (o.status === Status.DELIVERED && !o.paid) ? `<button class="btn" data-a="charge">Cobrar</button>` : '',
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid))
       ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
-    // Cancelar (marca CANCELLED y archiva con motivo)
-    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS)
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid))
       ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
 
   return `
 <article class="k-card" data-id="${o.id}">
-  <div class="muted small">Cliente: <b>${escapeHtml(o.customer||'-')}</b> · ${meta}</div>
+  <div class="muted small">
+    Cliente: <b>${escapeHtml(o.customer||'-')}</b>${phoneTxt} · ${meta}
+  </div>
+  <div class="muted small mono" style="margin-top:4px">
+    Total por cobrar: <b>$${Number(total).toFixed(0)}</b> ${o.paid ? '· <span class="k-badge ok">Pagado</span>' : ''}
+  </div>
   ${itemsHtml}
   ${o.notes ? `<div class="muted small"><b>Notas generales:</b> ${escapeHtml(o.notes)}</div>` : ''}
   <div class="k-actions" style="margin-top:8px">${actions}</div>
@@ -128,9 +157,28 @@ document.addEventListener('click', async (e)=>{
       return;
     }
 
+    // Ahora "Entregar" NO archiva. Pasa a DELIVERED (Por cobrar)
     if (a==='deliver'){
-      await archiveDelivered(id);
-      beep(); toast('Entregado ✔️');
+      await setStatus(id, Status.DELIVERED);
+      beep(); toast('Entregado ✔️ · por cobrar');
+      return;
+    }
+
+    // COBRAR: marca pagado y archiva
+    if (a==='charge'){
+      const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
+      const total = calcTotal(order);
+      const method = prompt(`Cobrar $${Number(total).toFixed(0)}\nMétodo (efectivo / tarjeta / transferencia):`, 'efectivo');
+      if (method === null) { btn.disabled=false; return; }
+      const payMethod = String(method||'efectivo').toLowerCase();
+      await updateOrder(id, {
+        paid: true,
+        paidAt: new Date(),
+        payMethod,
+        totalCharged: Number(total)
+      });
+      await archiveDelivered(id); // mueve a archivo
+      beep(); toast('Cobro registrado y pedido archivado');
       card.remove();
       return;
     }
