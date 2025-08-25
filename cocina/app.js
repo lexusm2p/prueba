@@ -9,7 +9,7 @@ const Status = {
   PENDING: 'PENDING',
   IN_PROGRESS: 'IN_PROGRESS',
   READY: 'READY',
-  DELIVERED: 'DELIVERED',   // <- nuevo: entregado, pendiente de cobro
+  DELIVERED: 'DELIVERED',   // entregado, pendiente de cobro
   CANCELLED: 'CANCELLED'
 };
 
@@ -17,17 +17,27 @@ let CURRENT_LIST = [];
 // IDs de órdenes ya "tomadas" en esta sesión (para ocultar el botón sin esperar snapshot)
 const LOCALLY_TAKEN = new Set();
 
+/* ================== Data stream ================== */
 subscribeOrders((orders = [])=>{
-  CURRENT_LIST = Array.isArray(orders) ? orders : [];
+  // Deduplicar por id por si el snapshot trae duplicados
+  const uniq = new Map();
+  for (const o of (Array.isArray(orders) ? orders : [])) {
+    if (!o?.id) continue;
+    uniq.set(o.id, o); // la última gana
+  }
+  CURRENT_LIST = Array.from(uniq.values());
   render(CURRENT_LIST);
 });
 
+/* ================== Render ================== */
 function render(list){
+  // Agrupar por estado
   const by = (list||[]).reduce((acc,o)=>{
     const s = o?.status || Status.PENDING;
     (acc[s] ||= []).push(o);
     return acc;
   },{});
+
   setCol('col-pending',  by.PENDING||[]);
   setCol('col-progress', by.IN_PROGRESS||[]);
   setCol('col-ready',    by.READY||[]);
@@ -38,9 +48,11 @@ function render(list){
 
 function setCol(id, arr){
   const el = document.getElementById(id);
+  if (!el) return; // defensa por si el contenedor aún no existe
   el.innerHTML = (arr||[]).map(renderCard).join('') || '<div class="empty">—</div>';
 }
 
+/* ================== Totales ================== */
 function calcSubtotal(o={}){
   if (typeof o.subtotal === 'number') return Number(o.subtotal)||0;
   const items = Array.isArray(o.items) ? o.items : [];
@@ -56,6 +68,7 @@ function calcTotal(o={}){
   return sub + tip; // comisión no se cobra al cliente
 }
 
+/* ================== Card ================== */
 function renderCard(o={}){
   const items = Array.isArray(o.items) && o.items.length
     ? o.items
@@ -127,6 +140,7 @@ function renderCard(o={}){
 </article>`;
 }
 
+/* ================== Actions ================== */
 document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-a]'); if(!btn) return;
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
@@ -157,7 +171,7 @@ document.addEventListener('click', async (e)=>{
       return;
     }
 
-    // Ahora "Entregar" NO archiva. Pasa a DELIVERED (Por cobrar)
+    // "Entregar" NO archiva. Pasa a DELIVERED (Por cobrar)
     if (a==='deliver'){
       await setStatus(id, Status.DELIVERED);
       beep(); toast('Entregado ✔️ · por cobrar');
@@ -224,6 +238,7 @@ document.addEventListener('click', async (e)=>{
   }
 });
 
+/* ================== Utils ================== */
 function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
