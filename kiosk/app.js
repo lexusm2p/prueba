@@ -1,6 +1,7 @@
 // /kiosk/app.js
 // Kiosko con carrito, edición de líneas, meta de pedido y laterales (incluye feed de “Listos”).
 // + Logro de 3 minis (sonido/aviso), aderezo sorpresa gratis, método de pago y mensaje final.
+// + Happy Hour aplicado SOLO al precio base del producto (no a extras ni DLC) y resumen por pedido.
 
 import { beep, toast } from '../shared/notify.js';
 import {
@@ -129,6 +130,24 @@ function normalizeExtraIngredients(){
     if (typeof x === 'string') return { id: slug(x), name: x, price: defaultPrice };
     return { id: x.id || slug(x.name), name: x.name, price: Number(x.price ?? defaultPrice) };
   });
+}
+
+/* === Happy Hour helpers (descuento solo al precio base del producto) === */
+function hhInfo(){
+  const hh = state.menu?.happyHour || {};
+  const enabled = !!hh.enabled;
+  const pct = Math.max(0, Math.min(100, Number(hh.discountPercent||0))) / 100;
+  const eligibleOnly = hh.applyEligibleOnly !== false; // default true
+  return { enabled, pct, eligibleOnly };
+}
+function hhDiscountPerUnit(item){
+  const { enabled, pct, eligibleOnly } = hhInfo();
+  if (!enabled || pct<=0) return 0;
+  // si eligibleOnly==true, respeta flag de producto (default true si no definido)
+  const isEligible = eligibleOnly ? (item?.hhEligible !== false) : true;
+  if (!isEligible) return 0;
+  const unit = Number(item?.price || 0);
+  return unit * pct; // SOLO al precio base
 }
 
 /* === Cómputos de carrito === */
@@ -265,11 +284,18 @@ function openItemModal(item, base, existingIndex=null){
     });
     const costS = saucesChecked * SP;
     const costI = ingrChecked.reduce((a,n)=>a+Number(n||0),0);
+
     const dlcChk  = item.mini && body.querySelector('#dlcCarne')?.checked;
     const extraDlc = dlcChk ? DLC : 0;
-    const subtotal = (Number(item.price||0) + extraDlc)*qty + (costS + costI)*qty;
+
+    // === HH: descuento SOLO sobre el precio base del producto ===
+    const hhDiscPerUnit = hhDiscountPerUnit(item); // en $/unidad
+    const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
+
+    const subtotal = (unitBaseAfterHH + extraDlc)*qty + (costS + costI)*qty;
     if(totalEl) totalEl.textContent = money(subtotal);
-    return { qty, subtotal, dlcChk };
+
+    return { qty, subtotal, dlcChk, hhDiscTotal: hhDiscPerUnit * qty };
   };
   inputs.forEach(i=> i.addEventListener('change', calc)); calc();
 
@@ -279,7 +305,7 @@ function openItemModal(item, base, existingIndex=null){
       if(!name){ alert('Por favor escribe tu nombre.'); return; }
       state.customerName = name;
 
-      const { qty, subtotal, dlcChk } = calc();
+      const { qty, subtotal, dlcChk, hhDiscTotal } = calc();
       const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
       const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? extrasIngr[i].name: null).filter(Boolean);
       const salsaSwap = (document.getElementById('swapSauce')?.value || '') || null;
@@ -303,7 +329,9 @@ function openItemModal(item, base, existingIndex=null){
         salsaDefault: base?.salsaDefault || base?.suggested || null,
         salsaCambiada: salsaSwap,
         extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk, surpriseSauce: surpriseSauce || null },
-        notes, lineTotal: subtotal
+        notes,
+        lineTotal: subtotal,
+        hhDisc: hhDiscTotal // para reporte por línea
       };
 
       if (existingIndex!==null){ state.cart[existingIndex] = newLine; toast('Línea actualizada'); }
@@ -532,7 +560,17 @@ function openCartModal(){
     }
 
     const generalNotes = (document.getElementById('cartNotes')?.value||'').trim();
+
+    // Subtotales + resumen de HH
     const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
+    const hhTotalDiscount = state.cart.reduce((a,l)=> a + (Number(l.hhDisc||0)), 0);
+    const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
+    const hhSummary = {
+      enabled: !!hh.enabled,
+      discountPercent: Number(hh.discountPercent||0),
+      applyEligibleOnly: hh.applyEligibleOnly!==false,
+      totalDiscount: Number(hhTotalDiscount||0)
+    };
 
     const order = {
       customer: state.customerName,
@@ -544,9 +582,11 @@ function openCartModal(){
         id:l.id, name:l.name, mini:l.mini, qty:l.qty, unitPrice:l.unitPrice,
         baseIngredients:l.baseIngredients, salsaDefault:l.salsaDefault,
         salsaCambiada:l.salsaCambiada, extras:l.extras, notes:l.notes||null,
-        lineTotal:l.lineTotal
+        lineTotal:l.lineTotal, hhDisc: Number(l.hhDisc||0)
       })),
-      subtotal, notes: generalNotes
+      subtotal,
+      notes: generalNotes,
+      hh: hhSummary
     };
 
     // Crea pedido y actualiza/crea cliente por teléfono
@@ -578,8 +618,14 @@ function recomputeLine(line){
   const dlcOn = !!(line.extras?.dlcCarne);
   const extraDlc = dlcOn ? DLC : 0;
 
-  const unitTotal = (Number(line.unitPrice||0) + extraDlc) + costS + costI;
+  // HH sobre precio base
+  const item = findItemById(line.id);
+  const hhDiscPerUnit = hhDiscountPerUnit(item);
+  const unitBaseAfterHH = Math.max(0, Number(line.unitPrice||0) - hhDiscPerUnit);
+
+  const unitTotal = (unitBaseAfterHH + extraDlc) + costS + costI;
   line.lineTotal = unitTotal * (line.qty||1);
+  line.hhDisc = hhDiscPerUnit * (line.qty||1);
 }
 function refreshCartTotals(){
   const total = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
@@ -682,12 +728,18 @@ document.addEventListener('click', (e)=>{
   const item = all.find(x=>x.id===id); if(!item) return;
 
   if (item.type==='drink' || item.type==='side'){
+    // (HH podría aplicar a bebidas si hhEligible=true; aquí no hay extras ni DLC)
+    const hhDiscPerUnit = hhDiscountPerUnit(item);
+    const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
+
     state.cart.push({
       id:item.id, name:item.name, mini:false, qty:1,
       unitPrice:Number(item.price||0),
       baseIngredients:[], salsaDefault:null, salsaCambiada:null,
       extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
-      notes:'', lineTotal:Number(item.price||0)
+      notes:'',
+      lineTotal: unitBaseAfterHH,      // ya con HH
+      hhDisc: hhDiscPerUnit            // descuento por 1 unidad
     });
     updateCartBar(); beep(); toast(`${item.name} agregado`);
   } else {
