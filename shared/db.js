@@ -226,6 +226,8 @@ export async function createOrder(orderDraft){
   await ensureAnonAuth();
   const payload = {
     ...orderDraft,
+    // Fuente del pedido (útil para reportes): kiosk|mesero|red|otro
+    source: orderDraft.source || 'kiosk',
     commission: Number(orderDraft.commission||0),
     tip: Number(orderDraft.tip||0),
     status: 'PENDING',
@@ -297,7 +299,8 @@ export async function getOrdersRange({ from, to, includeArchive = true, orderTyp
    Colección "inventory":
    { id, name, unit:'g'|'ml'|'unit', category?:string, currentStock:number,
      min?:number, max?:number, perish?:boolean, expiryDays?:number,
-     supplierId?:string, sku?:string, notes?:string, lastUpdated? }
+     supplierId?:string, sku?:string, notes?:string, lastUpdated?,
+     costAvg?:number, lastUnitCost?:number, lastPurchaseAt? }
 
    Movimientos "inventory_moves":
    { id, itemId, delta:+/-number, reason:'purchase'|'use'|'adjust'|'production'|'waste',
@@ -342,6 +345,9 @@ export async function upsertInventoryItem(item){
     supplierId: item.supplierId || null,
     sku: item.sku || '',
     notes: item.notes || '',
+    // costos
+    costAvg: Number(item.costAvg ?? 0),
+    lastUnitCost: Number(item.lastUnitCost ?? 0),
     lastUpdated: now
   };
   if(item.id){
@@ -372,21 +378,47 @@ export async function adjustStock(itemId, delta, reason='adjust', meta={}){
   });
 }
 
-/* --- Purchases --- */
+/* --- Purchases (con costo promedio ponderado) --- */
 export async function recordPurchase({ itemId, qty, unitCost, supplierId=null, expiryDate=null, channel=null }){
   await ensureAnonAuth();
+
+  // Leer inventario ANTES del abono para calcular costo promedio ponderado
+  const invRef = doc(db,'inventory', itemId);
+  const invSnap = await getDoc(invRef);
+  const invData = invSnap.exists() ? invSnap.data() : { currentStock:0, costAvg:0 };
+
+  const prevStock = Number(invData.currentStock || 0);
+  const prevAvg   = Number(invData.costAvg || 0);
+  const q         = Number(qty||0);
+  const cost      = Number(unitCost||0);
+
+  // Registrar compra
   const row = {
     itemId,
-    qty: Number(qty||0),
-    unitCost: Number(unitCost||0),
+    qty: q,
+    unitCost: cost,
     supplierId: supplierId || null,
     expiryDate: expiryDate ? new Date(expiryDate) : null,
     channel: channel || null,
     createdAt: serverTimestamp()
   };
   await addDoc(collection(db,'purchases'), row);
-  // abona al stock
-  await adjustStock(itemId, Number(qty||0), 'purchase', { supplierId, unitCost, channel, expiryDate });
+
+  // Abonar stock (movimiento)
+  await adjustStock(itemId, q, 'purchase', { supplierId, unitCost: cost, channel, expiryDate });
+
+  // Nuevo costo promedio ponderado (basado en stock anterior)
+  const newTotalUnits = prevStock + q;
+  const newAvg = newTotalUnits > 0
+    ? ((prevStock * prevAvg) + (q * cost)) / newTotalUnits
+    : cost;
+
+  // Guardar métricas de costo
+  await updateDoc(invRef, {
+    costAvg: Number(newAvg || 0),
+    lastUnitCost: cost,
+    lastPurchaseAt: serverTimestamp()
+  });
 }
 
 /** Versión con proveedor + descuento y costo final calculado */
@@ -510,7 +542,7 @@ export async function getProductAvailableUnits(product){
 
 /* =============================================================================
    APLICAR INVENTARIO A UN PEDIDO
-   - Vasitos por aderezo extra (settings.app.sauceCupItemId)
+   - Vasitos por aderezos extra (settings.app.sauceCupItemId)
    - Descargo por producto (stockItemId/stockMap)
    ========================================================================== */
 async function applyStockForLine(line){
