@@ -2,12 +2,14 @@
 // Kiosko con carrito, edición de líneas, meta de pedido y laterales (incluye feed de “Listos”).
 // + Logro de 3 minis (sonido/aviso), aderezo sorpresa gratis, método de pago y mensaje final.
 // + Happy Hour aplicado SOLO al precio base del producto (no a extras ni DLC) y resumen por pedido.
+// + Suscripción en vivo a settings/happyHour (actualiza UI y recálculo de carrito).
 
 import { beep, toast } from '../shared/notify.js';
 import {
   createOrder,
   fetchCatalogWithFallback,
   subscribeOrders,
+  subscribeHappyHour, // ← NUEVO
   // Cliente por teléfono
   fetchCustomer,
   upsertCustomerFromOrder,
@@ -99,7 +101,8 @@ async function init(){
   setActiveTab('mini');
   updateCartBar();
   setupSidebars();
-  setupReadyFeed(); // <- feed en vivo
+  bindHappyHour();     // ← activa escucha en vivo de HH
+  setupReadyFeed();    // ← feed en vivo
 }
 
 // dinero robusto (no revienta si llega undefined/null)
@@ -144,10 +147,43 @@ function hhDiscountPerUnit(item){
   const { enabled, pct, eligibleOnly } = hhInfo();
   if (!enabled || pct<=0) return 0;
   // si eligibleOnly==true, respeta flag de producto (default true si no definido)
+  theIsEligible:
+  ;
   const isEligible = eligibleOnly ? (item?.hhEligible !== false) : true;
   if (!isEligible) return 0;
   const unit = Number(item?.price || 0);
   return unit * pct; // SOLO al precio base
+}
+
+/* === UI: pastilla HH (lateral) === */
+function updateHHPill(hh){
+  const pill = document.getElementById('hhPill');
+  const txt  = document.getElementById('hhText');
+  const msg  = document.getElementById('hhMsg');
+  if (!pill || !txt) return;
+  pill.classList.toggle('on', !!hh.enabled);
+  txt.textContent = hh.enabled ? `Happy Hour – ${Number(hh.discountPercent||0)}%` : 'HH OFF';
+  if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
+}
+
+/* === Suscripción en vivo a settings/happyHour === */
+let unsubHH = null;
+function bindHappyHour(){
+  if (unsubHH) { unsubHH(); unsubHH = null; }
+  unsubHH = subscribeHappyHour(hh=>{
+    // guarda en el state y refresca UI
+    state.menu = state.menu || {};
+    state.menu.happyHour = {
+      enabled: !!hh.enabled,
+      discountPercent: Number(hh.discountPercent||0),
+      bannerText: hh.bannerText || '',
+      applyEligibleOnly: hh.applyEligibleOnly!==false
+    };
+    updateHHPill(state.menu.happyHour); // pastilla lateral
+    renderCards();                      // precios en tarjetas
+    state.cart.forEach(recomputeLine);  // re-calcula líneas del carrito
+    updateCartBar();
+  });
 }
 
 /* === Cómputos de carrito === */
@@ -185,7 +221,13 @@ function renderCards(){
           : `<div class="icon" aria-hidden="true"></div>`}
       </div>
       <div class="row">
-        <div class="price">${money(it.price)}</div>
+        ${(()=>{
+          const disc = hhDiscountPerUnit(it);
+          const eff  = Math.max(0, Number(it.price||0) - disc);
+          return disc>0
+            ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span></div>`
+            : `<div class="price">${money(it.price)}</div>`;
+        })()}
         <div class="row" style="gap:8px">
           <button class="btn ghost small" data-a="ing">Ingredientes</button>
           <button class="btn small" data-a="order">Ordenar</button>
