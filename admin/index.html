@@ -40,6 +40,7 @@
     <h2>Panel de administración</h2>
     <div class="tabs-admin" id="admTabs" role="tablist" aria-label="Módulos de Admin">
       <button class="tab is-active" data-tab="reportes" role="tab" aria-selected="true">Reportes</button>
+      <button class="tab" data-tab="cobros" role="tab" aria-selected="false">Cobros</button>
       <button class="tab" data-tab="compras" role="tab" aria-selected="false">Compras</button>
       <button class="tab" data-tab="inventario" role="tab" aria-selected="false">Inventario</button>
       <button class="tab" data-tab="proveedores" role="tab" aria-selected="false">Proveedores</button>
@@ -78,6 +79,61 @@
 
       <h4 style="margin-top:16px">Ventas por hora</h4>
       <table class="k-table" id="tblHours"><thead><tr><th>Hora</th><th>Órdenes</th><th>Ingresos</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <!-- COBROS -->
+    <section class="panel" id="panel-cobros">
+      <h3>Cobros</h3>
+
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+        <div class="field"><label>Desde</label><input id="cobFrom" type="date"/></div>
+        <div class="field"><label>Hasta</label><input id="cobTo" type="date"/></div>
+        <div class="field"><label>Tipo de pedido</label>
+          <select id="cobType">
+            <option value="all">Todos</option>
+            <option value="pickup">Pickup</option>
+            <option value="dinein">Mesa</option>
+          </select>
+        </div>
+        <div class="field" style="align-self:end"><button class="btn" id="btnCobrosRefresh">Actualizar</button></div>
+      </div>
+
+      <h4 style="margin-top:16px">Por cobrar (en vivo)</h4>
+      <table class="k-table" id="tblPorCobrar">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>Tipo</th>
+            <th class="right">Total</th>
+            <th>Pref. pago</th>
+            <th class="right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="grid" style="margin-top:16px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+        <div class="k-card"><div class="muted small">Cobros (registros)</div><div id="kpiCobrosCount" class="price">$0</div></div>
+        <div class="k-card"><div class="muted small">Total cobrado</div><div id="kpiCobrosTotal" class="price">$0</div></div>
+        <div class="k-card"><div class="muted small">Efectivo</div><div id="kpiCobrosEfe" class="price">$0</div></div>
+        <div class="k-card"><div class="muted small">Tarjeta</div><div id="kpiCobrosTar" class="price">$0</div></div>
+        <div class="k-card"><div class="muted small">Transferencia</div><div id="kpiCobrosTrans" class="price">$0</div></div>
+      </div>
+
+      <h4 style="margin-top:16px">Historial de cobros</h4>
+      <table class="k-table" id="tblCobrosHist">
+        <thead>
+          <tr>
+            <th>Fecha cobro</th>
+            <th>Cliente</th>
+            <th>Tipo</th>
+            <th class="right">Total cobrado</th>
+            <th>Método</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </section>
 
     <!-- COMPRAS -->
@@ -141,62 +197,63 @@
       <div class="muted small">WIP — podrás seleccionar productos/combos con descuento exclusivo durante HH.</div>
     </section>
 
-  <!-- RECETARIO (LISTADO) -->
-<section class="panel" id="panel-recetas">
-  <h3>Recetario de aderezos</h3>
+    <!-- RECETARIO (LISTADO) -->
+    <section class="panel" id="panel-recetas">
+      <h3>Recetario de aderezos</h3>
 
-  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:8px">
-    <div class="field">
-      <label>Buscar</label>
-      <input id="rcpSearch" type="text" placeholder="nombre o ingrediente…">
-    </div>
-    <div class="field">
-      <label>Porción rápida</label>
-      <select id="rcpQuickPort">
-        <option value="500">500 ml</option>
-        <option value="250">250 ml</option> <!-- NUEVO -->
-        <option value="200">200 ml</option>
-        <option value="100" selected>100 ml</option>
-      </select>
-    </div>
-  </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:8px">
+        <div class="field">
+          <label>Buscar</label>
+          <input id="rcpSearch" type="text" placeholder="nombre o ingrediente…">
+        </div>
+        <div class="field">
+          <label>Porción rápida</label>
+          <select id="rcpQuickPort">
+            <option value="500">500 ml</option>
+            <option value="250">250 ml</option> <!-- NUEVO -->
+            <option value="200">200 ml</option>
+            <option value="100" selected>100 ml</option>
+          </select>
+        </div>
+      </div>
 
-  <table class="k-table" id="tblRecipes">
-    <thead>
-      <tr>
-        <th>Receta</th>
-        <th>Rinde base</th>
-        <th>Producto terminado</th>
-        <th>#Ingr.</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</section>
+      <table class="k-table" id="tblRecipes">
+        <thead>
+          <tr>
+            <th>Receta</th>
+            <th>Rinde base</th>
+            <th>Producto terminado</th>
+            <th>#Ingr.</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
 
-<!-- Modal Receta (ver + escalar + preparar) -->
-<div class="modal small" id="rcpModal" role="dialog" aria-modal="true" aria-labelledby="rcpTitle" style="display:none">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div id="rcpTitle">Receta</div>
-      <button class="btn ghost small" id="rcpClose" aria-label="Cerrar">Cerrar</button>
-    </div>
-    <div class="modal-body" id="rcpBody"><!-- se llena por JS --></div>
-    <div class="modal-foot">
-      <div class="total-bar">
-        <div class="muted small mono" id="rcpHint"></div>
-        <div class="row" style="gap:8px">
-          <button class="btn ghost" id="rcpScale500">500 ml</button>
-          <button class="btn ghost" id="rcpScale250">250 ml</button> <!-- NUEVO -->
-          <button class="btn ghost" id="rcpScale200">200 ml</button>
-          <button class="btn ghost" id="rcpScale100">100 ml</button>
-          <button class="btn" id="rcpPrepare">Preparar</button>
+    <!-- Modal Receta (ver + escalar + preparar) -->
+    <div class="modal small" id="rcpModal" role="dialog" aria-modal="true" aria-labelledby="rcpTitle" style="display:none">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div id="rcpTitle">Receta</div>
+          <button class="btn ghost small" id="rcpClose" aria-label="Cerrar">Cerrar</button>
+        </div>
+        <div class="modal-body" id="rcpBody"><!-- se llena por JS --></div>
+        <div class="modal-foot">
+          <div class="total-bar">
+            <div class="muted small mono" id="rcpHint"></div>
+            <div class="row" style="gap:8px">
+              <button class="btn ghost" id="rcpScale500">500 ml</button>
+              <button class="btn ghost" id="rcpScale250">250 ml</button> <!-- NUEVO -->
+              <button class="btn ghost" id="rcpScale200">200 ml</button>
+              <button class="btn ghost" id="rcpScale100">100 ml</button>
+              <button class="btn" id="rcpPrepare">Preparar</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</div>
+
   </div>
 </main>
 
