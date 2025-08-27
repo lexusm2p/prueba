@@ -258,11 +258,20 @@
     <!-- ARTÍCULOS CRUD -->
     <section class="panel" id="panel-articulos">
       <h3>Artículos</h3>
-      <div class="field"><button class="btn" id="btnAddArticulo">Nuevo artículo</button></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-bottom:8px">
+        <div class="field">
+          <label>Buscar</label>
+          <input id="artSearch" type="text" placeholder="nombre o descripción…">
+        </div>
+        <div class="field" style="align-self:end">
+          <button class="btn" id="btnAddArticulo">Nuevo artículo</button>
+        </div>
+      </div>
       <table class="k-table" id="tblArticulos">
         <thead><tr><th>Nombre</th><th>Precio</th><th>Activo</th><th>Acciones</th></tr></thead>
         <tbody></tbody>
       </table>
+      <div class="muted small" style="margin-top:6px">* Haz clic en los encabezados para ordenar.</div>
     </section>
 
   </div>
