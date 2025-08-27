@@ -700,5 +700,44 @@ export async function attachLastOrderRef(phone, orderId){
 }
 
 /* =============================================================================
+   ARTÍCULOS (CRUD sencillo para módulo de Admin)
+   Estructura sugerida:
+   { id, name, price:number, active:boolean, desc?:string, sku?:string, createdAt, updatedAt }
+   ========================================================================== */
+export function subscribeArticles(cb){
+  const qy = query(collection(db, 'articles'), orderBy('name','asc'));
+  return onSnapshot(qy, (snap)=>{
+    const rows = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    cb(rows);
+  }, (err)=> console.error('[subscribeArticles]', err));
+}
+
+export async function upsertArticle(a){
+  await ensureAnonAuth();
+  const now = serverTimestamp();
+  const clean = {
+    name: String(a.name||'').trim(),
+    price: Number(a.price ?? 0),
+    active: a.active!==false,
+    desc: a.desc ? String(a.desc) : '',
+    sku: a.sku ? String(a.sku) : ''
+  };
+  if (a.id && String(a.id).trim()){
+    const id = String(a.id).trim();
+    await setDoc(doc(db,'articles', id), { id, ...clean, updatedAt: now }, { merge:true });
+    return id;
+  } else {
+    const ref = await addDoc(collection(db,'articles'), { ...clean, createdAt: now, updatedAt: now });
+    await setDoc(ref, { id: ref.id }, { merge:true });
+    return ref.id;
+  }
+}
+
+export async function deleteArticle(articleId){
+  await ensureAnonAuth();
+  await deleteDoc(doc(db,'articles', articleId));
+}
+
+/* =============================================================================
    FIN
    ========================================================================== */
