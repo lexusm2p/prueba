@@ -345,13 +345,16 @@ textarea{ min-height:80px }
   }
   #cards{ min-height:420px; }
 }
+
 /* En laptops más chicas ocultamos laterales */
 @media (max-width:1366px){
   body.has-sidebars main.container{
     margin-left:auto;
     margin-right:auto;
   }
-   /* === Kiosko: área de imagen dentro de la tarjeta === */
+}
+
+/* === Kiosko: área de imagen dentro de la tarjeta === */
 .card .media{
   display:flex;
   align-items:center;
@@ -359,7 +362,6 @@ textarea{ min-height:80px }
   height:140px;
   margin-top:4px;
 }
-
 .icon-img{
   width:128px;
   height:128px;
@@ -368,10 +370,47 @@ textarea{ min-height:80px }
   border:2px solid rgba(255,255,255,.08);
   background:#0e1626;
 }
-
-/* Responsive */
+/* Responsive para la imagen del kiosko */
 @media (max-width:520px){
   .card .media{ height:120px; }
   .icon-img{ width:112px; height:112px; }
 }
+
+/* =========================================================
+   Extensiones para CRUD de Artículos (Admin)
+   ========================================================= */
+/* Botones compactos en tablas (editar/eliminar) */
+.k-table .btn.small.ghost{
+  padding:6px 8px;
+  font-size:11px;
+  line-height:1;
+}
+.k-table .btn.small.ghost[data-a="del"]{
+  color:var(--danger);
+}
+
+/* Badges de estado */
+.badge-active{
+  background:#183a2a;
+  color:#2fd27d;
+  padding:2px 8px;
+  border-radius:6px;
+  font-size:12px;
+  font-weight:700;
+}
+.badge-inactive{
+  background:#3a2f18;
+  color:#ffb55a;
+  padding:2px 8px;
+  border-radius:6px;
+  font-size:12px;
+  font-weight:700;
+}
+
+/* (Opcional) Modal específico para Artículos */
+#artModal .modal-card{
+  width:min(480px,90vw);
+}
+#artModal .modal-body .field{
+  margin-bottom:12px;
 }
