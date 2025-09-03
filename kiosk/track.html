@@ -34,8 +34,19 @@
     .title{ font-weight:800; }
     .eta{ font-size:18px; font-weight:900; color:var(--accent); }
     .tag{ background:#1b2a45; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.08); }
-    .search{ display:flex; gap:8px; }
-    .search input{ flex:1; }
+
+    /* QR card */
+    .qr-wrap{ display:grid; grid-template-columns: 160px 1fr; gap:12px; align-items:center; }
+    .qr-box{
+      width:160px; height:160px; border-radius:12px;
+      display:grid; place-items:center; background:#091225;
+      border:1px solid rgba(255,255,255,.08);
+      overflow:hidden;
+    }
+    .qr-box img{ width:100%; height:100%; object-fit:contain; image-rendering: pixelated; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .row .btn{ white-space:nowrap; }
+    .row input{ flex:1 1 260px; }
   </style>
 </head>
 <body>
@@ -48,19 +59,38 @@
       <div class="eta" id="eta">7–10 min</div>
     </div>
 
+    <!-- QR para compartir esta página -->
     <div class="pane">
-      <div class="title">Busca tu pedido por teléfono</div>
-      <div class="muted" style="margin-bottom:8px">Ingresa tu número (10 dígitos) para ver el estado en tiempo real.</div>
-      <div class="search">
-        <input id="phone" type="tel" inputmode="numeric" pattern="\\d{10,}" placeholder="Ej. 5512345678"/>
-        <button class="btn" id="go">Ver estado</button>
+      <div class="title">Escanéalo desde tu mesa</div>
+      <div class="muted" style="margin-bottom:8px">Comparte el seguimiento con este QR o copia el enlace.</div>
+      <div class="qr-wrap">
+        <div class="qr-box">
+          <img id="qrImg" alt="QR para abrir el seguimiento"/>
+        </div>
+        <div>
+          <div class="row" style="margin-bottom:8px">
+            <input id="qrUrl" type="url" placeholder="URL de seguimiento"/>
+          </div>
+          <div class="row">
+            <button class="btn" id="qrUpdate">Actualizar QR</button>
+            <button class="btn ghost" id="qrCopy">Copiar enlace</button>
+          </div>
+          <div class="muted small" style="margin-top:8px">
+            Consejo: imprime este QR y colócalo en las mesas. El enlace apunta a esta misma página.
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="cols" style="margin-top:12px">
       <div class="pane">
-        <div class="title">Tu pedido</div>
-        <div id="mine" class="muted">Escribe tu teléfono y pulsa “Ver estado”.</div>
+        <div class="title">Busca tu pedido por teléfono</div>
+        <div class="muted" style="margin-bottom:8px">Ingresa tu número (10 dígitos) para ver el estado en tiempo real.</div>
+        <div class="row">
+          <input id="phone" type="tel" inputmode="numeric" pattern="\\d{10,}" placeholder="Ej. 5512345678"/>
+          <button class="btn" id="go">Ver estado</button>
+        </div>
+        <div id="mine" class="muted" style="margin-top:10px">Escribe tu teléfono y pulsa “Ver estado”.</div>
       </div>
       <div class="pane">
         <div class="title">Pedidos listos 🛎️ (recientes)</div>
