@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <link rel="stylesheet" href="../shared/styles.css"/>
+  <link rel="preload" as="audio" href="../shared/sfx/achievement.mp3">
   <title>Track — Seven de Burgers</title>
   <style>
     body{ background:#0b1424; }
@@ -47,13 +48,20 @@
     .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .row .btn{ white-space:nowrap; }
     .row input{ flex:1 1 260px; }
+
+    /* Estado principal */
+    #mine[aria-live]{ min-height:56px; }
+    .payline{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px; }
+    .payline .price{ font-weight:900; color:var(--accent); }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="head">
       <div style="display:flex; align-items:center; gap:10px">
-        <div class="brand"><span class="dot"></span> Seven de Burgers</div>
+        <div class="brand" style="display:flex;align-items:center;gap:8px">
+          <span class="dot"></span> <b>Seven de Burgers</b>
+        </div>
         <div id="hhPill" class="hh-pill"><span class="dot"></span><span id="hhText">HH OFF</span></div>
       </div>
       <div class="eta" id="eta">7–10 min</div>
@@ -90,7 +98,8 @@
           <input id="phone" type="tel" inputmode="numeric" pattern="\\d{10,}" placeholder="Ej. 5512345678"/>
           <button class="btn" id="go">Ver estado</button>
         </div>
-        <div id="mine" class="muted" style="margin-top:10px">Escribe tu teléfono y pulsa “Ver estado”.</div>
+        <!-- aria-live para anunciar cambios de estado -->
+        <div id="mine" class="muted" style="margin-top:10px" aria-live="polite">Escribe tu teléfono y pulsa “Ver estado”.</div>
       </div>
       <div class="pane">
         <div class="title">Pedidos listos 🛎️ (recientes)</div>
@@ -98,6 +107,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Sonido READY -->
+  <audio id="ding" src="../shared/sfx/achievement.mp3" preload="auto"></audio>
 
   <script type="module" src="./track.js"></script>
 </body>
