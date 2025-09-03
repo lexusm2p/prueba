@@ -1,5 +1,6 @@
 // /kiosk/track.js
 // Página pública para que el cliente vea: Happy Hour, su pedido por teléfono y feed de “Listos”.
+// + Generación de QR del enlace (sin librerías que tengas que instalar).
 
 import { subscribeOrders, subscribeHappyHour } from '../shared/db.js';
 
@@ -7,10 +8,17 @@ const $ = (s)=>document.querySelector(s);
 const hhPill = $('#hhPill');
 const hhText = $('#hhText');
 const etaEl  = $('#eta');
+
 const phoneIn = $('#phone');
 const goBtn = $('#go');
 const mineEl = $('#mine');
 const readyEl = $('#ready');
+
+// QR elements
+const qrImg = $('#qrImg');
+const qrUrl = $('#qrUrl');
+const qrUpdate = $('#qrUpdate');
+const qrCopy = $('#qrCopy');
 
 etaEl.textContent = '7–10 min'; // estático por ahora
 
@@ -25,6 +33,7 @@ subscribeHappyHour(hh=>{
 const normPhone = (s='') => String(s).replace(/\D+/g,'').slice(0,15);
 const ts = (d)=> (d?.toMillis?.() ?? new Date(d||0).getTime());
 
+// ---------- Render: Mi pedido ----------
 function renderMine(order){
   if (!mineEl) return;
   if (!order){
@@ -46,6 +55,7 @@ function renderMine(order){
     </div>`;
 }
 
+// ---------- Render: Listos ----------
 function renderReady(list){
   if (!readyEl) return;
   const rows = (list||[])
@@ -74,7 +84,6 @@ subscribeOrders(list=>{
   renderReady(list);
 
   if (currentPhone){
-    // Busca el pedido más reciente del teléfono indicado
     const mine = (list||[])
       .filter(o => normPhone(o.phone||'').endsWith(currentPhone))
       .sort((a,b)=> ts(b.createdAt) - ts(a.createdAt))[0];
@@ -82,7 +91,6 @@ subscribeOrders(list=>{
   }
 });
 
-// ---------- UI ----------
 goBtn?.addEventListener('click', ()=>{
   currentPhone = normPhone(phoneIn?.value || '');
   if (currentPhone.length < 10){
@@ -95,3 +103,36 @@ goBtn?.addEventListener('click', ()=>{
 phoneIn?.addEventListener('input', ()=>{
   phoneIn.value = normPhone(phoneIn.value);
 });
+
+// ---------- QR: usa un generador por URL (sin instalar nada) ----------
+function setDefaultQrUrl(){
+  // Por defecto apunta a esta página de track.
+  const url = `${location.origin}${location.pathname}`;
+  if (qrUrl) qrUrl.value = url;
+  updateQr();
+}
+
+function updateQr(){
+  const url = (qrUrl?.value || '').trim();
+  if (!url) return;
+  // Servicio público para generar QR como imagen PNG
+  const size = 160; // px
+  const api = 'https://api.qrserver.com/v1/create-qr-code/';
+  const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
+  if (qrImg) qrImg.src = src;
+}
+
+qrUpdate?.addEventListener('click', updateQr);
+
+qrCopy?.addEventListener('click', async ()=>{
+  try{
+    await navigator.clipboard.writeText(qrUrl.value);
+    qrCopy.textContent = '¡Copiado!';
+    setTimeout(()=> qrCopy.textContent = 'Copiar enlace', 1200);
+  }catch{
+    alert('No pude copiar. Selecciona el texto y copia manualmente.');
+  }
+});
+
+// Inicializa QR con la URL actual
+setDefaultQrUrl();
