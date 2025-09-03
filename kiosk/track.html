@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <link rel="stylesheet" href="../shared/styles.css"/>
+  <title>Track — Seven de Burgers</title>
+  <style>
+    body{ background:#0b1424; }
+    .wrap{ max-width:980px; margin:24px auto; padding:0 12px; }
+    .head{
+      display:flex; align-items:center; gap:10px; justify-content:space-between;
+      margin-bottom:14px;
+    }
+    .hh-pill{
+      display:inline-flex; align-items:center; gap:8px; background:#1b2438;
+      border:1px solid rgba(255,255,255,.1); border-radius:999px; padding:6px 10px;
+    }
+    .dot{ width:8px; height:8px; border-radius:50%; background:#777; }
+    .hh-on{ border-color:#2fe38b; box-shadow:0 0 0 2px rgba(47,227,139,.12); }
+    .hh-on .dot{ background:#2fe38b; }
+    .cols{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width:900px){ .cols{ grid-template-columns: 1fr; } }
+    .pane{
+      background:#0f182a; border:1px solid rgba(255,255,255,.08);
+      border-radius:14px; padding:14px;
+    }
+    .list{ list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:8px; }
+    .list li{
+      display:flex; gap:8px; align-items:center; justify-content:space-between;
+      background:#131f33; border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:10px;
+    }
+    .muted{ color:var(--muted); }
+    .title{ font-weight:800; }
+    .eta{ font-size:18px; font-weight:900; color:var(--accent); }
+    .tag{ background:#1b2a45; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.08); }
+    .search{ display:flex; gap:8px; }
+    .search input{ flex:1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <div style="display:flex; align-items:center; gap:10px">
+        <div class="brand"><span class="dot"></span> Seven de Burgers</div>
+        <div id="hhPill" class="hh-pill"><span class="dot"></span><span id="hhText">HH OFF</span></div>
+      </div>
+      <div class="eta" id="eta">7–10 min</div>
+    </div>
+
+    <div class="pane">
+      <div class="title">Busca tu pedido por teléfono</div>
+      <div class="muted" style="margin-bottom:8px">Ingresa tu número (10 dígitos) para ver el estado en tiempo real.</div>
+      <div class="search">
+        <input id="phone" type="tel" inputmode="numeric" pattern="\\d{10,}" placeholder="Ej. 5512345678"/>
+        <button class="btn" id="go">Ver estado</button>
+      </div>
+    </div>
+
+    <div class="cols" style="margin-top:12px">
+      <div class="pane">
+        <div class="title">Tu pedido</div>
+        <div id="mine" class="muted">Escribe tu teléfono y pulsa “Ver estado”.</div>
+      </div>
+      <div class="pane">
+        <div class="title">Pedidos listos 🛎️ (recientes)</div>
+        <ul id="ready" class="list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./track.js"></script>
+</body>
+</html>
