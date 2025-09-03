@@ -147,8 +147,6 @@ function hhDiscountPerUnit(item){
   const { enabled, pct, eligibleOnly } = hhInfo();
   if (!enabled || pct<=0) return 0;
   // si eligibleOnly==true, respeta flag de producto (default true si no definido)
-  theIsEligible:
-  ;
   const isEligible = eligibleOnly ? (item?.hhEligible !== false) : true;
   if (!isEligible) return 0;
   const unit = Number(item?.price || 0);
