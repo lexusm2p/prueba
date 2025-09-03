@@ -12,6 +12,19 @@
   <title>Kiosko — Seven de Burgers</title>
 
   <style>
+    /* ====== FIXES GLOBALES ====== */
+    html, body { width:100%; overflow-x:hidden; }
+    * { box-sizing: border-box; }
+
+    /* Safe areas (iPhone con notch) */
+    :root{
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+    }
+
+    /* ====== CART BAR (burbuja de carrito) ====== */
     .cartbar {
       position: fixed; left: 50%; transform: translateX(-50%);
       bottom: 12px; z-index: 60;
@@ -22,8 +35,12 @@
     }
     .cartbar .pill { background:#18243a; color:var(--ink); padding:8px 10px; border-radius:10px; font-size:12px;}
     .cartbar .total { color: var(--accent); font-weight: 900; }
-    @media (max-width:520px){ .cartbar{ width: calc(100% - 24px); } }
 
+    @media (max-width:520px){
+      .cartbar{ left:0; right:0; transform:none; width:auto; margin:0 12px; }
+    }
+
+    /* ====== LATERALES ====== */
     .side{
       position:fixed; top:88px; bottom:16px; width:280px; z-index:20;
       display:flex; align-items:flex-start; pointer-events:auto;
@@ -63,22 +80,14 @@
 
     @media (max-width:1280px){ .side{ display:none; } }
 
-    /* ====== MOBILE (iPhone/Android) ====== */
-    :root{
-      --safe-top: env(safe-area-inset-top, 0px);
-      --safe-right: env(safe-area-inset-right, 0px);
-      --safe-bottom: env(safe-area-inset-bottom, 0px);
-      --safe-left: env(safe-area-inset-left, 0px);
-    }
-
-    /* Tipografía y toques cómodos; evita zoom en iOS */
+    /* ====== TIPOGRAFÍA MOBILE ====== */
     @media (max-width: 900px){
       body{ font-size:16px; }
       .btn{ min-height:44px; }
       input, select, textarea{ font-size:16px; }
     }
 
-    /* Grid de tarjetas: 2 col / 1 col */
+    /* ====== GRID TARJETAS ====== */
     @media (max-width: 900px){
       #cards{
         display:grid;
@@ -94,7 +103,7 @@
       .icon-img{ max-width:80px; }
     }
 
-    /* Cart bar pegada al fondo con safe areas */
+    /* ====== CART BAR pegada al fondo y sin solapes ====== */
     @media (max-width: 900px){
       #cartBar{
         left:0; right:0; bottom:0; transform:none;
@@ -104,21 +113,55 @@
           calc(12px + var(--safe-bottom))
           calc(12px + var(--safe-left));
       }
-      main, .container{ padding-bottom: 84px; } /* evita solape con cart bar */
+      main, .container{ padding-bottom: calc(96px + var(--safe-bottom)); } /* evita solape con cart bar */
     }
 
-    /* Modal fullscreen cómodo en móvil */
+    /* ====== MODALES (incluye carrito) ====== */
+    .modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); z-index:70 }
+    .modal[style*="display: block"],
+    .modal[style*="display:block"]{ display:grid !important; } /* por si tu JS usa display:block */
+
+    /* Fullscreen cómodo en móvil */
     @media (max-width: 900px){
       .modal .modal-card{
         width:100vw; max-width:100vw;
         height:100dvh; max-height:100dvh;
         border-radius:0;
       }
+      .modal .modal-head{ padding-top: calc(12px + var(--safe-top)); }
       .modal .modal-body{
         overflow:auto;
         -webkit-overflow-scrolling:touch;
       }
-      .total-bar{ position:sticky; bottom:0; }
+      /* FOOTER pegado con safe-area y sin solapes */
+      .modal .modal-foot{
+        position:sticky; bottom:0; left:0; right:0;
+        padding:
+          12px calc(12px + var(--safe-right))
+          calc(12px + var(--safe-bottom))
+          calc(12px + var(--safe-left));
+        background:#0f1f33;
+        border-top:1px solid rgba(255,255,255,.12);
+      }
+      /* La barra total puede “romper” a 2 líneas si falta espacio */
+      .modal .total-bar{
+        display:flex; align-items:center; gap:10px; justify-content:space-between;
+        flex-wrap:wrap;
+      }
+      .modal .total-bar .btn{
+        flex:1 1 240px;             /* crece a ancho completo si hace falta */
+        max-width:100%;
+      }
+      #cartTotal, #mTotal{ min-width:120px; }
+    }
+
+    /* Extra protección para pantallas muy chicas (alto y ancho) */
+    @media (max-width: 360px), (max-height: 600px){
+      .modal .total-bar .btn{ width:100%; }
+    }
+
+    /* Tabs compactas */
+    @media (max-width: 900px){
       .tabs{ gap:6px; }
       .tabs .btn{ padding:10px 12px; }
     }
@@ -188,6 +231,7 @@
   <div class="grid" id="cards"></div>
 </main>
 
+<!-- Modal item -->
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
   <div class="modal-card">
     <div class="modal-head">
@@ -204,6 +248,7 @@
   </div>
 </div>
 
+<!-- Modal carrito -->
 <div class="modal" id="cartModal" role="dialog" aria-modal="true" aria-labelledby="cartTitle" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
@@ -220,12 +265,14 @@
   </div>
 </div>
 
+<!-- Burbuja carrito flotante -->
 <div id="cartBar" class="cartbar" role="button" aria-label="Revisar pedido">
   <span class="pill" id="cartCount">0 productos</span>
   <span class="total" id="cartBarTotal">$0</span>
   <button class="btn small" id="openCart">Revisar</button>
 </div>
 
+<!-- Modal PIN -->
 <div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
