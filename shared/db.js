@@ -213,6 +213,29 @@ export async function setHappyHour(patch){
   await setDoc(doc(db,'settings','happyHour'), clean, { merge:true });
 }
 
+/* ================================
+   ETA (Tiempo estimado de espera)
+   ================================ */
+export function subscribeETA(cb){
+  return onSnapshot(
+    doc(db, 'settings', 'eta'),
+    (d)=>{
+      const data = d.exists() ? d.data() : {};
+      const text = (data.text ?? data.eta ?? '7–10 min');
+      cb(String(text));
+    },
+    (err)=> console.error('[subscribeETA]', err)
+  );
+}
+
+/** Para cambiar el ETA desde Admin (p.ej. "10–15 min") */
+export async function setETA(text){
+  await ensureAnonAuth();
+  await setDoc(doc(db, 'settings', 'eta'), {
+    text: String(text || '7–10 min')
+  }, { merge:true });
+}
+
 /* =============================================================================
    ÓRDENES
    Estructura recomendada:
