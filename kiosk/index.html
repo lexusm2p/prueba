@@ -75,7 +75,6 @@
     }
     .hh-pill .dot{ width:8px; height:8px; border-radius:50%; background:#777; }
     .hh-pill.on{ border-color:#2fe38b; box-shadow:0 0 0 2px rgba(47,227,139,.12); }
-    .hh-pill.on .dot{ background:#2fe38b; }
     .hh-pill.on #hhText{ color:#2fe38b; }
 
     @media (max-width:1280px){ .side{ display:none; } }
@@ -165,6 +164,35 @@
       .tabs{ gap:6px; }
       .tabs .btn{ padding:10px 12px; }
     }
+
+    /* ====== DASHBOARD MÓVIL ====== */
+    .mi{ display:none; margin:12px 0 16px; }
+    @media (max-width:1280px){ .mi{ display:block; } } /* aparece cuando se ocultan laterales */
+    .mi-row{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width:520px){ .mi-row{ grid-template-columns: 1fr; } }
+    .mi-card{
+      background:#0f182a; border:1px solid rgba(255,255,255,.08);
+      border-radius:14px; box-shadow:var(--shadow); padding:12px;
+    }
+    .mi-title{ font-weight:800; margin-bottom:6px; }
+    .mi-note{ color:var(--ink); opacity:.85; font-size:13px; }
+    .mi-eta{ font-size:22px; font-weight:900; color:var(--accent); }
+
+    .mi-list{ list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:8px; }
+    .mi-list li{
+      display:flex; justify-content:space-between; align-items:center; gap:8px;
+      background:#131f33; border:1px solid rgba(255,255,255,.07);
+      border-radius:10px; padding:8px 10px;
+    }
+    .mi-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+    .mi-chip{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:6px 10px; border-radius:999px;
+      background:#131f33; border:1px solid rgba(255,255,255,.08);
+      font-size:13px;
+    }
+    /* Reutilizamos estilos de hh-pill también para móvil */
+    .hh-pill.on #miHHText{ color:#2fe38b; }
   </style>
 </head>
 
@@ -220,6 +248,36 @@
 </aside>
 
 <main class="container" aria-live="polite">
+  <!-- ===== Dashboard móvil (solo se muestra cuando se ocultan laterales) ===== -->
+  <section class="mi" id="mobileInfo" aria-label="Resumen rápido">
+    <div class="mi-row">
+      <div class="mi-card">
+        <div class="mi-title">Happy Hour</div>
+        <div class="hh-pill" id="miHHPill" aria-live="polite">
+          <span class="dot"></span><span id="miHHText">OFF</span>
+        </div>
+        <div class="mi-note" id="miHHMsg"></div>
+      </div>
+      <div class="mi-card">
+        <div class="mi-title">Tiempo estimado</div>
+        <div class="mi-eta" id="miEta">7–10 min</div>
+      </div>
+    </div>
+
+    <div class="mi-card" style="margin-top:12px;">
+      <div class="mi-title">Promos</div>
+      <ul class="mi-list" id="miPromos"></ul>
+    </div>
+
+    <div class="mi-card" style="margin-top:12px;">
+      <div class="mi-title">Más vendidos hoy</div>
+      <div class="mi-chips" id="miTop">
+        <!-- Chips dinámicos -->
+      </div>
+    </div>
+  </section>
+  <!-- ===== /Dashboard móvil ===== -->
+
   <div class="card" id="mode">
     <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
     <div class="tabs" role="tablist" aria-label="Seleccionar categoría">
