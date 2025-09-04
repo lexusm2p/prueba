@@ -3,13 +3,14 @@
 // + Logro de 3 minis (sonido/aviso), aderezo sorpresa gratis, método de pago y mensaje final.
 // + Happy Hour aplicado SOLO al precio base del producto (no a extras ni DLC) y resumen por pedido.
 // + Suscripción en vivo a settings/happyHour (actualiza UI y recálculo de carrito).
+// + Vista móvil “dashboard” (Happy Hour, ETA, Promos, Más vendidos).
 
 import { beep, toast } from '../shared/notify.js';
 import {
   createOrder,
   fetchCatalogWithFallback,
   subscribeOrders,
-  subscribeHappyHour, // ← NUEVO
+  subscribeHappyHour, // HH en vivo
   // Cliente por teléfono
   fetchCustomer,
   upsertCustomerFromOrder,
@@ -23,8 +24,17 @@ const state = {
   customerName: '',
   // teléfono agregado para pickup
   orderMeta: { type: 'pickup', table: '', phone: '', payMethodPref: 'efectivo' },
-  unsubReady: null,
-  comboUnlocked: false, // ← para “3 minis” (logro)
+
+  // Suscripciones
+  unsubReady: null,       // feed de listos
+  unsubAnalytics: null,   // ETA + top
+
+  // Analytics UI
+  etaText: '7–10 min',
+  topToday: [],
+
+  // logro
+  comboUnlocked: false,
 };
 
 /* === ÍCONOS: asigna aquí la ruta a las imágenes de cada burger base ===
@@ -44,10 +54,8 @@ const ICONS = {
 let achievementAudio = null;
 try { achievementAudio = new Audio('../shared/sfx/achievement.mp3'); } catch {}
 async function playAchievement(){
-  try {
-    if (achievementAudio) { await achievementAudio.play(); return; }
-    beep();
-  } catch { beep(); }
+  try { if (achievementAudio) { await achievementAudio.play(); return; } beep(); }
+  catch { beep(); }
 }
 
 /* 1) Login oculto */
@@ -101,8 +109,10 @@ async function init(){
   setActiveTab('mini');
   updateCartBar();
   setupSidebars();
-  bindHappyHour();     // ← activa escucha en vivo de HH
-  setupReadyFeed();    // ← feed en vivo
+  renderMobileInfo();  // pinta dashboard móvil
+  bindHappyHour();     // escucha en vivo HH
+  setupReadyFeed();    // feed “Listos”
+  startOrdersAnalytics(); // ETA + “más vendidos” en vivo
 }
 
 // dinero robusto (no revienta si llega undefined/null)
@@ -146,7 +156,6 @@ function hhInfo(){
 function hhDiscountPerUnit(item){
   const { enabled, pct, eligibleOnly } = hhInfo();
   if (!enabled || pct<=0) return 0;
-  // si eligibleOnly==true, respeta flag de producto (default true si no definido)
   const isEligible = eligibleOnly ? (item?.hhEligible !== false) : true;
   if (!isEligible) return 0;
   const unit = Number(item?.price || 0);
@@ -181,6 +190,7 @@ function bindHappyHour(){
     renderCards();                      // precios en tarjetas
     state.cart.forEach(recomputeLine);  // re-calcula líneas del carrito
     updateCartBar();
+    renderMobileInfo();                 // sincroniza dashboard móvil
   });
 }
 
@@ -400,9 +410,7 @@ function updateCartBar(){
 }
 
 // limpia teléfono a solo dígitos
-function normalizePhone(raw=''){
-  return String(raw).replace(/\D+/g,'').slice(0,15);
-}
+function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
 
 function openCartModal(){
   const m = document.getElementById('cartModal');
@@ -692,7 +700,9 @@ function setupSidebars(){
     txt.textContent = hh.enabled ? `Happy Hour – ${hh.discountPercent}%` : 'HH OFF';
     if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
   }
-  const eta = document.getElementById('etaTime'); if (eta) eta.textContent = '7–10 min';
+  const eta = document.getElementById('etaTime');
+  if (eta) eta.textContent = state.etaText || '7–10 min';
+  renderMobileInfo(); // sincroniza también en móvil
 
   const upsell = document.getElementById('upsellList');
   if (upsell){
@@ -720,9 +730,131 @@ function setupSidebars(){
 
   const rank = document.getElementById('rankToday');
   if (rank){
-    const pool = (state.menu?.minis||[]).slice(0,3).concat((state.menu?.burgers||[]).slice(0,2));
-    rank.innerHTML = pool.map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`).join('');
+    // Si ya tenemos top real, úsalo; sino, fallback a primeros ítems
+    const rows = (state.topToday.length
+        ? state.topToday.map(t=>`<li><div style="flex:1">${t.name}</div><div class="muted small">🔥 ${t.count}</div></li>`)
+        : (state.menu?.minis||[]).slice(0,3).concat((state.menu?.burgers||[]).slice(0,2))
+            .map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`))
+      .join('');
+    rank.innerHTML = rows;
   }
+}
+
+/* ===== Vista móvil (dashboard) ===== */
+function renderMobileInfo(){
+  const box = document.getElementById('mobileInfo');
+  if(!box) return;
+
+  // Happy Hour
+  const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
+  const pill = document.getElementById('miHHPill');
+  const txt  = document.getElementById('miHHText');
+  const msg  = document.getElementById('miHHMsg');
+  pill?.classList.toggle('on', !!hh.enabled);
+  if (txt) txt.textContent = hh.enabled ? `${hh.discountPercent}% OFF` : 'OFF';
+  if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
+
+  // ETA (valor centralizado)
+  const etaL = document.getElementById('etaTime'); if (etaL) etaL.textContent = state.etaText || '7–10 min';
+  const etaM = document.getElementById('miEta');   if (etaM) etaM.textContent = state.etaText || '7–10 min';
+
+  // Promos
+  const promo = document.getElementById('miPromos');
+  if (promo){
+    promo.innerHTML = hh.enabled
+      ? `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Combos con descuento</span><span class="price">-${hh.discountPercent}%</span></li>`
+      : `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Prueba nuestras minis ⭐</span><span class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</span></li>`;
+  }
+
+  // Más vendidos (hoy)
+  const top = document.getElementById('miTop');
+  if (top){
+    const chips = (state.topToday?.length ? state.topToday : [])
+      .map(t=> `<span class="mi-chip">${t.name} (${t.count})</span>`).join('');
+    top.innerHTML = chips || `<span class="muted small">Aún sin datos hoy</span>`;
+  }
+}
+
+/* ======= Herramientas de tiempo y analytics ======= */
+function tsToMs(t){
+  if (!t) return 0;
+  if (typeof t.toMillis === 'function') return t.toMillis();
+  if (t.seconds) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
+  const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
+}
+function isToday(ms){
+  if(!ms) return false;
+  const d = new Date(ms);
+  const now = new Date();
+  return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+}
+function computeTopToday(orders){
+  const acc = new Map(); // name -> count
+  for (const o of (orders||[])){
+    const created = tsToMs(o.createdAt);
+    if (!isToday(created)) continue;
+    const s = (o.status||'').toUpperCase();
+    if (s==='CANCELED') continue;
+    for (const it of (o.items||[])){
+      const k = it.name || it.id || '—';
+      const add = Number(it.qty||1);
+      acc.set(k, (acc.get(k)||0) + add);
+    }
+  }
+  state.topToday = [...acc.entries()]
+    .map(([name,count])=>({name, count}))
+    .sort((a,b)=> b.count - a.count)
+    .slice(0,5);
+}
+function computeETA(orders){
+  const base = {min:7, max:10};
+
+  // 1) tiempos reales (createdAt → ready/done)
+  const samples = [];
+  for (const o of (orders||[])){
+    const created = tsToMs(o.createdAt);
+    const ready   = tsToMs(o.readyAt || o.doneAt || (o.timestamps?.readyAt) || (o.timestamps?.doneAt));
+    if (!created || !ready) continue;
+    if (!isToday(ready)) continue;
+    const s = (o.status||'').toUpperCase();
+    if (s!=='READY' && s!=='DONE') continue;
+    const mins = (ready - created)/60000;
+    if (mins>0 && mins<120) samples.push(mins);
+  }
+  if (samples.length >= 3){
+    samples.sort((a,b)=>a-b);
+    const cut = Math.max(1, Math.floor(samples.length*0.1));   // recorte 10%
+    const trimmed = samples.slice(cut, samples.length-cut);
+    const avg = trimmed.reduce((a,n)=>a+n,0)/trimmed.length;
+    const lo = Math.max(5, Math.round(avg-2));
+    const hi = Math.min(25, Math.round(avg+2));
+    state.etaText = `${lo}–${hi} min`;
+    return;
+  }
+
+  // 2) por carga en cola
+  const q = (orders||[]).filter(o=>{
+    const s = (o.status||'').toUpperCase();
+    return s==='PENDING' || s==='RECEIVED' || s==='PREPARING' || s==='TAKEN';
+  }).length;
+  if (q>0){
+    const bump = Math.min(12, Math.ceil(q*1.5)); // ~1.5 min por pedido
+    const lo = base.min + Math.floor(bump/2);
+    const hi = base.max + bump;
+    state.etaText = `${lo}–${hi} min`;
+    return;
+  }
+
+  // 3) Fallback
+  state.etaText = `${base.min}–${base.max} min`;
+}
+function startOrdersAnalytics(){
+  if (state.unsubAnalytics){ state.unsubAnalytics(); state.unsubAnalytics=null; }
+  state.unsubAnalytics = subscribeOrders((orders)=>{
+    computeTopToday(orders);
+    computeETA(orders);
+    renderMobileInfo(); // refresca dashboard y ranking lateral
+  });
 }
 
 /* Feed de “Listos” (en vivo) */
@@ -732,11 +864,8 @@ function setupReadyFeed(){
   state.unsubReady = subscribeOrders(list=>{
     // Filtra READY, recientes primero
     const ready = (list||[]).filter(o=> (o.status||'')==='READY')
-      .sort((a,b)=>{
-        const ta = oTime(a);
-        const tb = oTime(b);
-        return tb - ta;
-      }).slice(0,6);
+      .sort((a,b)=> oTime(b) - oTime(a))
+      .slice(0,6);
 
     const rows = ready.map(o=>{
       const items = (o.items||[]);
