@@ -48,7 +48,7 @@ a{ color:var(--accent-2); text-decoration:none }
 
 /* ===== Header ===== */
 .header{
-  position:sticky; top:0; z-index:20;
+  position:sticky; top:0; z-index:30; /* ↑ antes 20 */
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 14px;
   background:rgba(10,14,24,.85);
@@ -196,7 +196,7 @@ textarea{ min-height:80px }
 .ul-clean .tag{ font-size:12px; color:var(--muted-2) }
 
 /* ===== Modal ===== */
-.modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); z-index:40 }
+.modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); z-index:70 } /* ↑ antes 40 */
 .modal.open{ display:grid }
 .modal-card{
   width:min(680px,92vw); max-height:86vh; overflow:auto;
@@ -338,16 +338,20 @@ textarea{ min-height:80px }
 
 /* ===== Laterales: layout del main cuando hay sidebars ===== */
 @media (min-width:1280px){
+  /* Al tener ancho suficiente, reservamos espacio para ambos laterales */
   body.has-sidebars main.container{
     max-width:none;
     margin-left:320px;   /* 280px side + 40px margen */
     margin-right:320px;  /* 280px side + 40px margen */
   }
+  /* Aseguramos que los laterales estén visibles en este rango */
+  .side{ display:flex; }
   #cards{ min-height:420px; }
 }
 
-/* En laptops más chicas ocultamos laterales */
-@media (max-width:1366px){
+/* En anchos menores a 1280px, ocultamos laterales y recentramos el main */
+@media (max-width:1279.98px){
+  .side{ display:none !important; }
   body.has-sidebars main.container{
     margin-left:auto;
     margin-right:auto;
