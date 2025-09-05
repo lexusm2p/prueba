@@ -160,6 +160,18 @@ function renderReady(list){
 // ---- Estado por teléfono + feed ----
 let currentPhone = '';
 
+// --- Auto-start por URL (?autostart=1&phone=XXXXXXXXXX)
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const autostart = qs.get('autostart') === '1';
+  const p = normPhone(qs.get('phone') || '');
+  if (p && phoneIn) phoneIn.value = p;     // prellenar el input
+  if (autostart && p.length >= 10) {
+    currentPhone = p;
+    renderMine(null); // placeholder mientras llega el snapshot
+  }
+})();
+
 DB.subscribeOrders(list=>{
   renderReady(list);
 
