@@ -1,17 +1,19 @@
 // /kiosk/track.js
-// Track público: refleja el MISMO status que cocina, notifica y suena en READY,
-// muestra total a pagar y agradece al pagar.
+// Track público: mismo status que cocina, suena/avisa en READY,
+// muestra total a pagar y agradece al pagar. HH/ETA en vivo.
 
-import { subscribeOrders, subscribeHappyHour } from '../shared/db.js';
+import * as DB from '../shared/db.js';
 
 const $ = (s)=>document.querySelector(s);
+
+// UI refs
 const hhPill = $('#hhPill');
 const hhText = $('#hhText');
 const etaEl  = $('#eta');
 
 const phoneIn = $('#phone');
-const goBtn = $('#go');
-const mineEl = $('#mine');
+const goBtn   = $('#go');
+const mineEl  = $('#mine');
 const readyEl = $('#ready');
 
 const ding = $('#ding'); // <audio> para READY
@@ -22,24 +24,47 @@ if ('Notification' in window && Notification.permission === 'default') {
 }
 
 // ---- Happy Hour ----
-subscribeHappyHour(hh=>{
-  const on = !!hh?.enabled;
-  hhPill?.classList.toggle('hh-on', on);
-  if (hhText) hhText.textContent = on ? `Happy Hour – ${Number(hh.discountPercent||0)}%` : 'HH OFF';
-});
+if (typeof DB.subscribeHappyHour === 'function'){
+  DB.subscribeHappyHour(hh=>{
+    const on = !!hh?.enabled;
+    hhPill?.classList.toggle('hh-on', on);
+    if (hhText) hhText.textContent = on ? `Happy Hour – ${Number(hh.discountPercent||0)}%` : 'HH OFF';
+  });
+}
+
+// ---- ETA (settings/eta si existe, si no, fallback por carga/tiempos) ----
+let etaSource = 'fallback'; // 'settings' si viene de Firestore
+
+function setETA(text){
+  if (etaEl) etaEl.textContent = text || '7–10 min';
+}
+setETA('7–10 min');
+
+if (typeof DB.subscribeETA === 'function'){
+  DB.subscribeETA(v=>{
+    etaSource = 'settings';
+    setETA(v?.text || '7–10 min');
+  });
+}
 
 // ---- Helpers ----
 const normPhone = (s='') => String(s).replace(/\D+/g,'').slice(0,15);
 const ts = (d)=> (d?.toMillis?.() ?? new Date(d||0).getTime());
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
+const escapeHtml = (s='') => String(s).replace(/[&<>"']/g, m=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+}[m]));
 
+// Teléfono robusto desde el pedido
+const getPhone = (o)=> normPhone(o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '');
+
+// Mapeo de estados (alineado a cocina)
 const STATUS_TEXT = {
-  // Lo que ve el cliente (mapea al estado de cocina)
-  PENDING:   { tag: '📥 Pedido recibido', sub: 'Esperando confirmación en cocina' },
-  CONFIRMED: { tag: '✅ Confirmado',      sub: 'En cola' }, // si lo usan
-  COOKING:   { tag: '🔥 En preparación',  sub: 'Estamos cocinando tu pedido' },
-  READY:     { tag: '🛎️ Listo para entregar', sub: 'Pásalo a recoger o espera en tu mesa' },
-  PAID:      { tag: '💚 Pagado',          sub: '¡Gracias!' }
+  PENDING:      { tag: '📥 Pedido recibido',      sub: 'Esperando confirmación en cocina' },
+  IN_PROGRESS:  { tag: '🔥 En preparación',        sub: 'Estamos cocinando tu pedido' },
+  READY:        { tag: '🛎️ Listo para entregar',  sub: 'Pásalo a recoger o espera en tu mesa' },
+  DELIVERED:    { tag: '✔️ Entregado',             sub: 'En proceso de cobro' },
+  PAID:         { tag: '💚 Pagado',                sub: '¡Gracias!' }
 };
 
 // ---- Render: Mi pedido ----
@@ -56,8 +81,12 @@ function renderMine(order){
     return;
   }
 
+  // Normaliza estado (si viene paid=true lo tratamos como PAID)
+  let st = String(order.status || 'PENDING').toUpperCase();
+  if (order.paid) st = 'PAID';
+
   // Notificación + sonido cuando pasa a READY
-  if (order.id === lastMineId && lastMineStatus !== 'READY' && order.status === 'READY') {
+  if (order.id === lastMineId && lastMineStatus !== 'READY' && st === 'READY') {
     try { ding?.play?.(); } catch {}
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('Tu pedido está listo 🛎️', {
@@ -66,38 +95,34 @@ function renderMine(order){
     }
   }
 
-  // Mensajes según estado
-  const st = String(order.status || 'PENDING').toUpperCase();
   const label = STATUS_TEXT[st] || STATUS_TEXT.PENDING;
 
   // Totales
   const subtotal = Number(order.subtotal || 0);
   const hhDisc   = Number(order.hh?.totalDiscount || 0);
 
-  // Línea de pago: se muestra en READY y PENDING/COOKING también (informativo),
-  // y se reemplaza por gracias en PAID.
+  // Línea de pago
   let payLine = `
     <div class="payline">
       <span class="price">Total a pagar: ${money(subtotal)}</span>
       ${hhDisc>0 ? `<span class="tag">Ahorro HH: -${money(hhDisc)}</span>` : ''}
-      ${order.payMethodPref ? `<span class="tag">${order.payMethodPref}</span>` : ''}
-      ${order.orderType==='dinein' && order.table ? `<span class="tag">Mesa ${order.table}</span>` : ''}
+      ${order.payMethodPref ? `<span class="tag">${escapeHtml(order.payMethodPref)}</span>` : ''}
+      ${order.orderType==='dinein' && order.table ? `<span class="tag">Mesa ${escapeHtml(order.table)}</span>` : ''}
       ${order.orderType==='pickup' ? `<span class="tag">Pickup</span>` : ''}
     </div>`;
-
   if (st === 'PAID') {
-    payLine = `<div class="payline"><b>¡Muchas gracias por tu compra, ${order.customer || 'amig@'}! 💚</b></div>`;
+    payLine = `<div class="payline"><b>¡Muchas gracias por tu compra, ${escapeHtml(order.customer || 'amig@')}! 💚</b></div>`;
   }
 
   // Resumen corto de ítems
   const items = order.items||[];
   const count = items.reduce((n,i)=> n + (i.qty||1), 0);
-  const names = items.map(i=>i.name).slice(0,3).join(', ');
+  const names = items.map(i=>i.name).slice(0,3).map(escapeHtml).join(', ');
 
   mineEl.innerHTML = `
     <div style="display:flex; gap:10px; align-items:center; justify-content:space-between">
       <div style="min-width:0">
-        <div><b>${order.customer || '—'}</b> · ${count} it.</div>
+        <div><b>${escapeHtml(order.customer || '—')}</b> · ${count} it.</div>
         <div class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${names}</div>
       </div>
       <span class="tag">${label.tag}</span>
@@ -120,10 +145,10 @@ function renderReady(list){
     .map(o=>{
       const items = o.items||[];
       const count = items.reduce((n,i)=> n + (i.qty||1), 0);
-      const names = items.map(i=>i.name).slice(0,2).join(', ');
+      const names = items.map(i=>i.name).slice(0,2).map(escapeHtml).join(', ');
       return `<li>
         <div style="flex:1;min-width:0">
-          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${(o.customer||'—')}</b> · ${count} it.</div>
+          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${escapeHtml(o.customer||'—')}</b> · ${count} it.</div>
           <div class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${names}</div>
         </div>
         <div>🛎️</div>
@@ -135,12 +160,17 @@ function renderReady(list){
 // ---- Estado por teléfono + feed ----
 let currentPhone = '';
 
-subscribeOrders(list=>{
+DB.subscribeOrders(list=>{
   renderReady(list);
+
+  // Fallback ETA por carga/tiempos si no viene de settings
+  if (etaSource !== 'settings'){
+    setETA(computeEtaFallback(list));
+  }
 
   if (currentPhone){
     const mine = (list||[])
-      .filter(o => normPhone(o.phone||'').endsWith(currentPhone))
+      .filter(o => getPhone(o).endsWith(currentPhone))
       .sort((a,b)=> ts(b.createdAt) - ts(a.createdAt))[0];
     renderMine(mine || null);
   }
@@ -189,3 +219,55 @@ qrCopy?.addEventListener('click', async ()=>{
   }
 });
 setDefaultQrUrl();
+
+/* ===== ETA fallback ===== */
+function tsToMs(t){
+  if (!t) return 0;
+  if (typeof t.toMillis === 'function') return t.toMillis();
+  if (t.seconds) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
+  const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
+}
+function isToday(ms){
+  if(!ms) return false;
+  const d = new Date(ms); const now = new Date();
+  return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+}
+function computeEtaFallback(orders){
+  const base = {min:7, max:10};
+
+  // muestras reales (createdAt → ready/done)
+  const samples = [];
+  for (const o of (orders||[])){
+    const created = tsToMs(o.createdAt);
+    const ready   = tsToMs(o.readyAt || o.doneAt || (o.timestamps?.readyAt) || (o.timestamps?.doneAt));
+    if (!created || !ready) continue;
+    if (!isToday(ready)) continue;
+    const s = (o.status||'').toUpperCase();
+    if (s!=='READY' && s!=='DONE') continue;
+    const mins = (ready - created)/60000;
+    if (mins>0 && mins<120) samples.push(mins);
+  }
+  if (samples.length >= 3){
+    samples.sort((a,b)=>a-b);
+    const cut = Math.max(1, Math.floor(samples.length*0.1));   // recorte 10%
+    const trimmed = samples.slice(cut, samples.length-cut);
+    const avg = trimmed.reduce((a,n)=>a+n,0)/trimmed.length;
+    const lo = Math.max(5, Math.round(avg-2));
+    const hi = Math.min(25, Math.round(avg+2));
+    return `${lo}–${hi} min`;
+  }
+
+  // por carga en cola
+  const q = (orders||[]).filter(o=>{
+    const s = (o.status||'').toUpperCase();
+    return s==='PENDING' || s==='RECEIVED' || s==='PREPARING' || s==='TAKEN' || s==='IN_PROGRESS';
+  }).length;
+  if (q>0){
+    const bump = Math.min(12, Math.ceil(q*1.5)); // ~1.5 min por pedido
+    const lo = base.min + Math.floor(bump/2);
+    const hi = base.max + bump;
+    return `${lo}–${hi} min`;
+  }
+
+  return `${base.min}–${base.max} min`;
+}
