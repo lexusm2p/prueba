@@ -6,6 +6,7 @@
 // Logro: “Combo 3 minis”, aderezo sorpresa gratis al elegir extras.
 // + Modal de seguimiento (QR + “Seguir ahora”) tras confirmar.
 // + CTA flotante para promover seguimiento al cerrar carrito sin confirmar.
+// + Cuenta regresiva HH con auto-refresh al terminar.
 
 import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
@@ -33,6 +34,9 @@ const state = {
 
   // Promoción seguimiento
   followCtaShown: false,  // evita spam de CTA al cerrar carrito
+
+  // Happy Hour countdown (solo UI)
+  hhLeftText: '', // "mm:ss" cuando haya endsAt
 };
 
 /* ======================= Recursos visuales ======================= */
@@ -110,7 +114,7 @@ async function init(){
   ensureFollowModal();
   ensureFollowCta();
 
-  bindHappyHour();       // HH en vivo
+  bindHappyHour();       // HH en vivo + countdown + refresh
   bindETA();             // ETA (settings) si existe; si no, fallback por analytics
   setupReadyFeed();      // feed “Listos”
   startOrdersAnalytics();// top “Más vendidos hoy” + fallback de ETA si no hay settings
@@ -292,6 +296,19 @@ function hideFollowCta(){
 }
 
 /* ======================= Happy Hour ======================= */
+
+// Countdown HH + refresh
+let hhTimer = null;
+const HH_REFRESH_GUARD_KEY = 'hhRefreshGuard-app';
+
+const fmtMMSS = (ms)=>{
+  const s = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(s/60);
+  const ss = s%60;
+  return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+};
+function stopHHTimer(){ if(hhTimer){ clearInterval(hhTimer); hhTimer=null; } }
+
 function hhInfo(){
   const hh = state.menu?.happyHour || {};
   const enabled = !!hh.enabled;
@@ -307,15 +324,57 @@ function hhDiscountPerUnit(item){
   const unit = Number(item?.price || 0);
   return unit * pct; // SOLO al precio base
 }
-function updateHHPill(hh){
+function updateHHPill(hh, extraText=''){
   const pill = document.getElementById('hhPill');
   const txt  = document.getElementById('hhText');
   const msg  = document.getElementById('hhMsg');
   if (!pill || !txt) return;
   pill.classList.toggle('on', !!hh.enabled);
-  txt.textContent = hh.enabled ? `Happy Hour – ${Number(hh.discountPercent||0)}%` : 'HH OFF';
+  txt.textContent = hh.enabled
+    ? `Happy Hour – ${Number(hh.discountPercent||0)}%${extraText ? ' · ' + extraText : ''}`
+    : 'HH OFF';
   if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
 }
+
+function startHHCountdown(hh){
+  stopHHTimer();
+  state.hhLeftText = '';
+  updateHHPill(hh);
+
+  const end = Number(hh?.endsAt || 0);
+  if (!hh.enabled || !end) { renderMobileInfo(); return; }
+
+  const tick = ()=>{
+    const left = end - Date.now();
+    if (left <= 0){
+      stopHHTimer();
+      // Evita loops de recarga
+      const token = String(end);
+      const guard = sessionStorage.getItem(HH_REFRESH_GUARD_KEY);
+      if (guard !== token){
+        sessionStorage.setItem(HH_REFRESH_GUARD_KEY, token);
+        // pinta 00:00 un instante
+        state.hhLeftText = '00:00';
+        updateHHPill(hh, state.hhLeftText);
+        renderMobileInfo();
+        setTimeout(()=> location.reload(), 300);
+        return;
+      }
+      // si ya recargamos una vez, mostrar OFF local
+      updateHHPill({ ...hh, enabled:false });
+      state.hhLeftText = '';
+      renderMobileInfo();
+      return;
+    }
+    state.hhLeftText = fmtMMSS(left);
+    updateHHPill(hh, state.hhLeftText);
+    renderMobileInfo();
+  };
+
+  tick();
+  hhTimer = setInterval(tick, 1000);
+}
+
 function bindHappyHour(){
   if (state.unsubHH) { state.unsubHH(); state.unsubHH = null; }
   if (typeof DB.subscribeHappyHour === 'function'){
@@ -325,9 +384,13 @@ function bindHappyHour(){
         enabled: !!hh.enabled,
         discountPercent: Number(hh.discountPercent||0),
         bannerText: hh.bannerText || '',
-        applyEligibleOnly: hh.applyEligibleOnly!==false
+        applyEligibleOnly: hh.applyEligibleOnly!==false,
+        endsAt: hh?.endsAt!=null ? Number(hh.endsAt) : null
       };
-      updateHHPill(state.menu.happyHour);
+      // countdown + UI
+      startHHCountdown(state.menu.happyHour);
+
+      // precios y UI dependientes
       renderCards();
       state.cart.forEach(recomputeLine);
       updateCartBar();
@@ -834,7 +897,9 @@ function setupSidebars(){
   const msg  = document.getElementById('hhMsg');
   if (pill && txt){
     pill.classList.toggle('on', !!hh.enabled);
-    txt.textContent = hh.enabled ? `Happy Hour – ${hh.discountPercent}%` : 'HH OFF';
+    txt.textContent = hh.enabled
+      ? `Happy Hour – ${hh.discountPercent}%${state.hhLeftText ? ' · ' + state.hhLeftText : ''}`
+      : 'HH OFF';
     if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
   }
   const eta = document.getElementById('etaTime');
@@ -886,7 +951,9 @@ function renderMobileInfo(){
   const txt  = document.getElementById('miHHText');
   const msg  = document.getElementById('miHHMsg');
   pill?.classList.toggle('on', !!hh.enabled);
-  if (txt) txt.textContent = hh.enabled ? `${hh.discountPercent}% OFF` : 'OFF';
+  if (txt) txt.textContent = hh.enabled
+    ? `${hh.discountPercent}% OFF${state.hhLeftText ? ' · ' + state.hhLeftText : ''}`
+    : 'OFF';
   if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
 
   const etaL = document.getElementById('etaTime'); if (etaL) etaL.textContent = state.etaText || '7–10 min';
@@ -1044,11 +1111,11 @@ document.addEventListener('click', (e)=>{
 }, false);
 
 /* ======================= Miscelánea ======================= */
-
-// Limpia suscripciones al abandonar la página
+// Limpia suscripciones y timers al abandonar la página
 window.addEventListener('beforeunload', ()=>{
   try{ state.unsubReady && state.unsubReady(); }catch{}
   try{ state.unsubAnalytics && state.unsubAnalytics(); }catch{}
   try{ state.unsubHH && state.unsubHH(); }catch{}
   try{ state.unsubETA && state.unsubETA(); }catch{}
+  try{ if(hhTimer) clearInterval(hhTimer); }catch{}
 });
