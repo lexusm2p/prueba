@@ -26,7 +26,8 @@ import { db, ensureAnonAuth } from "./firebase.js";
    Happy Hour:
    - /settings/happyHour => {
        enabled:boolean, discountPercent:number (0-100),
-       bannerText?:string, applyEligibleOnly?:boolean
+       bannerText?:string, applyEligibleOnly?:boolean,
+       endsAt?: number // epoch ms (para countdown en front)
      }
    ========================================================================== */
 
@@ -91,7 +92,8 @@ export async function fetchCatalogWithFallback(){
           enabled: !!happyHour.enabled,
           discountPercent: Number(happyHour.discountPercent||0),
           bannerText: happyHour.bannerText || '',
-          applyEligibleOnly: happyHour.applyEligibleOnly!==false // default true
+          applyEligibleOnly: happyHour.applyEligibleOnly!==false, // default true
+          endsAt: (happyHour.endsAt!=null ? Number(happyHour.endsAt) : null)
         },
         appSettings: {
           sauceCupItemId: cfg.sauceCupItemId || null
@@ -106,7 +108,7 @@ export async function fetchCatalogWithFallback(){
   const res = await fetch('../data/menu.json');
   const json = await res.json();
   if (!json.extras.dlcCarneMini) json.extras.dlcCarneMini = 12;
-  json.happyHour ||= { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true };
+  json.happyHour ||= { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true, endsAt:null };
   json.drinks ||= []; json.sides ||= []; json.combos ||= [];
   json.appSettings ||= { sauceCupItemId: null };
   return json;
@@ -197,19 +199,55 @@ export async function setSettings(patch){
   await setDoc(doc(db,'settings','app'), patch, { merge:true });
 }
 
+/** Happy Hour live (normaliza discountPercent/applyEligibleOnly/endsAt) */
 export function subscribeHappyHour(cb){
-  return onSnapshot(doc(db,'settings','happyHour'), (d)=>{
-    cb(d.exists()? d.data() : { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true });
-  }, (err)=> console.error('[subscribeHappyHour]', err));
+  return onSnapshot(
+    doc(db,'settings','happyHour'),
+    (d)=>{
+      const raw = d.exists()
+        ? d.data()
+        : { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true, endsAt:null };
+      cb({
+        enabled: !!raw.enabled,
+        discountPercent: Number(raw.discountPercent || 0),
+        bannerText: String(raw.bannerText || ''),
+        applyEligibleOnly: raw.applyEligibleOnly !== false,
+        endsAt: (raw.endsAt!=null ? Number(raw.endsAt) : null)
+      });
+    },
+    (err)=> console.error('[subscribeHappyHour]', err)
+  );
 }
+
+/**
+ * setHappyHour:
+ * - {enabled:true, durationMin:X} ⇒ endsAt = now + X min
+ * - {enabled:true, endsAt:epochMs} ⇒ usa ese fin
+ * - {enabled:false} ⇒ apaga y limpia endsAt
+ * - Si no mandas endsAt/durationMin, deja endsAt como está.
+ */
 export async function setHappyHour(patch){
   await ensureAnonAuth();
+
   const clean = {
     enabled: !!patch.enabled,
     discountPercent: Math.max(0, Math.min(100, Number(patch.discountPercent||0))),
     bannerText: String(patch.bannerText||''),
     applyEligibleOnly: patch.applyEligibleOnly!==false
   };
+
+  const hasEndsAt   = Object.prototype.hasOwnProperty.call(patch, 'endsAt');
+  const hasDuration = Object.prototype.hasOwnProperty.call(patch, 'durationMin');
+
+  if (clean.enabled && hasEndsAt){
+    const n = Number(patch.endsAt);
+    clean.endsAt = Number.isFinite(n) ? n : null;
+  } else if (clean.enabled && hasDuration){
+    const mins = Number(patch.durationMin);
+    clean.endsAt = (Number.isFinite(mins) && mins > 0) ? (Date.now() + mins*60000) : null;
+  } else if (!clean.enabled){
+    clean.endsAt = null;
+  }
   await setDoc(doc(db,'settings','happyHour'), clean, { merge:true });
 }
 
