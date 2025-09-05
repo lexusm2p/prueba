@@ -43,8 +43,15 @@ body{
     var(--bg);
 }
 
-/* ===== Links ===== */
+/* ===== Utilidades ===== */
 a{ color:var(--accent-2); text-decoration:none }
+.row{ display:flex; align-items:center; gap:8px }
+.right{ text-align:right }
+.center{ text-align:center }
+.nowrap{ white-space:nowrap }
+.mono{ font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace }
+.muted{ color:var(--muted) }
+.small{ font-size:12px }
 
 /* ===== Header ===== */
 .header{
@@ -112,6 +119,38 @@ a{ color:var(--accent-2); text-decoration:none }
   box-shadow:0 6px 0 #b22525, 0 10px 18px rgba(0,0,0,.35);
 }
 
+/* ===== Tabs genéricas (kiosko minis/grandes) ===== */
+.tabs{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.btn.tab{
+  border:2px solid rgba(255,255,255,.25);
+  background:#1c2436;
+  color:var(--ink);
+  box-shadow:none;
+  min-height:44px;
+  line-height:1;
+}
+.btn.tab.is-active{
+  border:2px solid #352600;
+  background:linear-gradient(#ffc83a,#f2a400);
+  color:#1a1200;
+  box-shadow:0 6px 0 #b37d08, 0 10px 18px rgba(0,0,0,.35);
+}
+
+/* ===== Tabs de Admin (por si se mueven desde el HTML inline) ===== */
+.tabs-admin{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px }
+.tabs-admin .tab{
+  padding:10px 12px; border-radius:12px; border:2px solid #2a3347;
+  background:#121a2a; color:#eaf2ff; cursor:pointer;
+}
+.tabs-admin .tab.is-active{
+  border-color:#ffd24a;
+  box-shadow:0 0 0 2px rgba(255,210,74,.15) inset;
+}
+
 /* ===== Cards (retro) ===== */
 .card{
   position:relative;
@@ -124,8 +163,7 @@ a{ color:var(--accent-2); text-decoration:none }
   box-shadow:var(--shadow), inset 0 0 0 2px rgba(255,255,255,.06);
 }
 .card h3{ margin:0 0 6px; font-size:clamp(18px,2.2vw,22px) }
-.muted{ color:var(--muted) }
-.small{ font-size:12px }
+.price{ color:var(--accent); font-weight:900; font-size:clamp(16px,2vw,18px) }
 
 /* Icono pixel (placeholder SVG) */
 .icon{
@@ -141,13 +179,11 @@ a{ color:var(--accent-2); text-decoration:none }
 <rect x="12" y="14" width="40" height="8" fill="%23d18b00"/>\
 <circle cx="20" cy="16" r="1" fill="%23000"/>\
 <circle cx="28" cy="16" r="1" fill="%23000"/>\
-<circle cx="36" cy="16 r="1" fill="%23000"/>\
+<circle cx="36" cy="16" r="1" fill="%23000"/>\
 </svg>') center/cover no-repeat;
 }
 
 /* ===== Pie de tarjeta (dos modos: .card-foot o último .row) ===== */
-.price{ color:var(--accent); font-weight:900; font-size:clamp(16px,2vw,18px) }
-
 .card-foot{
   position:absolute; left:16px; right:16px; bottom:16px;
   display:flex; align-items:center; gap:12px;
@@ -180,7 +216,7 @@ a{ color:var(--accent-2); text-decoration:none }
 /* ===== Campos ===== */
 .field{ margin:10px 0 }
 label{ display:block; margin-bottom:6px; color:var(--muted); font-size:12px }
-input[type=text],input[type=number],select,textarea{
+input[type=text],input[type=number],input[type=date],input[type=datetime-local],select,textarea{
   width:100%; padding:12px; border-radius:10px; border:1px solid var(--stroke);
   background:#0c1322; color:var(--ink);
 }
@@ -230,10 +266,14 @@ textarea{ min-height:80px }
 .k-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px }
 .k-badges{ display:flex; gap:6px; flex-wrap:wrap }
 .k-badge{ background:#132b3b; border:1px solid var(--stroke); padding:2px 8px; border-radius:999px; font-size:12px; color:var(--muted) }
+.k-badge.ok{ background:#183a2a }
+.k-badge.warn{ background:#3a2f18 }
 
-@media (max-width:980px){
-  .k-columns{ grid-template-columns:1fr }
-}
+/* ===== Tablas ===== */
+.k-table{ width:100%; border-collapse:collapse; font-size:14px }
+.k-table th,.k-table td{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08) }
+.k-table th{ text-align:left; color:var(--muted) }
+.k-table td.right, .k-table th.right{ text-align:right }
 
 /* ===== Responsive cards ===== */
 @media (max-width:640px){
@@ -306,35 +346,10 @@ textarea{ min-height:80px }
   }
 }
 
-/* ===== Tabs (Minis / Grandes) ===== */
-.tabs{
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-}
-.btn.tab{
-  border:2px solid rgba(255,255,255,.25);
-  background:#1c2436;
-  color:var(--ink);
-  box-shadow:none;
-  min-height:44px;
-  line-height:1;
-}
-.btn.tab.is-active{
-  border:2px solid #352600;
-  background:linear-gradient(#ffc83a,#f2a400);
-  color:#1a1200;
-  box-shadow:0 6px 0 #b37d08, 0 10px 18px rgba(0,0,0,.35);
-}
+/* iOS tamaño mínimo de fuentes en botones */
 @supports (-webkit-touch-callout: none) {
   .btn, .btn.tab, .btn.small{ font-size:16px; }
 }
-@media (max-width:480px){
-  .btn.tab{ flex:1 1 160px; }
-}
-
-/* Ajuste lectura */
-.card .muted.small{ line-height:1.35 }
 
 /* ===== Laterales: layout del main cuando hay sidebars ===== */
 @media (min-width:1280px){
@@ -383,7 +398,6 @@ textarea{ min-height:80px }
 /* =========================================================
    Extensiones para CRUD de Artículos (Admin)
    ========================================================= */
-/* Botones compactos en tablas (editar/eliminar) */
 .k-table .btn.small.ghost{
   padding:6px 8px;
   font-size:11px;
@@ -417,4 +431,75 @@ textarea{ min-height:80px }
 }
 #artModal .modal-body .field{
   margin-bottom:12px;
+}
+
+/* =========================================================
+   Happy Hour — Countdown pill (Admin > panel-happy)
+   ========================================================= */
+#panel-happy #hhCountdown{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:8px 12px;
+  min-width:160px;
+  white-space:nowrap;
+  border-radius:999px;
+  background:linear-gradient(180deg,#1a2337,#0f1626);
+  border:1.5px solid #2e3a56;
+  box-shadow:
+    0 2px 0 rgba(0,0,0,.25),
+    inset 0 0 0 1px rgba(255,255,255,.04);
+  color:var(--ink);
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.5px;
+}
+
+/* Puntito de estado */
+#panel-happy #hhCountdown::before{
+  content:"";
+  width:10px; height:10px;
+  border-radius:50%;
+  background:#49d28d; /* verde = ok */
+  box-shadow:0 0 0 3px rgba(73,210,141,.15);
+}
+
+/* Estados visuales (añade/quita estas clases desde JS) */
+#panel-happy #hhCountdown.is-running{
+  border-color:#2f8f4e;
+  box-shadow:
+    0 0 0 1px rgba(47,143,78,.25) inset,
+    0 0 16px rgba(47,143,78,.18);
+  animation:hhPulse 1.6s ease-in-out infinite;
+}
+#panel-happy #hhCountdown.is-warning{
+  border-color:#9a7b2c;
+}
+#panel-happy #hhCountdown.is-warning::before{
+  background:#ffd24a; /* dorado = por terminar */
+  box-shadow:0 0 0 3px rgba(255,210,74,.20);
+}
+#panel-happy #hhCountdown.is-stopped,
+#panel-happy #hhCountdown.is-idle{
+  opacity:.75;
+}
+#panel-happy #hhCountdown.is-stopped::before{
+  background:#9aa3b2; /* gris = detenido */
+  box-shadow:0 0 0 3px rgba(255,255,255,.08);
+}
+
+/* Pulso suave cuando está corriendo */
+@keyframes hhPulse{
+  0%{ transform:scale(1); }
+  50%{ transform:scale(1.06); }
+  100%{ transform:scale(1); }
+}
+
+/* Botones rápidos redondeados del panel HH */
+#panel-happy .row [id^="btnHH"]{
+  border-radius:999px;
+  padding:.45rem .7rem;
+}
+#panel-happy #btnHHStop{
+  border-color:#6b2a2a;
 }
