@@ -31,6 +31,7 @@ subscribeOrders((orders = [])=>{
 
 /* ================== Helpers ================== */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
+const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
 
 /* ================== Render ================== */
 function render(list){
@@ -83,19 +84,19 @@ function renderCard(o={}){
         lineTotal: (o.item?.price||0) * (o.qty||1)
       }] : []);
 
-  // META visible: mesa o pickup con teléfono
+  // META visible: mesa o pickup (sin teléfono aquí para no duplicar)
   let meta = '—';
   if (o.orderType === 'dinein') {
     meta = `Mesa: <b>${escapeHtml(o.table||'?')}</b>`;
   } else if (o.orderType === 'pickup') {
-    const phone = (o.phone || '').toString();
-    meta = `Pickup${phone ? ` · Tel: <b>${escapeHtml(phone)}</b>` : ''}`;
+    meta = 'Pickup';
   } else if (o.orderType) {
     meta = escapeHtml(o.orderType);
   }
 
   const total = calcTotal(o);
-  const phoneTxt = o.phone ? ` · Tel: <b>${escapeHtml(String(o.phone))}</b>` : '';
+  const phone = getPhone(o);
+  const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
   const itemsHtml = items.map(it=>{
     const ingr = (it.baseIngredients||[]).map(i=>`<div class="k-badge">${escapeHtml(i)}</div>`).join('');
