@@ -221,20 +221,114 @@ document.getElementById('btnReloadCatalog')?.addEventListener('click', async ()=
   }
 });
 
-/* ============== Happy Hour ============== */
+/* ============== Happy Hour (duración, fin y countdown) ============== */
+let HH_TIMER = null;
+
 subscribeHappyHour(hh => {
-  if (!q('#hhEnabled')) return;
-  q('#hhEnabled').value = hh?.enabled ? 'on' : 'off';
-  q('#hhDisc').value = Number(hh?.discountPercent || 0);
-  q('#hhMsg').value = hh?.bannerText || '';
+  // Campos básicos (existentes)
+  if (q('#hhEnabled')) q('#hhEnabled').value = hh?.enabled ? 'on' : 'off';
+  if (q('#hhDisc'))    q('#hhDisc').value    = Number(hh?.discountPercent || 0);
+  if (q('#hhMsg'))     q('#hhMsg').value     = hh?.bannerText || '';
+
+  // Opcionales: fin programado y countdown
+  const endsAt = Number(hh?.endsAt || 0) || null;
+
+  // #hhEndsAt puede ser input datetime-local o text; ponemos ISO local si existe
+  const endsEl = q('#hhEndsAt');
+  if (endsEl){
+    if (endsAt){
+      const d = new Date(endsAt);
+      // Para <input type="datetime-local"> formateamos YYYY-MM-DDTHH:mm
+      const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      endsEl.value = iso;
+      endsEl.title = d.toLocaleString();
+    }else{
+      endsEl.value = '';
+      endsEl.title = '';
+    }
+  }
+
+  // Countdown en #hhCountdown (si existe)
+  const lbl = q('#hhCountdown');
+  if (HH_TIMER){ clearInterval(HH_TIMER); HH_TIMER = null; }
+  if (lbl){
+    if (hh?.enabled && endsAt && endsAt > Date.now()){
+      const tick = ()=>{
+        const ms = endsAt - Date.now();
+        if (ms <= 0){
+          lbl.textContent = 'Finalizó';
+          clearInterval(HH_TIMER); HH_TIMER = null;
+          return;
+        }
+        const m = Math.floor(ms/60000);
+        const s = Math.floor((ms%60000)/1000);
+        lbl.textContent = `Termina en ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      };
+      tick();
+      HH_TIMER = setInterval(tick, 1000);
+    }else{
+      lbl.textContent = hh?.enabled ? 'Activo' : 'Inactivo';
+    }
+  }
 });
+
+// Guardar HH (usa durationMin o endsAt si están presentes)
 q('#btnSaveHappy')?.addEventListener('click', async () => {
   const enabled = q('#hhEnabled')?.value === 'on';
   const discountPercent = Number(q('#hhDisc')?.value || 0);
   const bannerText = (q('#hhMsg')?.value || '').trim();
-  try { await setHappyHour({ enabled, discountPercent, bannerText }); toast('Happy Hour guardada'); }
-  catch (e) { console.error(e); toast('No se pudo guardar HH'); }
+
+  // Opcionales
+  const durMinEl = q('#hhDurMin');
+  const endsEl   = q('#hhEndsAt');
+
+  const patch = { enabled, discountPercent, bannerText };
+
+  // Si hay duración numérica y HH habilitado, la usamos
+  const durMin = durMinEl ? Number(durMinEl.value||0) : 0;
+  if (enabled && Number.isFinite(durMin) && durMin > 0){
+    patch.durationMin = durMin;
+  } else if (enabled && endsEl && endsEl.value){
+    // Si hay fecha/hora de fin válida, la usamos
+    const t = new Date(endsEl.value);
+    if (!isNaN(t.getTime())) patch.endsAt = t.getTime();
+  }
+
+  try {
+    await setHappyHour(patch);
+    toast('Happy Hour guardada');
+  } catch (e) {
+    console.error(e); toast('No se pudo guardar HH');
+  }
 });
+
+// Acciones rápidas (opcionales: solo si existen los botones)
+q('#btnHH30')?.addEventListener('click', ()=> quickHH(30));
+q('#btnHH60')?.addEventListener('click', ()=> quickHH(60));
+q('#btnHH90')?.addEventListener('click', ()=> quickHH(90));
+q('#btnHHStop')?.addEventListener('click', async ()=>{
+  try{
+    await setHappyHour({ enabled:false, discountPercent: Number(q('#hhDisc')?.value||0), bannerText:(q('#hhMsg')?.value||'') });
+    toast('Happy Hour desactivada');
+  }catch(e){ console.error(e); toast('No se pudo desactivar'); }
+});
+q('#btnHHExtend15')?.addEventListener('click', async ()=>{
+  // Extiende 15 min desde ahora o desde endsAt vigente
+  try{
+    const disc = Number(q('#hhDisc')?.value||0);
+    const msg  = (q('#hhMsg')?.value||'');
+    await setHappyHour({ enabled:true, discountPercent: disc, bannerText: msg, durationMin: 15 });
+    toast('Extendido 15 min');
+  }catch(e){ console.error(e); toast('No se pudo extender'); }
+});
+async function quickHH(mins){
+  try{
+    const disc = Number(q('#hhDisc')?.value||0);
+    const msg  = (q('#hhMsg')?.value||'');
+    await setHappyHour({ enabled:true, discountPercent: disc, bannerText: msg, durationMin: mins });
+    toast(`Happy Hour por ${mins} min`);
+  }catch(e){ console.error(e); toast('No se pudo activar'); }
+}
 
 /* ============== Ajustes app para vasitos 2oz ============== */
 let APP_SETTINGS = {};
