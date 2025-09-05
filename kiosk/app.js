@@ -4,6 +4,8 @@
 // Suscripción en vivo a settings/happyHour (y a settings/eta si existe).
 // Vista móvil “dashboard” (HH, ETA, Promos, Más vendidos) + feed READY.
 // Logro: “Combo 3 minis”, aderezo sorpresa gratis al elegir extras.
+// + Modal de seguimiento (QR + “Seguir ahora”) tras confirmar.
+// + CTA flotante para promover seguimiento al cerrar carrito sin confirmar.
 
 import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
@@ -28,6 +30,9 @@ const state = {
   topToday: [],
 
   comboUnlocked: false,
+
+  // Promoción seguimiento
+  followCtaShown: false,  // evita spam de CTA al cerrar carrito
 };
 
 /* ======================= Recursos visuales ======================= */
@@ -101,6 +106,10 @@ async function init(){
   setupSidebars();
   renderMobileInfo();
 
+  // Asegura que existan los elementos para seguimiento (modal + CTA)
+  ensureFollowModal();
+  ensureFollowCta();
+
   bindHappyHour();       // HH en vivo
   bindETA();             // ETA (settings) si existe; si no, fallback por analytics
   setupReadyFeed();      // feed “Listos”
@@ -132,6 +141,149 @@ function normalizeExtraIngredients(){
     if (typeof x === 'string') return { id: slug(x), name: x, price: defaultPrice };
     return { id: x.id || slug(x.name), name: x.name, price: Number(x.price ?? defaultPrice) };
   });
+}
+
+/* ========= Seguimiento: helpers URL + modal + CTA flotante ========= */
+
+// Normaliza a dígitos (hasta 15 por compatibilidad)
+function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
+
+// Construye URL de track con autostart si hay phone
+function buildTrackUrl(phone){
+  const u = new URL('./track.html', location.href);
+  const clean = normalizePhone(phone || '');
+  if (clean) u.searchParams.set('phone', clean);
+  if (clean) u.searchParams.set('autostart', '1');
+  return u.toString();
+}
+
+// Inyecta modal si no existe
+function ensureFollowModal(){
+  if (document.getElementById('trackAskModal')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'trackAskModal';
+  wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;place-items:center;background:rgba(0,0,0,.4);backdrop-filter:saturate(120%) blur(2px)';
+  wrap.innerHTML = `
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="trackTtl"
+         style="max-width:760px;width:calc(100% - 24px);background:#0f182a;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px">
+      <div class="modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h3 id="trackTtl" style="margin:0">¿Quieres seguir tu pedido?</h3>
+        <button id="trackClose" class="btn ghost" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="muted" style="margin:6px 0 10px">Puedes verlo aquí mismo o abrirlo en tu teléfono escaneando el QR.</p>
+
+      <div class="grid" style="display:grid;grid-template-columns:200px 1fr;gap:12px;align-items:center">
+        <div class="qr-box"
+             style="width:200px;height:200px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0b1424;display:grid;place-items:center;overflow:hidden">
+          <img id="trackQrImg" alt="QR para abrir seguimiento"
+               style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated"/>
+        </div>
+        <div>
+          <div class="row" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <input id="trackUrl" type="url" readonly style="flex:1 1 auto;min-width:200px" />
+            <button class="btn ghost" id="trackCopy">Copiar enlace</button>
+          </div>
+          <div class="row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn" id="trackOpenNow">Seguir ahora</button>
+            <button class="btn ghost" id="trackClose2">No, gracias</button>
+          </div>
+          <div class="muted small" style="margin-top:8px">
+            Tip: pega este enlace en un mensaje o WhatsApp si el cliente quiere verlo después.
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  // Cerrar por botón
+  wrap.querySelector('#trackClose')?.addEventListener('click', closeFollowModal);
+  wrap.querySelector('#trackClose2')?.addEventListener('click', closeFollowModal);
+  // Cerrar por fondo (si hace click fuera de la tarjeta)
+  wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFollowModal(); });
+}
+
+function closeFollowModal(){
+  const m = document.getElementById('trackAskModal');
+  if (m) m.style.display = 'none';
+}
+
+function openFollowModal({ phone } = {}){
+  ensureFollowModal();
+  const m = document.getElementById('trackAskModal'); if (!m) return;
+
+  const url = buildTrackUrl(phone || '');
+  const qr = m.querySelector('#trackQrImg');
+  const linkEl = m.querySelector('#trackUrl');
+  const copyBtn = m.querySelector('#trackCopy');
+  const openNow = m.querySelector('#trackOpenNow');
+
+  // Generar QR
+  const size = 200;
+  const api = 'https://api.qrserver.com/v1/create-qr-code/';
+  const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
+  if (qr) qr.src = src;
+  if (linkEl) linkEl.value = url;
+
+  // Botones
+  if (openNow){
+    const hasPhone = !!normalizePhone(phone || '');
+    openNow.disabled = !hasPhone;
+    openNow.title = hasPhone ? '' : 'Requiere teléfono (también puedes usar el QR o enlace)';
+    openNow.onclick = ()=> { window.location.href = url; };
+  }
+  copyBtn.onclick = async ()=>{
+    try{
+      await navigator.clipboard.writeText(url);
+      copyBtn.textContent = '¡Copiado!';
+      setTimeout(()=> copyBtn.textContent = 'Copiar enlace', 1200);
+    }catch{
+      alert('No pude copiar. Selecciona el texto y copia manualmente.');
+    }
+  };
+
+  m.style.display = 'grid';
+  setTimeout(()=> openNow?.focus(), 0);
+}
+
+// CTA flotante (se crea una vez y se puede mostrar/ocultar)
+function ensureFollowCta(){
+  if (document.getElementById('followCta')) return;
+  const cta = document.createElement('div');
+  cta.id = 'followCta';
+  cta.style.cssText = `
+    position:fixed;right:12px;bottom:12px;z-index:9998;display:none;
+    background:#0f182a;border:1px solid rgba(255,255,255,.08);border-radius:12px;
+    padding:10px;box-shadow:0 10px 24px rgba(0,0,0,.25);max-width:84vw;`;
+  cta.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="min-width:0">
+        <div style="font-weight:700">¿Quieres seguir tu pedido?</div>
+        <div class="muted small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          Ábrelo en tu teléfono con un QR o enlace.
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" id="ctaFollowOpen">Abrir</button>
+        <button class="btn ghost" id="ctaFollowClose">Cerrar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(cta);
+  cta.querySelector('#ctaFollowClose')?.addEventListener('click', ()=> hideFollowCta());
+  cta.querySelector('#ctaFollowOpen')?.addEventListener('click', ()=>{
+    hideFollowCta();
+    openFollowModal({ phone: (state.orderMeta?.type==='pickup' ? state.orderMeta?.phone : '') || '' });
+  });
+}
+function showFollowCta(){
+  ensureFollowCta();
+  const cta = document.getElementById('followCta');
+  if (cta) cta.style.display = 'block';
+}
+function hideFollowCta(){
+  const cta = document.getElementById('followCta');
+  if (cta) cta.style.display = 'none';
 }
 
 /* ======================= Happy Hour ======================= */
@@ -282,7 +434,7 @@ function openItemModal(item, base, existingIndex=null){
   if (!body) return;
   body.innerHTML = `
     <div class="field"><label>Tu nombre</label>
-      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/></div>
+      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="\${state.customerName||''}"/></div>
     ${ item.mini && (DLC > 0) ? `
     <div class="field"><label>DLC de Carne grande</label>
       <div class="ul-clean">
@@ -411,13 +563,11 @@ function updateCartBar(){
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
 }
 
-function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
-
 function openCartModal(){
   const m = document.getElementById('cartModal');
   const body = document.getElementById('cartBody');
-  const close = ()=> { if(m) m.style.display='none'; };
-  document.getElementById('cartClose')?.addEventListener('click', close);
+  const close = ()=> { if(m) m.style.display='none'; /* Promover seguimiento si cierra sin confirmar */ if(!state.followCtaShown){ showFollowCta(); state.followCtaShown = true; } };
+  document.getElementById('cartClose')?.addEventListener('click', close, { once:true });
   if(m) m.style.display='grid';
 
   const confirmBtn = document.getElementById('cartConfirm');
@@ -448,8 +598,8 @@ function openCartModal(){
 
       <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
         <label>Teléfono de contacto (Pickup)</label>
-        <input id="phoneNum" type="tel" inputmode="tel" placeholder="10 dígitos"
-              pattern="\\d{10,}" value="${state.orderMeta.phone||''}" />
+        <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
+               placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
         <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
       </div>
 
@@ -634,7 +784,12 @@ function openCartModal(){
     toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
     state.cart = []; updateCartBar();
     if(m) m.style.display='none';
-  });
+
+    // ==== Modal de seguimiento tras confirmar ====
+    setTimeout(()=>{
+      openFollowModal({ phone: order.phone || state.orderMeta.phone || '' });
+    }, 200);
+  }, { once:true });
 }
 
 function recomputeLine(line){
