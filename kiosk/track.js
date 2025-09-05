@@ -41,9 +41,10 @@ function setETA(text){
 setETA('7–10 min');
 
 if (typeof DB.subscribeETA === 'function'){
-  DB.subscribeETA(v=>{
+  // subscribeETA emite un STRING (ver shared/db.js)
+  DB.subscribeETA((text)=>{
     etaSource = 'settings';
-    setETA(v?.text || '7–10 min');
+    setETA(String(text || '7–10 min'));
   });
 }
 
