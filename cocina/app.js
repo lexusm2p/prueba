@@ -29,6 +29,9 @@ subscribeOrders((orders = [])=>{
   render(CURRENT_LIST);
 });
 
+/* ================== Helpers ================== */
+const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
+
 /* ================== Render ================== */
 function render(list){
   // Agrupar por estado
@@ -53,17 +56,18 @@ function setCol(id, arr){
 }
 
 /* ================== Totales ================== */
+// Usa lineTotal si viene de kiosko (incluye extras/HH). Si no, cae a unitPrice*qty.
 function calcSubtotal(o={}){
-  if (typeof o.subtotal === 'number') return Number(o.subtotal)||0;
   const items = Array.isArray(o.items) ? o.items : [];
   return items.reduce((s,it)=>{
-    const up = Number(it.unitPrice||0);
-    const q  = Number(it.qty||1);
-    return s + up*q;
+    const line = (typeof it.lineTotal === 'number')
+      ? Number(it.lineTotal||0)
+      : (Number(it.unitPrice||0) * Number(it.qty||1));
+    return s + line;
   },0);
 }
 function calcTotal(o={}){
-  const sub = calcSubtotal(o);
+  const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) : calcSubtotal(o);
   const tip = Number(o.tip||0);
   return sub + tip; // comisión no se cobra al cliente
 }
@@ -75,7 +79,8 @@ function renderCard(o={}){
     : (o.item ? [{
         id:o.item.id, name:o.item.name, qty:o.qty||1, unitPrice:o.item.price||0,
         baseIngredients:o.baseIngredients||[], salsaDefault:o.salsaDefault||null,
-        salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||''
+        salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||'',
+        lineTotal: (o.item?.price||0) * (o.qty||1)
       }] : []);
 
   // META visible: mesa o pickup con teléfono
@@ -111,6 +116,12 @@ function renderCard(o={}){
       </div>`;
   }).join('');
 
+  // Resumen HH (si viene en el pedido)
+  const hh = o.hh || {};
+  const hhSummary = (hh.enabled && Number(hh.totalDiscount||0)>0)
+    ? `<span class="k-badge">HH -${Number(hh.discountPercent||0)}% · ahorro ${money(hh.totalDiscount)}</span>`
+    : '';
+
   // Acciones por estado + protección si ya fue tomada localmente
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
@@ -132,7 +143,7 @@ function renderCard(o={}){
     Cliente: <b>${escapeHtml(o.customer||'-')}</b>${phoneTxt} · ${meta}
   </div>
   <div class="muted small mono" style="margin-top:4px">
-    Total por cobrar: <b>$${Number(total).toFixed(0)}</b> ${o.paid ? '· <span class="k-badge ok">Pagado</span>' : ''}
+    Total por cobrar: <b>${money(total)}</b> ${o.paid ? '· <span class="k-badge ok">Pagado</span>' : ''} ${hhSummary}
   </div>
   ${itemsHtml}
   ${o.notes ? `<div class="muted small"><b>Notas generales:</b> ${escapeHtml(o.notes)}</div>` : ''}
@@ -182,7 +193,7 @@ document.addEventListener('click', async (e)=>{
     if (a==='charge'){
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const total = calcTotal(order);
-      const method = prompt(`Cobrar $${Number(total).toFixed(0)}\nMétodo (efectivo / tarjeta / transferencia):`, 'efectivo');
+      const method = prompt(`Cobrar ${money(total)}\nMétodo (efectivo / tarjeta / transferencia):`, 'efectivo');
       if (method === null) { btn.disabled=false; return; }
       const payMethod = String(method||'efectivo').toLowerCase();
       await updateOrder(id, {
@@ -241,6 +252,6 @@ document.addEventListener('click', async (e)=>{
 /* ================== Utils ================== */
 function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 }
