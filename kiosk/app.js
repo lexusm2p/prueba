@@ -142,6 +142,11 @@ function normalizeExtraIngredients(){
     return { id: x.id || slug(x.name), name: x.name, price: Number(x.price ?? defaultPrice) };
   });
 }
+function escapeHtml(s=''){
+  return String(s).replace(/[&<>"']/g, m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
 
 /* ========= Seguimiento: helpers URL + modal + CTA flotante ========= */
 
@@ -338,13 +343,11 @@ function bindHappyHour(){
 function bindETA(){
   if (state.unsubETA){ state.unsubETA(); state.unsubETA = null; }
   if (typeof DB.subscribeETA === 'function'){
-    state.unsubETA = DB.subscribeETA(data=>{
-      if (!data) return;
-      state.etaText = data.text || '7–10 min';
+    // subscribeETA emite un STRING (ver shared/db.js)
+    state.unsubETA = DB.subscribeETA((text)=>{
+      if (text == null) return;
+      state.etaText = String(text || '7–10 min');
       state.etaSource = 'settings';
-      // banner alta demanda opcional (si existe en index.html)
-      const banner = document.getElementById('highDemandBanner');
-      if (banner) banner.hidden = !data.highDemand;
       document.querySelectorAll('[data-eta-text]').forEach(el=> el.textContent = state.etaText);
       renderMobileInfo();
     });
@@ -434,7 +437,7 @@ function openItemModal(item, base, existingIndex=null){
   if (!body) return;
   body.innerHTML = `
     <div class="field"><label>Tu nombre</label>
-      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="\${state.customerName||''}"/></div>
+      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/></div>
     ${ item.mini && (DLC > 0) ? `
     <div class="field"><label>DLC de Carne grande</label>
       <div class="ul-clean">
@@ -822,11 +825,6 @@ function refreshCartTotals(){
     totalEl.style.display = state.cart.length ? '' : 'none';
   }
 }
-function escapeHtml(s=''){
-  return String(s).replace(/[&<>"']/g, m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[m]));
-}
 
 /* ======================= Laterales ======================= */
 function setupSidebars(){
@@ -1046,11 +1044,6 @@ document.addEventListener('click', (e)=>{
 }, false);
 
 /* ======================= Miscelánea ======================= */
-function escapeHtml(s=''){
-  return String(s).replace(/[&<>"']/g, m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[m]));
-}
 
 // Limpia suscripciones al abandonar la página
 window.addEventListener('beforeunload', ()=>{
