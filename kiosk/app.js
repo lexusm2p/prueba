@@ -1,45 +1,36 @@
 // /kiosk/app.js
-// Kiosko con carrito, edición de líneas, meta de pedido y laterales (incluye feed de “Listos”).
-// + Logro de 3 minis (sonido/aviso), aderezo sorpresa gratis, método de pago y mensaje final.
-// + Happy Hour aplicado SOLO al precio base del producto (no a extras ni DLC) y resumen por pedido.
-// + Suscripción en vivo a settings/happyHour (actualiza UI y recálculo de carrito).
-// + Vista móvil “dashboard” (Happy Hour, ETA, Promos, Más vendidos).
+// Kiosko con carrito, edición de líneas, metas de pedido y laterales.
+// Happy Hour aplicado SOLO al precio base (no extras/DLC) + resumen por pedido.
+// Suscripción en vivo a settings/happyHour (y a settings/eta si existe).
+// Vista móvil “dashboard” (HH, ETA, Promos, Más vendidos) + feed READY.
+// Logro: “Combo 3 minis”, aderezo sorpresa gratis al elegir extras.
 
 import { beep, toast } from '../shared/notify.js';
-import {
-  createOrder,
-  fetchCatalogWithFallback,
-  subscribeOrders,
-  subscribeHappyHour, // HH en vivo
-  // Cliente por teléfono
-  fetchCustomer,
-  upsertCustomerFromOrder,
-  attachLastOrderRef,
-} from '../shared/db.js';
+import * as DB from '../shared/db.js';
 
+/* ======================= Estado global ======================= */
 const state = {
   menu: null,
   mode: 'mini',
   cart: [],
   customerName: '',
-  // teléfono agregado para pickup
   orderMeta: { type: 'pickup', table: '', phone: '', payMethodPref: 'efectivo' },
 
   // Suscripciones
-  unsubReady: null,       // feed de listos
-  unsubAnalytics: null,   // ETA + top
+  unsubReady: null,
+  unsubAnalytics: null,
+  unsubHH: null,
+  unsubETA: null,
 
   // Analytics UI
   etaText: '7–10 min',
+  etaSource: 'fallback', // 'settings' si viene de subscribeETA
   topToday: [],
 
-  // logro
   comboUnlocked: false,
 };
 
-/* === ÍCONOS: asigna aquí la ruta a las imágenes de cada burger base ===
-   (para minis se usa la imagen de su baseOf)
-*/
+/* ======================= Recursos visuales ======================= */
 const ICONS = {
   starter:   "../shared/img/burgers/starter.png",
   koopa:     "../shared/img/burgers/koopa.png",
@@ -50,7 +41,6 @@ const ICONS = {
   finalboss: "../shared/img/burgers/finalboss.png"
 };
 
-/* === Audio “achievement” (opcional) === */
 let achievementAudio = null;
 try { achievementAudio = new Audio('../shared/sfx/achievement.mp3'); } catch {}
 async function playAchievement(){
@@ -58,7 +48,7 @@ async function playAchievement(){
   catch { beep(); }
 }
 
-/* 1) Login oculto */
+/* ======================= Login oculto (PIN) ======================= */
 const brand = document.getElementById('brandTap');
 let tapCount = 0, tapTimer = null;
 brand?.addEventListener('click', ()=>{
@@ -89,7 +79,7 @@ function openPinModal(){
   if(pinInput) pinInput.onkeydown = e=>{ if(e.key==='Enter') enter(); };
 }
 
-/* 2) Tabs */
+/* ======================= Tabs ======================= */
 document.getElementById('btnMinis')?.addEventListener('click', ()=> setMode('mini'));
 document.getElementById('btnBig')?.addEventListener('click', ()=> setMode('big'));
 function setMode(mode){ state.mode = mode; renderCards(); setActiveTab(mode); }
@@ -101,24 +91,25 @@ function setActiveTab(mode=state.mode){
   if(mode==='mini'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
 }
 
-/* 3) Init */
+/* ======================= Init ======================= */
 init();
 async function init(){
-  state.menu = await fetchCatalogWithFallback();
+  state.menu = await DB.fetchCatalogWithFallback();
   renderCards();
   setActiveTab('mini');
   updateCartBar();
   setupSidebars();
-  renderMobileInfo();  // pinta dashboard móvil
-  bindHappyHour();     // escucha en vivo HH
-  setupReadyFeed();    // feed “Listos”
-  startOrdersAnalytics(); // ETA + “más vendidos” en vivo
+  renderMobileInfo();
+
+  bindHappyHour();       // HH en vivo
+  bindETA();             // ETA (settings) si existe; si no, fallback por analytics
+  setupReadyFeed();      // feed “Listos”
+  startOrdersAnalytics();// top “Más vendidos hoy” + fallback de ETA si no hay settings
 }
 
-// dinero robusto (no revienta si llega undefined/null)
+/* ======================= Utilidades base ======================= */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 
-/* Helpers */
 function findItemById(id){
   return state.menu?.burgers?.find?.(b=>b.id===id)
       || state.menu?.minis?.find?.(m=>m.id===id)
@@ -134,8 +125,6 @@ function slug(s){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 }
-
-// Normaliza ingredientes extra (acepta strings o {id,name,price})
 function normalizeExtraIngredients(){
   const raw = state.menu?.extras?.ingredients ?? [];
   const defaultPrice = Number(state.menu?.extras?.ingredientPrice ?? 0);
@@ -145,7 +134,7 @@ function normalizeExtraIngredients(){
   });
 }
 
-/* === Happy Hour helpers (descuento solo al precio base del producto) === */
+/* ======================= Happy Hour ======================= */
 function hhInfo(){
   const hh = state.menu?.happyHour || {};
   const enabled = !!hh.enabled;
@@ -161,8 +150,6 @@ function hhDiscountPerUnit(item){
   const unit = Number(item?.price || 0);
   return unit * pct; // SOLO al precio base
 }
-
-/* === UI: pastilla HH (lateral) === */
 function updateHHPill(hh){
   const pill = document.getElementById('hhPill');
   const txt  = document.getElementById('hhText');
@@ -172,29 +159,47 @@ function updateHHPill(hh){
   txt.textContent = hh.enabled ? `Happy Hour – ${Number(hh.discountPercent||0)}%` : 'HH OFF';
   if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
 }
-
-/* === Suscripción en vivo a settings/happyHour === */
-let unsubHH = null;
 function bindHappyHour(){
-  if (unsubHH) { unsubHH(); unsubHH = null; }
-  unsubHH = subscribeHappyHour(hh=>{
-    // guarda en el state y refresca UI
-    state.menu = state.menu || {};
-    state.menu.happyHour = {
-      enabled: !!hh.enabled,
-      discountPercent: Number(hh.discountPercent||0),
-      bannerText: hh.bannerText || '',
-      applyEligibleOnly: hh.applyEligibleOnly!==false
-    };
-    updateHHPill(state.menu.happyHour); // pastilla lateral
-    renderCards();                      // precios en tarjetas
-    state.cart.forEach(recomputeLine);  // re-calcula líneas del carrito
-    updateCartBar();
-    renderMobileInfo();                 // sincroniza dashboard móvil
-  });
+  if (state.unsubHH) { state.unsubHH(); state.unsubHH = null; }
+  if (typeof DB.subscribeHappyHour === 'function'){
+    state.unsubHH = DB.subscribeHappyHour(hh=>{
+      state.menu = state.menu || {};
+      state.menu.happyHour = {
+        enabled: !!hh.enabled,
+        discountPercent: Number(hh.discountPercent||0),
+        bannerText: hh.bannerText || '',
+        applyEligibleOnly: hh.applyEligibleOnly!==false
+      };
+      updateHHPill(state.menu.happyHour);
+      renderCards();
+      state.cart.forEach(recomputeLine);
+      updateCartBar();
+      renderMobileInfo();
+    });
+  }else{
+    // sin backend HH: muestra estado actual del catálogo
+    updateHHPill(state.menu?.happyHour || {enabled:false, discountPercent:0});
+  }
 }
 
-/* === Cómputos de carrito === */
+/* ======================= ETA (settings + fallback) ======================= */
+function bindETA(){
+  if (state.unsubETA){ state.unsubETA(); state.unsubETA = null; }
+  if (typeof DB.subscribeETA === 'function'){
+    state.unsubETA = DB.subscribeETA(data=>{
+      if (!data) return;
+      state.etaText = data.text || '7–10 min';
+      state.etaSource = 'settings';
+      // banner alta demanda opcional (si existe en index.html)
+      const banner = document.getElementById('highDemandBanner');
+      if (banner) banner.hidden = !data.highDemand;
+      document.querySelectorAll('[data-eta-text]').forEach(el=> el.textContent = state.etaText);
+      renderMobileInfo();
+    });
+  }
+}
+
+/* ======================= Carrito / logro ======================= */
 function miniCount(cart=state.cart){
   return cart.reduce((sum, l)=> sum + ((l.mini ? l.qty||1 : 0)), 0);
 }
@@ -206,7 +211,7 @@ function checkComboAchievement(){
   }
 }
 
-/* 4) Tarjetas (con imagen) */
+/* ======================= Tarjetas ======================= */
 function renderCards(){
   const grid = document.getElementById('cards');
   if(!grid) return;
@@ -250,7 +255,7 @@ function renderCards(){
   });
 }
 
-/* 5) Modal producto (add/edit) */
+/* ======================= Modal producto ======================= */
 function openItemModal(item, base, existingIndex=null){
   const modal = document.getElementById('modal'); modal?.classList.add('open');
   const body  = document.getElementById('mBody');
@@ -259,9 +264,8 @@ function openItemModal(item, base, existingIndex=null){
   if(ttl) ttl.textContent = `${item.name} · ${money(item.price)}`;
   if(xBtn) xBtn.onclick = ()=> modal?.classList.remove('open');
 
-  // Extras
   const sauces = state.menu?.extras?.sauces ?? [];
-  const extrasIngr = normalizeExtraIngredients(); // [{id,name,price}]
+  const extrasIngr = normalizeExtraIngredients();
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
 
@@ -338,8 +342,8 @@ function openItemModal(item, base, existingIndex=null){
     const dlcChk  = item.mini && body.querySelector('#dlcCarne')?.checked;
     const extraDlc = dlcChk ? DLC : 0;
 
-    // === HH: descuento SOLO sobre el precio base del producto ===
-    const hhDiscPerUnit = hhDiscountPerUnit(item); // en $/unidad
+    // HH: descuento SOLO sobre el precio base del producto
+    const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
 
     const subtotal = (unitBaseAfterHH + extraDlc)*qty + (costS + costI)*qty;
@@ -361,12 +365,11 @@ function openItemModal(item, base, existingIndex=null){
       const salsaSwap = (document.getElementById('swapSauce')?.value || '') || null;
       const notes     = (document.getElementById('notes')?.value || '').trim();
 
-      // === Aderezo sorpresa (gratis, no suma costo) -> si eligió algún extra ===
+      // Aderezo sorpresa (gratis) si eligió algún extra
       let surpriseSauce = null;
       if ((saucesSel.length + ingrSel.length) > 0){
         const pool = (state.menu?.extras?.sauces || []).filter(s => !saucesSel.includes(s));
         if (pool.length) {
-          // escoger “determinístico” por estabilidad visual
           const idx = (state.cart.length + qty) % pool.length;
           surpriseSauce = pool[idx];
         }
@@ -381,21 +384,20 @@ function openItemModal(item, base, existingIndex=null){
         extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk, surpriseSauce: surpriseSauce || null },
         notes,
         lineTotal: subtotal,
-        hhDisc: hhDiscTotal // para reporte por línea
+        hhDisc: hhDiscTotal
       };
 
       if (existingIndex!==null){ state.cart[existingIndex] = newLine; toast('Línea actualizada'); }
       else { state.cart.push(newLine); toast('Agregado al pedido'); }
 
-      checkComboAchievement(); // ← valida combo de 3 minis
-
+      checkComboAchievement();
       document.getElementById('modal')?.classList.remove('open');
       updateCartBar(); beep();
     };
   }
 }
 
-/* 6) Carrito */
+/* ======================= Carrito ======================= */
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
@@ -409,7 +411,6 @@ function updateCartBar(){
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
 }
 
-// limpia teléfono a solo dígitos
 function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
 
 function openCartModal(){
@@ -422,7 +423,6 @@ function openCartModal(){
   const confirmBtn = document.getElementById('cartConfirm');
   const totalEl    = document.getElementById('cartTotal');
 
-  // ======= Carrito vacío =======
   if(state.cart.length===0){
     if(body) body.innerHTML = '<div class="muted">Tu carrito está vacío, elige un personaje de sabor.</div>';
     if (confirmBtn) confirmBtn.style.display = 'none';
@@ -430,7 +430,6 @@ function openCartModal(){
     return;
   }
 
-  // Hay artículos: aseguramos mostrar total y confirmar
   if (confirmBtn) confirmBtn.style.display = '';
   if (totalEl) totalEl.style.display = '';
 
@@ -502,19 +501,17 @@ function openCartModal(){
   const phoneInput = document.getElementById('phoneNum');
   const paySel     = document.getElementById('payMethod');
 
-  // normaliza conforme se escribe
   if (phoneInput){
     phoneInput.addEventListener('input', ()=>{
       const pos = phoneInput.selectionStart ?? phoneInput.value.length;
       phoneInput.value = normalizePhone(phoneInput.value);
       try { phoneInput.setSelectionRange(pos, pos); } catch {}
     });
-
-    // Autocompletar nombre por teléfono (si existe cliente)
+    // Autocomplete por teléfono
     phoneInput.addEventListener('change', async ()=>{
       const p = normalizePhone(phoneInput.value);
       if (p.length >= 10){
-        const c = await fetchCustomer(p);
+        const c = await DB.fetchCustomer(p);
         if (c?.name){
           const nameEl = document.getElementById('cartName');
           if (nameEl && !nameEl.value) nameEl.value = c.name;
@@ -528,14 +525,12 @@ function openCartModal(){
     if(mesaField)  mesaField.style.display  = (state.orderMeta.type==='dinein') ? '' : 'none';
     if(phoneField) phoneField.style.display = (state.orderMeta.type==='pickup') ? '' : 'none';
   });
-
   paySel?.addEventListener('change', ()=>{
     state.orderMeta.payMethodPref = (paySel?.value || 'efectivo');
   });
 
   refreshCartTotals();
 
-  // Handler de clicks persistente (reemplaza cualquier anterior)
   if (body){
     body.onclick = (e)=>{
       const btn = e.target.closest('button[data-a]');
@@ -551,28 +546,22 @@ function openCartModal(){
 
       if (act === 'remove') {
         state.cart.splice(i, 1);
-        updateCartBar();
-        openCartModal(); // re-render; si queda vacío, se muestra mensaje vacío
+        updateCartBar(); openCartModal();
         return;
       }
-
       if (act === 'more') {
         line.qty = Math.min(99, (line.qty || 1) + 1);
         recomputeLine(line);
-        updateCartBar();
-        openCartModal();
+        updateCartBar(); openCartModal();
         checkComboAchievement();
         return;
       }
-
       if (act === 'less') {
         line.qty = Math.max(1, (line.qty || 1) - 1);
         recomputeLine(line);
-        updateCartBar();
-        openCartModal();
+        updateCartBar(); openCartModal();
         return;
       }
-
       if (act === 'edit') {
         const item = findItemById(line.id);
         const base = baseOfItem(item);
@@ -591,12 +580,11 @@ function openCartModal(){
     state.orderMeta.type  = (document.getElementById('orderType')?.value||'pickup');
     state.orderMeta.payMethodPref = (document.getElementById('payMethod')?.value || 'efectivo');
 
-    // valida según tipo
     if(state.orderMeta.type==='dinein'){
       state.orderMeta.table = (document.getElementById('tableNum')?.value||'').trim();
       if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
       state.orderMeta.phone = '';
-    } else { // pickup
+    } else {
       const raw = (document.getElementById('phoneNum')?.value || '');
       const norm = normalizePhone(raw);
       if(norm.length < 10){
@@ -609,7 +597,6 @@ function openCartModal(){
 
     const generalNotes = (document.getElementById('cartNotes')?.value||'').trim();
 
-    // Subtotales + resumen de HH
     const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
     const hhTotalDiscount = state.cart.reduce((a,l)=> a + (Number(l.hhDisc||0)), 0);
     const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
@@ -637,11 +624,10 @@ function openCartModal(){
       hh: hhSummary
     };
 
-    // Crea pedido y actualiza/crea cliente por teléfono
-    const orderId = await createOrder(order);   // createOrder devuelve el id
+    const orderId = await DB.createOrder(order);
     if (order.phone) {
-      await upsertCustomerFromOrder(order);
-      await attachLastOrderRef(order.phone, orderId);
+      await DB.upsertCustomerFromOrder(order);
+      await DB.attachLastOrderRef(order.phone, orderId);
     }
 
     beep();
@@ -655,7 +641,6 @@ function recomputeLine(line){
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
 
-  // costo ingredientes por nombre
   const extrasIngr = normalizeExtraIngredients();
   const priceByName = new Map(extrasIngr.map(x=>[x.name, x.price]));
   const costI = (line.extras?.ingredients||[]).reduce((sum, name)=>{
@@ -666,7 +651,6 @@ function recomputeLine(line){
   const dlcOn = !!(line.extras?.dlcCarne);
   const extraDlc = dlcOn ? DLC : 0;
 
-  // HH sobre precio base
   const item = findItemById(line.id);
   const hhDiscPerUnit = hhDiscountPerUnit(item);
   const unitBaseAfterHH = Math.max(0, Number(line.unitPrice||0) - hhDiscPerUnit);
@@ -689,7 +673,7 @@ function escapeHtml(s=''){
   }[m]));
 }
 
-/* ===== Laterales ===== */
+/* ======================= Laterales ======================= */
 function setupSidebars(){
   const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
   const pill = document.getElementById('hhPill');
@@ -702,7 +686,7 @@ function setupSidebars(){
   }
   const eta = document.getElementById('etaTime');
   if (eta) eta.textContent = state.etaText || '7–10 min';
-  renderMobileInfo(); // sincroniza también en móvil
+  renderMobileInfo();
 
   const upsell = document.getElementById('upsellList');
   if (upsell){
@@ -730,7 +714,6 @@ function setupSidebars(){
 
   const rank = document.getElementById('rankToday');
   if (rank){
-    // Si ya tenemos top real, úsalo; sino, fallback a primeros ítems
     const rows = (state.topToday.length
         ? state.topToday.map(t=>`<li><div style="flex:1">${t.name}</div><div class="muted small">🔥 ${t.count}</div></li>`)
         : (state.menu?.minis||[]).slice(0,3).concat((state.menu?.burgers||[]).slice(0,2))
@@ -740,12 +723,11 @@ function setupSidebars(){
   }
 }
 
-/* ===== Vista móvil (dashboard) ===== */
+/* ======================= Dashboard móvil ======================= */
 function renderMobileInfo(){
   const box = document.getElementById('mobileInfo');
   if(!box) return;
 
-  // Happy Hour
   const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
   const pill = document.getElementById('miHHPill');
   const txt  = document.getElementById('miHHText');
@@ -754,11 +736,9 @@ function renderMobileInfo(){
   if (txt) txt.textContent = hh.enabled ? `${hh.discountPercent}% OFF` : 'OFF';
   if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
 
-  // ETA (valor centralizado)
   const etaL = document.getElementById('etaTime'); if (etaL) etaL.textContent = state.etaText || '7–10 min';
   const etaM = document.getElementById('miEta');   if (etaM) etaM.textContent = state.etaText || '7–10 min';
 
-  // Promos
   const promo = document.getElementById('miPromos');
   if (promo){
     promo.innerHTML = hh.enabled
@@ -766,7 +746,6 @@ function renderMobileInfo(){
       : `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Prueba nuestras minis ⭐</span><span class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</span></li>`;
   }
 
-  // Más vendidos (hoy)
   const top = document.getElementById('miTop');
   if (top){
     const chips = (state.topToday?.length ? state.topToday : [])
@@ -775,7 +754,7 @@ function renderMobileInfo(){
   }
 }
 
-/* ======= Herramientas de tiempo y analytics ======= */
+/* ======================= “Más vendidos hoy” + ETA fallback ======================= */
 function tsToMs(t){
   if (!t) return 0;
   if (typeof t.toMillis === 'function') return t.toMillis();
@@ -807,9 +786,9 @@ function computeTopToday(orders){
     .slice(0,5);
 }
 function computeETA(orders){
+  if (state.etaSource === 'settings') return; // ya viene de settings/eta
   const base = {min:7, max:10};
 
-  // 1) tiempos reales (createdAt → ready/done)
   const samples = [];
   for (const o of (orders||[])){
     const created = tsToMs(o.createdAt);
@@ -823,46 +802,42 @@ function computeETA(orders){
   }
   if (samples.length >= 3){
     samples.sort((a,b)=>a-b);
-    const cut = Math.max(1, Math.floor(samples.length*0.1));   // recorte 10%
+    const cut = Math.max(1, Math.floor(samples.length*0.1));
     const trimmed = samples.slice(cut, samples.length-cut);
     const avg = trimmed.reduce((a,n)=>a+n,0)/trimmed.length;
     const lo = Math.max(5, Math.round(avg-2));
     const hi = Math.min(25, Math.round(avg+2));
     state.etaText = `${lo}–${hi} min`;
-    return;
+  } else {
+    const q = (orders||[]).filter(o=>{
+      const s = (o.status||'').toUpperCase();
+      return s==='PENDING' || s==='RECEIVED' || s==='PREPARING' || s==='TAKEN';
+    }).length;
+    if (q>0){
+      const bump = Math.min(12, Math.ceil(q*1.5));
+      const lo = base.min + Math.floor(bump/2);
+      const hi = base.max + bump;
+      state.etaText = `${lo}–${hi} min`;
+    } else {
+      state.etaText = `${base.min}–${base.max} min`;
+    }
   }
-
-  // 2) por carga en cola
-  const q = (orders||[]).filter(o=>{
-    const s = (o.status||'').toUpperCase();
-    return s==='PENDING' || s==='RECEIVED' || s==='PREPARING' || s==='TAKEN';
-  }).length;
-  if (q>0){
-    const bump = Math.min(12, Math.ceil(q*1.5)); // ~1.5 min por pedido
-    const lo = base.min + Math.floor(bump/2);
-    const hi = base.max + bump;
-    state.etaText = `${lo}–${hi} min`;
-    return;
-  }
-
-  // 3) Fallback
-  state.etaText = `${base.min}–${base.max} min`;
+  document.querySelectorAll('[data-eta-text]').forEach(el=> el.textContent = state.etaText);
 }
 function startOrdersAnalytics(){
   if (state.unsubAnalytics){ state.unsubAnalytics(); state.unsubAnalytics=null; }
-  state.unsubAnalytics = subscribeOrders((orders)=>{
+  state.unsubAnalytics = DB.subscribeOrders((orders)=>{
     computeTopToday(orders);
     computeETA(orders);
-    renderMobileInfo(); // refresca dashboard y ranking lateral
+    renderMobileInfo();
   });
 }
 
-/* Feed de “Listos” (en vivo) */
+/* ======================= Feed READY ======================= */
 function setupReadyFeed(){
   if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
   const container = document.getElementById('readyFeed'); if (!container) return;
-  state.unsubReady = subscribeOrders(list=>{
-    // Filtra READY, recientes primero
+  state.unsubReady = DB.subscribeOrders(list=>{
     const ready = (list||[]).filter(o=> (o.status||'')==='READY')
       .sort((a,b)=> oTime(b) - oTime(a))
       .slice(0,6);
@@ -886,7 +861,7 @@ function oTime(o){
   return o.createdAt?.toMillis?.() ?? new Date(o.createdAt||0).getTime();
 }
 
-/* Upsell: agregar rápido */
+/* ======================= Upsell: agregar rápido ======================= */
 document.addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-add]'); if(!btn) return;
   const id = btn.getAttribute('data-add');
@@ -897,7 +872,6 @@ document.addEventListener('click', (e)=>{
   const item = all.find(x=>x.id===id); if(!item) return;
 
   if (item.type==='drink' || item.type==='side'){
-    // (HH podría aplicar a bebidas si hhEligible=true; aquí no hay extras ni DLC)
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
 
@@ -907,11 +881,26 @@ document.addEventListener('click', (e)=>{
       baseIngredients:[], salsaDefault:null, salsaCambiada:null,
       extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
       notes:'',
-      lineTotal: unitBaseAfterHH,      // ya con HH
-      hhDisc: hhDiscPerUnit            // descuento por 1 unidad
+      lineTotal: unitBaseAfterHH,
+      hhDisc: hhDiscPerUnit
     });
     updateCartBar(); beep(); toast(`${item.name} agregado`);
   } else {
     openItemModal(item, item.baseOf ? state.menu?.burgers?.find(b=>b.id===item.baseOf) : item);
   }
 }, false);
+
+/* ======================= Miscelánea ======================= */
+function escapeHtml(s=''){
+  return String(s).replace(/[&<>"']/g, m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+// Limpia suscripciones al abandonar la página
+window.addEventListener('beforeunload', ()=>{
+  try{ state.unsubReady && state.unsubReady(); }catch{}
+  try{ state.unsubAnalytics && state.unsubAnalytics(); }catch{}
+  try{ state.unsubHH && state.unsubHH(); }catch{}
+  try{ state.unsubETA && state.unsubETA(); }catch{}
+});
