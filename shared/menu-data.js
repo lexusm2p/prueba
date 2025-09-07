@@ -12,13 +12,13 @@ export const MENU = [
 ];
 
 export const MINIS = [
-  { id:'starter-mini',   name:'Starter Mini',    price:27, isMini:true, base:['Pan mini','Carne 85g','Queso amarillo','Queso blanco','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
-  { id:'koopa-mini',     name:'Koopa Mini',      price:27, isMini:true, base:['Pan mini','Carne 85g','Queso blanco','Piña','Tocino','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
-  { id:'fatality-mini',  name:'Fatality Mini',   price:37, isMini:true, base:['Pan mini','Carne 85g','Salsa cheddar','Tocino','Salsa habanero','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
-  { id:'megabyte-mini',  name:'Mega Byte Mini',  price:37, isMini:true, base:['Pan mini','Carne 85g','Salsa cheddar','Queso blanco','Tocino','Salchicha','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
-  { id:'hadouken-mini',  name:'Hadouken Mini',   price:37, isMini:true, base:['Pan mini','Carne 85g','Queso blanco','Queso amarillo','Salchicha','Aderezo chipotle','Lechuga','Jitomate','Cebolla','Catsup','Mostaza'] },
-  { id:'nintendo-mini',  name:'Nintendo Mini',   price:37, isMini:true, base:['Pan mini','Carne 85g','Queso blanco','Piña','Jamón','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
-  { id:'finalboss-mini', name:'Final Boss Mini', price:47, isMini:true, base:['Pan mini','Carne 85g','Salsa cheddar','Queso blanco','Queso amarillo','Tocino','Jamón','Salchicha','Piña','Salsa habanero','Aderezo chipotle','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
+  { id:'starter-mini',   name:'Starter Mini',    price:27, isMini:true, base:['Pan mini','Carne 45g','Queso amarillo','Queso blanco','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
+  { id:'koopa-mini',     name:'Koopa Mini',      price:27, isMini:true, base:['Pan mini','Carne 45g','Queso blanco','Piña','Tocino','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
+  { id:'fatality-mini',  name:'Fatality Mini',   price:37, isMini:true, base:['Pan mini','Carne 45g','Salsa cheddar','Tocino','Salsa habanero','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
+  { id:'megabyte-mini',  name:'Mega Byte Mini',  price:37, isMini:true, base:['Pan mini','Carne 45g','Salsa cheddar','Queso blanco','Tocino','Salchicha','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
+  { id:'hadouken-mini',  name:'Hadouken Mini',   price:37, isMini:true, base:['Pan mini','Carne 45g','Queso blanco','Queso amarillo','Salchicha','Aderezo chipotle','Lechuga','Jitomate','Cebolla','Catsup','Mostaza'] },
+  { id:'nintendo-mini',  name:'Nintendo Mini',   price:37, isMini:true, base:['Pan mini','Carne 45g','Queso blanco','Piña','Jamón','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
+  { id:'finalboss-mini', name:'Final Boss Mini', price:47, isMini:true, base:['Pan mini','Carne 45g','Salsa cheddar','Queso blanco','Queso amarillo','Tocino','Jamón','Salchicha','Piña','Salsa habanero','Aderezo chipotle','Lechuga','Jitomate','Cebolla','Mayonesa','Catsup','Mostaza'] },
 ];
 
 export const SAUCES = [
@@ -38,5 +38,5 @@ export const EXTRAS = [
   { id:'jamon',          name:'Jamón',                 price:5 },
   { id:'salchicha',      name:'Salchicha',             price:8 },
   { id:'cebolla-caram',  name:'Cebolla caramelizada',  price:5 },
-  { id:'carne-extra',    name:'Carne extra 85g',       price:20 },
+  { id:'carne-extra',    name:'Carne extra 85g',       price:20 }, // extra para hamburguesa grande
 ];
