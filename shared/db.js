@@ -19,7 +19,11 @@ import { db, ensureAnonAuth } from "./firebase.js";
    - /extras/ingredients => { items: [{name, price}] }
    Settings:
    - /settings/app => {
-       dlcCarneMini:number,
+       // NUEVO (opcional): gramos por defecto
+       meatGrams?: number,        // default 85 para 'big'
+       miniMeatGrams?: number,    // default 45 para 'mini'
+       // ya existente:
+       dlcCarneMini:number,       // precio de carne extra (NO son gramos)
        saucePrice?:number, ingredientPrice?:number,
        sauceCupItemId?: string   // ID de inventario para vasitos (opcional)
      }
@@ -53,6 +57,23 @@ export async function fetchCatalogWithFallback(){
     const cfg       = appCfgDoc.exists() ? appCfgDoc.data()             : {};
     const happyHour = hhDoc.exists()     ? hhDoc.data()                 : { enabled:false, discountPercent:0 };
 
+    // ---------- NORMALIZACIÓN DE GRAMOS DE CARNE ----------
+    // Defaults: big=85 g, mini=45 g (configurables en /settings/app)
+    const bigMeatGrams  = Number(cfg.meatGrams ?? 85);
+    const miniMeatGrams = Number(cfg.miniMeatGrams ?? 45);
+
+    const normalizeMeat = (arr, grams) =>
+      (Array.isArray(arr) ? arr : []).map(i =>
+        /^carne(\b|\s)/i.test(String(i)) ? `Carne ${grams} g` : i
+      );
+
+    products.forEach(p => {
+      const grams = Number(p.meatGrams ?? (p.type === 'mini' ? miniMeatGrams : bigMeatGrams));
+      p.meatGrams = grams;
+      p.ingredients = normalizeMeat(p.ingredients, grams);
+    });
+    // -------------------------------------------------------
+
     if (products.length) {
       const burgers = products.filter(p=>p.type==='big');
       const minis   = products.filter(p=>p.type==='mini');
@@ -73,7 +94,7 @@ export async function fetchCatalogWithFallback(){
         ))
       ) || 10;
 
-      const dlcCarneMini = Number(cfg.dlcCarneMini ?? 12);
+      const dlcCarneMini = Number(cfg.dlcCarneMini ?? 12); // precio de carne extra mini
 
       return {
         burgers,
@@ -96,7 +117,9 @@ export async function fetchCatalogWithFallback(){
           endsAt: (happyHour.endsAt!=null ? Number(happyHour.endsAt) : null)
         },
         appSettings: {
-          sauceCupItemId: cfg.sauceCupItemId || null
+          sauceCupItemId: cfg.sauceCupItemId || null,
+          meatGrams: bigMeatGrams,
+          miniMeatGrams
         }
       };
     }
@@ -107,10 +130,34 @@ export async function fetchCatalogWithFallback(){
   // Fallback a /data/menu.json
   const res = await fetch('../data/menu.json');
   const json = await res.json();
-  if (!json.extras.dlcCarneMini) json.extras.dlcCarneMini = 12;
+
+  // Defaults de config si faltan
   json.happyHour ||= { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true, endsAt:null };
   json.drinks ||= []; json.sides ||= []; json.combos ||= [];
-  json.appSettings ||= { sauceCupItemId: null };
+  json.extras ||= {};
+  if (!json.extras.dlcCarneMini) json.extras.dlcCarneMini = 12;
+  json.appSettings ||= {};
+  json.appSettings.meatGrams = Number(json.appSettings.meatGrams ?? 85);
+  json.appSettings.miniMeatGrams = Number(json.appSettings.miniMeatGrams ?? 45);
+
+  // Normalizar "Carne {g}" también en fallback
+  const normalizeMeat = (arr, grams) =>
+    (Array.isArray(arr) ? arr : []).map(i =>
+      /^carne(\b|\s)/i.test(String(i)) ? `Carne ${grams} g` : i
+    );
+
+  // Si el JSON ya trae productos separados, aplica por tipo
+  (json.burgers || []).forEach(p => {
+    const grams = Number(p.meatGrams ?? json.appSettings.meatGrams);
+    p.meatGrams = grams;
+    p.ingredients = normalizeMeat(p.ingredients, grams);
+  });
+  (json.minis || []).forEach(p => {
+    const grams = Number(p.meatGrams ?? json.appSettings.miniMeatGrams);
+    p.meatGrams = grams;
+    p.ingredients = normalizeMeat(p.ingredients, grams);
+  });
+
   return json;
 }
 
@@ -142,7 +189,9 @@ export async function upsertProduct(prod){
     comboItems: Array.isArray(prod.comboItems) ? prod.comboItems : [],
     stockItemId: prod.stockItemId || null,
     stockPerUnit: (prod.stockPerUnit!=null) ? Number(prod.stockPerUnit) : null,
-    stockMap: Array.isArray(prod.stockMap) ? prod.stockMap : []
+    stockMap: Array.isArray(prod.stockMap) ? prod.stockMap : [],
+    // opcional: permitir definir gramos específicos por producto
+    meatGrams: (prod.meatGrams!=null) ? Number(prod.meatGrams) : undefined
   };
   if (prod.id && String(prod.id||'').trim()){
     const id = String(prod.id).trim();
