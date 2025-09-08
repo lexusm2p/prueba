@@ -155,8 +155,18 @@ export async function getOrdersRange({ from, to, includeArchive=false, orderType
 /* =============== Settings (ETA, HappyHour, Theme, App Settings) =============== */
 const SETTINGS = 'settings';
 
+// ✅ Helper: Asegurar que los cambios “administrativos” solo se hagan desde /admin/
+function assertAdminContext() {
+  const path = (typeof location !== 'undefined' ? location.pathname : '') || '';
+  const inAdmin = /\/admin(\/|$)/.test(path);
+  if (!inAdmin) {
+    throw new Error('Acceso denegado: esta operación solo está permitida desde el panel de Admin.');
+  }
+}
+
 // ETA: emitimos SIEMPRE texto (soporta {text} o {minutes})
 export async function setETA(text) {
+  assertAdminContext();
   await ensureAuth();
   await setDoc(doc(db, SETTINGS, 'eta'),
     { text: String(text), updatedAt: serverTimestamp() },
@@ -174,6 +184,7 @@ export function subscribeETA(cb) {
 
 // Happy Hour
 export async function setHappyHour(payload) {
+  assertAdminContext();
   await ensureAuth();
   await setDoc(doc(db, SETTINGS, 'happyHour'),
     { ...payload, updatedAt: serverTimestamp() },
@@ -183,8 +194,10 @@ export function subscribeHappyHour(cb) {
   return onSnapshot(doc(db, SETTINGS, 'happyHour'), (d) => cb(d.data() ?? null));
 }
 
-// THEME
+// THEME — ⚠️ Admin‑only
 export async function setTheme({ name, overrides = {} }) {
+  // Bloqueo “duro” en cliente para que el kiosko no pueda escribir el tema global.
+  assertAdminContext();
   await ensureAuth();
   await setDoc(doc(db, SETTINGS, 'theme'),
     { name, overrides, updatedAt: serverTimestamp() },
@@ -205,6 +218,7 @@ export function subscribeInventory(cb) {
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
 export async function upsertInventoryItem(item) {
+  assertAdminContext();
   await ensureAuth();
   const ref = item.id ? doc(db,'inventory', item.id) : doc(collection(db,'inventory'));
   await setDoc(ref, { ...item, updatedAt: serverTimestamp() }, { merge: true });
@@ -216,6 +230,7 @@ export function subscribeSuppliers(cb) {
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
 export async function upsertSupplier(supp) {
+  assertAdminContext();
   await ensureAuth();
   const ref = supp.id ? doc(db,'suppliers', supp.id) : doc(collection(db,'suppliers'));
   await setDoc(ref, { ...supp, updatedAt: serverTimestamp() }, { merge: true });
@@ -223,6 +238,7 @@ export async function upsertSupplier(supp) {
 }
 
 export async function recordPurchase(purchase) {
+  assertAdminContext();
   await ensureAuth();
   // Guarda compra y actualiza costo promedio simple / existencias
   const { itemId, qty=0, unitCost=0 } = purchase || {};
@@ -245,6 +261,7 @@ export async function recordPurchase(purchase) {
 
 // Movimiento directo de stock (admin: cups, producción, etc.)
 export async function adjustStock(itemId, delta, reason='use', meta={}) {
+  assertAdminContext();
   if (!itemId || !Number.isFinite(delta)) return;
   await ensureAuth();
   const ref = doc(db,'inventory', itemId);
@@ -262,6 +279,7 @@ export function subscribeRecipes(cb) {
 
 // Compat con Admin: produceBatch({ recipeId, outputQty })
 export async function produceBatch({ recipeId, outputQty }) {
+  assertAdminContext();
   if (!recipeId || !(outputQty > 0)) throw new Error('Datos de producción inválidos');
   await ensureAuth();
   await addDoc(collection(db, 'productions'), {
@@ -276,12 +294,14 @@ export function subscribeArticles(cb) {
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
 export async function upsertArticle(article) {
+  assertAdminContext();
   await ensureAuth();
   const ref = article.id ? doc(db,'articles', article.id) : doc(collection(db,'articles'));
   await setDoc(ref, { ...article, updatedAt: serverTimestamp() }, { merge: true });
   return ref.id;
 }
 export async function deleteArticle(id) {
+  assertAdminContext();
   await ensureAuth();
   await updateDoc(doc(db,'articles', id), { deletedAt: serverTimestamp() });
 }
