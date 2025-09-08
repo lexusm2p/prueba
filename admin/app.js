@@ -1,4 +1,4 @@
-// /admin/app.js  — Admin completo + Historial + CRUD de Artículos
+// /admin/app.js  — Admin completo + Historial + Recetario mejorado + CRUD Artículos
 import {
   // Reportes
   getOrdersRange,
@@ -41,9 +41,10 @@ tabs.addEventListener('click', (e) => {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + target)?.classList.add('active');
 
-  // Historial: al entrar, arrancamos auto‑refresh y cargamos
-  if (target === 'hist') { startHistAutoRefresh(); loadHistory(); }
-  else { stopHistAutoRefresh(); }
+  if (target === 'hist') { startHistAutoRefresh(); loadHistory(); } else { stopHistAutoRefresh(); }
+
+  // NUEVO: al abrir Recetario, mostrar cuadro rápido de preparación
+  if (target === 'recetas') { openQuickPrepDialog(); }
 });
 
 /* ============== Reportes ============== */
@@ -64,7 +65,7 @@ async function runReports() {
   try {
     const from = new Date((fromEl?.value||'') + 'T00:00:00');
     const to   = new Date((toEl?.value||'')   + 'T23:59:59');
-    const type = typeEl?.value || 'all'; // all|pickup|dinein
+    const type = typeEl?.value || 'all';
     const includeArchive = (histEl?.value !== 'No');
 
     const orders = await getOrdersRange({ from, to, includeArchive, orderType: type === 'all' ? null : type });
@@ -84,9 +85,7 @@ async function runReports() {
     q('#tblHours tbody').innerHTML = rows || '<tr><td colspan="3">—</td></tr>';
 
     toast('Reporte listo');
-  } catch (e) {
-    console.error(e); toast('No se pudo generar el reporte');
-  }
+  } catch (e) { console.error(e); toast('No se pudo generar el reporte'); }
 }
 
 function aggregateOrders(orders) {
@@ -117,7 +116,6 @@ function aggregateOrders(orders) {
     by[k].revenue += (o.subtotal || 0);
   });
   const byHour = Object.values(by).sort((a, b) => a.hour.localeCompare(b.hour));
-
   return { orders: ordersCount, revenue, units, avgTicket, topItems, lowItems, byHour };
 }
 
@@ -128,7 +126,7 @@ function fillTable(id, arr) {
     : '<tr><td colspan="3">—</td></tr>';
 }
 
-/* ============== HISTORIAL (panel-hist) ============== */
+/* ============== HISTORIAL ============== */
 let HIST_ALL = [];
 let HIST_TIMER = null;
 
@@ -144,7 +142,6 @@ histTypeEl?.addEventListener('change', renderHistory);
 histStateEl?.addEventListener('change', renderHistory);
 histLimitEl?.addEventListener('input', renderHistory);
 
-// Auto‑refresh cada 10s si la pestaña Historial está activa
 document.addEventListener('visibilitychange', ()=>{
   if (document.hidden) stopHistAutoRefresh();
   else if (isHistActive()) startHistAutoRefresh();
@@ -153,7 +150,6 @@ function isHistActive(){ return document.getElementById('panel-hist')?.classList
 function startHistAutoRefresh(){ stopHistAutoRefresh(); HIST_TIMER = setInterval(()=>{ if(isHistActive()) loadHistory(false); }, 10000); }
 function stopHistAutoRefresh(){ if (HIST_TIMER){ clearInterval(HIST_TIMER); HIST_TIMER=null; } }
 
-// Carga de historial: HOY por defecto; límite por UI
 async function loadHistory(showToast = true){
   try{
     const now = new Date();
@@ -175,15 +171,10 @@ async function loadHistory(showToast = true){
       return { id:o.id, _ts:when.getTime(), when, num, custName, phone, state, type, total, items };
     }).sort((a,b)=> b._ts - a._ts);
 
-    // primera vez: pon 5
     if (histLimitEl && !histLimitEl.dataset.touched){ histLimitEl.value = '5'; }
-
     renderHistory();
     if (showToast) toast('Historial actualizado');
-  }catch(err){
-    console.error(err);
-    toast('No se pudo cargar el historial');
-  }
+  }catch(err){ console.error(err); toast('No se pudo cargar el historial'); }
 }
 
 function renderHistory(){
@@ -222,7 +213,6 @@ function renderHistory(){
     const itemsText = o.items.map(i=> `${esc(i.name)} x${i.qty}`).join(', ');
     const numTxt = (o.num!=null) ? `#${esc(o.num)}` : (o.id||'—');
     const badgeCls = (o.state==='READY' || o.state==='CHARGED') ? 'ok' : 'warn';
-
     return `<tr>
       <td>${fecha}</td>
       <td>${esc(o.custName||'—')}<div class="muted small">${esc(o.phone||'')}</div></td>
@@ -236,71 +226,49 @@ function renderHistory(){
 
   tb.innerHTML = html || '<tr><td colspan="7">—</td></tr>';
 }
-
-function exportHistoryCSV(){
+function exportHistoryCSV(){ /* ...igual que antes... */ // por brevedad, se mantiene igual que tu versión previa
   const qraw  = (histSearchEl?.value || '').trim();
   const qstr  = qraw.toLowerCase();
   const typeF = histTypeEl?.value || 'all';
   const stateF= (histStateEl?.value || 'all').toUpperCase();
   const limit = Math.max(1, Number(histLimitEl?.value||5) || 5);
-
   const rows = HIST_ALL.filter(o=>{
     if (typeF !== 'all' && o.type !== typeF) return false;
     if (stateF !== 'ALL' && o.state !== stateF) return false;
     if (!qstr) return true;
-
-    const id    = (o.id||'').toLowerCase();
-    const num   = (o.num==null ? '' : String(o.num)).toLowerCase();
-    const name  = (o.custName||'').toLowerCase();
-    const phone = (o.phone||'').toLowerCase();
-    const type  = (o.type||'').toLowerCase();
-    const state = (o.state||'').toLowerCase();
-    const items = o.items.map(i=> `${i.name} x${i.qty}`).join(' ').toLowerCase();
-
+    const id=(o.id||'').toLowerCase(), num=(o.num==null?'':String(o.num)).toLowerCase();
+    const name=(o.custName||'').toLowerCase(), phone=(o.phone||'').toLowerCase();
+    const type=(o.type||'').toLowerCase(), state=(o.state||'').toLowerCase();
+    const items=o.items.map(i=>`${i.name} x${i.qty}`).join(' ').toLowerCase();
     if (qraw && /^\d+$/.test(qraw) && num === qraw) return true;
-    return id.includes(qstr) || num.includes(qstr) || name.includes(qstr) ||
-           phone.includes(qstr) || type.includes(qstr) || state.includes(qstr) ||
-           items.includes(qstr);
-  }).slice(0, limit);
-
-  const header = ['Fecha','Numero/ID','Cliente','Teléfono','Tipo','Estado','Artículos','Total'];
-  const lines = [header.join(',')];
-  for (const o of rows){
-    const d = o.when;
-    const fecha = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    const numTxt = (o.num!=null) ? `#${o.num}` : (o.id||'');
-    const items = o.items.map(i=> `${i.name} x${i.qty}`).join(' | ');
-    const csvRow = [
-      fecha, numTxt, o.custName||'', o.phone||'',
-      o.type||'', o.state||'', items, Number(o.total||0).toFixed(2)
-    ].map(csvEscape).join(',');
+    return id.includes(qstr)||num.includes(qstr)||name.includes(qstr)||phone.includes(qstr)||type.includes(qstr)||state.includes(qstr)||items.includes(qstr);
+  }).slice(0,limit);
+  const header=['Fecha','Numero/ID','Cliente','Teléfono','Tipo','Estado','Artículos','Total'];
+  const lines=[header.join(',')];
+  for(const o of rows){
+    const d=o.when;
+    const fecha=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const numTxt=(o.num!=null)?`#${o.num}`:(o.id||'');
+    const items=o.items.map(i=>`${i.name} x${i.qty}`).join(' | ');
+    const csvRow=[fecha,numTxt,o.custName||'',o.phone||'',o.type||'',o.state||'',items,Number(o.total||0).toFixed(2)].map(csvEscape).join(',');
     lines.push(csvRow);
   }
-  const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `historial_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=`historial_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
-function csvEscape(v){ const s = String(v??''); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
+function csvEscape(v){ const s=String(v??''); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; }
+(function autoLoadHistOnBoot(){ try{ if (histLimitEl) { histLimitEl.value='5'; histLimitEl.dataset.touched='1'; } loadHistory(false);}catch(_){}})();
 
-// Carga automática: últimos 5 de hoy al abrir Admin
-(function autoLoadHistOnBoot(){
-  try{
-    if (histLimitEl) { histLimitEl.value = '5'; histLimitEl.dataset.touched = '1'; }
-    loadHistory(false);
-  }catch(_){}
-})();
-
-/* ============== Inventario (suscripción) ============== */
+/* ============== Inventario ============== */
 const invRows = [];
 const invMap  = new Map();
 subscribeInventory(items => {
   invRows.length = 0; invRows.push(...items);
   invMap.clear(); items.forEach(it => invMap.set(it.id, it));
   renderInventoryTable();
-  renderRecipeTable(); // refresca nombres en recetario
+  renderRecipeTable();
 });
 q('#btnInvRefresh')?.addEventListener('click', renderInventoryTable);
 q('#invSearch')?.addEventListener('input', renderInventoryTable);
@@ -325,37 +293,21 @@ btnAddPurchase && (btnAddPurchase.onclick = async () => {
   const name = (q('#pName')?.value || '').trim();
   const qty  = Number(q('#pQty')?.value || 0);
   const cost = Number(q('#pCost')?.value || 0);
-  const supplierId = (q('#pVendor')?.value || '').trim() || null; // opcional
-  if (!name || qty <= 0 || cost <= 0) {
-    toast('Completa ingrediente, cantidad y costo');
-    return;
-  }
-
+  const supplierId = (q('#pVendor')?.value || '').trim() || null;
+  if (!name || qty <= 0 || cost <= 0) { toast('Completa ingrediente, cantidad y costo'); return; }
   try {
-    // 1) Buscar item existente por nombre (insensible a mayúsculas)
     const norm = (s)=> String(s||'').trim().toLowerCase();
     const found = invRows.find(it => norm(it.name) === norm(name));
-
-    // 2) Crear si no existe
     let itemId = found?.id;
     if (!itemId) {
-      itemId = await upsertInventoryItem({
-        name, unit: 'unit', currentStock: 0, min: 0, max: 0, perish: false
-      });
+      itemId = await upsertInventoryItem({ name, unit:'unit', currentStock:0, min:0, max:0, perish:false });
       toast('Ingrediente nuevo creado en inventario');
     }
-
-    // 3) Registrar compra + abonar stock
     await recordPurchase({ itemId, qty, unitCost: cost, supplierId });
-
-    // 4) Reset UI
     if (q('#pQty'))  q('#pQty').value = '1';
     if (q('#pCost')) q('#pCost').value = '0';
     toast('Compra registrada');
-  } catch (e) {
-    console.error(e);
-    toast('Error al registrar compra');
-  }
+  } catch (e) { console.error(e); toast('Error al registrar compra'); }
 });
 
 /* ============== Proveedores ============== */
@@ -381,138 +333,87 @@ function renderProducts(items = []) {
     `<tr><td>${esc(p.name)}</td><td>${esc(p.type)}</td><td>${fmtMoney(p.price)}</td><td>${p.active ? 'Sí' : 'No'}</td><td>${p.id}</td></tr>`
   ).join('') || '<tr><td colspan="5">—</td></tr>';
 }
-// Botón “Refrescar catálogo del kiosko”
 document.getElementById('btnReloadCatalog')?.addEventListener('click', async ()=>{
-  try{
-    await fetchCatalogWithFallback(); // fuerza lectura actual de catálogo
-    toast('Catálogo recargado para el kiosko');
-  }catch(e){
-    console.error(e);
-    toast('No se pudo recargar el catálogo');
-  }
+  try{ await fetchCatalogWithFallback(); toast('Catálogo recargado para el kiosko'); }
+  catch(e){ console.error(e); toast('No se pudo recargar el catálogo'); }
 });
 
-/* ============== Happy Hour (duración, fin y countdown) ============== */
+/* ============== Happy Hour ============== */
 let HH_TIMER = null;
-
 subscribeHappyHour(hh => {
-  // Campos básicos (existentes)
   if (q('#hhEnabled')) q('#hhEnabled').value = hh?.enabled ? 'on' : 'off';
   if (q('#hhDisc'))    q('#hhDisc').value    = Number(hh?.discountPercent || 0);
   if (q('#hhMsg'))     q('#hhMsg').value     = hh?.bannerText || '';
-
-  // Opcionales: fin programado y countdown
   const endsAt = Number(hh?.endsAt || 0) || null;
-
-  // #hhEndsAt puede ser input datetime-local o text; ponemos ISO local si existe
   const endsEl = q('#hhEndsAt');
   if (endsEl){
     if (endsAt){
       const d = new Date(endsAt);
-      // YYYY-MM-DDTHH:mm
       const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-      endsEl.value = iso;
-      endsEl.title = d.toLocaleString();
-    }else{
-      endsEl.value = '';
-      endsEl.title = '';
-    }
+      endsEl.value = iso; endsEl.title = d.toLocaleString();
+    }else{ endsEl.value = ''; endsEl.title = ''; }
   }
-
-  // Countdown en #hhCountdown (si existe)
   const lbl = q('#hhCountdown');
   if (HH_TIMER){ clearInterval(HH_TIMER); HH_TIMER = null; }
   if (lbl){
     if (hh?.enabled && endsAt && endsAt > Date.now()){
       const tick = ()=>{
         const ms = endsAt - Date.now();
-        if (ms <= 0){
-          lbl.textContent = 'Finalizó';
-          clearInterval(HH_TIMER); HH_TIMER = null;
-          return;
-        }
-        const m = Math.floor(ms/60000);
-        const s = Math.floor((ms%60000)/1000);
+        if (ms <= 0){ lbl.textContent = 'Finalizó'; clearInterval(HH_TIMER); HH_TIMER = null; return; }
+        const m = Math.floor(ms/60000); const s = Math.floor((ms%60000)/1000);
         lbl.textContent = `Termina en ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
       };
-      tick();
-      HH_TIMER = setInterval(tick, 1000);
-    }else{
-      lbl.textContent = hh?.enabled ? 'Activo' : 'Inactivo';
-    }
+      tick(); HH_TIMER = setInterval(tick, 1000);
+    }else{ lbl.textContent = hh?.enabled ? 'Activo' : 'Inactivo'; }
   }
 });
-
-// Guardar HH (usa duraciónMin o endsAt si están presentes)
 q('#btnSaveHappy')?.addEventListener('click', async () => {
   const enabled = q('#hhEnabled')?.value === 'on';
   const discountPercent = Number(q('#hhDisc')?.value || 0);
   const bannerText = (q('#hhMsg')?.value || '').trim();
-
-  // Opcionales
-  const durMinEl = q('#hhDurMin');
-  const endsEl   = q('#hhEndsAt');
-
+  const durMinEl = q('#hhDurMin'); const endsEl = q('#hhEndsAt');
   const patch = { enabled, discountPercent, bannerText };
-
-  // Si hay duración numérica y HH habilitado, la usamos
   const durMin = durMinEl ? Number(durMinEl.value||0) : 0;
-  if (enabled && Number.isFinite(durMin) && durMin > 0){
-    patch.durationMin = durMin;
-  } else if (enabled && endsEl && endsEl.value){
-    // Si hay fecha/hora de fin válida, la usamos
-    const t = new Date(endsEl.value);
-    if (!isNaN(t.getTime())) patch.endsAt = t.getTime();
+  if (enabled && Number.isFinite(durMin) && durMin > 0){ patch.durationMin = durMin; }
+  else if (enabled && endsEl && endsEl.value){
+    const t = new Date(endsEl.value); if (!isNaN(t.getTime())) patch.endsAt = t.getTime();
   }
-
-  try {
-    await setHappyHour(patch);
-    toast('Happy Hour guardada');
-  } catch (e) {
-    console.error(e); toast('No se pudo guardar HH');
-  }
+  try { await setHappyHour(patch); toast('Happy Hour guardada'); }
+  catch (e) { console.error(e); toast('No se pudo guardar HH'); }
 });
-
-// Acciones rápidas (opcionales: solo si existen los botones)
 q('#btnHH30')?.addEventListener('click', ()=> quickHH(30));
 q('#btnHH60')?.addEventListener('click', ()=> quickHH(60));
 q('#btnHH90')?.addEventListener('click', ()=> quickHH(90));
 q('#btnHHStop')?.addEventListener('click', async ()=>{
-  try{
-    await setHappyHour({ enabled:false, discountPercent: Number(q('#hhDisc')?.value||0), bannerText:(q('#hhMsg')?.value||'') });
-    toast('Happy Hour desactivada');
-  }catch(e){ console.error(e); toast('No se pudo desactivar'); }
+  try{ await setHappyHour({ enabled:false, discountPercent:Number(q('#hhDisc')?.value||0), bannerText:(q('#hhMsg')?.value||'') }); toast('Happy Hour desactivada'); }
+  catch(e){ console.error(e); toast('No se pudo desactivar'); }
 });
 q('#btnHHExtend15')?.addEventListener('click', async ()=>{
-  // Extiende 15 min desde ahora o desde endsAt vigente
-  try{
-    const disc = Number(q('#hhDisc')?.value||0);
-    const msg  = (q('#hhMsg')?.value||'');
-    await setHappyHour({ enabled:true, discountPercent: disc, bannerText: msg, durationMin: 15 });
-    toast('Extendido 15 min');
-  }catch(e){ console.error(e); toast('No se pudo extender'); }
+  try{ const disc=Number(q('#hhDisc')?.value||0); const msg=(q('#hhMsg')?.value||'');
+    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:15 }); toast('Extendido 15 min'); }
+  catch(e){ console.error(e); toast('No se pudo extender'); }
 });
 async function quickHH(mins){
-  try{
-    const disc = Number(q('#hhDisc')?.value||0);
-    const msg  = (q('#hhMsg')?.value||'');
-    await setHappyHour({ enabled:true, discountPercent: disc, bannerText: msg, durationMin: mins });
-    toast(`Happy Hour por ${mins} min`);
-  }catch(e){ console.error(e); toast('No se pudo activar');
-  }
+  try{ const disc=Number(q('#hhDisc')?.value||0); const msg=(q('#hhMsg')?.value||'');
+    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:mins }); toast(`Happy Hour por ${mins} min`); }
+  catch(e){ console.error(e); toast('No se pudo activar'); }
 }
 
-/* ============== Ajustes app para vasitos 2oz ============== */
+/* ============== Ajustes globales ============== */
 let APP_SETTINGS = {};
 subscribeSettings(s => { APP_SETTINGS = s || {}; });
 
-/* ============== RECETARIO (LISTADO + MODAL) ============== */
+/* ============== RECETARIO ============== */
 let RECIPES = [];
-subscribeRecipes(list => {
-  RECIPES = list || [];
-  renderRecipeTable();
-});
+subscribeRecipes(list => { RECIPES = list || []; renderRecipeTable(); });
+
 q('#rcpSearch')?.addEventListener('input', renderRecipeTable);
+document.addEventListener('click', (e)=>{
+  const viewBtn = e.target.closest('#tblRecipes [data-a="view"]');
+  if (viewBtn){ const id = viewBtn.closest('tr')?.dataset?.id; const r = RECIPES.find(x=>x.id===id); if (r) openRecipeModal(r); return; }
+  const prepBtn = e.target.closest('#tblRecipes [data-a="prep"]');
+  if (prepBtn){ const id = prepBtn.closest('tr')?.dataset?.id; const r = RECIPES.find(x=>x.id===id); if (r) openQuickPrepDialog(r); return; }
+});
 
 function renderRecipeTable(){
   const tb = q('#tblRecipes tbody'); if (!tb) return;
@@ -527,25 +428,29 @@ function renderRecipeTable(){
     .map(r=>{
       const outName = invMap.get(r.outputItemId)?.name || r.outputItemId || '—';
       const count = (r.ingredients||[]).length;
+      const low = isLowStock(r.outputItemId);
+      const warn = low ? `<span class="k-badge warn" title="Stock bajo">LOW</span>` : '';
       return `<tr data-id="${r.id}">
-        <td><b>${esc(r.name||'Receta')}</b></td>
+        <td><b>${esc(r.name||'Receta')}</b> ${warn}</td>
         <td>${Number(r.yieldQty||0)} ${esc(r.yieldUnit||'ml')}</td>
         <td>${esc(outName)}</td>
         <td>${count}</td>
-        <td class="right"><button class="btn small ghost" data-a="view">Ver</button></td>
+        <td class="right" style="white-space:nowrap">
+          <button class="btn small ghost" data-a="view">Ver</button>
+          <button class="btn small" data-a="prep">Preparar</button>
+        </td>
       </tr>`;
     }).join('');
   tb.innerHTML = rows || '<tr><td colspan="5">—</td></tr>';
 }
+function isLowStock(itemId){
+  if (!itemId) return false;
+  const it = invMap.get(itemId);
+  const th = Number(APP_SETTINGS?.lowStockThreshold ?? 5);
+  return it && Number(it.currentStock||0) <= th;
+}
 
-document.addEventListener('click', (e)=>{
-  const btn = e.target.closest('#tblRecipes [data-a="view"]'); if(!btn) return;
-  const tr  = btn.closest('tr'); const id = tr?.dataset?.id;
-  const r   = RECIPES.find(x=>x.id===id); if(!r) return;
-  openRecipeModal(r);
-});
-
-/* ---- Modal de receta ---- */
+/* ---- Modal de receta (solo lectura) ---- */
 const rcpModal = document.getElementById('rcpModal');
 document.getElementById('rcpClose')?.addEventListener('click', ()=> rcpModal.style.display='none');
 
@@ -555,10 +460,7 @@ let CURRENT_OUT_QTY = 100;
 function scaleIngredients(r, outQty){
   const base = Number(r.yieldQty||0) || 1;
   const factor = Number(outQty)/base;
-  return (r.ingredients||[]).map(ing => ({
-    ...ing,
-    qtyScaled: Number(ing.qty||0)*factor,
-  }));
+  return (r.ingredients||[]).map(ing => ({ ...ing, qtyScaled: Number(ing.qty||0)*factor }));
 }
 
 function renderRecipeModal(){
@@ -573,6 +475,7 @@ function renderRecipeModal(){
       <div><b>${esc(CURRENT_R.name||'Receta')}</b></div>
       <div class="muted small">Rinde base: ${Number(CURRENT_R.yieldQty||0)} ${esc(CURRENT_R.yieldUnit||'ml')}</div>
       <div class="muted small">Producto terminado: ${esc(outItem)}</div>
+      ${isLowStock(CURRENT_R.outputItemId) ? '<div class="muted small" style="color:#ffda8a">⚠ Stock bajo del producto terminado</div>' : ''}
     </div>
 
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
@@ -607,6 +510,8 @@ function renderRecipeModal(){
         }).join('')}
       </div>
     </div>
+
+    ${CURRENT_R.method ? `<div class="field"><label>Método</label><div class="muted sm" style="white-space:pre-wrap">${esc(CURRENT_R.method)}</div></div>`:''}
   `;
   hint.textContent = `Salida: ${CURRENT_OUT_QTY} ml`;
   document.getElementById('rcpTitle').textContent = CURRENT_R.name || 'Receta';
@@ -618,14 +523,10 @@ function openRecipeModal(r){
   rcpModal.style.display='grid';
   renderRecipeModal();
 }
-
-// Botones rápidos del modal
 document.getElementById('rcpScale500')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=500; renderRecipeModal(); });
 document.getElementById('rcpScale250')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=250; renderRecipeModal(); });
 document.getElementById('rcpScale200')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=200; renderRecipeModal(); });
 document.getElementById('rcpScale100')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=100; renderRecipeModal(); });
-
-// Input manual en el modal
 document.getElementById('rcpBody')?.addEventListener('input', (e)=>{
   if (e.target && e.target.id==='rcpOutQty'){
     const v = Number(e.target.value||0);
@@ -633,47 +534,146 @@ document.getElementById('rcpBody')?.addEventListener('input', (e)=>{
     renderRecipeModal();
   }
 });
+document.getElementById('rcpPrepare')?.addEventListener('click', doPrepareFromView);
 
-/* Preparar lote desde el modal */
-document.getElementById('rcpPrepare')?.addEventListener('click', async ()=>{
+async function doPrepareFromView(){
   if (!CURRENT_R) return;
   const outQty = Number(document.getElementById('rcpOutQty')?.value || CURRENT_OUT_QTY || 0);
   if (!outQty || outQty<=0){ toast('Indica cantidad de salida en ml'); return; }
-
   try{
     await produceBatch({ recipeId: CURRENT_R.id, outputQty: outQty });
-
     const cups = Number(document.getElementById('rcpCups')?.value || 0);
     const cupId = APP_SETTINGS?.sauceCupItemId || null;
-    if (cupId && cups>0){
-      await adjustStock(cupId, -cups, 'use', { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty });
-    }
-
+    if (cupId && cups>0){ await adjustStock(cupId, -cups, 'use', { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty }); }
     const store = (document.getElementById('rcpStore')?.value === 'si');
     const storeQty = Number(document.getElementById('rcpStoreQty')?.value || 0);
     if (store && CURRENT_R.outputItemId){
-      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', {
-        recipeId: CURRENT_R.id, stored: true, storedQtyMl: storeQty, outputQtyMl: outQty
-      });
+      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', { recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty });
     }
+    toast('Lote preparado'); document.getElementById('rcpClose')?.click();
+  }catch(e){ console.error(e); toast('No se pudo preparar el lote'); }
+}
 
-    toast('Lote preparado');
-    document.getElementById('rcpClose')?.click();
-  }catch(e){
-    console.error(e);
-    toast('No se pudo preparar el lote');
+/* ---- Diálogo rápido “Preparar receta” (al abrir pestaña Recetario) ---- */
+function openQuickPrepDialog(prefRecipe = null){
+  if (!RECIPES.length){ toast('No hay recetas registradas'); return; }
+  const wrap = document.createElement('div');
+  wrap.className = 'modal small'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.style.display='grid';
+  const quickDefault = Number(document.getElementById('rcpQuickPort')?.value || 100);
+  const options = RECIPES.map(r=>`<option value="${r.id}" ${prefRecipe && prefRecipe.id===r.id?'selected':''}>${esc(r.name||'Receta')}</option>`).join('');
+  const rid = (prefRecipe?.id || RECIPES[0].id);
+  const r0 = prefRecipe || RECIPES[0];
+
+  wrap.innerHTML = `
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>Preparar receta</div>
+        <button class="btn ghost small" data-close>Cerrar</button>
+      </div>
+      <div class="modal-body" id="qpBody">
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
+          <div class="field">
+            <label>Receta</label>
+            <select id="qpRecipe">${options}</select>
+          </div>
+          <div class="field">
+            <label>Cantidad a preparar (ml)</label>
+            <input id="qpQty" type="number" min="10" step="10" value="${quickDefault}">
+          </div>
+          <div class="field">
+            <label></label>
+            <button class="btn ghost" id="qpSuggest">Sugerir cantidad</button>
+          </div>
+          <div class="field">
+            <label>¿Se preparó correctamente?</label>
+            <select id="qpDone"><option value="si">Sí</option><option value="no">No</option></select>
+          </div>
+        </div>
+        <div id="qpPreview" class="field"></div>
+      </div>
+      <div class="modal-foot">
+        <div class="total-bar">
+          <div></div>
+          <div class="row" style="gap:8px">
+            <button class="btn" id="qpConfirm">Confirmar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  const $ = (s)=> wrap.querySelector(s);
+  function close(){ wrap.remove(); }
+
+  const state = { r: r0, qty: quickDefault };
+  renderPreview();
+
+  wrap.addEventListener('change', (e)=>{
+    if (e.target.id==='qpRecipe'){
+      const rr = RECIPES.find(x=>x.id===e.target.value); if (rr){ state.r = rr; renderPreview(); }
+    }
+  });
+  wrap.addEventListener('input', (e)=>{
+    if (e.target.id==='qpQty'){ state.qty = Math.max(10, Number(e.target.value||0)||10); renderPreview(); }
+  });
+  wrap.addEventListener('click', async (e)=>{
+    if (e.target.matches('[data-close]')) { close(); return; }
+    if (e.target.id==='qpSuggest'){ e.preventDefault(); const q=await suggestQty(state.r); if (q){ $('#qpQty').value=q; state.qty=q; renderPreview(); } return; }
+    if (e.target.id==='qpConfirm'){
+      if ($('#qpDone').value!=='si'){ toast('Marcado como no preparado. No se ajusta inventario.'); close(); return; }
+      try{
+        await produceBatch({ recipeId: state.r.id, outputQty: state.qty });
+        // guardamos como almacenado (igual que el modal grande)
+        await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty });
+        toast('Producción confirmada'); close();
+      }catch(err){ console.error(err); toast('No se pudo confirmar producción'); }
+      return;
+    }
+  });
+
+  function renderPreview(){
+    const list = scaleIngredients(state.r, state.qty);
+    const low  = isLowStock(state.r.outputItemId);
+    $('#qpPreview').innerHTML = `
+      <label>Ingredientes para ${state.qty} ml ${low?'<span class="k-badge warn" style="margin-left:6px">Stock bajo</span>':''}</label>
+      <div class="rc-ingredients">
+        ${list.map(ing=>{
+          const name = invMap.get(ing.itemId)?.name || ing.itemId;
+          const unit = ing.unit || 'ml';
+          return `<div class="row" style="gap:8px; justify-content:space-between">
+            <div style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${esc(name)}</div>
+            <div>${ing.qtyScaled.toFixed(1)} ${esc(unit)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      ${state.r.method ? `<div class="muted sm" style="margin-top:8px; white-space:pre-wrap"><b>Método:</b>\n${esc(state.r.method)}</div>`:''}
+    `;
   }
-});
+}
 
-/* ============== ARTÍCULOS (CRUD con modal) ============== */
+/* Recomendación de cantidad: ventas últimos 7 días × ml por pedido */
+async function suggestQty(recipe){
+  try{
+    const now = new Date();
+    const from = new Date(now); from.setDate(now.getDate()-7); from.setHours(0,0,0,0);
+    const to   = new Date(now); to.setHours(23,59,59,999);
+    const orders = await getOrdersRange({ from, to, includeArchive:true, orderType:null });
+
+    // Total de pedidos (como base general). Si el recipe define `suggestMlPerOrder`, lo usamos; de lo contrario 20ml.
+    const perOrderMl = Number(recipe?.suggestMlPerOrder || APP_SETTINGS?.defaultSuggestMlPerOrder || 20);
+    const totalOrders = (orders||[]).length || 1;
+    const dailyAvgOrders = totalOrders / 7;
+    const qty = Math.ceil(dailyAvgOrders * perOrderMl * 1.2 / 10) * 10; // 20% colchón y redondeo a 10 ml
+    toast(`Sugerencia basada en ventas: ~${qty} ml`);
+    return qty;
+  }catch(e){ console.error(e); toast('No se pudo calcular sugerencia'); return null; }
+}
+
+/* ============== ARTÍCULOS (CRUD) ============== */
 let ARTICLES = [];
 let ART_SORT = { by: 'name', dir: 'asc' };
 let ART_FILTER = '';
-
-subscribeArticles(arr => {
-  ARTICLES = Array.isArray(arr) ? arr : [];
-  renderArticles();
-});
+subscribeArticles(arr => { ARTICLES = Array.isArray(arr) ? arr : []; renderArticles(); });
 
 const btnAddArticulo = document.getElementById('btnAddArticulo');
 btnAddArticulo?.addEventListener('click', () => openArticleModal());
@@ -684,28 +684,21 @@ document.addEventListener('input', (e)=>{
   ART_FILTER = String(input.value||'').toLowerCase().trim();
   renderArticles();
 });
-
 document.addEventListener('click', async (e)=>{
-  // Acciones de tabla
   const btn = e.target.closest('#tblArticulos [data-a]');
   if (btn){
     const id = btn.dataset.id;
     const a  = ARTICLES.find(x=>x.id===id);
     const act = btn.dataset.a;
-
     if (act === 'edit') { openArticleModal(a); return; }
     if (act === 'dup')  { if(a) duplicateArticle(a); return; }
     if (act === 'del')  { if(a) confirmDeleteArticle(a); return; }
     if (act === 'toggle'){
-      try {
-        await upsertArticle({ ...a, active: !a?.active });
-        toast(a?.active ? 'Artículo desactivado' : 'Artículo activado');
-      } catch(err){ console.error(err); toast('No se pudo actualizar activo'); }
+      try { await upsertArticle({ ...a, active: !a?.active }); toast(a?.active ? 'Artículo desactivado' : 'Artículo activado'); }
+      catch(err){ console.error(err); toast('No se pudo actualizar activo'); }
       return;
     }
   }
-
-  // Ordenamiento por encabezados
   const th = e.target.closest('#tblArticulos thead [data-sort]');
   if (th){
     const by = th.dataset.sort;
@@ -714,21 +707,15 @@ document.addEventListener('click', async (e)=>{
     renderArticles();
   }
 });
-
 function renderArticles(){
   const tb = q('#tblArticulos tbody'); if (!tb) return;
-
   let rows = ARTICLES.slice();
-
-  // Filtro
   if (ART_FILTER){
     rows = rows.filter(a=>{
       const hay = (a.name||'') + ' ' + (a.desc||'');
       return hay.toLowerCase().includes(ART_FILTER);
     });
   }
-
-  // Orden
   rows.sort((a,b)=>{
     const dir = ART_SORT.dir==='asc'?1:-1;
     const va = (ART_SORT.by==='price') ? Number(a.price||0) :
@@ -739,7 +726,6 @@ function renderArticles(){
                String(b.name||'').toLowerCase();
     if (va<vb) return -1*dir; if (va>vb) return 1*dir; return 0;
   });
-
   tb.innerHTML = rows.map(a => `
     <tr>
       <td style="min-width:180px">${esc(a.name||'—')}<div class="muted small">${esc(a.desc||'')}</div></td>
@@ -753,8 +739,6 @@ function renderArticles(){
       </td>
     </tr>
   `).join('') || '<tr><td colspan="4">—</td></tr>';
-
-  // Encabezados con sort (si no existen, los agregamos una vez)
   const thead = q('#tblArticulos thead tr');
   if (thead && !thead.querySelector('[data-sort]')) {
     thead.innerHTML = `
@@ -766,7 +750,7 @@ function renderArticles(){
   }
 }
 
-/* ---- Modal de Artículo (crea/edita) ---- */
+/* ---- Modal de Artículo ---- */
 function openArticleModal(article = null){
   const isEdit = !!(article && article.id);
   const data = {
@@ -776,13 +760,8 @@ function openArticleModal(article = null){
     active: article?.active ?? true,
     desc: article?.desc || ''
   };
-
-  // contenedor modal
   const wrap = document.createElement('div');
-  wrap.className = 'modal';
-  wrap.setAttribute('role','dialog');
-  wrap.setAttribute('aria-modal','true');
-  wrap.style.display = 'grid';
+  wrap.className = 'modal'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.style.display = 'grid';
   wrap.innerHTML = `
     <div class="modal-card">
       <div class="modal-head">
@@ -832,16 +811,8 @@ function openArticleModal(article = null){
   wrap.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
   setTimeout(()=> $('#aName')?.focus(), 0);
 
-  // Validación simple
-  function validate(){
-    const name = $('#aName')?.value.trim();
-    const ok = !!name;
-    $('#aNameErr').style.display = ok ? 'none' : '';
-    return ok;
-  }
-  wrap.addEventListener('input', (e)=>{
-    if (e.target.id === 'aName') validate();
-  });
+  function validate(){ const name = $('#aName')?.value.trim(); const ok = !!name; $('#aNameErr').style.display = ok ? 'none' : ''; return ok; }
+  wrap.addEventListener('input', (e)=>{ if (e.target.id === 'aName') validate(); });
 
   async function save(){
     if (!validate()){ beep(); return; }
@@ -852,46 +823,25 @@ function openArticleModal(article = null){
       active: $('#aActive').value === 'on',
       desc: $('#aDesc').value.trim()
     };
-    try{
-      await upsertArticle(payload);
-      toast('Artículo guardado');
-      close();
-    }catch(err){
-      console.error(err);
-      toast('No se pudo guardar el artículo');
-    }
+    try{ await upsertArticle(payload); toast('Artículo guardado'); close(); }
+    catch(err){ console.error(err); toast('No se pudo guardar el artículo'); }
   }
-
   $('#aSave')?.addEventListener('click', save);
   wrap.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); save(); } });
 
-  if (isEdit){
-    $('#aDelete')?.addEventListener('click', ()=> confirmDeleteArticle({ id:data.id, name:data.name }));
-  }
+  if (isEdit){ $('#aDelete')?.addEventListener('click', ()=> confirmDeleteArticle({ id:data.id, name:data.name })); }
 }
 
 async function duplicateArticle(a){
   try{
-    const copy = {
-      name: (a.name || 'Artículo') + ' (copia)',
-      price: Number(a.price||0),
-      active: false,
-      desc: a.desc || ''
-    };
-    await upsertArticle(copy);
-    toast('Artículo duplicado (quedó inactivo)');
-  }catch(err){
-    console.error(err);
-    toast('No se pudo duplicar');
-  }
+    const copy = { name:(a.name || 'Artículo') + ' (copia)', price:Number(a.price||0), active:false, desc:a.desc || '' };
+    await upsertArticle(copy); toast('Artículo duplicado (quedó inactivo)');
+  }catch(err){ console.error(err); toast('No se pudo duplicar'); }
 }
-
 function confirmDeleteArticle(article){
   if (!article) return;
   if (!confirm(`¿Eliminar artículo "${article.name}"?`)) return;
-  deleteArticle(article.id)
-    .then(()=> toast('Artículo eliminado'))
-    .catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
+  deleteArticle(article.id).then(()=> toast('Artículo eliminado')).catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
 }
 
 /* ---------------- helpers ---------------- */
@@ -899,16 +849,8 @@ function q(sel){ return document.querySelector(sel); }
 function setTxt(id,v){ const el=document.getElementById(id); if(el) el.textContent=String(v); }
 function setMoney(id,v){ const el=document.getElementById(id); if(el) el.textContent=fmtMoney(v); }
 const fmtMoney = n => '$' + Number(n||0).toFixed(0);
-function esc(s=''){
-  return String(s).replace(/[&<>"']/g, m => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'
-  }[m])).replace(/'/g, '&#39;');
-}
+function esc(s=''){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])).replace(/'/g, '&#39;'); }
 function escAttr(s=''){ return String(s).replace(/"/g, '&quot;'); }
-function escHtml(s=''){
-  return String(s).replace(/[&<>"']/g, m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'
-  }[m]));
-}
+function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
 runReports(); // primer reporte al abrir
