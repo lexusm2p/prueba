@@ -1,4 +1,6 @@
 // /admin/app.js — Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
+// + Panel de TEMAS festivos mexicanos (vista previa local + guardar GLOBAL en settings/theme)
+
 import {
   // Reportes
   getOrdersRange,
@@ -27,9 +29,21 @@ import {
   // Artículos (nuevo módulo)
   subscribeArticles,
   upsertArticle,
-  deleteArticle
+  deleteArticle,
+
+  // TEMAS (nuevo)
+  setTheme,            // guarda GLOBAL el tema: { name: 'Independencia' }
+  subscribeTheme       // puede no existir en algunas implementaciones; tenemos shim abajo
 } from '../shared/db.js';
+
 import { toast, beep } from '../shared/notify.js';
+
+// 🎨 utilidades de tema (colores/vars CSS, tipografías) — vista previa local y lectura de lista
+import {
+  initThemeFromSettings, // suscribe y aplica el tema global al <document> cuando cambia settings/theme
+  applyThemeLocal,       // aplica un tema por nombre SOLO en este cliente (sin tocar settings)
+  listThemes             // devuelve array de nombres de temas disponibles
+} from '../shared/theme.js';
 
 /* ---------------- Tabs ---------------- */
 const tabs = document.getElementById('admTabs') || document;
@@ -955,6 +969,111 @@ function confirmDeleteArticle(article){
   deleteArticle(article.id).then(()=> toast('Artículo eliminado')).catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
 }
 
+/* ============== TEMAS FESTIVOS (nuevo panel) ============== */
+/**
+ * Qué hace:
+ * - Se suscribe a settings/theme y aplica en vivo (initThemeFromSettings)
+ * - Muestra un panel flotante para:
+ *     a) Probar localmente un tema (solo este admin)
+ *     b) Guardar GLOBAL el tema (todos los kioskos/meseros/cocina)
+ * - Si no existe subscribeTheme en tu DB, no truena (ya aplicamos initThemeFromSettings)
+ */
+let THEME_UNSUB = null;
+initThemePanel(); // crea el panel UI
+bindThemeLive();  // engancha suscripción global
+
+function bindThemeLive(){
+  // initThemeFromSettings ya aplica live el tema global, pero guardamos la unsub si la expone
+  try {
+    if (typeof subscribeTheme === 'function'){
+      THEME_UNSUB = subscribeTheme((t)=> {
+        // opcional: puedes reflejar el nombre en el select si quieres
+        const sel = document.getElementById('admThemeSelect');
+        if (sel && t?.name) {
+          const opt = [...sel.options].find(o=>o.value===t.name);
+          if (opt) sel.value = t.name;
+        }
+      });
+    }
+  } catch (_){}
+  // además, arrancamos el listener de theme.js para aplicar estilos del backend
+  try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch(_){}
+}
+
+function initThemePanel(){
+  if (document.getElementById('admThemePanel')) return;
+
+  // Panel flotante discreto (no interfiere con tabs)
+  const box = document.createElement('div');
+  box.id = 'admThemePanel';
+  Object.assign(box.style, {
+    position: 'fixed',
+    right: '14px',
+    bottom: '14px',
+    background: 'rgba(15,24,42,.92)',
+    border: '1px solid rgba(255,255,255,.12)',
+    borderRadius: '14px',
+    padding: '10px',
+    color: 'var(--text, #fff)',
+    zIndex: 9999,
+    width: 'min(320px, 92vw)',
+    boxShadow: '0 10px 26px rgba(0,0,0,.35)',
+    fontSize: '12px'
+  });
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <strong style="font-size:12px">Tema (Kiosko/UI)</strong>
+      <button id="admThemeToggle" class="btn tiny ghost" style="padding:2px 8px">—</button>
+    </div>
+    <div id="admThemeBody" style="margin-top:8px">
+      <div class="field">
+        <label>Selecciona tema</label>
+        <select id="admThemeSelect" style="width:100%"></select>
+      </div>
+      <div class="row" style="gap:8px; margin-top:6px; flex-wrap:wrap">
+        <button class="btn small" id="admThemePreview">Probar local</button>
+        <button class="btn small" id="admThemeSave">Guardar GLOBAL</button>
+      </div>
+      <div class="muted small" id="admThemeMsg" style="margin-top:6px;opacity:.9"></div>
+    </div>
+  `;
+  document.body.appendChild(box);
+
+  // Poblar lista de temas desde theme.js
+  const sel = document.getElementById('admThemeSelect');
+  try {
+    const names = listThemes();
+    sel.innerHTML = names.map(n=> `<option value="${n}">${n}</option>`).join('');
+  } catch {
+    sel.innerHTML = `<option value="default">default</option>`;
+  }
+
+  // Toggle de colapsado
+  const body = document.getElementById('admThemeBody');
+  document.getElementById('admThemeToggle')?.addEventListener('click', ()=>{
+    body.style.display = (body.style.display==='none') ? 'block' : 'none';
+  });
+
+  // Probar local (no persiste en settings)
+  document.getElementById('admThemePreview')?.addEventListener('click', ()=>{
+    const name = sel.value;
+    try { applyThemeLocal(name); setThemeMsg('Tema aplicado localmente.'); }
+    catch(e){ console.error(e); setThemeMsg('No se pudo aplicar local.'); }
+  });
+
+  // Guardar GLOBAL (todos los kioskos)
+  document.getElementById('admThemeSave')?.addEventListener('click', async ()=>{
+    const name = sel.value;
+    try { await setTheme({ name }); setThemeMsg('Tema GLOBAL guardado. Kioskos lo aplicarán en vivo.'); }
+    catch(e){ console.error(e); setThemeMsg('No se pudo guardar GLOBAL.'); }
+  });
+
+  function setThemeMsg(text){
+    const msg = document.getElementById('admThemeMsg');
+    if (msg) msg.textContent = text;
+  }
+}
+
 /* ---------------- helpers ---------------- */
 function q(sel){ return document.querySelector(sel); }
 function setTxt(id,v){ const el=document.getElementById(id); if(el) el.textContent=String(v); }
@@ -962,6 +1081,7 @@ function setMoney(id,v){ const el=document.getElementById(id); if(el) el.textCon
 const fmtMoney = n => '$' + Number(n||0).toFixed(0);
 function esc(s=''){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])).replace(/'/g, '&#39;'); }
 function escAttr(s=''){ return String(s).replace(/"/g, '&quot;'); }
-function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&gt;','>':'&quot;'}[m])); }
 
+/* ---------------- Arranque ---------------- */
 runReports(); // primer reporte al abrir
