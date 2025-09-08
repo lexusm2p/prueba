@@ -1,45 +1,47 @@
-//apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
- //   authDomain: "seven-de-burgers.firebaseapp.com",
-   // projectId: "seven-de-burgers",
-    //storageBucket: "seven-de-burgers.firebasestorage.app",
-    //messagingSenderId: "34089845279",
-    //appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
-  //  measurementId: "G-Q8YQJGL2XY
- // /shared/firebase.js
-// Inicializa Firebase (App, Auth anónima y Firestore) usando el SDK modular por CDN.
-// ⚠️ Este archivo debe contener SOLO JavaScript (sin <script> ni HTML).
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+// /shared/firebase.js
+// ÚNICA inicialización de Firebase (App, Auth, Firestore).
+// Evita múltiples SDKs/duplicados. Si tenías /lib/firebase.js, elimínalo y usa solo este.
+// ------------------------------------------------------------
 
-// ⬇️ CONFIG DE TU PROYECTO
-// Nota: el storageBucket correcto suele terminar en ".appspot.com"
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+  getAuth, signInAnonymously, onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {
+  getFirestore, serverTimestamp, doc, getDoc, setDoc, updateDoc, addDoc, collection,
+  onSnapshot, query, where, orderBy, limit, Timestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+// 🔐 TU CONFIG (deja UNA sola fuente de verdad)
 const firebaseConfig = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
   authDomain: "seven-de-burgers.firebaseapp.com",
   projectId: "seven-de-burgers",
-  storageBucket: "seven-de-burgers.firebasestorage.app", // ← corrige si usabas firebasestorage.app
-  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
-  // messagingSenderId: "34089845279",
-  // measurementId: "G-Q8YQJGL2XY"
+  storageBucket: "seven-de-burgers.firebasestorage.app",
+  messagingSenderId: "34089845279",
+  appId: "G-Q8YQJGL2XY"
 };
 
-export const app  = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db   = getFirestore(app);
+// 🧩 Asegura app única (no doble init)
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Asegura sesión anónima antes de usar Firestore en cualquier módulo
-export async function ensureAnonAuth(){
-  return new Promise((resolve, reject) => {
-    onAuthStateChanged(auth, async (user) => {
-      try {
-        if (user) return resolve(user);
-        await signInAnonymously(auth);
-        // onAuthStateChanged se disparará de nuevo y resolverá
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
+// 🔑 Servicios
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// 🧭 Helper: asegura sesión anónima (evita errores de permisos)
+async function ensureAuth() {
+  if (!auth.currentUser) await signInAnonymously(auth);
+  return auth.currentUser;
 }
+
+// 🔔 Listener público para depurar (opcional, dejar comentado en prod)
+// onAuthStateChanged(auth, (u) => console.debug('[auth]', u?.uid));
+
+export {
+  app, auth, db, ensureAuth,
+  // Firestore utils que ya usas en todo el proyecto:
+  serverTimestamp, doc, getDoc, setDoc, updateDoc, addDoc, collection,
+  onSnapshot, query, where, orderBy, limit, Timestamp
+};
