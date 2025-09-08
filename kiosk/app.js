@@ -7,9 +7,13 @@
 // + Modal de seguimiento (QR + “Seguir ahora”) tras confirmar.
 // + CTA flotante para promover seguimiento al cerrar carrito sin confirmar.
 // + Cuenta regresiva HH con auto-refresh al terminar.
+// + Sistema de temas festivos mexicanos (local/global) — requiere /shared/theme.js y /shared/db.js
 
 import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
+// Temas (🎨): aplica en vivo desde Firestore y permite probar/cambiar local/global
+import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
+import { setTheme } from '../shared/db.js';
 
 /* ======================= Estado global ======================= */
 const state = {
@@ -24,6 +28,7 @@ const state = {
   unsubAnalytics: null,
   unsubHH: null,
   unsubETA: null,
+  unsubTheme: null,    // ← suscripción a settings/theme
 
   // Analytics UI
   etaText: '7–10 min',
@@ -33,10 +38,13 @@ const state = {
   comboUnlocked: false,
 
   // Promoción seguimiento
-  followCtaShown: false,  // evita spam de CTA al cerrar carrito
+  followCtaShown: false,  // evita spam de CTA al cerrar carrito sin confirmar
 
   // Happy Hour countdown (solo UI)
   hhLeftText: '', // "mm:ss" cuando haya endsAt
+
+  // Modo admin local (para “Aplicar GLOBAL” de tema sin salir del kiosko)
+  adminMode: false
 };
 
 /* ======================= Recursos visuales ======================= */
@@ -80,6 +88,15 @@ function openPinModal(){
   const hide = ()=>{ if(pinModal){ pinModal.style.display='none'; if(pinInput) pinInput.value=''; } };
   const enter = ()=>{
     const pin = (pinInput?.value||'').trim();
+
+    // 🔒 PIN especial para habilitar “modo admin local” (aplica tema GLOBAL desde kiosko)
+    if (pin === '7777') {
+      state.adminMode = true;
+      toast('Modo admin local habilitado (Temas GLOBAL disponibles)');
+      hide();
+      return;
+    }
+
     const route = map[pin];
     if (!route){ toast('PIN incorrecto'); return; }
     hide(); location.href = route;
@@ -118,6 +135,11 @@ async function init(){
   bindETA();             // ETA (settings) si existe; si no, fallback por analytics
   setupReadyFeed();      // feed “Listos”
   startOrdersAnalytics();// top “Más vendidos hoy” + fallback de ETA si no hay settings
+
+  // 🎨 THEME: suscripción en vivo a /settings/theme + panel flotante local/global
+  if (state.unsubTheme) { try{ state.unsubTheme(); }catch{} state.unsubTheme = null; }
+  state.unsubTheme = initThemeFromSettings({ defaultName: 'Independencia' });
+  mountThemePanel(); // ocúltalo en prod si no lo quieres visible
 }
 
 /* ======================= Utilidades base ======================= */
@@ -857,8 +879,8 @@ function openCartModal(){
 
     const orderId = await DB.createOrder(order);
     if (order.phone) {
-      await DB.upsertCustomerFromOrder(order);
-      await DB.attachLastOrderRef(order.phone, orderId);
+      await DB.upsertCustomerFromOrder?.(order);
+      await DB.attachLastOrderRef?.(order.phone, orderId);
     }
 
     beep();
@@ -1059,9 +1081,18 @@ function computeETA(orders){
   }
   document.querySelectorAll('[data-eta-text]').forEach(el=> el.textContent = state.etaText);
 }
+
+// 👇 Compatibilidad: si tu DB no tiene subscribeOrders, usamos onOrdersSnapshot o subscribeActiveOrders
+function subscribeOrdersShim(cb){
+  if (typeof DB.subscribeOrders === 'function') return DB.subscribeOrders(cb);
+  if (typeof DB.onOrdersSnapshot === 'function') return DB.onOrdersSnapshot(cb);
+  if (typeof DB.subscribeActiveOrders === 'function') return DB.subscribeActiveOrders(cb);
+  console.warn('No hay método de suscripción a órdenes en DB'); return ()=>{};
+}
+
 function startOrdersAnalytics(){
   if (state.unsubAnalytics){ state.unsubAnalytics(); state.unsubAnalytics=null; }
-  state.unsubAnalytics = DB.subscribeOrders((orders)=>{
+  state.unsubAnalytics = subscribeOrdersShim((orders)=>{
     computeTopToday(orders);
     computeETA(orders);
     renderMobileInfo();
@@ -1072,7 +1103,7 @@ function startOrdersAnalytics(){
 function setupReadyFeed(){
   if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
   const container = document.getElementById('readyFeed'); if (!container) return;
-  state.unsubReady = DB.subscribeOrders(list=>{
+  state.unsubReady = subscribeOrdersShim(list=>{
     const ready = (list||[]).filter(o=> (o.status||'')==='READY')
       .sort((a,b)=> oTime(b) - oTime(a))
       .slice(0,6);
@@ -1125,6 +1156,99 @@ document.addEventListener('click', (e)=>{
   }
 }, false);
 
+/* ======================= THEME: panel flotante (tester local + aplicar GLOBAL) ======================= */
+function mountThemePanel() {
+  if (document.getElementById('theme-floating-panel')) return;
+
+  const box = document.createElement('div');
+  box.id = 'theme-floating-panel';
+  Object.assign(box.style, {
+    position: 'fixed',
+    right: '12px',
+    bottom: 'calc(var(--safe-bottom) + 12px)',
+    background: 'rgba(0,0,0,.75)',
+    backdropFilter: 'blur(4px)',
+    padding: '10px',
+    border: '1px solid rgba(255,255,255,.2)',
+    borderRadius: '14px',
+    zIndex: 9999,
+    color: 'var(--text)',
+    fontSize: '12px',
+    maxWidth: '260px',
+    boxShadow: '0 10px 30px rgba(0,0,0,.35)'
+  });
+
+  const head = document.createElement('div');
+  head.style.display = 'flex';
+  head.style.alignItems = 'center';
+  head.style.justifyContent = 'space-between';
+  head.style.gap = '8px';
+  const title = document.createElement('strong');
+  title.textContent = 'Tema (MX)';
+  title.style.fontSize = '12px';
+  const toggle = document.createElement('button');
+  toggle.textContent = '—';
+  Object.assign(toggle.style, {
+    background: 'transparent', border: '1px solid rgba(255,255,255,.2)',
+    borderRadius: '8px', color: 'var(--text)', padding: '2px 6px', cursor: 'pointer'
+  });
+
+  const body = document.createElement('div'); body.style.marginTop = '8px';
+  toggle.addEventListener('click', ()=>{ body.style.display = (body.style.display==='none') ? 'block':'none'; });
+
+  const row1 = document.createElement('div');
+  row1.style.display = 'grid'; row1.style.gridTemplateColumns = '1fr'; row1.style.gap = '6px';
+  const labelSel = document.createElement('label'); labelSel.textContent = 'Selecciona tema:';
+  const select = document.createElement('select');
+  Object.assign(select.style, { width:'100%', padding:'6px', borderRadius:'8px', border:'1px solid rgba(255,255,255,.2)' });
+  for (const name of listThemes()) {
+    const opt = document.createElement('option'); opt.value = name; opt.textContent = name; select.appendChild(opt);
+  }
+
+  const row2 = document.createElement('div');
+  row2.style.display = 'grid'; row2.style.gridTemplateColumns = '1fr 1fr'; row2.style.gap = '6px';
+  const btnLocal = document.createElement('button');
+  btnLocal.textContent = 'Probar local';
+  Object.assign(btnLocal.style, {
+    padding:'8px', borderRadius:'10px', border:'1px solid rgba(255,255,255,.2)', background:'var(--accent)', cursor:'pointer'
+  });
+  const btnGlobal = document.createElement('button');
+  btnGlobal.textContent = 'Aplicar GLOBAL';
+  btnGlobal.title = 'Requiere modo admin (PIN 7777)';
+  Object.assign(btnGlobal.style, {
+    padding:'8px', borderRadius:'10px', border:'1px solid rgba(255,255,255,.2)', background:'var(--accent-2)', cursor:'pointer'
+  });
+
+  const msg = document.createElement('div'); msg.style.marginTop = '6px'; msg.style.opacity = '.9';
+
+  btnLocal.addEventListener('click', ()=>{
+    applyThemeLocal(select.value);
+    setMsg('Tema aplicado localmente.', 'ok');
+  });
+
+  btnGlobal.addEventListener('click', async ()=>{
+    if (!state.adminMode) return setMsg('Debes activar modo admin (PIN 7777).', 'warn');
+    try {
+      await setTheme({ name: select.value });
+      setMsg('Tema GLOBAL actualizado. Kioskos lo aplicarán en vivo.', 'ok');
+    } catch (e) {
+      console.error(e); setMsg('Error al guardar tema global.', 'err');
+    }
+  });
+
+  function setMsg(text, kind='ok'){
+    msg.textContent = text;
+    msg.style.color = (kind==='ok'?'#A7F3D0': kind==='warn'?'#FFE082':'#FFABAB');
+  }
+
+  head.appendChild(title); head.appendChild(toggle);
+  row1.appendChild(labelSel); row1.appendChild(select);
+  row2.appendChild(btnLocal); row2.appendChild(btnGlobal);
+  body.appendChild(row1); body.appendChild(row2); body.appendChild(msg);
+  box.appendChild(head); box.appendChild(body);
+  document.body.appendChild(box);
+}
+
 /* ======================= Miscelánea ======================= */
 // Limpia suscripciones y timers al abandonar la página
 window.addEventListener('beforeunload', ()=>{
@@ -1132,5 +1256,6 @@ window.addEventListener('beforeunload', ()=>{
   try{ state.unsubAnalytics && state.unsubAnalytics(); }catch{}
   try{ state.unsubHH && state.unsubHH(); }catch{}
   try{ state.unsubETA && state.unsubETA(); }catch{}
+  try{ state.unsubTheme && state.unsubTheme(); }catch{}
   try{ if(hhTimer) clearInterval(hhTimer); }catch{}
 });
