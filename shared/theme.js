@@ -1,9 +1,10 @@
 // /shared/theme.js
 // Sistema de temas festivos mexicanos para el kiosko.
 // - Aplica variables CSS en :root
-// - Carga fuente opcional del tema (si la hay)
+// - Carga fuente opcional del tema
 // - Suscripción en vivo a /settings.theme.name (si DB lo soporta)
 // - Fallback sin backend usando localStorage ("kiosk.theme")
+// - Decoraciones pixel‑art (baner, papel picado, sombrero) para "Independencia"
 
 import * as DB from './db.js';
 
@@ -24,9 +25,11 @@ const THEMES = {
       '--ok':'#24d36b',
       '--stroke':'rgba(255,255,255,.10)',
     },
-    // Fuente con feeling “poster vintage”
+    // Fuente con feeling “poster vintage”, conservando Press Start 2P
     fontFamily: '"Chakra Petch", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&display=swap'
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap',
+    // Decoraciones especiales
+    decorations: { vivaBanner: true, papelPicado: true, sombrero: true }
   },
 
   // Noviembre
@@ -45,7 +48,8 @@ const THEMES = {
       '--stroke':'rgba(255,255,255,.12)',
     },
     fontFamily: '"Nova Round", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Nova+Round&display=swap'
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Nova+Round&display=swap',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
   // Diciembre
@@ -64,7 +68,8 @@ const THEMES = {
       '--stroke':'rgba(255,255,255,.12)',
     },
     fontFamily: '"Nunito", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&display=swap'
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Nunito:wght@800&display=swap',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
   // Febrero
@@ -83,7 +88,8 @@ const THEMES = {
       '--stroke':'rgba(255,255,255,.12)',
     },
     fontFamily: '"Baloo 2", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap'
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&display=swap',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
   // Octubre
@@ -102,11 +108,12 @@ const THEMES = {
       '--stroke':'rgba(255,255,255,.12)'
     },
     fontFamily: '"Changa One", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Changa+One:ital@0;1&display=swap'
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Changa+One:ital@0;1&display=swap',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   }
 };
 
-/* ================= utilidades ================= */
+/* ================= utilidades base ================= */
 function ensureFontLoaded(url){
   if (!url) return;
   const id = 'theme-font-link';
@@ -121,9 +128,128 @@ function applyVars(vars){
 }
 function setFontFamily(family){
   if (!family) return;
-  const root = document.documentElement;
-  // En tu CSS usas --font como variable principal
-  root.style.setProperty('--font', family);
+  document.documentElement.style.setProperty('--font', family);
+}
+
+/* =============== Decoraciones “Independencia” =============== */
+// CSS común para decoraciones
+const DECOR_STYLE_ID = 'theme-decor-css';
+function injectDecorCss(){
+  if (document.getElementById(DECOR_STYLE_ID)) return;
+  const css = `
+  /* Banner Viva México pixel/arcade */
+  #mx-viva {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    top: 8px; z-index: 60;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px; line-height: 1.1;
+    letter-spacing: .5px;
+    color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35);
+    background:
+      linear-gradient(#0f1a12,#0a140d) padding-box,
+      linear-gradient(90deg,#18c96b,#ffffff,#ff4d4d) border-box;
+    border: 2px solid transparent; border-radius: 10px;
+    padding: 8px 12px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  }
+  #mx-viva .blink{ animation: blink 1s steps(2,end) infinite }
+  @keyframes blink { 50% { opacity:.2 } }
+
+  /* Papel picado (fijo al fondo, no interfiere con el gameplay) */
+  #mx-papel {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    opacity: .18;
+    background-size: 140px 90px;
+    background-repeat: repeat;
+    image-rendering: pixelated;
+  }
+
+  /* Sombrero arriba del logo/brand */
+  #mx-sombrero {
+    position: absolute; z-index: 61; width: 64px; height: 48px;
+    transform: translate(-6px,-42px) rotate(-8deg);
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+  `;
+  const style = document.createElement('style');
+  style.id = DECOR_STYLE_ID; style.textContent = css;
+  document.head.appendChild(style);
+}
+
+// SVGs (data URL) – ligeros y pixelados
+const SVG_SOMBRERO = `data:image/svg+xml;utf8,
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 48' shape-rendering='crispEdges'>
+  <rect width='64' height='48' fill='none'/>
+  <path d='M8 32h48v6H8z' fill='%23b27a2e'/>
+  <path d='M12 28h40v4H12z' fill='%23d6a54b'/>
+  <path d='M26 10h12v10H26z' fill='%23c28a34'/>
+  <path d='M24 20h16v6H24z' fill='%23e3b358'/>
+  <path d='M18 34h28v2H18z' fill='%23ff4d4d'/>
+  <path d='M22 34h4v2h-4z' fill='%2318c96b'/>
+</svg>`;
+
+const SVG_PAPEL = `data:image/svg+xml;utf8,
+<svg xmlns='http://www.w3.org/2000/svg' width='140' height='90' shape-rendering='crispEdges'>
+  <rect width='140' height='90' fill='%230b1420'/>
+  <!-- tiras verde, blanco, rojo pixel -->
+  <rect x='0' y='0' width='140' height='12' fill='%2318c96b'/>
+  <rect x='0' y='12' width='140' height='12' fill='%23ffffff'/>
+  <rect x='0' y='24' width='140' height='12' fill='%23ff4d4d'/>
+  <!-- recortes simples tipo papel -->
+  <rect x='10' y='50' width='12' height='12' fill='%23151f2d'/>
+  <rect x='36' y='56' width='8' height='8' fill='%23151f2d'/>
+  <rect x='58' y='50' width='12' height='12' fill='%23151f2d'/>
+  <rect x='86' y='56' width='8' height='8' fill='%23151f2d'/>
+  <rect x='110' y='50' width='12' height='12' fill='%23151f2d'/>
+</svg>`;
+
+// Crear o quitar nodos
+function ensureNode(id, tag = 'div'){
+  let el = document.getElementById(id);
+  if (!el){ el = document.createElement(tag); el.id = id; document.body.appendChild(el); }
+  return el;
+}
+function removeNode(id){ const el = document.getElementById(id); if (el) el.remove(); }
+
+// Aplica/limpia decor según tema
+function applyDecorations(themeName){
+  const conf = THEMES[themeName]?.decorations || {};
+  // CSS base
+  injectDecorCss();
+
+  // Papel picado
+  if (conf.papelPicado){
+    const papel = ensureNode('mx-papel');
+    papel.style.backgroundImage = `url("${SVG_PAPEL}")`;
+    papel.style.display = 'block';
+  } else { removeNode('mx-papel'); }
+
+  // Banner ¡VIVA MÉXICO!
+  if (conf.vivaBanner){
+    const viva = ensureNode('mx-viva');
+    viva.innerHTML = `🎉 <span class="blink">¡VIVA MÉXICO!</span> 🇲🇽`;
+    viva.style.display = 'block';
+  } else { removeNode('mx-viva'); }
+
+  // Sombrero sobre brand
+  if (conf.sombrero){
+    const sombrero = ensureNode('mx-sombrero','img');
+    sombrero.src = SVG_SOMBRERO;
+    // Intenta posicionarlo sobre #brandTap si existe
+    const brand = document.getElementById('brandTap');
+    if (brand){
+      brand.style.position = brand.style.position || 'relative';
+      brand.appendChild(sombrero);
+    } else {
+      // Fallback: esquina superior izquierda
+      sombrero.style.position = 'fixed';
+      sombrero.style.left = '18px';
+      sombrero.style.top  = '22px';
+      document.body.appendChild(sombrero);
+    }
+    sombrero.style.display = 'block';
+  } else { removeNode('mx-sombrero'); }
 }
 
 /* ============== API pública ============== */
@@ -136,6 +262,8 @@ export function applyThemeLocal(name){
   applyVars(t.vars);
   setFontFamily(t.fontFamily);
   document.documentElement.setAttribute('data-theme', name);
+  // Decoraciones
+  applyDecorations(name);
   try{ localStorage.setItem('kiosk.theme', name); }catch{}
 }
 
@@ -175,7 +303,6 @@ export function initThemeFromSettings({ defaultName='Independencia' } = {}){
    vía DB.setTheme (lo exponemos como sugar aquí por si lo necesitas).
 ========================================================= */
 export async function setThemeGlobal(name){
-  // intenta DB.setTheme(); si no existe, usa setSettings/updateSettings; si no, localStorage.
   if (typeof DB.setTheme === 'function'){ return DB.setTheme({ name }); }
   if (typeof DB.setSettings === 'function'){ return DB.setSettings({ theme:{ name } }); }
   if (typeof DB.updateSettings === 'function'){ return DB.updateSettings({ theme:{ name } }); }
