@@ -128,7 +128,7 @@ a{ color:var(--accent-2); text-decoration:none }
 .btn.tab{
   border:2px solid rgba(255,255,255,.25);
   background:#1c2436;
-  color:var(--ink);
+  color:#eaf2ff;
   box-shadow:none;
   min-height:44px;
   line-height:1;
@@ -502,4 +502,103 @@ textarea{ min-height:80px }
 }
 #panel-happy #btnHHStop{
   border-color:#6b2a2a;
+}
+
+/* =========================================================
+   HISTORIAL DE PEDIDOS (Admin)
+   ========================================================= */
+.table-wrap{
+  overflow:auto;
+  -webkit-overflow-scrolling: touch; /* iOS scroll suave */
+  border:1px solid var(--stroke);
+  border-radius:12px;
+  background:linear-gradient(180deg,#111a2c,#0d1728);
+}
+#tblHist.k-table th, #tblHist.k-table td{
+  white-space:nowrap;
+  vertical-align:middle;
+}
+#tblHist .btn.small.ghost{
+  padding:6px 8px;
+  line-height:1;
+  font-size:11px;
+}
+@media (max-width: 480px){
+  /* Oculta “Artículos” en XS */
+  #tblHist th:nth-child(4), #tblHist td:nth-child(4){
+    display:none;
+  }
+}
+/* Modal de pedido más ancho en desktop, fluido en móvil */
+.modal .modal-card{
+  width:min(760px,94vw);
+  max-height:86vh;
+}
+@media (max-width: 520px){
+  .modal .modal-card{ width:94vw; }
+}
+/* Foco accesible en filas */
+.k-table tbody tr:focus-within{
+  outline:2px solid rgba(124,201,255,.35);
+  outline-offset:-2px;
+}
+@supports (-webkit-touch-callout: none) {
+  #tblHist .btn.small.ghost{ font-size:14px; }
+}
+
+/* =========================================================
+   FIX: Panel de COCINA en celulares (mejor grid/espaciado)
+   ========================================================= */
+/* 3 columnas desktop, 2 columnas tablet, 1 columna móvil */
+@media (max-width: 1100px){
+  .k-columns{ grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width: 720px){
+  .k-columns{ grid-template-columns:1fr; }
+  .k-card{ padding:12px; }
+  .k-head .title{ font-size:13px; }
+  .k-badge{ font-size:11px; }
+  .k-actions{ gap:6px; }
+  .k-actions .btn.small{
+    padding:9px 10px;
+    min-width:auto;
+  }
+}
+/* Evita desbordes por textos largos (mesas/cliente/nota) */
+.k-card,
+.k-head .title,
+.k-card .row,
+.k-badges{
+  min-width:0;
+}
+.k-card *{
+  word-break:break-word;
+}
+/* Para columnas muy pobladas, permitir scroll vertical suave */
+@media (max-width: 720px){
+  .k-columns{
+    max-height: calc(100vh - 180px);
+    overflow:auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+/* Botones se apilan cuando hay muchos */
+@media (max-width: 400px){
+  .k-actions{
+    flex-direction:row;
+    flex-wrap:wrap;
+  }
+  .k-actions .btn.small{
+    flex:1 1 48%;
+  }
+}
+/* Reduce márgenes y separadores para densidad en móvil */
+@media (max-width: 720px){
+  .k-card{ margin-bottom:8px; }
+  .k-table th,.k-table td{ padding:8px; }
+}
+/* Evita “salto” del header pegajoso sobre el kanban en móvil */
+@media (max-width: 720px){
+  .header{ position:sticky; top:0; }
+  body{ overscroll-behavior-y:none; }
 }
