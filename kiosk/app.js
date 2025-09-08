@@ -133,6 +133,19 @@ function findItemById(id){
 function baseOfItem(item){
   return item?.baseOf ? state.menu?.burgers?.find?.(b=>b.id===item.baseOf) : item;
 }
+
+// Normaliza ingredientes mostrando gramos correctos según mini/grande
+function formatIngredientsFor(item, base){
+  const meatDefaultBig  = Number(state.menu?.appSettings?.meatGrams ?? 85);
+  const meatDefaultMini = Number(state.menu?.appSettings?.miniMeatGrams ?? 45);
+  const grams = Number(item?.meatGrams ?? (item?.mini ? meatDefaultMini : meatDefaultBig));
+  const src = (Array.isArray(item?.ingredients) && item.ingredients.length)
+    ? item.ingredients
+    : (base?.ingredients || []);
+  // Reemplaza cualquier "Carne ..." por "Carne {grams} g"
+  return src.map(s => /^Carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s);
+}
+
 function slug(s){
   return String(s).toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -466,8 +479,9 @@ function renderCards(){
       </div>`;
     grid.appendChild(card);
 
+    // ← Ajustado para usar gramos correctos según mini/grande
     card.querySelector('[data-a="ing"]')?.addEventListener('click', ()=>{
-      alert(`${base?.name||it.name}\n\nIngredientes:\n- ${(base?.ingredients||[]).join('\n- ')}`);
+      alert(`${it.name}\n\nIngredientes:\n- ${formatIngredientsFor(it, base).join('\n- ')}`);
     });
     card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> openItemModal(it, base));
   });
@@ -596,7 +610,8 @@ function openItemModal(item, base, existingIndex=null){
       const newLine = {
         id: item.id, name: item.name, mini: !!item.mini, qty,
         unitPrice: Number(item.price||0),
-        baseIngredients: base?.ingredients||[],
+        // ← Ajustado para incluir ingredientes con gramos correctos
+        baseIngredients: formatIngredientsFor(item, base),
         salsaDefault: base?.salsaDefault || base?.suggested || null,
         salsaCambiada: salsaSwap,
         extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk, surpriseSauce: surpriseSauce || null },
