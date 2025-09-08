@@ -21,6 +21,14 @@
     .rc-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
     .rc-ingredients{ max-height:340px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; }
     .muted.sm{ font-size:12px; color:var(--muted); }
+
+    /* Tablas responsivas / iOS */
+    .table-wrap { overflow:auto; -webkit-overflow-scrolling: touch; }
+    .k-table th, .k-table td { white-space: nowrap; }
+    @media (max-width: 480px){
+      /* Ocultar columna “Artículos” en pantallas XS donde aplique */
+      #tblHist th:nth-child(4), #tblHist td:nth-child(4) { display:none; }
+    }
   </style>
 </head>
 <body>
@@ -40,6 +48,9 @@
     <h2>Panel de administración</h2>
     <div class="tabs-admin" id="admTabs" role="tablist" aria-label="Módulos de Admin">
       <button class="tab is-active" data-tab="reportes" role="tab" aria-selected="true">Reportes</button>
+      <!-- NUEVO: pestaña Historial -->
+      <button class="tab" data-tab="hist" role="tab" aria-selected="false">Historial</button>
+      <!-- /NUEVO -->
       <button class="tab" data-tab="cobros" role="tab" aria-selected="false">Cobros</button>
       <button class="tab" data-tab="compras" role="tab" aria-selected="false">Compras</button>
       <button class="tab" data-tab="inventario" role="tab" aria-selected="false">Inventario</button>
@@ -81,6 +92,69 @@
       <h4 style="margin-top:16px">Ventas por hora</h4>
       <table class="k-table" id="tblHours"><thead><tr><th>Hora</th><th>Órdenes</th><th>Ingresos</th></tr></thead><tbody></tbody></table>
     </section>
+
+    <!-- NUEVO: HISTORIAL -->
+    <section class="panel" id="panel-hist">
+      <h3>Historial de pedidos</h3>
+
+      <!-- Filtros (reusan rango y archivo del panel Reportes) -->
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
+        <div class="field">
+          <label>Búsqueda (nombre / teléfono / ID)</label>
+          <input id="histSearch" type="search" placeholder="Buscar…">
+        </div>
+        <div class="field">
+          <label>Tipo</label>
+          <select id="histType">
+            <option value="all">Todos</option>
+            <option value="pickup">Pickup</option>
+            <option value="dinein">Mesa</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <select id="histState">
+            <option value="all">Todos</option>
+            <option value="PENDING">PENDING</option>
+            <option value="COOKING">COOKING</option>
+            <option value="READY">READY</option>
+            <option value="CHARGED">CHARGED</option>
+            <option value="CANCELLED">CANCELLED</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Límite</label>
+          <input id="histLimit" type="number" min="10" step="10" value="50">
+        </div>
+        <div class="field" style="align-self:end">
+          <div class="row" style="gap:8px">
+            <button id="btnHistLoad" class="btn">Cargar</button>
+            <button id="btnHistCSV" class="btn ghost">Exportar CSV</button>
+          </div>
+          <div class="muted small" style="margin-top:6px">
+            * Usa “Desde/Hasta” y “Incluir archivo histórico” del panel Reportes.
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:8px;">
+        <table id="tblHist" class="k-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Tipo</th>
+              <th>Artículos</th>
+              <th>Total</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="7">—</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- /NUEVO: HISTORIAL -->
 
     <!-- COBROS -->
     <section class="panel" id="panel-cobros">
