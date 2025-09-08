@@ -1,4 +1,4 @@
-// /admin/app.js  — Admin completo + Historial + Recetario mejorado + CRUD Artículos
+// /admin/app.js — Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
 import {
   // Reportes
   getOrdersRange,
@@ -43,7 +43,7 @@ tabs.addEventListener('click', (e) => {
 
   if (target === 'hist') { startHistAutoRefresh(); loadHistory(); } else { stopHistAutoRefresh(); }
 
-  // NUEVO: al abrir Recetario, mostrar cuadro rápido de preparación
+  // Al abrir Recetario, lanzar diálogo rápido
   if (target === 'recetas') { openQuickPrepDialog(); }
 });
 
@@ -220,13 +220,14 @@ function renderHistory(){
       <td style="max-width:420px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis">${itemsText||'—'}</td>
       <td class="right">${fmtMoney(o.total)}</td>
       <td><span class="k-badge ${badgeCls}">${esc(o.state||'-')}</span></td>
-      <td class="right"><span class="muted small mono">${numTxt}</span></td>
+      <td class="right"><span class="muted small mono">${(o.num!=null)?`#${esc(o.num)}`:(o.id||'—')}</span></td>
     </tr>`;
   }).join('');
 
   tb.innerHTML = html || '<tr><td colspan="7">—</td></tr>';
 }
-function exportHistoryCSV(){ /* ...igual que antes... */ // por brevedad, se mantiene igual que tu versión previa
+
+function exportHistoryCSV(){
   const qraw  = (histSearchEl?.value || '').trim();
   const qstr  = qraw.toLowerCase();
   const typeF = histTypeEl?.value || 'all';
@@ -259,7 +260,13 @@ function exportHistoryCSV(){ /* ...igual que antes... */ // por brevedad, se man
   setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 function csvEscape(v){ const s=String(v??''); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; }
-(function autoLoadHistOnBoot(){ try{ if (histLimitEl) { histLimitEl.value='5'; histLimitEl.dataset.touched='1'; } loadHistory(false);}catch(_){}})();
+
+(function autoLoadHistOnBoot(){
+  try{
+    if (histLimitEl) { histLimitEl.value='5'; histLimitEl.dataset.touched='1'; }
+    loadHistory(false);
+  }catch(_){}
+})();
 
 /* ============== Inventario ============== */
 const invRows = [];
@@ -268,10 +275,11 @@ subscribeInventory(items => {
   invRows.length = 0; invRows.push(...items);
   invMap.clear(); items.forEach(it => invMap.set(it.id, it));
   renderInventoryTable();
-  renderRecipeTable();
+  renderRecipeTable(); // refresca nombres en recetario
 });
 q('#btnInvRefresh')?.addEventListener('click', renderInventoryTable);
 q('#invSearch')?.addEventListener('input', renderInventoryTable);
+
 function renderInventoryTable() {
   const qstr = (q('#invSearch')?.value || '').toLowerCase();
   const tb = q('#tblInv tbody'); if (!tb) return;
@@ -288,6 +296,9 @@ function renderInventoryTable() {
 }
 
 /* ============== Compras ============== */
+let SUPPLIERS = [];
+subscribeSuppliers(arr => { SUPPLIERS = arr || []; renderVendors(arr); });
+
 const btnAddPurchase = document.getElementById('btnAddPurchase');
 btnAddPurchase && (btnAddPurchase.onclick = async () => {
   const name = (q('#pName')?.value || '').trim();
@@ -310,8 +321,11 @@ btnAddPurchase && (btnAddPurchase.onclick = async () => {
   } catch (e) { console.error(e); toast('Error al registrar compra'); }
 });
 
-/* ============== Proveedores ============== */
-subscribeSuppliers(renderVendors);
+function renderVendors(arr = []) {
+  const tb = q('#tblVendors tbody'); if (!tb) return;
+  tb.innerHTML = arr.map(v => `<tr><td>${esc(v.name)}</td><td>${esc(v.contact || '-')}</td><td>${v.id}</td></tr>`).join('')
+    || '<tr><td colspan="3">—</td></tr>';
+}
 q('#btnSaveVendor')?.addEventListener('click', async () => {
   const name = (q('#vName')?.value || '').trim();
   const contact = (q('#vContact')?.value || '').trim();
@@ -319,11 +333,6 @@ q('#btnSaveVendor')?.addEventListener('click', async () => {
   try { await upsertSupplier({ name, contact }); toast('Proveedor guardado'); }
   catch (e) { console.error(e); toast('Error al guardar proveedor'); }
 });
-function renderVendors(arr = []) {
-  const tb = q('#tblVendors tbody'); if (!tb) return;
-  tb.innerHTML = arr.map(v => `<tr><td>${esc(v.name)}</td><td>${esc(v.contact || '-')}</td><td>${v.id}</td></tr>`).join('')
-    || '<tr><td colspan="3">—</td></tr>';
-}
 
 /* ============== Productos (solo lectura) ============== */
 subscribeProducts(renderProducts);
@@ -554,14 +563,14 @@ async function doPrepareFromView(){
   }catch(e){ console.error(e); toast('No se pudo preparar el lote'); }
 }
 
-/* ---- Diálogo rápido “Preparar receta” (al abrir pestaña Recetario) ---- */
+/* ---- Diálogo rápido “Preparar receta” (con validación inversa) ---- */
 function openQuickPrepDialog(prefRecipe = null){
   if (!RECIPES.length){ toast('No hay recetas registradas'); return; }
   const wrap = document.createElement('div');
-  wrap.className = 'modal small'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.style.display='grid';
+  wrap.className = 'modal'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.style.display='grid';
+
   const quickDefault = Number(document.getElementById('rcpQuickPort')?.value || 100);
   const options = RECIPES.map(r=>`<option value="${r.id}" ${prefRecipe && prefRecipe.id===r.id?'selected':''}>${esc(r.name||'Receta')}</option>`).join('');
-  const rid = (prefRecipe?.id || RECIPES[0].id);
   const r0 = prefRecipe || RECIPES[0];
 
   wrap.innerHTML = `
@@ -570,8 +579,9 @@ function openQuickPrepDialog(prefRecipe = null){
         <div>Preparar receta</div>
         <button class="btn ghost small" data-close>Cerrar</button>
       </div>
+
       <div class="modal-body" id="qpBody">
-        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px">
           <div class="field">
             <label>Receta</label>
             <select id="qpRecipe">${options}</select>
@@ -584,18 +594,19 @@ function openQuickPrepDialog(prefRecipe = null){
             <label></label>
             <button class="btn ghost" id="qpSuggest">Sugerir cantidad</button>
           </div>
-          <div class="field">
-            <label>¿Se preparó correctamente?</label>
-            <select id="qpDone"><option value="si">Sí</option><option value="no">No</option></select>
-          </div>
         </div>
-        <div id="qpPreview" class="field"></div>
+
+        <div id="qpPreview" class="field" style="margin-top:8px"></div>
+        <div id="qpIssues"  class="field" style="margin-top:6px"></div>
+        <div id="qpCost"    class="field" style="margin-top:6px"></div>
       </div>
+
       <div class="modal-foot">
         <div class="total-bar">
-          <div></div>
+          <div class="muted small" id="qpHint"></div>
           <div class="row" style="gap:8px">
-            <button class="btn" id="qpConfirm">Confirmar</button>
+            <button class="btn ghost" id="qpBuyMissing" disabled>Registrar compras faltantes</button>
+            <button class="btn" id="qpConfirm" disabled>Confirmar</button>
           </div>
         </div>
       </div>
@@ -605,37 +616,63 @@ function openQuickPrepDialog(prefRecipe = null){
   const $ = (s)=> wrap.querySelector(s);
   function close(){ wrap.remove(); }
 
-  const state = { r: r0, qty: quickDefault };
-  renderPreview();
+  const state = { r: r0, qty: quickDefault, needs: [] };
+  renderAll();
 
   wrap.addEventListener('change', (e)=>{
     if (e.target.id==='qpRecipe'){
-      const rr = RECIPES.find(x=>x.id===e.target.value); if (rr){ state.r = rr; renderPreview(); }
+      const rr = RECIPES.find(x=>x.id===e.target.value); if (rr){ state.r = rr; renderAll(); }
     }
   });
   wrap.addEventListener('input', (e)=>{
-    if (e.target.id==='qpQty'){ state.qty = Math.max(10, Number(e.target.value||0)||10); renderPreview(); }
+    if (e.target.id==='qpQty'){ state.qty = Math.max(10, Number(e.target.value||0)||10); renderAll(); }
   });
   wrap.addEventListener('click', async (e)=>{
     if (e.target.matches('[data-close]')) { close(); return; }
-    if (e.target.id==='qpSuggest'){ e.preventDefault(); const q=await suggestQty(state.r); if (q){ $('#qpQty').value=q; state.qty=q; renderPreview(); } return; }
-    if (e.target.id==='qpConfirm'){
-      if ($('#qpDone').value!=='si'){ toast('Marcado como no preparado. No se ajusta inventario.'); close(); return; }
+    if (e.target.id==='qpSuggest'){ e.preventDefault(); const q=await suggestQty(state.r); if (q){ $('#qpQty').value=q; state.qty=q; renderAll(); } return; }
+
+    if (e.target.id==='qpBuyMissing'){
+      // leer inputs por cada falta y registrar compras
+      const rows = [...wrap.querySelectorAll('.qp-buyrow')];
+      if (!rows.length) return;
       try{
-        await produceBatch({ recipeId: state.r.id, outputQty: state.qty });
-        // guardamos como almacenado (igual que el modal grande)
-        await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty });
-        toast('Producción confirmada'); close();
-      }catch(err){ console.error(err); toast('No se pudo confirmar producción'); }
+        for (const row of rows){
+          const itemId = row.dataset.item;
+          const qty = Number(row.querySelector('[data-qty]')?.value || 0);
+          const cost = Number(row.querySelector('[data-cost]')?.value || 0);
+          const supplierId = row.querySelector('[data-sup]')?.value || null;
+          if (itemId && qty>0 && cost>0){
+            await recordPurchase({ itemId, qty, unitCost: cost, supplierId });
+          }
+        }
+        toast('Compras registradas');
+        renderAll(); // vuelve a calcular con stocks/costos actualizados
+      }catch(err){ console.error(err); toast('No se pudieron registrar compras'); }
       return;
     }
+
+    if (e.target.id==='qpConfirm'){
+      try{
+        await produceBatch({ recipeId: state.r.id, outputQty: state.qty });
+        // marcar meta almacenada (informativo)
+        await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty });
+        toast('Producción confirmada');
+        close();
+      }catch(err){ console.error(err); toast('No se pudo confirmar producción'); }
+    }
   });
+
+  function renderAll(){
+    renderPreview();
+    renderValidation();
+    renderCost();
+  }
 
   function renderPreview(){
     const list = scaleIngredients(state.r, state.qty);
     const low  = isLowStock(state.r.outputItemId);
     $('#qpPreview').innerHTML = `
-      <label>Ingredientes para ${state.qty} ml ${low?'<span class="k-badge warn" style="margin-left:6px">Stock bajo</span>':''}</label>
+      <label>Ingredientes para ${state.qty} ml ${low?'<span class="k-badge warn" style="margin-left:6px">Stock bajo producto final</span>':''}</label>
       <div class="rc-ingredients">
         ${list.map(ing=>{
           const name = invMap.get(ing.itemId)?.name || ing.itemId;
@@ -649,6 +686,81 @@ function openQuickPrepDialog(prefRecipe = null){
       ${state.r.method ? `<div class="muted sm" style="margin-top:8px; white-space:pre-wrap"><b>Método:</b>\n${esc(state.r.method)}</div>`:''}
     `;
   }
+
+  function renderValidation(){
+    const list = scaleIngredients(state.r, state.qty);
+    const needs = [];
+    const issues = list.map(ing=>{
+      const inv = invMap.get(ing.itemId);
+      const have = Number(inv?.currentStock||0);
+      const need = Number(ing.qtyScaled||0);
+      const costAvg = Number(inv?.costAvg||0);
+
+      const faltaStock = have < need;
+      const faltaCosto = costAvg <= 0;
+
+      if (faltaStock || faltaCosto){
+        needs.push({ itemId: ing.itemId, need, have, faltaStock, faltaCosto });
+      }
+      return { ing, inv, have, need, costAvg, faltaStock, faltaCosto };
+    });
+
+    state.needs = needs;
+
+    if (!needs.length){
+      $('#qpIssues').innerHTML = `<div class="muted small" style="color:#a7ffbf">✔ Insumos OK: stock y costos promedio están listos.</div>`;
+      $('#qpBuyMissing').disabled = true;
+      $('#qpConfirm').disabled = false;
+      $('#qpHint').textContent = '';
+      return;
+    }
+
+    // Render filas para completar compras faltantes
+    const supplierOpts = `<option value="">— proveedor —</option>` + (SUPPLIERS||[]).map(s=>`<option value="${s.id}">${esc(s.name||s.id)}</option>`).join('');
+    $('#qpIssues').innerHTML = `
+      <label>Faltantes / datos requeridos</label>
+      <div class="muted small" style="margin-bottom:6px">Debes completar estos datos antes de confirmar.</div>
+      <div class="col" style="gap:6px">
+        ${issues.filter(i=> i.faltaStock || i.faltaCosto).map(row=>{
+          const name = invMap.get(row.ing.itemId)?.name || row.ing.itemId;
+          const compQty = Math.max(0, (row.need - row.have));
+          return `
+          <div class="card qp-buyrow" data-item="${row.ing.itemId}" style="padding:8px; border:1px solid rgba(255,255,255,.08); border-radius:10px">
+            <div class="row" style="justify-content:space-between; gap:8px">
+              <div style="min-width:0"><b>${esc(name)}</b>
+                <div class="muted small">Necesitas ${row.need.toFixed(2)} • Disponible ${row.have.toFixed(2)} ${row.faltaCosto? '• <span style="color:#ffd27f">sin costo promedio</span>':''}</div>
+              </div>
+              <div class="row" style="gap:8px; flex-wrap:wrap">
+                <select data-sup class="small">${supplierOpts}</select>
+                <input data-qty  type="number" min="0" step="0.01" value="${compQty.toFixed(2)}" class="small" title="Cantidad a comprar">
+                <input data-cost type="number" min="0" step="0.01" placeholder="Costo unit." class="small" title="Costo unitario">
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+    $('#qpBuyMissing').disabled = false;
+    $('#qpConfirm').disabled = true;
+    $('#qpHint').textContent = `Completa compras/costos para habilitar “Confirmar”.`;
+  }
+
+  function renderCost(){
+    const list = scaleIngredients(state.r, state.qty);
+    let total = 0;
+    for (const ing of list){
+      const inv = invMap.get(ing.itemId);
+      const cost = Number(inv?.costAvg||0);
+      total += cost * Number(ing.qtyScaled||0);
+    }
+    const costPerMl = state.qty > 0 ? total / state.qty : 0;
+    $('#qpCost').innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <div class="muted">Costo estimado del lote</div>
+        <div><b>${fmtMoney(total)}</b> <span class="muted small">(${fmtMoney(costPerMl)}/ml)</span></div>
+      </div>
+    `;
+  }
 }
 
 /* Recomendación de cantidad: ventas últimos 7 días × ml por pedido */
@@ -659,11 +771,10 @@ async function suggestQty(recipe){
     const to   = new Date(now); to.setHours(23,59,59,999);
     const orders = await getOrdersRange({ from, to, includeArchive:true, orderType:null });
 
-    // Total de pedidos (como base general). Si el recipe define `suggestMlPerOrder`, lo usamos; de lo contrario 20ml.
     const perOrderMl = Number(recipe?.suggestMlPerOrder || APP_SETTINGS?.defaultSuggestMlPerOrder || 20);
     const totalOrders = (orders||[]).length || 1;
     const dailyAvgOrders = totalOrders / 7;
-    const qty = Math.ceil(dailyAvgOrders * perOrderMl * 1.2 / 10) * 10; // 20% colchón y redondeo a 10 ml
+    const qty = Math.ceil(dailyAvgOrders * perOrderMl * 1.2 / 10) * 10; // +20% colchón y redondeo
     toast(`Sugerencia basada en ventas: ~${qty} ml`);
     return qty;
   }catch(e){ console.error(e); toast('No se pudo calcular sugerencia'); return null; }
