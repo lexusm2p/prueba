@@ -19,6 +19,10 @@
   --gap:16px;
   --pad:16px;
   --font:'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+
+  /* ---- decor / extras por tema ---- */
+  --decor-glow: 0 0 18px rgba(255,210,74,.25);
+  --snow-alpha: 0; /* Navidad activa "nieve" cuando >0 */
 }
 
 /* ===== Fuente retro ===== */
@@ -28,6 +32,18 @@
   font-weight:400;
   font-display:swap;
   src:url("https://fonts.gstatic.com/s/pressstart2p/v15/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2") format("woff2");
+}
+
+/* ==== Fuentes festivas extra (opcional, usadas por data-font) ==== */
+@font-face{
+  font-family:'Alfa Slab One';
+  font-style:normal; font-weight:400; font-display:swap;
+  src:url("https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8F2fN5-TSy3aZC-qLw.woff2") format("woff2");
+}
+@font-face{
+  font-family:'Carter One';
+  font-style:normal; font-weight:400; font-display:swap;
+  src:url("https://fonts.gstatic.com/s/carterone/v20/q5uFpOE3QqiFRDO6R9Q.woff2") format("woff2");
 }
 
 /* ===== Reset ===== */
@@ -601,4 +617,148 @@ textarea{ min-height:80px }
 @media (max-width: 720px){
   .header{ position:sticky; top:0; }
   body{ overscroll-behavior-y:none; }
+}
+
+/* =========================================================
+   SISTEMA DE TEMAS FESTIVOS (por data-theme en <html> o <body>)
+   ========================================================= */
+/* Base: ya definida en :root. Cada tema sobreescribe variables. */
+
+/* --- Independencia (verde/blanco/rojo + dorado) --- */
+html[data-theme="Independencia"], body[data-theme="Independencia"]{
+  --bg:#08110a;
+  --panel:#0e1b12;
+  --panel-2:#0b1510;
+  --ink:#f6fff4;
+  --muted:#c9e7d1;
+  --muted-2:#a6d1b0;
+  --accent:#ffd24a;     /* dorado */
+  --accent-2:#4be37a;   /* verde vivo */
+  --ok:#3ae08a;
+  --danger:#ff5656;
+  --stroke:rgba(255,255,255,.12);
+  --decor-glow: 0 0 18px rgba(75,227,122,.25), 0 0 28px rgba(255,210,74,.18);
+}
+
+/* --- Día de Muertos (cempasúchil + morado) --- */
+html[data-theme="Muertos"], body[data-theme="Muertos"]{
+  --bg:#140b11;
+  --panel:#1b1020;
+  --panel-2:#130a18;
+  --ink:#fff7fb;
+  --muted:#e7cbe0;
+  --muted-2:#d9a6cc;
+  --accent:#ffa620;     /* cempasúchil */
+  --accent-2:#9b6bff;   /* morado vivo */
+  --ok:#39e0a7;
+  --danger:#ff6b8a;
+  --stroke:rgba(255,255,255,.12);
+  --decor-glow: 0 0 18px rgba(155,107,255,.25), 0 0 28px rgba(255,166,32,.18);
+}
+
+/* --- Navidad (rojo/verde + nieve sutil) --- */
+html[data-theme="Navidad"], body[data-theme="Navidad"]{
+  --bg:#0b1210;
+  --panel:#12201a;
+  --panel-2:#0f1915;
+  --ink:#f6fff8;
+  --muted:#c8e9d6;
+  --muted-2:#a5d7be;
+  --accent:#ff6060;     /* rojo */
+  --accent-2:#5fe08a;   /* verde */
+  --ok:#4fe59f;
+  --danger:#ff6b6b;
+  --stroke:rgba(255,255,255,.12);
+  --decor-glow: 0 0 18px rgba(95,224,138,.25), 0 0 28px rgba(255,96,96,.18);
+  --snow-alpha:.35;     /* activa efecto de “nieve” */
+}
+
+/* --- Fiestas (tricolor suave + acento jade) --- */
+html[data-theme="Fiestas"], body[data-theme="Fiestas"]{
+  --bg:#0c1014;
+  --panel:#111a24;
+  --panel-2:#0c1620;
+  --ink:#f3fbff;
+  --muted:#bdd2e2;
+  --muted-2:#a6c4d9;
+  --accent:#42e38a;     /* jade */
+  --accent-2:#f85f5f;   /* rojo */
+  --ok:#41e39c;
+  --danger:#ff6b6b;
+  --stroke:rgba(255,255,255,.12);
+  --decor-glow: 0 0 18px rgba(66,227,138,.25), 0 0 28px rgba(248,95,95,.18);
+}
+
+/* Efecto de brillo sutil a elementos clave bajo temas festivos */
+.card,
+.btn,
+.brand .dot{
+  box-shadow: var(--shadow);
+}
+html[data-theme], body[data-theme] .card{
+  box-shadow: var(--shadow), 0 0 0 2px rgba(255,255,255,.03) inset, var(--decor-glow);
+}
+
+/* “Nieve” sutil (solo cuando --snow-alpha>0) */
+html[data-theme="Navidad"] body::before,
+body[data-theme="Navidad"]::before{
+  content:"";
+  position:fixed; inset:0; pointer-events:none; z-index:1;
+  background-image:
+    radial-gradient(rgba(255,255,255,var(--snow-alpha)) 1px, transparent 1px),
+    radial-gradient(rgba(255,255,255,calc(var(--snow-alpha)*.8)) 1px, transparent 1px);
+  background-size: 2px 2px, 3px 3px;
+  background-position: 0 0, 1px 1px;
+  animation: snowFloat 18s linear infinite;
+}
+@keyframes snowFloat{
+  from{ background-position: 0 0, 1px 1px; }
+  to  { background-position: 0 200px, 1px 201px; }
+}
+
+/* “Papel picado” decorativo (opcional: añade .papel-picado a un contenedor superior) */
+.papel-picado{
+  position:relative; z-index:0;
+}
+.papel-picado::before{
+  content:"";
+  position:absolute; left:0; right:0; top:0; height:28px; z-index:-1;
+  background:
+    repeating-linear-gradient(90deg,
+      #2fd27d 0 26px, #ffd24a 26px 52px, #ff6b6b 52px 78px, #7cc9ff 78px 104px);
+  mask:
+    radial-gradient(8px 8px at 12px 18px, #000 98%, transparent 100%) repeat-x,
+    linear-gradient(#000,#000);
+  -webkit-mask:
+    radial-gradient(8px 8px at 12px 18px, #000 98%, transparent 100%) repeat-x,
+    linear-gradient(#000,#000);
+  -webkit-mask-size: 28px 28px, 100% 100%;
+  mask-size: 28px 28px, 100% 100%;
+  box-shadow: 0 6px 12px rgba(0,0,0,.25);
+}
+
+/* =========================================================
+   PAQUETES DE FUENTE (por data-font en <html> o <body>)
+   ========================================================= */
+html[data-font="retro"], body[data-font="retro"]{
+  --font:'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+html[data-font="slab"], body[data-font="slab"]{
+  --font:'Alfa Slab One', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+html[data-font="cantina"], body[data-font="cantina"]{
+  --font:'Carter One', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+
+/* Títulos más vistosos cuando usamos slab/cantina */
+html[data-font="slab"] h1, html[data-font="slab"] h2, html[data-font="slab"] h3,
+body[data-font="slab"] h1, body[data-font="slab"] h2, body[data-font="slab"] h3,
+html[data-font="cantina"] h1, html[data-font="cantina"] h2, html[data-font="cantina"] h3,
+body[data-font="cantina"] h1, body[data-font="cantina"] h2, body[data-font="cantina"] h3{
+  letter-spacing:.5px;
+}
+
+/* Acento de enfoque accesible respeta acentos de tema */
+:focus-visible{
+  outline-color: var(--accent-2);
 }
