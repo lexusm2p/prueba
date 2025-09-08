@@ -1,12 +1,11 @@
 // /shared/theme.js
-// Sistema de temas festivos mexicanos para el kiosko.
-// - Aplica variables CSS en :root
-// - Carga fuente opcional del tema
-// - Suscripción en vivo a /settings.theme.name (si DB lo soporta)
-// - Fallback sin backend usando localStorage ("kiosk.theme")
-// - Decoraciones pixel‑art (baner, papel picado, sombrero) para "Independencia"
+// Tema MX con decor gamer: banner "¡VIVA MÉXICO!", sombrero pixel y fondo con tu imagen.
+// Guardar la imagen como: /shared/img/mx-collage.png  (ajusta MX_COLLAGE_URL si usas otro nombre)
 
 import * as DB from './db.js';
+
+/* ===== Ruta de tu imagen ===== */
+const MX_COLLAGE_URL = '../shared/img/mx-collage.png';
 
 /* ===================== Presets MX ===================== */
 const THEMES = {
@@ -25,10 +24,8 @@ const THEMES = {
       '--ok':'#24d36b',
       '--stroke':'rgba(255,255,255,.10)',
     },
-    // Fuente con feeling “poster vintage”, conservando Press Start 2P
     fontFamily: '"Chakra Petch", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
     fontUrl: 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap',
-    // Decoraciones especiales
     decorations: { vivaBanner: true, papelPicado: true, sombrero: true }
   },
 
@@ -41,8 +38,8 @@ const THEMES = {
       '--ink':'#fff7f1',
       '--muted':'#e6c7ff',
       '--muted-2':'#eab1ff',
-      '--accent':'#ff9f1a',     // cempasúchil
-      '--accent-2':'#7c5cff',   // morado
+      '--accent':'#ff9f1a',
+      '--accent-2':'#7c5cff',
       '--danger':'#ff7a7a',
       '--ok':'#35e0a1',
       '--stroke':'rgba(255,255,255,.12)',
@@ -61,8 +58,8 @@ const THEMES = {
       '--ink':'#f5fff5',
       '--muted':'#c8e9c8',
       '--muted-2':'#a9d9b0',
-      '--accent':'#e63946',     // rojo
-      '--accent-2':'#57cc99',   // verde
+      '--accent':'#e63946',
+      '--accent-2':'#57cc99',
       '--danger':'#ff6b6b',
       '--ok':'#2fd27d',
       '--stroke':'rgba(255,255,255,.12)',
@@ -101,8 +98,8 @@ const THEMES = {
       '--ink':'#fef6ff',
       '--muted':'#d4c6ff',
       '--muted-2':'#b9a7ff',
-      '--accent':'#ff7a00',   // naranja
-      '--accent-2':'#7c5cff', // morado
+      '--accent':'#ff7a00',
+      '--accent-2':'#7c5cff',
       '--danger':'#ff6b6b',
       '--ok':'#2fd27d',
       '--stroke':'rgba(255,255,255,.12)'
@@ -132,7 +129,6 @@ function setFontFamily(family){
 }
 
 /* =============== Decoraciones “Independencia” =============== */
-// CSS común para decoraciones
 const DECOR_STYLE_ID = 'theme-decor-css';
 function injectDecorCss(){
   if (document.getElementById(DECOR_STYLE_ID)) return;
@@ -155,13 +151,21 @@ function injectDecorCss(){
   #mx-viva .blink{ animation: blink 1s steps(2,end) infinite }
   @keyframes blink { 50% { opacity:.2 } }
 
-  /* Papel picado (fijo al fondo, no interfiere con el gameplay) */
+  /* Fondo con la imagen + velo gamer para no perder legibilidad */
   #mx-papel {
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
     opacity: .18;
-    background-size: 140px 90px;
-    background-repeat: repeat;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
     image-rendering: pixelated;
+  }
+  /* Velo sutil retro (scanlines) */
+  #mx-papel::after{
+    content:""; position:absolute; inset:0;
+    background:
+      linear-gradient(transparent 97%, rgba(0,0,0,.25) 100%) 0 0/100% 3px,
+      radial-gradient(120% 90% at 10% 0%, rgba(0,0,0,.35), transparent 60%);
   }
 
   /* Sombrero arriba del logo/brand */
@@ -171,13 +175,18 @@ function injectDecorCss(){
     image-rendering: pixelated;
     pointer-events: none;
   }
+
+  @media (max-width:520px){
+    #mx-viva{ top:4px; font-size:11px; padding:6px 10px }
+    #mx-papel{ opacity:.12 }
+  }
   `;
   const style = document.createElement('style');
   style.id = DECOR_STYLE_ID; style.textContent = css;
   document.head.appendChild(style);
 }
 
-// SVGs (data URL) – ligeros y pixelados
+/* SVG sombrero (data URL) */
 const SVG_SOMBRERO = `data:image/svg+xml;utf8,
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 48' shape-rendering='crispEdges'>
   <rect width='64' height='48' fill='none'/>
@@ -189,22 +198,7 @@ const SVG_SOMBRERO = `data:image/svg+xml;utf8,
   <path d='M22 34h4v2h-4z' fill='%2318c96b'/>
 </svg>`;
 
-const SVG_PAPEL = `data:image/svg+xml;utf8,
-<svg xmlns='http://www.w3.org/2000/svg' width='140' height='90' shape-rendering='crispEdges'>
-  <rect width='140' height='90' fill='%230b1420'/>
-  <!-- tiras verde, blanco, rojo pixel -->
-  <rect x='0' y='0' width='140' height='12' fill='%2318c96b'/>
-  <rect x='0' y='12' width='140' height='12' fill='%23ffffff'/>
-  <rect x='0' y='24' width='140' height='12' fill='%23ff4d4d'/>
-  <!-- recortes simples tipo papel -->
-  <rect x='10' y='50' width='12' height='12' fill='%23151f2d'/>
-  <rect x='36' y='56' width='8' height='8' fill='%23151f2d'/>
-  <rect x='58' y='50' width='12' height='12' fill='%23151f2d'/>
-  <rect x='86' y='56' width='8' height='8' fill='%23151f2d'/>
-  <rect x='110' y='50' width='12' height='12' fill='%23151f2d'/>
-</svg>`;
-
-// Crear o quitar nodos
+/* Helpers nodos */
 function ensureNode(id, tag = 'div'){
   let el = document.getElementById(id);
   if (!el){ el = document.createElement(tag); el.id = id; document.body.appendChild(el); }
@@ -212,16 +206,15 @@ function ensureNode(id, tag = 'div'){
 }
 function removeNode(id){ const el = document.getElementById(id); if (el) el.remove(); }
 
-// Aplica/limpia decor según tema
+/* Aplica/limpia decor según tema */
 function applyDecorations(themeName){
   const conf = THEMES[themeName]?.decorations || {};
-  // CSS base
   injectDecorCss();
 
-  // Papel picado
+  // Fondo con tu imagen
   if (conf.papelPicado){
     const papel = ensureNode('mx-papel');
-    papel.style.backgroundImage = `url("${SVG_PAPEL}")`;
+    papel.style.backgroundImage = `url("${MX_COLLAGE_URL}")`;
     papel.style.display = 'block';
   } else { removeNode('mx-papel'); }
 
@@ -236,13 +229,11 @@ function applyDecorations(themeName){
   if (conf.sombrero){
     const sombrero = ensureNode('mx-sombrero','img');
     sombrero.src = SVG_SOMBRERO;
-    // Intenta posicionarlo sobre #brandTap si existe
     const brand = document.getElementById('brandTap');
     if (brand){
       brand.style.position = brand.style.position || 'relative';
       brand.appendChild(sombrero);
     } else {
-      // Fallback: esquina superior izquierda
       sombrero.style.position = 'fixed';
       sombrero.style.left = '18px';
       sombrero.style.top  = '22px';
@@ -262,7 +253,6 @@ export function applyThemeLocal(name){
   applyVars(t.vars);
   setFontFamily(t.fontFamily);
   document.documentElement.setAttribute('data-theme', name);
-  // Decoraciones
   applyDecorations(name);
   try{ localStorage.setItem('kiosk.theme', name); }catch{}
 }
@@ -270,10 +260,8 @@ export function applyThemeLocal(name){
 /**
  * Suscribe a /settings.theme.name si DB lo ofrece.
  * Si no hay backend, usa localStorage y aplica el último tema guardado.
- * @returns {Function} unsubscribe
  */
 export function initThemeFromSettings({ defaultName='Independencia' } = {}){
-  // 1) Aplica el que haya en localStorage de inicio (UX rápida)
   let initial = defaultName;
   try{
     const saved = localStorage.getItem('kiosk.theme');
@@ -281,7 +269,6 @@ export function initThemeFromSettings({ defaultName='Independencia' } = {}){
   }catch{}
   applyThemeLocal(initial);
 
-  // 2) Si el backend ofrece subscribeSettings, úsalo
   if (typeof DB.subscribeSettings === 'function'){
     const unsub = DB.subscribeSettings((settings)=>{
       const name = settings?.theme?.name || initial;
@@ -290,7 +277,6 @@ export function initThemeFromSettings({ defaultName='Independencia' } = {}){
     return ()=> { try{unsub&&unsub();}catch{} };
   }
 
-  // 3) Fallback sin backend: escuchar cambios de storage (multi‑tab)
   const onStorage = (e)=>{
     if (e.key === 'kiosk.theme' && THEMES[e.newValue]) applyThemeLocal(e.newValue);
   };
@@ -298,10 +284,7 @@ export function initThemeFromSettings({ defaultName='Independencia' } = {}){
   return ()=> window.removeEventListener('storage', onStorage);
 }
 
-/* ================= Helpers para Admin =================
-   setThemeGlobal() se invoca indirectamente desde kiosk/app.js
-   vía DB.setTheme (lo exponemos como sugar aquí por si lo necesitas).
-========================================================= */
+/* ============== Helper Admin opcional ============== */
 export async function setThemeGlobal(name){
   if (typeof DB.setTheme === 'function'){ return DB.setTheme({ name }); }
   if (typeof DB.setSettings === 'function'){ return DB.setSettings({ theme:{ name } }); }
