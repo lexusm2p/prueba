@@ -11,9 +11,8 @@
 
 import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
-// Temas (🎨): aplica en vivo desde Firestore y permite probar/cambiar local/global
+// Temas (🎨): aplica en vivo desde Firestore y permite probar local
 import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
-import { setTheme } from '../shared/db.js';
 
 /* ======================= Estado global ======================= */
 const state = {
@@ -41,10 +40,7 @@ const state = {
   followCtaShown: false,  // evita spam de CTA al cerrar carrito sin confirmar
 
   // Happy Hour countdown (solo UI)
-  hhLeftText: '', // "mm:ss" cuando haya endsAt
-
-  // Modo admin local (para “Aplicar GLOBAL” de tema sin salir del kiosko)
-  adminMode: false
+  hhLeftText: '' // "mm:ss" cuando haya endsAt
 };
 
 /* ======================= Recursos visuales ======================= */
@@ -88,15 +84,6 @@ function openPinModal(){
   const hide = ()=>{ if(pinModal){ pinModal.style.display='none'; if(pinInput) pinInput.value=''; } };
   const enter = ()=>{
     const pin = (pinInput?.value||'').trim();
-
-    // 🔒 PIN especial para habilitar “modo admin local” (aplica tema GLOBAL desde kiosko)
-    if (pin === '7777') {
-      state.adminMode = true;
-      toast('Modo admin local habilitado (Temas GLOBAL disponibles)');
-      hide();
-      return;
-    }
-
     const route = map[pin];
     if (!route){ toast('PIN incorrecto'); return; }
     hide(); location.href = route;
@@ -136,7 +123,7 @@ async function init(){
   setupReadyFeed();      // feed “Listos”
   startOrdersAnalytics();// top “Más vendidos hoy” + fallback de ETA si no hay settings
 
-  // 🎨 THEME: suscripción en vivo a /settings/theme + panel flotante local/global
+  // 🎨 THEME: suscripción en vivo a /settings/theme + panel flotante SOLO local
   if (state.unsubTheme) { try{ state.unsubTheme(); }catch{} state.unsubTheme = null; }
   state.unsubTheme = initThemeFromSettings({ defaultName: 'Independencia' });
   mountThemePanel(); // ocúltalo en prod si no lo quieres visible
@@ -1156,7 +1143,7 @@ document.addEventListener('click', (e)=>{
   }
 }, false);
 
-/* ======================= THEME: panel flotante (tester local + aplicar GLOBAL) ======================= */
+/* ======================= THEME: panel flotante (solo tester local) ======================= */
 function mountThemePanel() {
   if (document.getElementById('theme-floating-panel')) return;
 
@@ -1206,17 +1193,11 @@ function mountThemePanel() {
   }
 
   const row2 = document.createElement('div');
-  row2.style.display = 'grid'; row2.style.gridTemplateColumns = '1fr 1fr'; row2.style.gap = '6px';
+  row2.style.display = 'grid'; row2.style.gridTemplateColumns = '1fr'; row2.style.gap = '6px';
   const btnLocal = document.createElement('button');
   btnLocal.textContent = 'Probar local';
   Object.assign(btnLocal.style, {
     padding:'8px', borderRadius:'10px', border:'1px solid rgba(255,255,255,.2)', background:'var(--accent)', cursor:'pointer'
-  });
-  const btnGlobal = document.createElement('button');
-  btnGlobal.textContent = 'Aplicar GLOBAL';
-  btnGlobal.title = 'Requiere modo admin (PIN 7777)';
-  Object.assign(btnGlobal.style, {
-    padding:'8px', borderRadius:'10px', border:'1px solid rgba(255,255,255,.2)', background:'var(--accent-2)', cursor:'pointer'
   });
 
   const msg = document.createElement('div'); msg.style.marginTop = '6px'; msg.style.opacity = '.9';
@@ -1226,16 +1207,6 @@ function mountThemePanel() {
     setMsg('Tema aplicado localmente.', 'ok');
   });
 
-  btnGlobal.addEventListener('click', async ()=>{
-    if (!state.adminMode) return setMsg('Debes activar modo admin (PIN 7777).', 'warn');
-    try {
-      await setTheme({ name: select.value });
-      setMsg('Tema GLOBAL actualizado. Kioskos lo aplicarán en vivo.', 'ok');
-    } catch (e) {
-      console.error(e); setMsg('Error al guardar tema global.', 'err');
-    }
-  });
-
   function setMsg(text, kind='ok'){
     msg.textContent = text;
     msg.style.color = (kind==='ok'?'#A7F3D0': kind==='warn'?'#FFE082':'#FFABAB');
@@ -1243,7 +1214,7 @@ function mountThemePanel() {
 
   head.appendChild(title); head.appendChild(toggle);
   row1.appendChild(labelSel); row1.appendChild(select);
-  row2.appendChild(btnLocal); row2.appendChild(btnGlobal);
+  row2.appendChild(btnLocal);
   body.appendChild(row1); body.appendChild(row2); body.appendChild(msg);
   box.appendChild(head); box.appendChild(body);
   document.body.appendChild(box);
