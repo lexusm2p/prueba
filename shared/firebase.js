@@ -14,15 +14,16 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 // 🔐 TU CONFIG (deja UNA sola fuente de verdad)
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
   authDomain: "seven-de-burgers.firebaseapp.com",
   projectId: "seven-de-burgers",
   storageBucket: "seven-de-burgers.firebasestorage.app",
   messagingSenderId: "34089845279",
-  appId: "G-Q8YQJGL2XY"
+  appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
+  measurementId: "G-Q8YQJGL2XY"
 };
-
 // 🧩 Asegura app única (no doble init)
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
