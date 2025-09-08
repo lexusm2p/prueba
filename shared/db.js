@@ -1,47 +1,115 @@
 // /shared/db.js
-// Módulo de acceso a Firestore: órdenes activas del día, reportes por rango,
-// settings (ETA/HappyHour/Theme), inventario, artículos, recetas, catálogo.
-// ----------------------------------------------------------------
+// Firestore + catálogo con fallback (Firestore → /data/menu.json → /shared/catalog.json)
+// Órdenes, settings (ETA/HH/Theme), inventario, recetas/producción, artículos y clientes.
 
 import {
   db, ensureAuth,
   serverTimestamp, doc, getDoc, setDoc, updateDoc, addDoc, collection,
-  onSnapshot, query, where, orderBy, limit, Timestamp
+  onSnapshot, query, where, orderBy, limit, Timestamp, increment
 } from './firebase.js';
 
 /* =============== Utilidades de fecha =============== */
-// Regresa un Date a las 00:00:00 de hoy (local)
-export function startOfToday() {
-  const d = new Date(); d.setHours(0,0,0,0); return d;
+export function startOfToday() { const d = new Date(); d.setHours(0,0,0,0); return d; }
+export function toTs(d) { return Timestamp.fromDate(new Date(d)); }
+
+/* =============== Catálogo: fetch con fallback =============== */
+// Normaliza el catálogo a la forma esperada por el kiosko/admin
+function normalizeCatalog(cat = {}) {
+  const safe = (x, def=[]) => Array.isArray(x) ? x : (x ? [x] : def);
+  const appSettings = {
+    miniMeatGrams: Number(cat?.appSettings?.miniMeatGrams ?? 45),
+    meatGrams: Number(cat?.appSettings?.meatGrams ?? 85),
+    defaultSuggestMlPerOrder: Number(cat?.appSettings?.defaultSuggestMlPerOrder ?? 20),
+    lowStockThreshold: Number(cat?.appSettings?.lowStockThreshold ?? 5)
+  };
+  const happyHour = {
+    enabled: !!cat?.happyHour?.enabled,
+    discountPercent: Number(cat?.happyHour?.discountPercent ?? 0),
+    bannerText: String(cat?.happyHour?.bannerText ?? ''),
+    applyEligibleOnly: cat?.happyHour?.applyEligibleOnly !== false,
+    endsAt: cat?.happyHour?.endsAt ?? null
+  };
+  return {
+    burgers: safe(cat.burgers),
+    minis:   safe(cat.minis),
+    drinks:  safe(cat.drinks),
+    sides:   safe(cat.sides),
+    extras: {
+      sauces: safe(cat?.extras?.sauces ?? []),
+      ingredients: safe(cat?.extras?.ingredients ?? []),
+      ingredientPrice: Number(cat?.extras?.ingredientPrice ?? 0),
+      saucePrice: Number(cat?.extras?.saucePrice ?? 0),
+      dlcCarneMini: Number(cat?.extras?.dlcCarneMini ?? 0)
+    },
+    appSettings,
+    happyHour
+  };
 }
-// Convierte Date→Timestamp Firestore
-export function toTs(d) {
-  return Timestamp.fromDate(d);
+
+// Ruta relativa segura desde /kiosk/ y /admin/
+function guessDataPath() {
+  // ambos (kiosk y admin) están 1 nivel dentro del root
+  // /kiosk/*  -> ../data/menu.json
+  // /admin/*  -> ../data/menu.json
+  return '../data/menu.json';
+}
+
+export async function fetchCatalogWithFallback() {
+  // 1) Firestore: /settings/catalog (o /catalog/public)
+  try {
+    const d1 = await getDoc(doc(db, 'settings', 'catalog'));
+    if (d1.exists()) return normalizeCatalog(d1.data());
+  } catch {}
+
+  try {
+    const d2 = await getDoc(doc(db, 'catalog', 'public'));
+    if (d2.exists()) return normalizeCatalog(d2.data());
+  } catch {}
+
+  // 2) Archivo en /data/menu.json (lo que tú tienes)
+  try {
+    const res = await fetch(guessDataPath(), { cache: 'no-store' });
+    if (res.ok) return normalizeCatalog(await res.json());
+  } catch {}
+
+  // 3) Fallback adicional (opcional) /shared/catalog.json
+  try {
+    const res2 = await fetch('../shared/catalog.json', { cache:'no-store' });
+    if (res2.ok) return normalizeCatalog(await res2.json());
+  } catch {}
+
+  // 4) Último recurso: catálogo vacío “seguro”
+  return normalizeCatalog({});
+}
+
+/* Solo lectura para Admin (tabla de productos) */
+export function subscribeProducts(cb) {
+  // Como el catálogo no está en una colección “products”, emitimos uno único
+  // basado en fetchCatalogWithFallback(). Si luego migras a Firestore, reemplaza aquí.
+  (async () => {
+    const cat = await fetchCatalogWithFallback();
+    const items = [
+      ...(cat.burgers||[]).map(p => ({...p, type:'burger'})),
+      ...(cat.minis||[]).map(p => ({...p, type:'mini'})),
+      ...(cat.drinks||[]).map(p => ({...p, type:'drink'})),
+      ...(cat.sides||[]).map(p => ({...p, type:'side'})),
+    ];
+    cb(items);
+  })();
 }
 
 /* =============== Órdenes =============== */
-
-// 📡 Solo órdenes ACTIVAS de HOY (menor costo + velocidad en cocina/mesero/kiosko)
 export function subscribeActiveOrders(cb) {
   const active = ['PENDING','COOKING','IN_PROGRESS','READY'];
-
   const qy = query(
     collection(db, 'orders'),
     where('createdAt', '>=', toTs(startOfToday())),
     where('status', 'in', active),
     orderBy('createdAt', 'asc')
   );
-  // Requiere índice compuesto: orders | status(Asc), createdAt(Asc)
-  return onSnapshot(qy, (snap) => {
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    cb(list);
-  });
+  return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
 
-// Compatibilidad para kiosk (usa un “shim”): si llaman subscribeOrders, usamos las activas
-export const subscribeOrders = (cb)=> subscribeActiveOrders(cb);
-
-// 📥 Crear orden (kiosko/mesero)
 export async function createOrder(payload) {
   await ensureAuth();
   const ref = await addDoc(collection(db, 'orders'), {
@@ -52,152 +120,95 @@ export async function createOrder(payload) {
   });
   return ref.id;
 }
-
-// 🔁 Cambiar estado (cocina/admin)
 export async function setOrderStatus(id, status) {
   await ensureAuth();
-  await updateDoc(doc(db, 'orders', id), {
-    status,
-    updatedAt: serverTimestamp()
+  await updateDoc(doc(db, 'orders', id), { status, updatedAt: serverTimestamp() });
+}
+
+export async function getOrdersRange({ from, to, includeArchive=false, orderType=null }) {
+  const _from = toTs(from);
+  const _to   = toTs(to);
+  const col   = includeArchive ? 'orders_archive' : 'orders';
+
+  // Para máxima compatibilidad (kiosko guarda `orderType` top-level):
+  const qy = query(
+    collection(db, col),
+    where('createdAt', '>=', _from),
+    where('createdAt', '<', _to),
+    orderBy('createdAt', 'asc')
+  );
+
+  // getDocs dinámico sin romper tu bundle
+  const { getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  const snap = await getDocs(qy);
+  let rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  if (orderType && orderType !== 'all') {
+    rows = rows.filter(o =>
+      (o.orderType && o.orderType === orderType) ||
+      (o.orderMeta?.type && o.orderMeta.type === orderType)
+    );
+  }
+  return rows;
+}
+
+/* =============== Settings (ETA, HappyHour, Theme, App Settings) =============== */
+const SETTINGS = 'settings';
+
+// ETA: emitimos SIEMPRE texto (soporta {text} o {minutes})
+export async function setETA(text) {
+  await ensureAuth();
+  await setDoc(doc(db, SETTINGS, 'eta'),
+    { text: String(text), updatedAt: serverTimestamp() },
+    { merge: true });
+}
+export function subscribeETA(cb) {
+  return onSnapshot(doc(db, SETTINGS, 'eta'), (d) => {
+    const data = d.data() ?? null;
+    if (!data) return cb(null);
+    // compat: si guardaste {minutes: "7–10 min"}
+    const text = data.text ?? data.minutes ?? null;
+    cb(text == null ? null : String(text));
   });
 }
 
-// 🔎 Reporte por rango (admin)
-export async function getOrdersRange({ from, to, includeArchive = false, orderType = null }) {
-  const _from = toTs(new Date(from));
-  const _to   = toTs(new Date(to));
-
-  const colName = includeArchive ? 'orders_archive' : 'orders';
-  const pieces = [
-    where('createdAt', '>=', _from),
-    where('createdAt', '<=', _to),
-    orderBy('createdAt', 'asc')
-  ];
-  if (orderType) pieces.unshift(where('orderType', '==', orderType));
-
-  // Nota: en entornos de hosting estático puede no haber módulos din. de Firestore; intentamos ambos.
-  let snap;
-  try{
-    const { getDocs } = await import('https://cdn.skypack.dev/@firebase/firestore');
-    snap = await getDocs(query(collection(db, colName), ...pieces));
-  }catch{
-    const { getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    snap = await getDocs(query(collection(db, colName), ...pieces));
-  }
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-/* =============== Settings (ETA, HappyHour, Theme) =============== */
-
-const SETTINGS = 'settings';
-
-// ⏱️ ETA
-export async function setETA(minutes) {
-  await ensureAuth();
-  await setDoc(doc(db, SETTINGS, 'eta'), { minutes, updatedAt: serverTimestamp() }, { merge: true });
-}
-// Devuelve minutos (número) o null si no hay doc
-export function subscribeETA(cb) {
-  return onSnapshot(doc(db, SETTINGS, 'eta'), (d) => cb(d.data()?.minutes ?? null));
-}
-
-// 🎉 Happy Hour
+// Happy Hour
 export async function setHappyHour(payload) {
   await ensureAuth();
-  await setDoc(doc(db, SETTINGS, 'happyHour'), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(doc(db, SETTINGS, 'happyHour'),
+    { ...payload, updatedAt: serverTimestamp() },
+    { merge: true });
 }
 export function subscribeHappyHour(cb) {
   return onSnapshot(doc(db, SETTINGS, 'happyHour'), (d) => cb(d.data() ?? null));
 }
 
-// 🎨 THEME
+// THEME
 export async function setTheme({ name, overrides = {} }) {
   await ensureAuth();
-  await setDoc(doc(db, SETTINGS, 'theme'), { name, overrides, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(doc(db, SETTINGS, 'theme'),
+    { name, overrides, updatedAt: serverTimestamp() },
+    { merge: true });
 }
 export function subscribeTheme(cb) {
   return onSnapshot(doc(db, SETTINGS, 'theme'), (d) => cb(d.data() ?? null));
 }
 
-// 🧰 Settings agregados (Admin espera varios flags/thresholds)
-// Intenta leer /settings/app; si no existe, arma un objeto combinando docs sueltos.
-export function subscribeSettings(cb){
-  let combined = {};
-  const emit = ()=> cb({ ...combined });
-
-  // 1) Preferimos un doc “app” único si existe
-  const unsubApp = onSnapshot(doc(db, SETTINGS, 'app'), (snap)=>{
-    if (snap.exists()){
-      combined = { ...combined, ...snap.data() };
-      emit();
-    }
-  });
-
-  // 2) Además escuchamos HH/Theme/ETA para aportar campos útiles
-  const unsubHH = onSnapshot(doc(db, SETTINGS, 'happyHour'), (snap)=>{
-    combined = { ...combined, happyHour: snap.data() ?? null };
-    emit();
-  });
-  const unsubTheme = onSnapshot(doc(db, SETTINGS, 'theme'), (snap)=>{
-    combined = { ...combined, theme: snap.data() ?? null };
-    emit();
-  });
-  const unsubETA = onSnapshot(doc(db, SETTINGS, 'eta'), (snap)=>{
-    const v = snap.data();
-    combined = { ...combined, eta: v ?? null };
-    emit();
-  });
-
-  // Defaults suaves para no romper UI de Admin/Recetario
-  combined = {
-    lowStockThreshold: 5,
-    defaultSuggestMlPerOrder: 20,
-    sauceCupItemId: null,
-    ...combined
-  };
-  emit();
-
-  return ()=>{ try{unsubApp();}catch{} try{unsubHH();}catch{} try{unsubTheme();}catch{} try{unsubETA();}catch{} };
+// App settings genéricos (para admin: lowStockThreshold, sauceCupItemId, etc.)
+export function subscribeSettings(cb) {
+  return onSnapshot(doc(db, SETTINGS, 'app'), (d) => cb(d.data() ?? {}));
 }
 
 /* =============== Inventario / Compras / Proveedores =============== */
-
 export function subscribeInventory(cb) {
   const qy = query(collection(db, 'inventory'), orderBy('name','asc'));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
-
-// Upsert simple de ítem
 export async function upsertInventoryItem(item) {
   await ensureAuth();
   const ref = item.id ? doc(db,'inventory', item.id) : doc(collection(db,'inventory'));
   await setDoc(ref, { ...item, updatedAt: serverTimestamp() }, { merge: true });
   return ref.id;
-}
-
-// Movimiento de inventario (delta puede ser positivo o negativo). type/meta informativos.
-export async function adjustStock(itemId, delta = 0, type = 'adjust', meta = {}){
-  if (!itemId) return;
-  await ensureAuth();
-
-  // Registrar movimiento (bitácora)
-  await addDoc(collection(db,'inventory_movements'), {
-    itemId, delta: Number(delta||0), type, meta: meta || {}, createdAt: serverTimestamp()
-  });
-
-  // Actualizar stock actual (lectura + update simple)
-  try{
-    const ref = doc(db,'inventory', itemId);
-    const snap = await getDoc(ref);
-    const prev = Number(snap.data()?.currentStock || 0);
-    await updateDoc(ref, {
-      currentStock: prev + Number(delta||0),
-      updatedAt: serverTimestamp()
-    });
-  }catch(e){
-    // si no existe el item, ignoramos (o podrías crearlo)
-    console.warn('[db.adjustStock] no se pudo actualizar stock:', e);
-  }
 }
 
 export function subscribeSuppliers(cb) {
@@ -211,54 +222,55 @@ export async function upsertSupplier(supp) {
   return ref.id;
 }
 
-// Compra (puedes extender para recalcular costAvg)
 export async function recordPurchase(purchase) {
   await ensureAuth();
-  await addDoc(collection(db,'purchases'), {
-    ...purchase,
-    createdAt: serverTimestamp()
+  // Guarda compra y actualiza costo promedio simple / existencias
+  const { itemId, qty=0, unitCost=0 } = purchase || {};
+  await addDoc(collection(db,'purchases'), { ...purchase, createdAt: serverTimestamp() });
+
+  if (itemId && qty > 0) {
+    const ref = doc(db,'inventory', itemId);
+    const snap = await getDoc(ref);
+    const cur  = snap.exists() ? (snap.data().currentStock||0) : 0;
+    const prevCost = snap.exists() ? Number(snap.data().costAvg||0) : 0;
+    // Ponderación simple: si no hay stock previo, toma unitCost; si hay, promedio simple
+    const newStock = Number(cur) + Number(qty);
+    const newCost  = (prevCost>0 && cur>0) ? ((prevCost*cur + unitCost*qty) / newStock) : unitCost;
+    await setDoc(ref,
+      { currentStock: newStock, costAvg: newCost, updatedAt: serverTimestamp() },
+      { merge:true }
+    );
+  }
+}
+
+// Movimiento directo de stock (admin: cups, producción, etc.)
+export async function adjustStock(itemId, delta, reason='use', meta={}) {
+  if (!itemId || !Number.isFinite(delta)) return;
+  await ensureAuth();
+  const ref = doc(db,'inventory', itemId);
+  await setDoc(ref, { currentStock: increment(Number(delta)), updatedAt: serverTimestamp() }, { merge:true });
+  await addDoc(collection(db,'inventory_moves'), {
+    itemId, delta:Number(delta), reason, meta, createdAt: serverTimestamp()
   });
 }
 
 /* =============== Recetario / Producción =============== */
-
 export function subscribeRecipes(cb) {
   const qy = query(collection(db, 'recipes'), orderBy('name','asc'));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
 
-/**
- * produceBatch — versión compatible con tu Admin:
- *   produceBatch({ recipeId, outputQty })
- * - Guarda un documento en "productions".
- * - (Opcional) ajusta stock del producto terminado si configuras recipe.outputItemId
- *   en tus documentos de recipe (Admin ya lo usa para avisos LOW).
- */
-export async function produceBatch({ recipeId, outputQty }){
-  if (!recipeId || !(outputQty > 0)) throw new Error('recipeId y outputQty requeridos');
+// Compat con Admin: produceBatch({ recipeId, outputQty })
+export async function produceBatch({ recipeId, outputQty }) {
+  if (!recipeId || !(outputQty > 0)) throw new Error('Datos de producción inválidos');
   await ensureAuth();
-
-  // guardamos producción básica
-  const ref = await addDoc(collection(db, 'productions'), {
-    recipeId,
-    outputQty,
+  await addDoc(collection(db, 'productions'), {
+    recipeId, outputQty,
     createdAt: serverTimestamp()
   });
-
-  // intento opcional de sumar stock del producto terminado
-  try{
-    const r = await getDoc(doc(db, 'recipes', recipeId));
-    const outId = r.data()?.outputItemId;
-    if (outId && outputQty > 0){
-      await adjustStock(outId, Number(outputQty||0), 'production', { recipeId });
-    }
-  }catch(e){ console.warn('[db.produceBatch] no se pudo ajustar stock:', e); }
-
-  return ref.id;
 }
 
-/* =============== Artículos (CRUD) =============== */
-
+/* =============== Artículos (CRUD Admin) =============== */
 export function subscribeArticles(cb) {
   const qy = query(collection(db, 'articles'), orderBy('updatedAt','desc'), limit(100));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
@@ -274,121 +286,26 @@ export async function deleteArticle(id) {
   await updateDoc(doc(db,'articles', id), { deletedAt: serverTimestamp() });
 }
 
-/* =============== Productos & Catálogo (lectura) =============== */
-
-// Solo lectura para Admin (si no existe, emitimos [])
-export function subscribeProducts(cb){
-  try{
-    const qy = query(collection(db, 'products'), orderBy('name','asc'));
-    return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
-  }catch(e){
-    console.warn('[db] subscribeProducts fallback vacío:', e);
-    cb([]); return ()=>{};
-  }
+/* =============== Clientes (kiosko: autocompletar por teléfono) =============== */
+export async function fetchCustomer(phoneDigits) {
+  const id = String(phoneDigits||'').replace(/\D+/g,'');
+  if (!id) return null;
+  const d1 = await getDoc(doc(db,'customers', id));
+  return d1.exists() ? d1.data() : null;
 }
-
-/**
- * Catálogo con fallback para Kiosko:
- *  1) /settings/catalog
- *  2) /catalog/public
- *  3) /shared/catalog.json
- *  4) catálogo mínimo local
- */
-export async function fetchCatalogWithFallback(){
-  // 1) /settings/catalog
-  try{
-    const r1 = await getDoc(doc(db, SETTINGS, 'catalog'));
-    if (r1.exists()){
-      return normalizeCatalog(r1.data() || {});
-    }
-  }catch(e){ console.warn('[db] settings/catalog no disponible:', e); }
-
-  // 2) /catalog/public
-  try{
-    const r2 = await getDoc(doc(collection(db, 'catalog'), 'public'));
-    if (r2.exists()){
-      return normalizeCatalog(r2.data() || {});
-    }
-  }catch(e){ console.warn('[db] catalog/public no disponible:', e); }
-
-  // 3) archivo estático
-  try{
-    const res = await fetch('../shared/catalog.json', { cache:'no-store' });
-    if (res.ok){
-      const json = await res.json();
-      return normalizeCatalog(json);
-    }
-  }catch(e){ console.warn('[db] catalog.json no disponible:', e); }
-
-  // 4) mínimo para no romper UI
-  return normalizeCatalog({
-    minis:[], burgers:[], drinks:[], sides:[],
-    extras:{ sauces:[], ingredients:[], ingredientPrice:0, saucePrice:0, dlcCarneMini:12 },
-    appSettings:{ miniMeatGrams:45, meatGrams:85, defaultSuggestMlPerOrder:20, lowStockThreshold:5 },
-    happyHour:{ enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true, endsAt:null }
-  });
+export async function upsertCustomerFromOrder(order) {
+  const phone = String(order?.phone||'').replace(/\D+/g,'');
+  if (!phone) return;
+  await ensureAuth();
+  await setDoc(doc(db,'customers', phone), {
+    phone, name: order?.customer || null, updatedAt: serverTimestamp()
+  }, { merge:true });
 }
-
-function normalizeCatalog(raw){
-  const num = (v, d=0)=> (Number.isFinite(Number(v)) ? Number(v) : d);
-  return {
-    minis: raw.minis || [],
-    burgers: raw.burgers || [],
-    drinks: raw.drinks || [],
-    sides: raw.sides || [],
-    extras: {
-      sauces: raw.extras?.sauces || [],
-      ingredients: raw.extras?.ingredients || [],
-      ingredientPrice: num(raw.extras?.ingredientPrice, 0),
-      saucePrice: num(raw.extras?.saucePrice, 0),
-      dlcCarneMini: num(raw.extras?.dlcCarneMini, 12)
-    },
-    appSettings: {
-      miniMeatGrams: num(raw.appSettings?.miniMeatGrams, 45),
-      meatGrams:     num(raw.appSettings?.meatGrams, 85),
-      defaultSuggestMlPerOrder: num(raw.appSettings?.defaultSuggestMlPerOrder, 20),
-      lowStockThreshold: num(raw.appSettings?.lowStockThreshold, 5)
-    },
-    happyHour: {
-      enabled: !!raw?.happyHour?.enabled,
-      discountPercent: num(raw?.happyHour?.discountPercent, 0),
-      bannerText: String(raw?.happyHour?.bannerText || ''),
-      applyEligibleOnly: (raw?.happyHour?.applyEligibleOnly !== false),
-      endsAt: (raw?.happyHour?.endsAt ?? null)
-    }
-  };
-}
-
-/* =============== Clientes (helpers para kiosko) =============== */
-
-export async function fetchCustomer(phoneDigits){
-  try{
-    const id = String(phoneDigits || '').replace(/\D+/g,'');
-    if (!id) return null;
-    const r = await getDoc(doc(db, 'customers', id));
-    return r.exists() ? { id, ...r.data() } : null;
-  }catch(e){ console.warn('[db] fetchCustomer:', e); return null; }
-}
-
-export async function upsertCustomerFromOrder(order){
-  try{
-    const phone = String(order?.phone || '').replace(/\D+/g,'');
-    if (!phone) return;
-    await setDoc(doc(db, 'customers', phone), {
-      phone,
-      name: order?.customer || null,
-      lastOrderAt: serverTimestamp()
-    }, { merge:true });
-  }catch(e){ console.warn('[db] upsertCustomerFromOrder:', e); }
-}
-
-export async function attachLastOrderRef(phoneDigits, orderId){
-  try{
-    const id = String(phoneDigits || '').replace(/\D+/g,'');
-    if (!id) return;
-    await setDoc(doc(db, 'customers', id), {
-      lastOrderId: orderId,
-      lastOrderAt: serverTimestamp()
-    }, { merge:true });
-  }catch(e){ console.warn('[db] attachLastOrderRef:', e); }
+export async function attachLastOrderRef(phone, orderId) {
+  const id = String(phone||'').replace(/\D+/g,'');
+  if (!id || !orderId) return;
+  await ensureAuth();
+  await setDoc(doc(db,'customers', id), {
+    lastOrderId: orderId, lastOrderAt: serverTimestamp()
+  }, { merge:true });
 }
