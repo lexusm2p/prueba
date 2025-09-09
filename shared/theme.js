@@ -168,6 +168,67 @@ export const THEMES = {
     fontFamily: '"Chakra Petch", system-ui, -apple-system, Segoe UI, Roboto, Arial',
     fontUrl: 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  },
+
+  /* ========== NUEVO 1: Pixel Art (8‑bit) ========== */
+  'Pixel Art': {
+    vars: {
+      '--bg':'#0a0f1a',
+      '--panel':'#101a2c',
+      '--panel-2':'#0d1626',
+      '--ink':'#f0f6ff',
+      '--muted':'#c2d4f5',
+      '--muted-2':'#a8c4f0',
+      '--accent':'#ffd24a',    // dorado pixel
+      '--accent-2':'#55ff7f',  // verde fosfo
+      '--danger':'#ff6b6b',
+      '--ok':'#2fe38b',
+      '--stroke':'rgba(255,255,255,.12)'
+    },
+    // Press Start 2P ya está en tu CSS base
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  },
+
+  /* ========== NUEVO 2: Retro Arcade (neón 80s/90s) ========== */
+  'Retro Arcade': {
+    vars: {
+      '--bg':'#0b0714',
+      '--panel':'#140f2a',
+      '--panel-2':'#0f0b20',
+      '--ink':'#fdf2ff',
+      '--muted':'#d9c6ff',
+      '--muted-2':'#bfa8ff',
+      '--accent':'#00e5ff',   // cian neón
+      '--accent-2':'#ff37a6', // magenta neón
+      '--danger':'#ff6b8a',
+      '--ok':'#41e3a2',
+      '--stroke':'rgba(255,255,255,.14)'
+    },
+    fontFamily: '"Audiowide", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Audiowide&display=swap',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  },
+
+  /* ========== NUEVO 3: Y2K (90s/00s) ========== */
+  'Y2K (90s/00s)': {
+    vars: {
+      '--bg':'#0b0f14',
+      '--panel':'#0f1a24',
+      '--panel-2':'#0c1520',
+      '--ink':'#e8f7ff',
+      '--muted':'#b7d4e8',
+      '--muted-2':'#a0c6e0',
+      '--accent':'#6ee7ff',   // celeste glossy
+      '--accent-2':'#c0f',    // púrpura Y2K
+      '--danger':'#ff6bba',
+      '--ok':'#45e3b3',
+      '--stroke':'rgba(255,255,255,.10)'
+    },
+    fontFamily: '"Orbitron", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Orbitron:wght@600..900&display=swap',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   }
 };
 
@@ -175,10 +236,15 @@ export const THEMES = {
 function ensureFontLoaded(url){
   if (!url) return;
   const id = 'theme-font-link';
-  if (document.getElementById(id)) return;
-  const link = document.createElement('link');
-  link.id = id; link.rel = 'stylesheet'; link.href = url;
-  document.head.appendChild(link);
+  const link = document.getElementById(id);
+  if (link) {
+    // Si ya existe pero con otro href, actualízalo
+    if (link.href !== url) link.href = url;
+    return;
+  }
+  const l = document.createElement('link');
+  l.id = id; l.rel = 'stylesheet'; l.href = url;
+  document.head.appendChild(l);
 }
 function applyVars(vars){
   const root = document.documentElement;
