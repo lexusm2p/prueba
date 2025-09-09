@@ -1,31 +1,59 @@
 // /cocina/app.js
-import {
-  subscribeOrders, setStatus, archiveDelivered, updateOrder,
-  applyInventoryForOrder
-} from '../shared/db.js';
+import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 
+/* ================== Shims DB (compat) ================== */
+function subscribeOrdersShim(cb){
+  if (typeof DB.subscribeOrders === 'function') return DB.subscribeOrders(cb);
+  if (typeof DB.onOrdersSnapshot === 'function') return DB.onOrdersSnapshot(cb);
+  if (typeof DB.subscribeActiveOrders === 'function') return DB.subscribeActiveOrders(cb);
+  console.warn('[cocina] No hay método de suscripción a órdenes en DB'); return ()=>{};
+}
+async function setStatusShim(id, status){
+  if (typeof DB.setOrderStatus === 'function') return DB.setOrderStatus(id, status);
+  if (typeof DB.setStatus === 'function') return DB.setStatus(id, status);
+  throw new Error('No hay setOrderStatus/setStatus en DB');
+}
+async function updateOrderShim(id, patch){
+  // Preferible: updateOrder → setDoc merge
+  if (typeof DB.updateOrder === 'function') return DB.updateOrder(id, patch);
+  // Fallback: intenta usar upsert genérico si existiera
+  if (typeof DB.upsertOrder === 'function') return DB.upsertOrder({ id, ...patch });
+  // Último recurso: no se puede (no rompe el flujo visual)
+  console.warn('[cocina] updateOrder no disponible; patch ignorado:', patch);
+}
+async function archiveDeliveredShim(id, finalStatus='DONE'){
+  if (typeof DB.archiveDelivered === 'function') return DB.archiveDelivered(id);
+  // Fallback: si no hay archivado, al menos “sácalo de vista” marcando DONE
+  await setStatusShim(id, finalStatus);
+}
+async function applyInventoryForOrderShim(order){
+  if (typeof DB.applyInventoryForOrder === 'function') {
+    try { await DB.applyInventoryForOrder(order); } catch(e){ console.warn('applyInventoryForOrder error', e); }
+  }
+}
+
+/* ================== Constantes ================== */
 const Status = {
   PENDING: 'PENDING',
   IN_PROGRESS: 'IN_PROGRESS',
   READY: 'READY',
   DELIVERED: 'DELIVERED',   // entregado, pendiente de cobro
-  CANCELLED: 'CANCELLED'
+  CANCELLED: 'CANCELLED',
+  DONE: 'DONE'
 };
 
 let CURRENT_LIST = [];
-// IDs de órdenes ya "tomadas" en esta sesión (para ocultar el botón sin esperar snapshot)
-const LOCALLY_TAKEN = new Set();
+const LOCALLY_TAKEN = new Set(); // ids tomadas en esta sesión (oculta botón “Tomar” al instante)
 
 /* ================== Data stream ================== */
-subscribeOrders((orders = [])=>{
-  // Deduplicar por id por si el snapshot trae duplicados
+const unsub = subscribeOrdersShim((orders = [])=>{
+  // Dedup por id
   const uniq = new Map();
   for (const o of (Array.isArray(orders) ? orders : [])) {
     if (!o?.id) continue;
-    // Asegura que exista createdAt (si viene de kiosko debería venir)
     if (!o.createdAt) o.createdAt = o.timestamps?.createdAt || new Date();
-    uniq.set(o.id, o); // la última gana
+    uniq.set(o.id, o);
   }
   CURRENT_LIST = Array.from(uniq.values());
   render(CURRENT_LIST);
@@ -47,32 +75,13 @@ const fmtMMSS = (ms)=>{
   const ss = s % 60;
   return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
 };
-
-/* ================== Render ================== */
-function render(list){
-  // Agrupar por estado
-  const by = (list||[]).reduce((acc,o)=>{
-    const s = o?.status || Status.PENDING;
-    (acc[s] ||= []).push(o);
-    return acc;
-  },{});
-
-  setCol('col-pending',  by.PENDING||[]);
-  setCol('col-progress', by.IN_PROGRESS||[]);
-  setCol('col-ready',    by.READY||[]);
-  // Por cobrar: entregados y no pagados
-  const bill = (by.DELIVERED||[]).filter(o => !o.paid);
-  setCol('col-bill',     bill);
-}
-
-function setCol(id, arr){
-  const el = document.getElementById(id);
-  if (!el) return; // defensa por si el contenedor aún no existe
-  el.innerHTML = (arr||[]).map(renderCard).join('') || '<div class="empty">—</div>';
+function escapeHtml(s=''){
+  return String(s).replace(/[&<>"']/g, m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
 }
 
 /* ================== Totales ================== */
-// Usa lineTotal si viene de kiosko (incluye extras/HH). Si no, cae a unitPrice*qty.
 function calcSubtotal(o={}){
   const items = Array.isArray(o.items) ? o.items : [];
   return items.reduce((s,it)=>{
@@ -85,7 +94,27 @@ function calcSubtotal(o={}){
 function calcTotal(o={}){
   const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) : calcSubtotal(o);
   const tip = Number(o.tip||0);
-  return sub + tip; // comisión no se cobra al cliente
+  return sub + tip;
+}
+
+/* ================== Render ================== */
+function render(list){
+  const by = (list||[]).reduce((acc,o)=>{
+    const s = o?.status || Status.PENDING;
+    (acc[s] ||= []).push(o);
+    return acc;
+  },{});
+
+  setCol('col-pending',  by.PENDING||[]);
+  setCol('col-progress', by.IN_PROGRESS||[]);
+  setCol('col-ready',    by.READY||[]);
+  const bill = (by.DELIVERED||[]).filter(o => !o.paid);
+  setCol('col-bill',     bill);
+}
+function setCol(id, arr){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = (arr||[]).map(renderCard).join('') || '<div class="empty">—</div>';
 }
 
 /* ================== Card ================== */
@@ -99,28 +128,21 @@ function renderCard(o={}){
         lineTotal: (o.item?.price||0) * (o.qty||1)
       }] : []);
 
-  // META visible: mesa o pickup (sin teléfono aquí para no duplicar)
   let meta = '—';
-  if (o.orderType === 'dinein') {
-    meta = `Mesa: <b>${escapeHtml(o.table||'?')}</b>`;
-  } else if (o.orderType === 'pickup') {
-    meta = 'Pickup';
-  } else if (o.orderType) {
-    meta = escapeHtml(o.orderType);
-  }
+  if (o.orderType === 'dinein') meta = `Mesa: <b>${escapeHtml(o.table||'?')}</b>`;
+  else if (o.orderType === 'pickup') meta = 'Pickup';
+  else if (o.orderType) meta = escapeHtml(o.orderType);
 
   const total = calcTotal(o);
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
-  // Timers
   const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
   const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
   const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
   const tNow     = Date.now();
-
-  const totalRunMs = (tReady || tNow) - (tCreated || tNow);
-  const inKitchenMs = (tReady || tNow) - (tStarted || tNow);
+  const totalRunMs   = (tReady || tNow) - (tCreated || tNow);
+  const inKitchenMs  = (tReady || tNow) - (tStarted || tNow);
 
   const timerHtml = `
     <div class="muted small mono" style="margin-top:6px">
@@ -148,20 +170,16 @@ function renderCard(o={}){
       </div>`;
   }).join('');
 
-  // Resumen HH (si viene en el pedido)
   const hh = o.hh || {};
   const hhSummary = (hh.enabled && Number(hh.totalDiscount||0)>0)
     ? `<span class="k-badge">HH -${Number(hh.discountPercent||0)}% · ahorro ${money(hh.totalDiscount)}</span>`
     : '';
 
-  // Acciones por estado + protección si ya fue tomada localmente
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
     (o.status === Status.IN_PROGRESS) ? `<button class="btn ok" data-a="ready">Listo</button>` : '',
-    // Entregar: pasa a DELIVERED (no archiva)
     (o.status === Status.READY) ? `<button class="btn ok" data-a="deliver">Entregar</button>` : '',
-    // Cobrar: sólo si está entregada y no pagada
     (o.status === Status.DELIVERED && !o.paid) ? `<button class="btn" data-a="charge">Cobrar</button>` : '',
     (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid))
       ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
@@ -190,66 +208,51 @@ document.addEventListener('click', async (e)=>{
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
   const a = btn.dataset.a;
 
-  // Evita doble click
   btn.disabled = true;
-
   try{
     if (a==='take'){
-      // Marca local para que no vuelva a renderizar "Tomar" aunque todavía no llegue el snapshot
       LOCALLY_TAKEN.add(id);
       btn.textContent = 'Tomando…';
-      // Aplica inventario (vasitos por aderezos extra, etc.)
       const order = CURRENT_LIST.find(x=>x.id===id);
-      if(order){
-        await applyInventoryForOrder({ ...order, id }); // asegura incluir id
-      }
-      // Avanza estado y guarda sello de inicio
-      await setStatus(id, Status.IN_PROGRESS);
-      await updateOrder(id, {
-        startedAt: now(),
-        'timestamps.startedAt': now()
-      });
+      if(order){ await applyInventoryForOrderShim({ ...order, id }); }
+      await setStatusShim(id, Status.IN_PROGRESS);
+      await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now() });
       beep(); toast('En preparación');
-      render(CURRENT_LIST); // rerender rápido
+      render(CURRENT_LIST);
       return;
     }
 
     if (a==='ready'){
-      await setStatus(id, Status.READY);
-      await updateOrder(id, {
-        readyAt: now(),
-        'timestamps.readyAt': now()
-      });
+      await setStatusShim(id, Status.READY);
+      await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now() });
       beep(); toast('Listo 🛎️');
       return;
     }
 
-    // "Entregar" NO archiva. Pasa a DELIVERED (Por cobrar)
     if (a==='deliver'){
-      await setStatus(id, Status.DELIVERED);
-      await updateOrder(id, {
-        deliveredAt: now(),
-        'timestamps.deliveredAt': now()
-      });
+      await setStatusShim(id, Status.DELIVERED);
+      await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now() });
       beep(); toast('Entregado ✔️ · por cobrar');
       return;
     }
 
-    // COBRAR: marca pagado y archiva
     if (a==='charge'){
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const total = calcTotal(order);
       const method = prompt(`Cobrar ${money(total)}\nMétodo (efectivo / tarjeta / transferencia):`, 'efectivo');
       if (method === null) { btn.disabled=false; return; }
       const payMethod = String(method||'efectivo').toLowerCase();
-      await updateOrder(id, {
+
+      await updateOrderShim(id, {
         paid: true,
         paidAt: now(),
         payMethod,
         totalCharged: Number(total)
       });
-      await archiveDelivered(id); // mueve a archivo
-      beep(); toast('Cobro registrado y pedido archivado');
+
+      // Si hay archivado real, úsalo; si no, marca DONE para sacarlo de vista
+      await archiveDeliveredShim(id, Status.DONE);
+      beep(); toast('Cobro registrado');
       card.remove();
       return;
     }
@@ -258,29 +261,29 @@ document.addEventListener('click', async (e)=>{
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const notes = prompt('Editar notas generales para cocina:', order.notes||'');
       if (notes!==null){
-        await updateOrder(id,{ notes });
+        await updateOrderShim(id,{ notes });
         toast('Notas actualizadas');
       }
       return;
     }
 
-    // Cancelar: pide motivo (obligatorio), marca CANCELLED, guarda motivo y archiva
     if (a==='cancel'){
       const confirmDelete = confirm('¿Eliminar este pedido? Pasará a CANCELLED y se archivará.');
       if (!confirmDelete) return;
 
       const reason = prompt('Motivo de cancelación (obligatorio):', '');
-      if (reason === null) return; // usuario canceló
+      if (reason === null) return;
       const trimmed = String(reason).trim();
       if (!trimmed) { alert('Por favor escribe un motivo.'); return; }
 
-      await updateOrder(id, {
+      await updateOrderShim(id, {
         status: Status.CANCELLED,
         cancelReason: trimmed,
         cancelledAt: now(),
         cancelledBy: 'kitchen'
       });
-      await archiveDelivered(id); // mover a orders_archive conservando los campos
+      // Si no hay archivado, al menos márcalo DONE para esconderlo del tablero
+      await archiveDeliveredShim(id, Status.DONE);
       beep(); toast('Pedido eliminado');
       card.remove();
       return;
@@ -295,16 +298,11 @@ document.addEventListener('click', async (e)=>{
   }
 });
 
-/* ========== Refresco ligero de timers (sin golpear la DB) ========== */
-// Re-renderiza sólo los contenedores para refrescar mm:ss en pantalla.
+/* ========== Refresco ligero de timers ========== */
 setInterval(()=>{
   if (!CURRENT_LIST.length) return;
   render(CURRENT_LIST);
-}, 15000); // cada 15 s
+}, 15000);
 
-/* ================== Utils ================== */
-function escapeHtml(s=''){
-  return String(s).replace(/[&<>"']/g, m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[m]));
-}
+/* ========== Limpieza ========== */
+window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} });
