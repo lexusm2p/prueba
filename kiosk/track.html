@@ -7,7 +7,11 @@
   <link rel="preload" as="audio" href="../shared/sfx/achievement.mp3">
   <title>Track — Seven de Burgers</title>
   <style>
-    body{ background:#0b1424; }
+    :root{
+      --bg:#0b1424; --panel:#0f182a; --panel-2:#131f33; --border:rgba(255,255,255,.08);
+      --chip:#1b2a45; --muted:#aeb9cd; --ok:#2fe38b;
+    }
+    body{ background:var(--bg); }
     .wrap{ max-width:980px; margin:24px auto; padding:0 12px; }
     .head{
       display:flex; align-items:center; gap:10px; justify-content:space-between;
@@ -18,30 +22,30 @@
       border:1px solid rgba(255,255,255,.1); border-radius:999px; padding:6px 10px;
     }
     .dot{ width:8px; height:8px; border-radius:50%; background:#777; }
-    .hh-on{ border-color:#2fe38b; box-shadow:0 0 0 2px rgba(47,227,139,.12); }
-    .hh-on .dot{ background:#2fe38b; }
+    .hh-on{ border-color:var(--ok); box-shadow:0 0 0 2px rgba(47,227,139,.12); }
+    .hh-on .dot{ background:var(--ok); }
     .cols{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
     @media (max-width:900px){ .cols{ grid-template-columns: 1fr; } }
     .pane{
-      background:#0f182a; border:1px solid rgba(255,255,255,.08);
+      background:var(--panel); border:1px solid var(--border);
       border-radius:14px; padding:14px;
     }
     .list{ list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:8px; }
     .list li{
       display:flex; gap:8px; align-items:center; justify-content:space-between;
-      background:#131f33; border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:10px;
+      background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:10px;
     }
     .muted{ color:var(--muted); }
     .title{ font-weight:800; }
-    .eta{ font-size:18px; font-weight:900; color:var(--accent); }
-    .tag{ background:#1b2a45; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.08); }
+    .eta{ font-size:18px; font-weight:900; color:var(--ok); }
+    .tag{ background:var(--chip); padding:4px 8px; border-radius:999px; border:1px solid var(--border); }
 
     /* QR card */
     .qr-wrap{ display:grid; grid-template-columns: 160px 1fr; gap:12px; align-items:center; }
     .qr-box{
       width:160px; height:160px; border-radius:12px;
       display:grid; place-items:center; background:#091225;
-      border:1px solid rgba(255,255,255,.08);
+      border:1px solid var(--border);
       overflow:hidden;
     }
     .qr-box img{ width:100%; height:100%; object-fit:contain; image-rendering: pixelated; }
@@ -49,10 +53,40 @@
     .row .btn{ white-space:nowrap; }
     .row input{ flex:1 1 260px; }
 
-    /* Estado principal */
+    /* Estado principal + mascota */
     #mine[aria-live]{ min-height:56px; }
+    .play{
+      display:grid; grid-template-columns: 120px 1fr; gap:12px; align-items:center;
+      margin-top:12px;
+    }
+    .eggbox{
+      width:120px; height:120px; border-radius:16px; background:#091225; border:1px solid var(--border);
+      display:grid; place-items:center; font-size:64px; line-height:1;
+    }
+    .stage{ font-weight:800; }
     .payline{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px; }
-    .payline .price{ font-weight:900; color:var(--accent); }
+    .payline .price{ font-weight:900; color:var(--ok); }
+
+    /* Coleccionables */
+    .grid-col{
+      display:grid; grid-template-columns: repeat(4, minmax(64px,1fr)); gap:8px; margin-top:8px;
+    }
+    .card-mini{
+      aspect-ratio: 1/1; border-radius:12px; border:1px solid var(--border);
+      display:grid; place-items:center; background:#0c1526; font-size:28px; position:relative;
+    }
+    .card-mini .ribbon{
+      position:absolute; top:6px; right:6px; font-size:10px; padding:2px 6px; border-radius:999px;
+      background:#2a1b45; border:1px solid var(--border);
+    }
+    .cap{ font-size:12px; color:var(--muted); margin-top:6px; }
+
+    /* CTA volver */
+    .bar{
+      position:sticky; bottom:12px; z-index:10; margin-top:14px;
+      display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;
+    }
+    .btn.primary{ background:var(--ok); color:#001b10; font-weight:800; }
   </style>
 </head>
 <body>
@@ -62,9 +96,9 @@
         <div class="brand" style="display:flex;align-items:center;gap:8px">
           <span class="dot"></span> <b>Seven de Burgers</b>
         </div>
-        <div id="hhPill" class="hh-pill"><span class="dot"></span><span id="hhText">HH OFF</span></div>
+        <div id="hhPill" class="hh-pill" aria-live="polite"><span class="dot"></span><span id="hhText">HH OFF</span></div>
       </div>
-      <div class="eta" id="eta">7–10 min</div>
+      <div class="eta" id="eta" aria-live="polite">7–10 min</div>
     </div>
 
     <!-- QR para compartir esta página -->
@@ -91,6 +125,7 @@
     </div>
 
     <div class="cols" style="margin-top:12px">
+      <!-- Col A: Buscar y estado con juego -->
       <div class="pane">
         <div class="title">Busca tu pedido por teléfono</div>
         <div class="muted" style="margin-bottom:8px">Ingresa tu número (10 dígitos) para ver el estado en tiempo real.</div>
@@ -107,13 +142,40 @@
           />
           <button class="btn" id="go">Ver estado</button>
         </div>
-        <!-- aria-live para anunciar cambios de estado -->
+
+        <!-- Estado vivo + gamificación -->
         <div id="mine" class="muted" style="margin-top:10px" aria-live="polite">Escribe tu teléfono y pulsa “Ver estado”.</div>
+        <div class="play" id="play" style="display:none">
+          <div class="eggbox" id="petEmoji" aria-hidden="true">🥚</div>
+          <div>
+            <div class="stage" id="stageText">Esperando confirmación…</div>
+            <div class="payline" id="payline" style="display:none">
+              <span class="tag">Total</span>
+              <span class="price" id="totalMoney">$0</span>
+            </div>
+            <div class="cap" id="stCap">Tu mascota evoluciona conforme avanza tu pedido.</div>
+          </div>
+        </div>
+
+        <!-- Coleccionables -->
+        <div style="margin-top:12px">
+          <div class="title">Tus coleccionables</div>
+          <div class="muted small">Máximo 7 por cliente. Hay 2 raros 👑. Se revelan cuando tu pedido está listo.</div>
+          <div class="grid-col" id="colGrid"></div>
+          <div class="cap" id="colCap"></div>
+        </div>
       </div>
+
+      <!-- Col B: Feed ready -->
       <div class="pane">
         <div class="title">Pedidos listos 🛎️ (recientes)</div>
         <ul id="ready" class="list"></ul>
       </div>
+    </div>
+
+    <div class="bar">
+      <a class="btn ghost" id="shareLink">Compartir</a>
+      <a class="btn primary" id="backKiosk" href="../kiosk/index.html">Volver al kiosko</a>
     </div>
   </div>
 
