@@ -1,15 +1,36 @@
 // /shared/theme.js
-// Tema MX con decor gamer: banner "¡VIVA MÉXICO!", sombrero pixel y fondo con tu imagen.
-// Guardar la imagen como: /shared/img/mx-collage.png  (ajusta MX_COLLAGE_URL si usas otro nombre)
+// Sistema de temas (paletas + decoraciones opcionales)
+// Requiere: ./db.js (opcional, si quieres sincronizar GLOBAL) y tus imágenes.
+// Sugerido: coloca una imagen para Independencia en /shared/img/mx-collage.png
 
 import * as DB from './db.js';
 
-/* ===== Ruta de tu imagen ===== */
+/* ===== Imagen usada en Independencia (papel picado / collage) ===== */
 const MX_COLLAGE_URL = '../shared/img/mx-collage.png';
 
-/* ===================== Presets MX ===================== */
-const THEMES = {
-  // Septiembre / Grito
+/* ===================== Presets ===================== */
+export const THEMES = {
+  /* ========== BASE (look por defecto) ========== */
+  'Base': {
+    vars: {
+      '--bg':'#0b1424',
+      '--panel':'#0f182a',
+      '--panel-2':'#131f33',
+      '--ink':'#e6edf7',
+      '--muted':'#aeb9cd',
+      '--muted-2':'#9fb0c7',
+      '--accent':'#5ac8fa',
+      '--accent-2':'#a78bfa',
+      '--danger':'#ff6b6b',
+      '--ok':'#2fe38b',
+      '--stroke':'rgba(255,255,255,.08)',
+    },
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  },
+
+  /* ========== Septiembre / Grito ========== */
   'Independencia': {
     vars: {
       '--bg':'#09100b',
@@ -29,7 +50,7 @@ const THEMES = {
     decorations: { vivaBanner: true, papelPicado: true, sombrero: true }
   },
 
-  // Noviembre
+  /* ========== Noviembre ========== */
   'Día de Muertos': {
     vars: {
       '--bg':'#0e0a14',
@@ -49,7 +70,7 @@ const THEMES = {
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  // Diciembre
+  /* ========== Diciembre ========== */
   'Navidad': {
     vars: {
       '--bg':'#0b0f0b',
@@ -58,8 +79,8 @@ const THEMES = {
       '--ink':'#f5fff5',
       '--muted':'#c8e9c8',
       '--muted-2':'#a9d9b0',
-      '--accent':'#e63946',
-      '--accent-2':'#57cc99',
+      '--accent':'#e63946',   // rojo
+      '--accent-2':'#57cc99', // verde
       '--danger':'#ff6b6b',
       '--ok':'#2fd27d',
       '--stroke':'rgba(255,255,255,.12)',
@@ -69,7 +90,7 @@ const THEMES = {
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  // Febrero
+  /* ========== Febrero ========== */
   'San Valentín': {
     vars: {
       '--bg':'#160b12',
@@ -89,7 +110,7 @@ const THEMES = {
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  // Octubre
+  /* ========== Octubre ========== */
   'Halloween': {
     vars: {
       '--bg':'#0b0b12',
@@ -98,14 +119,54 @@ const THEMES = {
       '--ink':'#fef6ff',
       '--muted':'#d4c6ff',
       '--muted-2':'#b9a7ff',
-      '--accent':'#ff7a00',
-      '--accent-2':'#7c5cff',
+      '--accent':'#ff7a00', // naranja
+      '--accent-2':'#7c5cff', // morado
       '--danger':'#ff6b6b',
       '--ok':'#2fd27d',
       '--stroke':'rgba(255,255,255,.12)'
     },
     fontFamily: '"Changa One", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
     fontUrl: 'https://fonts.googleapis.com/css2?family=Changa+One:ital@0;1&display=swap',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  },
+
+  /* ========== EXTRA: Fútbol / Mundial ========== */
+  'Fútbol': {
+    vars: {
+      '--bg':'#07131c',
+      '--panel':'#0c1c28',
+      '--panel-2':'#0a1823',
+      '--ink':'#e6f0ff',
+      '--muted':'#b7c7de',
+      '--muted-2':'#9eb5d3',
+      '--accent':'#22c55e', // césped
+      '--accent-2':'#3b82f6', // cielo
+      '--danger':'#fb7185',
+      '--ok':'#34d399',
+      '--stroke':'rgba(255,255,255,.10)'
+    },
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
+    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  },
+
+  /* ========== EXTRA: Lucha Libre ========== */
+  'Lucha Libre': {
+    vars: {
+      '--bg':'#0a0a1a',
+      '--panel':'#10102a',
+      '--panel-2':'#0c0c22',
+      '--ink':'#f3f4f6',
+      '--muted':'#c7d2fe',
+      '--muted-2':'#a5b4fc',
+      '--accent':'#f59e0b',  // dorado
+      '--accent-2':'#06b6d4',// cian
+      '--danger':'#f87171',
+      '--ok':'#34d399',
+      '--stroke':'rgba(255,255,255,.10)'
+    },
+    fontFamily: '"Chakra Petch", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   }
 };
@@ -151,7 +212,7 @@ function injectDecorCss(){
   #mx-viva .blink{ animation: blink 1s steps(2,end) infinite }
   @keyframes blink { 50% { opacity:.2 } }
 
-  /* Fondo con la imagen + velo gamer para no perder legibilidad */
+  /* Fondo con la imagen + velo gamer */
   #mx-papel {
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
     opacity: .18;
@@ -160,7 +221,6 @@ function injectDecorCss(){
     background-size: cover;
     image-rendering: pixelated;
   }
-  /* Velo sutil retro (scanlines) */
   #mx-papel::after{
     content:""; position:absolute; inset:0;
     background:
@@ -168,12 +228,11 @@ function injectDecorCss(){
       radial-gradient(120% 90% at 10% 0%, rgba(0,0,0,.35), transparent 60%);
   }
 
-  /* Sombrero arriba del logo/brand */
+  /* Sombrero sobre el brand */
   #mx-sombrero {
     position: absolute; z-index: 61; width: 64px; height: 48px;
     transform: translate(-6px,-42px) rotate(-8deg);
-    image-rendering: pixelated;
-    pointer-events: none;
+    image-rendering: pixelated; pointer-events: none;
   }
 
   @media (max-width:520px){
@@ -211,7 +270,7 @@ function applyDecorations(themeName){
   const conf = THEMES[themeName]?.decorations || {};
   injectDecorCss();
 
-  // Fondo con tu imagen
+  // Fondo con imagen (solo Independencia u otros que activen papelPicado)
   if (conf.papelPicado){
     const papel = ensureNode('mx-papel');
     papel.style.backgroundImage = `url("${MX_COLLAGE_URL}")`;
@@ -246,22 +305,25 @@ function applyDecorations(themeName){
 /* ============== API pública ============== */
 export function listThemes(){ return Object.keys(THEMES); }
 
-export function applyThemeLocal(name){
-  const t = THEMES[name] || null;
-  if (!t) return;
+export function applyThemeLocal(name='Base'){
+  const t = THEMES[name] || THEMES.Base;
   ensureFontLoaded(t.fontUrl);
   applyVars(t.vars);
   setFontFamily(t.fontFamily);
+  document.documentElement.setAttribute('data-theme-name', name);
   document.documentElement.setAttribute('data-theme', name);
   applyDecorations(name);
   try{ localStorage.setItem('kiosk.theme', name); }catch{}
 }
 
+// Volver al tema base en esta pestaña
+export function resetThemeLocal(){ applyThemeLocal('Base'); }
+
 /**
  * Suscribe a /settings.theme.name si DB lo ofrece.
  * Si no hay backend, usa localStorage y aplica el último tema guardado.
  */
-export function initThemeFromSettings({ defaultName='Independencia' } = {}){
+export function initThemeFromSettings({ defaultName='Base' } = {}){
   let initial = defaultName;
   try{
     const saved = localStorage.getItem('kiosk.theme');
@@ -284,7 +346,7 @@ export function initThemeFromSettings({ defaultName='Independencia' } = {}){
   return ()=> window.removeEventListener('storage', onStorage);
 }
 
-/* ============== Helper Admin opcional ============== */
+/* ============== Helper Admin opcional (GLOBAL) ============== */
 export async function setThemeGlobal(name){
   if (typeof DB.setTheme === 'function'){ return DB.setTheme({ name }); }
   if (typeof DB.setSettings === 'function'){ return DB.setSettings({ theme:{ name } }); }
