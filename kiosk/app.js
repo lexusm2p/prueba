@@ -44,7 +44,10 @@ const state = {
   hhLeftText: '', // "mm:ss" cuando haya endsAt
 
   // Admin local (desbloquea "Aplicar GLOBAL")
-  adminMode: false
+  adminMode: false,
+
+  // Nombre del tema activo (para sombrero)
+  themeName: ''
 };
 
 /* ======================= Recursos visuales ======================= */
@@ -57,6 +60,68 @@ const ICONS = {
   nintendo:  "../shared/img/burgers/nintendo.png",
   finalboss: "../shared/img/burgers/finalboss.png"
 };
+
+// 🎩 Sombrero para tema Independencia
+const SOMBRERO_SRC = "../shared/img/sombrero.png";
+let hatCssInjected = false;
+function injectHatCssOnce(){
+  if (hatCssInjected) return;
+  const style = document.createElement('style');
+  style.textContent = `
+    .media{ position:relative; display:grid; place-items:center; }
+    .media .icon-img{ display:block; }
+    .hat-overlay{
+      position:absolute; top:-10%; left:50%; width:58%;
+      transform:translateX(-50%) rotate(-6deg);
+      image-rendering:pixelated; pointer-events:none;
+      filter: drop-shadow(0 2px 0 rgba(0,0,0,.25));
+      max-width:120px;
+    }
+    @media (max-width:520px){ .hat-overlay{ width:62%; top:-12%; } }
+  `;
+  document.head.appendChild(style);
+  hatCssInjected = true;
+}
+function readThemeNameFromDOM(){
+  const root = document.documentElement;
+  const dataAttr =
+    root.getAttribute('data-theme-name') ||
+    root.getAttribute('data-theme') ||
+    root.dataset?.themeName ||
+    root.dataset?.theme || '';
+  if (dataAttr) return String(dataAttr).trim();
+  const cssVar = getComputedStyle(root).getPropertyValue('--theme-name') || '';
+  return String(cssVar).trim().replace(/^"|"$/g,'');
+}
+function startThemeWatcher(){
+  state.themeName = readThemeNameFromDOM();
+
+  // Reactiva tarjetas cuando cambie atributo data-theme(-name)
+  const mo = new MutationObserver(()=>{
+    const newName = readThemeNameFromDOM();
+    if (newName !== state.themeName){
+      state.themeName = newName;
+      renderCards();
+    }
+  });
+  mo.observe(document.documentElement, { attributes:true, attributeFilter:['data-theme','data-theme-name'] });
+
+  // Evento opcional emitido por theme.js
+  window.addEventListener('theme:changed', ()=>{
+    const newName = readThemeNameFromDOM();
+    if (newName !== state.themeName){ state.themeName = newName; renderCards(); }
+  });
+
+  // Pequeño polling de arranque por si solo se setea var CSS
+  let ticks = 0;
+  const id = setInterval(()=>{
+    const newName = readThemeNameFromDOM();
+    if (newName !== state.themeName){
+      state.themeName = newName; renderCards();
+    }
+    if (++ticks > 40) clearInterval(id);
+  }, 500);
+}
 
 let achievementAudio = null;
 try { achievementAudio = new Audio('../shared/sfx/achievement.mp3'); } catch {}
@@ -123,6 +188,11 @@ function setActiveTab(mode=state.mode){
 init();
 async function init(){
   state.menu = await DB.fetchCatalogWithFallback();
+
+  // Sombrero: CSS + watcher de tema
+  injectHatCssOnce();
+  startThemeWatcher();
+
   renderCards();
   setActiveTab('mini');
   updateCartBar();
@@ -484,6 +554,8 @@ function renderCards(){
     const baseId = base?.id || it.id;
     const iconSrc = ICONS[baseId] || null;
 
+    const hatOn = String(state.themeName || '').toLowerCase() === 'independencia';
+
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
@@ -492,6 +564,7 @@ function renderCards(){
         ${iconSrc
           ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
           : `<div class="icon" aria-hidden="true"></div>`}
+        ${hatOn && iconSrc ? `<img src="${SOMBRERO_SRC}" alt="" aria-hidden="true" class="hat-overlay"/>` : ``}
       </div>
       <div class="row">
         ${(()=>{
@@ -1239,12 +1312,16 @@ function mountThemePanel() {
 
   btnLocal.addEventListener('click', ()=>{
     applyThemeLocal(select.value);
+    state.themeName = select.value; // sincroniza sombrero inmediatamente
+    renderCards();
     setMsg('Tema aplicado localmente.', 'ok');
   });
 
   btnGlobal.addEventListener('click', async ()=>{
     try {
       await setTheme({ name: select.value });
+      state.themeName = select.value;
+      renderCards();
       setMsg('Tema GLOBAL actualizado. Kioskos lo aplicarán en vivo.', 'ok');
     } catch (e) {
       console.error(e); setMsg('Error al guardar tema global.', 'err');
