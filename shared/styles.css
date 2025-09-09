@@ -624,8 +624,27 @@ textarea{ min-height:80px }
    ========================================================= */
 /* Base: ya definida en :root. Cada tema sobreescribe variables. */
 
+/* --- Base (vuelve al look por defecto del sitio) --- */
+html[data-theme="Base"], body[data-theme="Base"],
+html[data-theme-name="Base"], body[data-theme-name="Base"]{
+  --bg:#0b0f19;
+  --panel:#121a2a;
+  --panel-2:#0f1726;
+  --ink:#eef4ff;
+  --muted:#b8c6d8;
+  --muted-2:#90a4bd;
+  --accent:#ffd24a;
+  --accent-2:#7cc9ff;
+  --danger:#ff6b6b;
+  --ok:#2fd27d;
+  --stroke:rgba(255,255,255,.10);
+  --decor-glow: 0 0 18px rgba(255,210,74,.25);
+  --snow-alpha: 0;
+}
+
 /* --- Independencia (verde/blanco/rojo + dorado) --- */
-html[data-theme="Independencia"], body[data-theme="Independencia"]{
+html[data-theme="Independencia"], body[data-theme="Independencia"],
+html[data-theme-name="Independencia"], body[data-theme-name="Independencia"]{
   --bg:#08110a;
   --panel:#0e1b12;
   --panel-2:#0b1510;
@@ -640,8 +659,11 @@ html[data-theme="Independencia"], body[data-theme="Independencia"]{
   --decor-glow: 0 0 18px rgba(75,227,122,.25), 0 0 28px rgba(255,210,74,.18);
 }
 
-/* --- Día de Muertos (cempasúchil + morado) --- */
-html[data-theme="Muertos"], body[data-theme="Muertos"]{
+/* --- Día de Muertos (alias de Muertos) --- */
+html[data-theme="Día de Muertos"], body[data-theme="Día de Muertos"],
+html[data-theme-name="Día de Muertos"], body[data-theme-name="Día de Muertos"],
+html[data-theme="Muertos"], body[data-theme="Muertos"],
+html[data-theme-name="Muertos"], body[data-theme-name="Muertos"]{
   --bg:#140b11;
   --panel:#1b1020;
   --panel-2:#130a18;
@@ -654,10 +676,12 @@ html[data-theme="Muertos"], body[data-theme="Muertos"]{
   --danger:#ff6b8a;
   --stroke:rgba(255,255,255,.12);
   --decor-glow: 0 0 18px rgba(155,107,255,.25), 0 0 28px rgba(255,166,32,.18);
+  --snow-alpha: 0;
 }
 
 /* --- Navidad (rojo/verde + nieve sutil) --- */
-html[data-theme="Navidad"], body[data-theme="Navidad"]{
+html[data-theme="Navidad"], body[data-theme="Navidad"],
+html[data-theme-name="Navidad"], body[data-theme-name="Navidad"]{
   --bg:#0b1210;
   --panel:#12201a;
   --panel-2:#0f1915;
@@ -674,7 +698,8 @@ html[data-theme="Navidad"], body[data-theme="Navidad"]{
 }
 
 /* --- Fiestas (tricolor suave + acento jade) --- */
-html[data-theme="Fiestas"], body[data-theme="Fiestas"]{
+html[data-theme="Fiestas"], body[data-theme="Fiestas"],
+html[data-theme-name="Fiestas"], body[data-theme-name="Fiestas"]{
   --bg:#0c1014;
   --panel:#111a24;
   --panel-2:#0c1620;
@@ -689,19 +714,94 @@ html[data-theme="Fiestas"], body[data-theme="Fiestas"]{
   --decor-glow: 0 0 18px rgba(66,227,138,.25), 0 0 28px rgba(248,95,95,.18);
 }
 
+/* --- San Valentín --- */
+html[data-theme="San Valentín"], body[data-theme="San Valentín"],
+html[data-theme-name="San Valentín"], body[data-theme-name="San Valentín"]{
+  --bg:#160b12;
+  --panel:#231320;
+  --panel-2:#1a0f19;
+  --ink:#fff0f5;
+  --muted:#ffd1e1;
+  --muted-2:#ffb8d0;
+  --accent:#ff4d8d;
+  --accent-2:#ffd24a;
+  --ok:#2fd27d;
+  --danger:#ff6b6b;
+  --stroke:rgba(255,255,255,.12);
+  --decor-glow: 0 0 18px rgba(255,77,141,.18);
+  --snow-alpha: 0;
+}
+
+/* --- Halloween --- */
+html[data-theme="Halloween"], body[data-theme="Halloween"],
+html[data-theme-name="Halloween"], body[data-theme-name="Halloween"]{
+  --bg:#0b0b12;
+  --panel:#121426;
+  --panel-2:#0f1020;
+  --ink:#fef6ff;
+  --muted:#d4c6ff;
+  --muted-2:#b9a7ff;
+  --accent:#ff7a00;
+  --accent-2:#7c5cff;
+  --ok:#2fd27d;
+  --danger:#ff6b6b;
+  --stroke:rgba(255,255,255,.12);
+  --decor-glow: 0 0 18px rgba(124,92,255,.25), 0 0 28px rgba(255,122,0,.18);
+  --snow-alpha: 0;
+}
+
+/* --- Fútbol --- */
+html[data-theme="Fútbol"], body[data-theme="Fútbol"],
+html[data-theme-name="Fútbol"], body[data-theme-name="Fútbol"]{
+  --bg:#07131c;
+  --panel:#0c1c28;
+  --panel-2:#0a1823;
+  --ink:#e6f0ff;
+  --muted:#b7c7de;
+  --muted-2:#9eb5d3;
+  --accent:#22c55e;   /* césped */
+  --accent-2:#3b82f6; /* cielo */
+  --ok:#34d399;
+  --danger:#fb7185;
+  --stroke:rgba(255,255,255,.10);
+  --decor-glow: 0 0 18px rgba(34,197,94,.22);
+  --snow-alpha: 0;
+}
+
+/* --- Lucha Libre --- */
+html[data-theme="Lucha Libre"], body[data-theme="Lucha Libre"],
+html[data-theme-name="Lucha Libre"], body[data-theme-name="Lucha Libre"]{
+  --bg:#0a0a1a;
+  --panel:#10102a;
+  --panel-2:#0c0c22;
+  --ink:#f3f4f6;
+  --muted:#c7d2fe;
+  --muted-2:#a5b4fc;
+  --accent:#f59e0b;   /* dorado */
+  --accent-2:#06b6d4; /* cian */
+  --ok:#34d399;
+  --danger:#f87171;
+  --stroke:rgba(255,255,255,.10);
+  --decor-glow: 0 0 18px rgba(245,158,11,.22), 0 0 28px rgba(6,182,212,.18);
+  --snow-alpha: 0;
+}
+
 /* Efecto de brillo sutil a elementos clave bajo temas festivos */
 .card,
 .btn,
 .brand .dot{
   box-shadow: var(--shadow);
 }
-html[data-theme], body[data-theme] .card{
+html[data-theme] .card, body[data-theme] .card,
+html[data-theme-name] .card, body[data-theme-name] .card{
   box-shadow: var(--shadow), 0 0 0 2px rgba(255,255,255,.03) inset, var(--decor-glow);
 }
 
 /* “Nieve” sutil (solo cuando --snow-alpha>0) */
-html[data-theme="Navidad"] body::before,
-body[data-theme="Navidad"]::before{
+html[data-theme="Navidad"]::before,
+body[data-theme="Navidad"]::before,
+html[data-theme-name="Navidad"]::before,
+body[data-theme-name="Navidad"]::before{
   content:"";
   position:fixed; inset:0; pointer-events:none; z-index:1;
   background-image:
