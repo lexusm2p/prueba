@@ -1,6 +1,6 @@
 // /shared/db.js
 // Firestore + catálogo con fallback (Firestore → /data/menu.json → /shared/catalog.json)
-// Órdenes, settings (ETA/HH/Theme), inventario, recetas/producción, artículos y clientes.
+// Órdenes, settings (ETA/HH/Theme), inventario, recetas/producción, artículos, products (opcional) y clientes.
 
 import {
   db, ensureAuth,
@@ -82,7 +82,7 @@ export async function fetchCatalogWithFallback() {
   return normalizeCatalog({});
 }
 
-/* Solo lectura para Admin (tabla de productos) */
+/* Solo lectura para Admin (tabla de productos derivados del catálogo) */
 export function subscribeProducts(cb) {
   // Como el catálogo no está en una colección “products”, emitimos uno único
   // basado en fetchCatalogWithFallback(). Si luego migras a Firestore, reemplaza aquí.
@@ -304,6 +304,68 @@ export async function deleteArticle(id) {
   assertAdminContext();
   await ensureAuth();
   await updateDoc(doc(db,'articles', id), { deletedAt: serverTimestamp() });
+}
+
+/* Helpers de Artículos para “edición limitada / destacados” */
+export async function fetchFeaturedArticles() {
+  // NOTA: si necesitas filtros más finos por fecha, se puede migrar a getDocs con where.
+  return new Promise((resolve) => {
+    const qy = query(collection(db, 'articles'), orderBy('updatedAt','desc'), limit(100));
+    const unsub = onSnapshot(qy, (snap) => {
+      const list = snap.docs.map(d=> ({ id:d.id, ...d.data() }));
+      resolve(list.filter(a => a?.featured && !a?.deletedAt));
+      unsub(); // una sola lectura “rápida”
+    });
+  });
+}
+
+export function mergeCatalogWithArticles(cat, articles=[]) {
+  // mezcla sencilla: agrega artículos destacados por categoría existente
+  const acc = {
+    burgers: [...(cat?.burgers||[])],
+    minis:   [...(cat?.minis||[])],
+    drinks:  [...(cat?.drinks||[])],
+    sides:   [...(cat?.sides||[])],
+    extras:  { ...(cat?.extras||{}) },
+    appSettings: cat?.appSettings || {},
+    happyHour:   cat?.happyHour || {}
+  };
+  for (const a of (articles||[])) {
+    if (!a?.category || !a?.featured || a?.deletedAt) continue;
+    if (a.category === 'burgers') acc.burgers.push(a);
+    else if (a.category === 'minis') acc.minis.push(a);
+    else if (a.category === 'drinks') acc.drinks.push(a);
+    else if (a.category === 'sides') acc.sides.push(a);
+  }
+  return acc;
+}
+
+/* =============== Products (CRUD opcional “oficial”) =============== */
+// Suscripción en vivo a colección products (si decides usarla)
+export function subscribeProductsLive(cb) {
+  const qy = query(collection(db, 'products'), orderBy('updatedAt','desc'), limit(200));
+  return onSnapshot(qy, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+}
+
+export async function upsertProduct(product) {
+  assertAdminContext();
+  await ensureAuth();
+  const ref = product?.id
+    ? doc(db, 'products', product.id)
+    : doc(collection(db, 'products'));
+  await setDoc(ref, {
+    ...product,
+    updatedAt: serverTimestamp(),
+    createdAt: product?.createdAt ?? serverTimestamp()
+  }, { merge: true });
+  return ref.id;
+}
+
+export async function deleteProduct(id) {
+  assertAdminContext();
+  await ensureAuth();
+  // Borrado suave: marca deletedAt (para conservar histórico/SEO interno)
+  await setDoc(doc(db, 'products', id), { deletedAt: serverTimestamp() }, { merge: true });
 }
 
 /* =============== Clientes (kiosko: autocompletar por teléfono) =============== */
