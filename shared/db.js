@@ -1,6 +1,8 @@
 // /shared/db.js
 // Firestore + catálogo con fallback (Firestore → /data/menu.json → /shared/catalog.json)
 // Órdenes, settings (ETA/HH/Theme), inventario, recetas/producción, artículos, products (opcional) y clientes.
+// + Coleccionables (stickers/tarjetas) server‑backed con límites y suscripción
+// + Stub opcional para WhatsApp vía webhook en settings
 
 import {
   db, ensureAuth,
@@ -22,6 +24,9 @@ function toMillisFlexible(raw) {
   }
   const ms = new Date(raw).getTime();
   return Number.isFinite(ms) ? ms : null;
+}
+function normalizePhone(raw=''){
+  return String(raw).replace(/\D+/g,'').slice(0,15);
 }
 
 /* =============== Catálogo: fetch con fallback =============== */
@@ -99,8 +104,6 @@ export async function fetchCatalogWithFallback() {
 
 /* Solo lectura para Admin (tabla de productos derivados del catálogo) */
 export function subscribeProducts(cb) {
-  // Como el catálogo no está en una colección “products”, emitimos uno único
-  // basado en fetchCatalogWithFallback(). Si luego migras a Firestore, reemplaza aquí.
   (async () => {
     const cat = await fetchCatalogWithFallback();
     const items = [
@@ -135,7 +138,7 @@ export function subscribeOrders(cb) {
   return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
 
-// Alias de compatibilidad para UIs que lo esperan
+// Alias de compatibilidad
 export const onOrdersSnapshot = subscribeOrders;
 
 export async function createOrder(payload) {
@@ -158,7 +161,6 @@ export async function getOrdersRange({ from, to, includeArchive=false, orderType
   const _to   = toTs(to);
   const col   = includeArchive ? 'orders_archive' : 'orders';
 
-  // Para máxima compatibilidad (kiosko guarda `orderType` top-level):
   const qy = query(
     collection(db, col),
     where('createdAt', '>=', _from),
@@ -166,7 +168,6 @@ export async function getOrdersRange({ from, to, includeArchive=false, orderType
     orderBy('createdAt', 'asc')
   );
 
-  // getDocs dinámico sin romper tu bundle
   const { getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
   const snap = await getDocs(qy);
   let rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -183,23 +184,20 @@ export async function getOrdersRange({ from, to, includeArchive=false, orderType
 /* =============== Settings (ETA, HappyHour, Theme, App Settings) =============== */
 const SETTINGS = 'settings';
 
-// ✅ Helper: Asegurar que los cambios “administrativos” solo se hagan desde /admin/ o admin local (PIN 7777)
+// ✅ Solo /admin/ o admin local (PIN 7777 en kiosko)
 function assertAdminContext() {
   const path = (typeof location !== 'undefined' ? location.pathname : '') || '';
   const inAdmin = /\/admin(\/|$)/.test(path);
-
-  // Permitir desde kiosko si hay bandera de admin local (PIN 7777)
   let kioskAdmin = false;
   try {
     kioskAdmin = (typeof sessionStorage !== 'undefined') && sessionStorage.getItem('kioskAdmin') === '1';
   } catch {}
-
   if (!inAdmin && !kioskAdmin) {
     throw new Error('Acceso denegado: esta operación solo está permitida desde el panel de Admin.');
   }
 }
 
-// ETA: emitimos SIEMPRE texto (soporta {text} o {minutes})
+// ETA
 export async function setETA(text) {
   assertAdminContext();
   await ensureAuth();
@@ -211,7 +209,6 @@ export function subscribeETA(cb) {
   return onSnapshot(doc(db, SETTINGS, 'eta'), (d) => {
     const data = d.data() ?? null;
     if (!data) return cb(null);
-    // compat: si guardaste {minutes: "7–10 min"}
     const text = data.text ?? data.minutes ?? null;
     cb(text == null ? null : String(text));
   });
@@ -221,7 +218,6 @@ export function subscribeETA(cb) {
 export async function setHappyHour(payload) {
   assertAdminContext();
   await ensureAuth();
-  // Si llega endsAt como Timestamp/string/number, lo normalizamos a ms
   const normalized = {
     ...payload,
     endsAt: toMillisFlexible(payload?.endsAt ?? null),
@@ -233,9 +229,8 @@ export function subscribeHappyHour(cb) {
   return onSnapshot(doc(db, SETTINGS, 'happyHour'), (d) => cb(d.data() ?? null));
 }
 
-// THEME — ⚠️ Admin‑only
+// THEME
 export async function setTheme({ name, overrides = {} }) {
-  // Bloqueo “duro” en cliente; se permite admin local (PIN 7777) gracias a assertAdminContext()
   assertAdminContext();
   await ensureAuth();
   await setDoc(doc(db, SETTINGS, 'theme'),
@@ -246,7 +241,7 @@ export function subscribeTheme(cb) {
   return onSnapshot(doc(db, SETTINGS, 'theme'), (d) => cb(d.data() ?? null));
 }
 
-// App settings genéricos (para admin: lowStockThreshold, sauceCupItemId, etc.)
+// App settings (incluye opcional whatsappWebhookUrl)
 export function subscribeSettings(cb) {
   return onSnapshot(doc(db, SETTINGS, 'app'), (d) => cb(d.data() ?? {}));
 }
@@ -279,7 +274,6 @@ export async function upsertSupplier(supp) {
 export async function recordPurchase(purchase) {
   assertAdminContext();
   await ensureAuth();
-  // Guarda compra y actualiza costo promedio simple / existencias
   const { itemId, qty=0, unitCost=0 } = purchase || {};
   await addDoc(collection(db,'purchases'), { ...purchase, createdAt: serverTimestamp() });
 
@@ -288,7 +282,6 @@ export async function recordPurchase(purchase) {
     const snap = await getDoc(ref);
     const cur  = snap.exists() ? (snap.data().currentStock||0) : 0;
     const prevCost = snap.exists() ? Number(snap.data().costAvg||0) : 0;
-    // Ponderación simple: si no hay stock previo, toma unitCost; si hay, promedio simple
     const newStock = Number(cur) + Number(qty);
     const newCost  = (prevCost>0 && cur>0) ? ((prevCost*cur + unitCost*qty) / newStock) : unitCost;
     await setDoc(ref,
@@ -298,7 +291,7 @@ export async function recordPurchase(purchase) {
   }
 }
 
-// Movimiento directo de stock (admin: cups, producción, etc.)
+// Movimiento directo de stock
 export async function adjustStock(itemId, delta, reason='use', meta={}) {
   assertAdminContext();
   if (!itemId || !Number.isFinite(delta)) return;
@@ -315,8 +308,6 @@ export function subscribeRecipes(cb) {
   const qy = query(collection(db, 'recipes'), orderBy('name','asc'));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
-
-// Compat con Admin: produceBatch({ recipeId, outputQty })
 export async function produceBatch({ recipeId, outputQty }) {
   assertAdminContext();
   if (!recipeId || !(outputQty > 0)) throw new Error('Datos de producción inválidos');
@@ -344,10 +335,7 @@ export async function deleteArticle(id) {
   await ensureAuth();
   await updateDoc(doc(db,'articles', id), { deletedAt: serverTimestamp() });
 }
-
-/* Helpers de Artículos para “edición limitada / destacados” */
 export async function fetchFeaturedArticles() {
-  // NOTA: si necesitas filtros más finos por fecha, se puede migrar a getDocs con where.
   return new Promise((resolve) => {
     const qy = query(collection(db, 'articles'), orderBy('updatedAt','desc'), limit(100));
     const unsub = onSnapshot(qy, (snap) => {
@@ -357,9 +345,7 @@ export async function fetchFeaturedArticles() {
     });
   });
 }
-
 export function mergeCatalogWithArticles(cat, articles=[]) {
-  // mezcla sencilla: agrega artículos destacados por categoría existente
   const acc = {
     burgers: [...(cat?.burgers||[])],
     minis:   [...(cat?.minis||[])],
@@ -380,12 +366,10 @@ export function mergeCatalogWithArticles(cat, articles=[]) {
 }
 
 /* =============== Products (CRUD opcional “oficial”) =============== */
-// Suscripción en vivo a colección products (si decides usarla)
 export function subscribeProductsLive(cb) {
   const qy = query(collection(db, 'products'), orderBy('updatedAt','desc'), limit(200));
   return onSnapshot(qy, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
-
 export async function upsertProduct(product) {
   assertAdminContext();
   await ensureAuth();
@@ -399,11 +383,9 @@ export async function upsertProduct(product) {
   }, { merge: true });
   return ref.id;
 }
-
 export async function deleteProduct(id) {
   assertAdminContext();
   await ensureAuth();
-  // Borrado suave: marca deletedAt (para conservar histórico/SEO interno)
   await setDoc(doc(db, 'products', id), { deletedAt: serverTimestamp() }, { merge: true });
 }
 
@@ -429,4 +411,166 @@ export async function attachLastOrderRef(phone, orderId) {
   await setDoc(doc(db,'customers', id), {
     lastOrderId: orderId, lastOrderAt: serverTimestamp()
   }, { merge:true });
+}
+
+/* =============== Coleccionables (stickers/tarjetas) =============== */
+// Límites
+export const COLLECTIBLE_LIMIT = 7;
+export const RARE_LIMIT = 2;
+
+// Pools (ajusta nombres/emojis a tu marca)
+export const COMMON_POOL = [
+  { id:'c1', emoji:'🍟', name:'Papas Pro' },
+  { id:'c2', emoji:'🥤', name:'Refresco Retro' },
+  { id:'c3', emoji:'🧀', name:'Cheddar Crew' },
+  { id:'c4', emoji:'🌶️', name:'Spicy Squad' },
+  { id:'c5', emoji:'🥓', name:'Bacon Band' }
+];
+export const RARE_POOL = [
+  { id:'r1', emoji:'👑🍔', name:'Burger Kingpin', rare:true },
+  { id:'r2', emoji:'🛸🍔', name:'UFO Patty', rare:true }
+];
+
+function pickCollectible(current=[]) {
+  const have = new Set(current.map(x=>x.id));
+  const leftCommon = COMMON_POOL.filter(x=>!have.has(x.id));
+  const leftRare   = RARE_POOL.filter(x=>!have.has(x.id));
+
+  // Probabilidad rara 10% si ya tiene >=3 y hay raras disponibles
+  const tryRare = (current.length>=3) && leftRare.length>0 && Math.random()<0.10;
+  const pool = tryRare ? leftRare : (leftCommon.length ? leftCommon : leftRare);
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+/**
+ * Lee la colección del cliente.
+ * @returns {Promise<{collection: Array, awardedOrderIds: Array, counters: {total:number, rares:number}}>}
+ */
+export async function getCollectibles(phoneRaw){
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { collection:[], awardedOrderIds:[], counters:{ total:0, rares:0 } };
+  const d = await getDoc(doc(db,'customers', phone));
+  if (!d.exists()) return { collection:[], awardedOrderIds:[], counters:{ total:0, rares:0 } };
+  const data = d.data() || {};
+  const collection = Array.isArray(data.collection) ? data.collection : [];
+  const awardedOrderIds = Array.isArray(data.awardedOrderIds) ? data.awardedOrderIds : [];
+  const counters = data.counters || { total: collection.length, rares: collection.filter(x=>x.rare).length };
+  return { collection, awardedOrderIds, counters };
+}
+
+/**
+ * Suscripción a cambios de coleccionables del cliente.
+ * @param {string} phoneRaw
+ * @param {(payload)=>void} cb
+ */
+export function subscribeCollectibles(phoneRaw, cb){
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return ()=>{};
+  return onSnapshot(doc(db,'customers', phone), (d)=>{
+    if (!d.exists()) { cb({ collection:[], awardedOrderIds:[], counters:{total:0,rares:0} }); return; }
+    const data = d.data() || {};
+    cb({
+      collection: Array.isArray(data.collection) ? data.collection : [],
+      awardedOrderIds: Array.isArray(data.awardedOrderIds) ? data.awardedOrderIds : [],
+      counters: data.counters || {
+        total:(data.collection||[]).length,
+        rares:(data.collection||[]).filter(x=>x.rare).length
+      }
+    });
+  });
+}
+
+/**
+ * Premia al cliente si procede (READY/DONE/PAID/DELIVERED), una sola vez por orderId,
+ * respetando límites: máx. 7 totales, máx. 2 raros.
+ * Devuelve { awarded: boolean, reward, collection }.
+ */
+export async function awardCollectible({ phone: phoneRaw, orderId, forceReward=null }){
+  const phone = normalizePhone(phoneRaw);
+  if (!phone || !orderId) return { awarded:false, reward:null, collection:[] };
+
+  await ensureAuth();
+
+  const ref = doc(db,'customers', phone);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? (snap.data() || {}) : {};
+
+  const collection = Array.isArray(data.collection) ? data.collection : [];
+  const awardedOrderIds = new Set(Array.isArray(data.awardedOrderIds) ? data.awardedOrderIds : []);
+  const counters = data.counters || { total: collection.length, rares: collection.filter(x=>x.rare).length };
+
+  if (awardedOrderIds.has(orderId)) {
+    return { awarded:false, reward:null, collection };
+  }
+  if (counters.total >= COLLECTIBLE_LIMIT) {
+    await setDoc(ref, { awardedOrderIds: Array.from(new Set([...awardedOrderIds, orderId])) }, { merge:true });
+    return { awarded:false, reward:null, collection };
+  }
+
+  // Elegir premio
+  const reward0 = forceReward || pickCollectible(collection);
+  if (!reward0) {
+    await setDoc(ref, { awardedOrderIds: Array.from(new Set([...awardedOrderIds, orderId])) }, { merge:true });
+    return { awarded:false, reward:null, collection };
+  }
+
+  // Validar raros
+  let reward = { ...reward0 };
+  const isRare = !!reward.rare;
+  if (isRare && counters.rares >= RARE_LIMIT) {
+    const have = new Set(collection.map(x=>x.id));
+    const commonsLeft = COMMON_POOL.filter(x=>!have.has(x.id));
+    const fallback = commonsLeft[0] || null;
+    if (!fallback) {
+      await setDoc(ref, { awardedOrderIds: Array.from(new Set([...awardedOrderIds, orderId])) }, { merge:true });
+      return { awarded:false, reward:null, collection };
+    }
+    reward = { ...fallback };
+  }
+
+  // Aplicar
+  const stamp = { ...reward, at: serverTimestamp() };
+  const newCollection = [...collection, stamp];
+  const newAwarded = Array.from(new Set([...awardedOrderIds, orderId]));
+  const newCounters = {
+    total: newCollection.length,
+    rares: newCollection.filter(x=>x.rare).length
+  };
+
+  await setDoc(ref, {
+    phone,
+    collection: newCollection,
+    awardedOrderIds: newAwarded,
+    counters: newCounters,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  return { awarded:true, reward, collection: newCollection };
+}
+
+/* =============== WhatsApp (opcional vía webhook) =============== */
+/**
+ * Envía un mensaje de WhatsApp si configuraste un webhook:
+ * En Firestore: settings/app.whatsappWebhookUrl = 'https://tu-backend/wa'
+ * payload: { to: "52XXXXXXXXXX", text: "mensaje", meta?: {...} }
+ */
+export async function sendWhatsAppMessage(payload) {
+  try {
+    // lee settings/app una vez
+    const appDoc = await getDoc(doc(db, SETTINGS, 'app'));
+    const webhook = appDoc.exists() ? (appDoc.data()?.whatsappWebhookUrl || '') : '';
+    const url = webhook || '/api/wa'; // fallback local si montas un proxy
+    if (!url) return { ok:false, error:'No webhook configured' };
+
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    const json = await res.json().catch(()=> ({}));
+    return { ok: res.ok, ...json };
+  } catch (e) {
+    return { ok:false, error: String(e?.message||e) };
+  }
 }
