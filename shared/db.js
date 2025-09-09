@@ -12,6 +12,18 @@ import {
 export function startOfToday() { const d = new Date(); d.setHours(0,0,0,0); return d; }
 export function toTs(d) { return Timestamp.fromDate(new Date(d)); }
 
+/* =============== Helpers varios =============== */
+function toMillisFlexible(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (raw?.toMillis?.()) return raw.toMillis();
+  if (raw?.seconds != null) {
+    return (raw.seconds * 1000) + Math.floor((raw.nanoseconds || 0) / 1e6);
+  }
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
 /* =============== Catálogo: fetch con fallback =============== */
 // Normaliza el catálogo a la forma esperada por el kiosko/admin
 function normalizeCatalog(cat = {}) {
@@ -22,13 +34,16 @@ function normalizeCatalog(cat = {}) {
     defaultSuggestMlPerOrder: Number(cat?.appSettings?.defaultSuggestMlPerOrder ?? 20),
     lowStockThreshold: Number(cat?.appSettings?.lowStockThreshold ?? 5)
   };
+
+  // endsAt normalizado SIEMPRE a milisegundos (o null)
   const happyHour = {
     enabled: !!cat?.happyHour?.enabled,
     discountPercent: Number(cat?.happyHour?.discountPercent ?? 0),
     bannerText: String(cat?.happyHour?.bannerText ?? ''),
     applyEligibleOnly: cat?.happyHour?.applyEligibleOnly !== false,
-    endsAt: cat?.happyHour?.endsAt ?? null
+    endsAt: toMillisFlexible(cat?.happyHour?.endsAt ?? null)
   };
+
   return {
     burgers: safe(cat.burgers),
     minis:   safe(cat.minis),
@@ -110,6 +125,19 @@ export function subscribeActiveOrders(cb) {
   return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
 
+// 🔔 Stream completo de órdenes de hoy (cualquier estatus)
+export function subscribeOrders(cb) {
+  const qy = query(
+    collection(db, 'orders'),
+    where('createdAt', '>=', toTs(startOfToday())),
+    orderBy('createdAt', 'asc')
+  );
+  return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+}
+
+// Alias de compatibilidad para UIs que lo esperan
+export const onOrdersSnapshot = subscribeOrders;
+
 export async function createOrder(payload) {
   await ensureAuth();
   const ref = await addDoc(collection(db, 'orders'), {
@@ -155,11 +183,18 @@ export async function getOrdersRange({ from, to, includeArchive=false, orderType
 /* =============== Settings (ETA, HappyHour, Theme, App Settings) =============== */
 const SETTINGS = 'settings';
 
-// ✅ Helper: Asegurar que los cambios “administrativos” solo se hagan desde /admin/
+// ✅ Helper: Asegurar que los cambios “administrativos” solo se hagan desde /admin/ o admin local (PIN 7777)
 function assertAdminContext() {
   const path = (typeof location !== 'undefined' ? location.pathname : '') || '';
   const inAdmin = /\/admin(\/|$)/.test(path);
-  if (!inAdmin) {
+
+  // Permitir desde kiosko si hay bandera de admin local (PIN 7777)
+  let kioskAdmin = false;
+  try {
+    kioskAdmin = (typeof sessionStorage !== 'undefined') && sessionStorage.getItem('kioskAdmin') === '1';
+  } catch {}
+
+  if (!inAdmin && !kioskAdmin) {
     throw new Error('Acceso denegado: esta operación solo está permitida desde el panel de Admin.');
   }
 }
@@ -186,9 +221,13 @@ export function subscribeETA(cb) {
 export async function setHappyHour(payload) {
   assertAdminContext();
   await ensureAuth();
-  await setDoc(doc(db, SETTINGS, 'happyHour'),
-    { ...payload, updatedAt: serverTimestamp() },
-    { merge: true });
+  // Si llega endsAt como Timestamp/string/number, lo normalizamos a ms
+  const normalized = {
+    ...payload,
+    endsAt: toMillisFlexible(payload?.endsAt ?? null),
+    updatedAt: serverTimestamp()
+  };
+  await setDoc(doc(db, SETTINGS, 'happyHour'), normalized, { merge: true });
 }
 export function subscribeHappyHour(cb) {
   return onSnapshot(doc(db, SETTINGS, 'happyHour'), (d) => cb(d.data() ?? null));
@@ -196,7 +235,7 @@ export function subscribeHappyHour(cb) {
 
 // THEME — ⚠️ Admin‑only
 export async function setTheme({ name, overrides = {} }) {
-  // Bloqueo “duro” en cliente para que el kiosko no pueda escribir el tema global.
+  // Bloqueo “duro” en cliente; se permite admin local (PIN 7777) gracias a assertAdminContext()
   assertAdminContext();
   await ensureAuth();
   await setDoc(doc(db, SETTINGS, 'theme'),
