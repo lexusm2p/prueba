@@ -49,6 +49,12 @@ const state = {
   themeName: ''
 };
 
+/* ====== ETA tuning (suavizado y ventana móvil) ====== */
+let etaSmoothed = null;         // suavizado exponencial en minutos
+const ETA_MAX_SAMPLES = 30;     // últimas N órdenes listas de hoy
+const ETA_ALPHA = 0.4;          // 0..1 (más alto = más reactivo)
+const ETA_MIN = 5, ETA_MAX = 25;// clamps del rango mostrado
+
 /* ======================= Recursos visuales ======================= */
 // Íconos base (tema normal)
 const ICONS = {
@@ -1051,7 +1057,7 @@ function renderMobileInfo(){
   }
 }
 
-/* ======================= “Más vendidos hoy” + ETA fallback ======================= */
+/* ======================= “Más vendidos hoy” + ETA (mejorado) ======================= */
 function tsToMs(t){
   if (!t) return 0;
   if (typeof t.toMillis === 'function') return t.toMillis();
@@ -1083,33 +1089,47 @@ function computeTopToday(orders){
     .slice(0,5);
 }
 function computeETA(orders){
-  if (state.etaSource === 'settings') return;
-  const base = {min:7, max:10};
+  if (state.etaSource === 'settings') return; // settings/eta tiene prioridad
 
+  const base = {min:7, max:10};
   const samples = [];
+
   for (const o of (orders||[])){
     const created = tsToMs(o.createdAt);
     const ready   = tsToMs(o.readyAt || o.doneAt || (o.timestamps?.readyAt) || (o.timestamps?.doneAt));
     if (!created || !ready) continue;
     if (!isToday(ready)) continue;
-    const s = (o.status||'').toUpperCase();
-    if (s!=='READY' && s!=='DONE') continue;
+
+    const st = (o.status||'').toUpperCase();
+    if (st!=='READY' && st!=='DONE') continue;
+
     const mins = (ready - created)/60000;
     if (mins>0 && mins<120) samples.push(mins);
   }
+
   if (samples.length >= 3){
-    samples.sort((a,b)=>a-b);
-    const cut = Math.max(1, Math.floor(samples.length*0.1));
-    const trimmed = samples.slice(cut, samples.length-cut);
+    // Ventana móvil: últimas N
+    const recent = samples.slice(-ETA_MAX_SAMPLES).sort((a,b)=>a-b);
+
+    // Recorte 10% extremos (quita outliers)
+    const cut = Math.max(1, Math.floor(recent.length*0.1));
+    const trimmed = recent.slice(cut, recent.length - cut);
+
+    // Promedio y suavizado exponencial
     const avg = trimmed.reduce((a,n)=>a+n,0)/trimmed.length;
-    const lo = Math.max(5, Math.round(avg-2));
-    const hi = Math.min(25, Math.round(avg+2));
+    etaSmoothed = (etaSmoothed==null) ? avg : (ETA_ALPHA*avg + (1-ETA_ALPHA)*etaSmoothed);
+
+    // Rango mostrado (±2 min, clampeado)
+    const lo = Math.max(ETA_MIN, Math.round(etaSmoothed - 2));
+    const hi = Math.min(ETA_MAX, Math.round(etaSmoothed + 2));
     state.etaText = `${lo}–${hi} min`;
   } else {
+    // Fallback por carga actual en cola activa
     const q = (orders||[]).filter(o=>{
       const s = (o.status||'').toUpperCase();
       return s==='PENDING' || s==='RECEIVED' || s==='PREPARING' || s==='TAKEN';
     }).length;
+
     if (q>0){
       const bump = Math.min(12, Math.ceil(q*1.5));
       const lo = base.min + Math.floor(bump/2);
@@ -1119,6 +1139,7 @@ function computeETA(orders){
       state.etaText = `${base.min}–${base.max} min`;
     }
   }
+
   document.querySelectorAll('[data-eta-text]').forEach(el=> el.textContent = state.etaText);
 }
 
