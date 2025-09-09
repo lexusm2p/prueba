@@ -68,17 +68,20 @@ function injectHatCssOnce(){
   if (hatCssInjected) return;
   const style = document.createElement('style');
   style.textContent = `
-    .media{ position:relative; display:grid; place-items:center; }
-    .media .icon-img{ display:block; }
+    .card .media{
+      position:relative; display:grid; place-items:center;
+      overflow:visible; /* no recortar el sombrero */
+    }
+    .media .icon-img{ display:block; image-rendering:pixelated; }
     .hat-overlay{
-      position:absolute; top:-10%; left:50%; width:58%;
+      position:absolute; top:-18%; left:50%; width:120%;
       transform:translateX(-50%) rotate(-6deg);
       image-rendering:pixelated; pointer-events:none;
       filter: drop-shadow(0 2px 0 rgba(0,0,0,.25));
-      max-width:120px;
-      z-index:2; /* asegura que quede encima del ícono */
+      z-index:2; /* por encima del ícono */
+      max-width:none;
     }
-    @media (max-width:520px){ .hat-overlay{ width:62%; top:-12%; } }
+    @media (max-width:520px){ .hat-overlay{ width:128%; top:-20%; } }
   `;
   document.head.appendChild(style);
   hatCssInjected = true;
@@ -96,14 +99,12 @@ function readThemeNameFromDOM(){
 }
 function startThemeWatcher(){
   state.themeName = readThemeNameFromDOM();
-  console.debug('[kiosk] themeName:', state.themeName); // <-- log para depurar
 
   // Reactiva tarjetas cuando cambie atributo data-theme(-name)
   const mo = new MutationObserver(()=>{
     const newName = readThemeNameFromDOM();
     if (newName !== state.themeName){
       state.themeName = newName;
-      console.debug('[kiosk] themeName:', state.themeName);
       renderCards();
     }
   });
@@ -112,11 +113,7 @@ function startThemeWatcher(){
   // Evento opcional emitido por theme.js
   window.addEventListener('theme:changed', ()=>{
     const newName = readThemeNameFromDOM();
-    if (newName !== state.themeName){
-      state.themeName = newName;
-      console.debug('[kiosk] themeName:', state.themeName);
-      renderCards();
-    }
+    if (newName !== state.themeName){ state.themeName = newName; renderCards(); }
   });
 
   // Pequeño polling de arranque por si solo se setea var CSS
@@ -124,9 +121,7 @@ function startThemeWatcher(){
   const id = setInterval(()=>{
     const newName = readThemeNameFromDOM();
     if (newName !== state.themeName){
-      state.themeName = newName;
-      console.debug('[kiosk] themeName:', state.themeName);
-      renderCards();
+      state.themeName = newName; renderCards();
     }
     if (++ticks > 40) clearInterval(id);
   }, 500);
@@ -564,7 +559,7 @@ function renderCards(){
     const iconSrc = ICONS[baseId] || null;
 
     // Sombrero encendido si el nombre del tema "suena" a fiestas patrias
-    const hatOn = /independencia|mex|patria/i.test(String(state.themeName || ''));
+    const hatOn = /independencia|méx|mex|patria|viva/i.test(String(state.themeName || ''));
 
     const card = document.createElement('div');
     card.className='card';
