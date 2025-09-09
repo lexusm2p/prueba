@@ -50,13 +50,12 @@ const state = {
 };
 
 /* ====== ETA tuning (suavizado y ventana móvil) ====== */
-let etaSmoothed = null;         // suavizado exponencial en minutos
-const ETA_MAX_SAMPLES = 30;     // últimas N órdenes listas de hoy
-const ETA_ALPHA = 0.4;          // 0..1 (más alto = más reactivo)
-const ETA_MIN = 5, ETA_MAX = 25;// clamps del rango mostrado
+let etaSmoothed = null;
+const ETA_MAX_SAMPLES = 30;
+const ETA_ALPHA = 0.4;
+const ETA_MIN = 5, ETA_MAX = 25;
 
 /* ======================= Recursos visuales ======================= */
-// Íconos base (tema normal)
 const ICONS = {
   starter:   "../shared/img/burgers/starter.png",
   koopa:     "../shared/img/burgers/koopa.png",
@@ -66,8 +65,6 @@ const ICONS = {
   nintendo:  "../shared/img/burgers/nintendo.png",
   finalboss: "../shared/img/burgers/finalboss.png"
 };
-
-// Íconos festivos (se usan SOLO cuando el tema MX está activo)
 const ICONS_MEX = {
   starter:   "../shared/img/burgers_mex/starter.png",
   koopa:     "../shared/img/burgers_mex/koopa.png",
@@ -92,8 +89,6 @@ function readThemeNameFromDOM(){
 }
 function startThemeWatcher(){
   state.themeName = readThemeNameFromDOM();
-
-  // Reactiva tarjetas cuando cambie atributo data-theme(-name)
   const mo = new MutationObserver(()=>{
     const newName = readThemeNameFromDOM();
     if (newName !== state.themeName){
@@ -102,20 +97,14 @@ function startThemeWatcher(){
     }
   });
   mo.observe(document.documentElement, { attributes:true, attributeFilter:['data-theme','data-theme-name'] });
-
-  // Evento opcional emitido por theme.js
   window.addEventListener('theme:changed', ()=>{
     const newName = readThemeNameFromDOM();
     if (newName !== state.themeName){ state.themeName = newName; renderCards(); }
   });
-
-  // Pequeño polling de arranque por si solo se setea var CSS
   let ticks = 0;
   const id = setInterval(()=>{
     const newName = readThemeNameFromDOM();
-    if (newName !== state.themeName){
-      state.themeName = newName; renderCards();
-    }
+    if (newName !== state.themeName){ state.themeName = newName; renderCards(); }
     if (++ticks > 40) clearInterval(id);
   }, 500);
 }
@@ -150,8 +139,6 @@ function openPinModal(){
   const hide = ()=>{ if(pinModal){ pinModal.style.display='none'; if(pinInput) pinInput.value=''; } };
   const enter = ()=>{
     const pin = (pinInput?.value||'').trim();
-
-    // 🔒 PIN especial para habilitar “modo admin local”
     if (pin === '7777') {
       state.adminMode = true;
       sessionStorage.setItem('kioskAdmin','1');
@@ -160,7 +147,6 @@ function openPinModal(){
       hide();
       return;
     }
-
     const route = map[pin];
     if (!route){ toast('PIN incorrecto'); return; }
     hide(); location.href = route;
@@ -185,43 +171,28 @@ function setActiveTab(mode=state.mode){
 init();
 async function init(){
   state.menu = await DB.fetchCatalogWithFallback();
-
-  // Tema: watcher (para swap de íconos)
   startThemeWatcher();
-
   renderCards();
   setActiveTab('mini');
   updateCartBar();
   setupSidebars();
   renderMobileInfo();
-
-  // Seguimiento (modal + CTA)
   ensureFollowModal();
   ensureFollowCta();
-
   bindHappyHour();
   bindETA();
   setupReadyFeed();
   startOrdersAnalytics();
-
-  // THEME: suscripción a /settings/theme (aplica en vivo)
   if (state.unsubTheme) { try{ state.unsubTheme(); }catch{} state.unsubTheme = null; }
   state.unsubTheme = initThemeFromSettings({ defaultName: 'Independencia' });
-
-  // 🔔 EXTRA: reflejar nombre de tema desde DB.subscribeTheme para refrescar íconos al instante
   if (typeof DB.subscribeTheme === 'function') {
     try {
       DB.subscribeTheme((t)=>{
         const name = (t?.name || '').trim();
-        if (name && name !== state.themeName) {
-          state.themeName = name;
-          renderCards();
-        }
+        if (name && name !== state.themeName) { state.themeName = name; renderCards(); }
       });
     } catch {}
   }
-
-  // Si ya se desbloqueó previamente en esta pestaña, mostrar el panel
   if (sessionStorage.getItem('kioskAdmin') === '1') {
     state.adminMode = true;
     mountThemePanel();
@@ -230,7 +201,6 @@ async function init(){
 
 /* ======================= Utilidades base ======================= */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
-
 function findItemById(id){
   return state.menu?.burgers?.find?.(b=>b.id===id)
       || state.menu?.minis?.find?.(m=>m.id===id)
@@ -241,8 +211,6 @@ function findItemById(id){
 function baseOfItem(item){
   return item?.baseOf ? state.menu?.burgers?.find?.(b=>b.id===item.baseOf) : item;
 }
-
-// Normaliza ingredientes mostrando gramos correctos según mini/grande
 function formatIngredientsFor(item, base){
   const meatDefaultBig  = Number(state.menu?.appSettings?.meatGrams ?? 85);
   const meatDefaultMini = Number(state.menu?.appSettings?.miniMeatGrams ?? 45);
@@ -252,7 +220,6 @@ function formatIngredientsFor(item, base){
     : (base?.ingredients || []);
   return src.map(s => /^Carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s);
 }
-
 function slug(s){
   return String(s).toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -272,7 +239,7 @@ function escapeHtml(s=''){
   }[m]));
 }
 
-/* ========= Seguimiento: helpers URL + modal + CTA flotante ========= */
+/* ========= Seguimiento ========= */
 function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
 function buildTrackUrl(phone){
   const u = new URL('./track.html', location.href);
@@ -282,7 +249,7 @@ function buildTrackUrl(phone){
   return u.toString();
 }
 
-/* ========= WhatsApp: confirmación opcional ========= */
+/* ========= WhatsApp ========= */
 async function sendWaOrderCreated({ phone, name, orderId, subtotal, etaText, hhTotalDiscount=0 }) {
   if (!phone) return;
   try {
@@ -291,23 +258,19 @@ async function sendWaOrderCreated({ phone, name, orderId, subtotal, etaText, hhT
     const hhLine  = (Number(hhTotalDiscount||0) > 0) ? `Promo HH: -$${Number(hhTotalDiscount||0).toFixed(0)}\n` : '';
     const text =
       `¡Hola ${name || ''}! Recibimos tu pedido en Seven de Burgers 🍔.\n` +
-      etaLine +
-      hhLine +
+      etaLine + hhLine +
       `Total estimado: $${Number(subtotal||0).toFixed(0)}\n` +
       `Sigue tu pedido aquí: ${trackUrl}`;
-
-    // db.js -> sendWhatsAppMessage lee settings/app.whatsappWebhookUrl o usa /api/wa
     const res = await DB.sendWhatsAppMessage({
-      to: `52${phone}`, // ajusta el prefijo si lo necesitas
+      to: `52${phone}`,
       text,
       meta: { kind: 'order_created', orderId }
     });
     if (!res?.ok) console.warn('WA not sent:', res);
-  } catch (e) {
-    console.warn('WA error:', e);
-  }
+  } catch (e) { console.warn('WA error:', e); }
 }
 
+/* ===== Modal de seguimiento ===== */
 function ensureFollowModal(){
   if (document.getElementById('trackAskModal')) return;
   const wrap = document.createElement('div');
@@ -345,31 +308,24 @@ function ensureFollowModal(){
     </div>
   `;
   document.body.appendChild(wrap);
-
   wrap.querySelector('#trackClose')?.addEventListener('click', closeFollowModal);
   wrap.querySelector('#trackClose2')?.addEventListener('click', closeFollowModal);
   wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFollowModal(); });
 }
-function closeFollowModal(){
-  const m = document.getElementById('trackAskModal');
-  if (m) m.style.display = 'none';
-}
+function closeFollowModal(){ const m = document.getElementById('trackAskModal'); if (m) m.style.display = 'none'; }
 function openFollowModal({ phone } = {}){
   ensureFollowModal();
   const m = document.getElementById('trackAskModal'); if (!m) return;
-
   const url = buildTrackUrl(phone || '');
   const qr = m.querySelector('#trackQrImg');
   const linkEl = m.querySelector('#trackUrl');
   const copyBtn = m.querySelector('#trackCopy');
   const openNow = m.querySelector('#trackOpenNow');
-
   const size = 200;
   const api = 'https://api.qrserver.com/v1/create-qr-code/';
   const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
   if (qr) qr.src = src;
   if (linkEl) linkEl.value = url;
-
   if (openNow){
     const hasPhone = !!normalizePhone(phone || '');
     openNow.disabled = !hasPhone;
@@ -381,16 +337,13 @@ function openFollowModal({ phone } = {}){
       await navigator.clipboard.writeText(url);
       copyBtn.textContent = '¡Copiado!';
       setTimeout(()=> copyBtn.textContent = 'Copiar enlace', 1200);
-    }catch{
-      alert('No pude copiar. Selecciona el texto y copia manualmente.');
-    }
+    }catch{ alert('No pude copiar. Selecciona el texto y copia manualmente.'); }
   };
-
   m.style.display = 'grid';
   setTimeout(()=> openNow?.focus(), 0);
 }
 
-// CTA flotante
+/* ======================= CTA flotante ======================= */
 function ensureFollowCta(){
   if (document.getElementById('followCta')) return;
   const cta = document.createElement('div');
@@ -420,20 +373,12 @@ function ensureFollowCta(){
     openFollowModal({ phone: (state.orderMeta?.type==='pickup' ? state.orderMeta?.phone : '') || '' });
   });
 }
-function showFollowCta(){
-  ensureFollowCta();
-  const cta = document.getElementById('followCta');
-  if (cta) cta.style.display = 'block';
-}
-function hideFollowCta(){
-  const cta = document.getElementById('followCta');
-  if (cta) cta.style.display = 'none';
-}
+function showFollowCta(){ ensureFollowCta(); const c = document.getElementById('followCta'); if (c) c.style.display='block'; }
+function hideFollowCta(){ const c = document.getElementById('followCta'); if (c) c.style.display='none'; }
 
 /* ======================= Happy Hour ======================= */
 let hhTimer = null;
 const HH_REFRESH_GUARD_KEY = 'hhRefreshGuard-app';
-
 const fmtMMSS = (ms)=>{
   const s = Math.max(0, Math.floor(ms/1000));
   const m = Math.floor(s/60);
@@ -441,12 +386,11 @@ const fmtMMSS = (ms)=>{
   return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
 };
 function stopHHTimer(){ if(hhTimer){ clearInterval(hhTimer); hhTimer=null; } }
-
 function hhInfo(){
   const hh = state.menu?.happyHour || {};
   const enabled = !!hh.enabled;
   const pct = Math.max(0, Math.min(100, Number(hh.discountPercent||0))) / 100;
-  const eligibleOnly = hh.applyEligibleOnly !== false; // default true
+  const eligibleOnly = hh.applyEligibleOnly !== false;
   return { enabled, pct, eligibleOnly };
 }
 function hhDiscountPerUnit(item){
@@ -455,7 +399,7 @@ function hhDiscountPerUnit(item){
   const isEligible = eligibleOnly ? (item?.hhEligible !== false) : true;
   if (!isEligible) return 0;
   const unit = Number(item?.price || 0);
-  return unit * pct; // SOLO al precio base
+  return unit * pct;
 }
 function updateHHPill(hh, extraText=''){
   const pill = document.getElementById('hhPill');
@@ -472,10 +416,8 @@ function startHHCountdown(hh){
   stopHHTimer();
   state.hhLeftText = '';
   updateHHPill(hh);
-
   const end = Number(hh?.endsAt || 0);
   if (!hh.enabled || !end) { renderMobileInfo(); return; }
-
   const tick = ()=>{
     const left = end - Date.now();
     if (left <= 0){
@@ -487,7 +429,6 @@ function startHHCountdown(hh){
         state.hhLeftText = '00:00';
         updateHHPill({ ...hh, enabled:false }, state.hhLeftText);
         renderMobileInfo();
-        // Espera un tick para permitir que otros listeners pinten OFF sin bucles
         setTimeout(()=> { try{ location.reload(); }catch{} }, 250);
       } else {
         updateHHPill({ ...hh, enabled:false });
@@ -500,7 +441,6 @@ function startHHCountdown(hh){
     updateHHPill(hh, state.hhLeftText);
     renderMobileInfo();
   };
-
   tick();
   hhTimer = setInterval(tick, 1000);
 }
@@ -558,17 +498,12 @@ function renderCards(){
   const grid = document.getElementById('cards');
   if(!grid) return;
   grid.innerHTML = '';
-
   const items = state.mode==='mini' ? (state.menu?.minis||[]) : (state.menu?.burgers||[]);
-
   items.forEach(it=>{
     const base = baseOfItem(it);
     const baseId = base?.id || it.id;
-
-    // ¿Tema MX activo? (para swap de íconos)
     const mxThemeOn = /independencia|méx|mex|patria|viva/i.test(String(state.themeName || ''));
     const iconSrc = (mxThemeOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null);
-
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
@@ -592,7 +527,6 @@ function renderCards(){
         </div>
       </div>`;
     grid.appendChild(card);
-
     card.querySelector('[data-a="ing"]')?.addEventListener('click', ()=>{
       alert(`${it.name}\n\nIngredientes:\n- ${formatIngredientsFor(it, base).join('\n- ')}`);
     });
@@ -683,16 +617,12 @@ function openItemModal(item, base, existingIndex=null){
     });
     const costS = saucesChecked * SP;
     const costI = ingrChecked.reduce((a,n)=>a+Number(n||0),0);
-
     const dlcChk  = item.mini && body.querySelector('#dlcCarne')?.checked;
     const extraDlc = dlcChk ? DLC : 0;
-
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
-
     const subtotal = (unitBaseAfterHH + extraDlc)*qty + (costS + costI)*qty;
     if(totalEl) totalEl.textContent = money(subtotal);
-
     return { qty, subtotal, dlcChk, hhDiscTotal: hhDiscPerUnit * qty };
   };
   inputs.forEach(i=> i.addEventListener('change', calc)); calc();
@@ -776,41 +706,41 @@ function openCartModal(){
 
   if(body) body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
-      <input id="cartName" type="text" required value="\${state.customerName||''}" /></div>
+      <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
 
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
       <div class="field">
         <label>Tipo de pedido</label>
         <select id="orderType">
-          <option value="pickup" \${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
-          <option value="dinein"  \${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
+          <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
+          <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
         </select>
       </div>
 
-      <div class="field" id="phoneField" style="\${state.orderMeta.type==='pickup'?'':'display:none'}">
+      <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
         <label>Teléfono de contacto (Pickup)</label>
         <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
-               placeholder="10 dígitos" pattern="[0-9]{10}" value="\${state.orderMeta.phone||''}" />
+               placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
         <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
       </div>
 
-      <div class="field" id="mesaField" style="\${state.orderMeta.type==='dinein'?'':'display:none'}">
+      <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
         <label>Número de mesa</label>
-        <input id="tableNum" type="text" placeholder="Ej. 4" value="\${state.orderMeta.table||''}" />
+        <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
       </div>
 
       <div class="field">
         <label>Método de pago</label>
         <select id="payMethod">
-          <option value="efectivo" \${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
-          <option value="tarjeta" \${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
-          <option value="transferencia" \${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
+          <option value="efectivo" ${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
+          <option value="tarjeta" ${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
+          <option value="transferencia" ${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
         </select>
       </div>
     </div>
 
     <div class="field">
-      \${state.cart.map((l,idx)=>{
+      ${state.cart.map((l,idx)=>{
         const extrasTxt = [
           (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
           ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
@@ -818,17 +748,17 @@ function openCartModal(){
           (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
         ].filter(Boolean).join(', ');
         return `
-        <div class="k-card" style="margin:8px 0" data-i="\${idx}">
-          <h4>\${l.name} · x\${l.qty}</h4>
-          \${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: \${l.salsaCambiada}</div>`:''}
-          \${extrasTxt? `<div class="muted small">\${extrasTxt}</div>`:''}
-          \${l.notes ? `<div class="muted small">Notas: \${escapeHtml(l.notes)}</div>`:''}
+        <div class="k-card" style="margin:8px 0" data-i="${idx}">
+          <h4>${l.name} · x${l.qty}</h4>
+          ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
+          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
+          ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
           <div class="k-actions" style="gap:6px">
             <button class="btn small ghost" data-a="less">-</button>
             <button class="btn small ghost" data-a="more">+</button>
             <button class="btn small" data-a="edit">Editar</button>
             <button class="btn small danger" data-a="remove">Eliminar</button>
-            <div style="margin-left:auto" class="price">\${money(l.lineTotal)}</div>
+            <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
           </div>
         </div>`;}).join('')}
     </div>
@@ -873,15 +803,10 @@ function openCartModal(){
 
   if (body){
     body.onclick = (e)=>{
-      const btn = e.target.closest('button[data-a]');
-      if (!btn) return;
-
-      const card = btn.closest('[data-i]');
-      if (!card) return;
+      const btn = e.target.closest('button[data-a]'); if (!btn) return;
+      const card = btn.closest('[data-i]'); if (!card) return;
       const i = parseInt(card.dataset.i, 10);
-      const line = state.cart[i];
-      if (!line) return;
-
+      const line = state.cart[i]; if (!line) return;
       const act = btn.dataset.a;
 
       if (act === 'remove') {
@@ -968,7 +893,6 @@ function openCartModal(){
     if (order.phone) {
       await DB.upsertCustomerFromOrder?.(order);
       await DB.attachLastOrderRef?.(order.phone, orderId);
-      // 🔔 WhatsApp de confirmación (opcional)
       sendWaOrderCreated({
         phone: order.phone,
         name: order.customer,
@@ -982,7 +906,7 @@ function openCartModal(){
     beep();
     toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
     state.cart = []; updateCartBar();
-    const m = document.getElementById('cartModal'); if(m) m.style.display='none';
+    const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
 
     setTimeout(()=>{
       openFollowModal({ phone: order.phone || state.orderMeta.phone || '' });
@@ -993,21 +917,17 @@ function openCartModal(){
 function recomputeLine(line){
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
-
   const extrasIngr = normalizeExtraIngredients();
   const priceByName = new Map(extrasIngr.map(x=>[x.name, x.price]));
   const costI = (line.extras?.ingredients||[]).reduce((sum, name)=>{
     return sum + Number(priceByName.get(name) ?? state.menu?.extras?.ingredientPrice ?? 0);
   }, 0);
-
   const costS = (line.extras?.sauces?.length || 0) * SP;
   const dlcOn = !!(line.extras?.dlcCarne);
   const extraDlc = dlcOn ? DLC : 0;
-
   const item = findItemById(line.id);
   const hhDiscPerUnit = hhDiscountPerUnit(item);
   const unitBaseAfterHH = Math.max(0, Number(line.unitPrice||0) - hhDiscPerUnit);
-
   const unitTotal = (unitBaseAfterHH + extraDlc) + costS + costI;
   line.lineTotal = unitTotal * (line.qty||1);
   line.hhDisc = hhDiscPerUnit * (line.qty||1);
@@ -1106,7 +1026,7 @@ function renderMobileInfo(){
   }
 }
 
-/* ======================= “Más vendidos hoy” + ETA (mejorado) ======================= */
+/* ======================= “Más vendidos hoy” + ETA ======================= */
 function tsToMs(t){
   if (!t) return 0;
   if (typeof t.toMillis === 'function') return t.toMillis();
@@ -1120,7 +1040,7 @@ function isToday(ms){
   return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
 }
 function computeTopToday(orders){
-  const acc = new Map(); // name -> count
+  const acc = new Map();
   for (const o of (orders||[])){
     const created = tsToMs(o.createdAt);
     if (!isToday(created)) continue;
@@ -1138,47 +1058,33 @@ function computeTopToday(orders){
     .slice(0,5);
 }
 function computeETA(orders){
-  if (state.etaSource === 'settings') return; // settings/eta tiene prioridad
-
+  if (state.etaSource === 'settings') return;
   const base = {min:7, max:10};
   const samples = [];
-
   for (const o of (orders||[])){
     const created = tsToMs(o.createdAt);
     const ready   = tsToMs(o.readyAt || o.doneAt || (o.timestamps?.readyAt) || (o.timestamps?.doneAt));
     if (!created || !ready) continue;
     if (!isToday(ready)) continue;
-
     const st = (o.status||'').toUpperCase();
     if (st!=='READY' && st!=='DONE') continue;
-
     const mins = (ready - created)/60000;
     if (mins>0 && mins<120) samples.push(mins);
   }
-
   if (samples.length >= 3){
-    // Ventana móvil: últimas N
     const recent = samples.slice(-ETA_MAX_SAMPLES).sort((a,b)=>a-b);
-
-    // Recorte 10% extremos (quita outliers)
     const cut = Math.max(1, Math.floor(recent.length*0.1));
     const trimmed = recent.slice(cut, recent.length - cut);
-
-    // Promedio y suavizado exponencial
     const avg = trimmed.reduce((a,n)=>a+n,0)/trimmed.length;
     etaSmoothed = (etaSmoothed==null) ? avg : (ETA_ALPHA*avg + (1-ETA_ALPHA)*etaSmoothed);
-
-    // Rango mostrado (±2 min, clampeado)
     const lo = Math.max(ETA_MIN, Math.round(etaSmoothed - 2));
     const hi = Math.min(ETA_MAX, Math.round(etaSmoothed + 2));
     state.etaText = `${lo}–${hi} min`;
   } else {
-    // Fallback por carga actual en cola activa
     const q = (orders||[]).filter(o=>{
       const s = (o.status||'').toUpperCase();
       return s==='PENDING' || s==='RECEIVED' || s==='PREPARING' || s==='TAKEN';
     }).length;
-
     if (q>0){
       const bump = Math.min(12, Math.ceil(q*1.5));
       const lo = base.min + Math.floor(bump/2);
@@ -1188,11 +1094,8 @@ function computeETA(orders){
       state.etaText = `${base.min}–${base.max} min`;
     }
   }
-
   document.querySelectorAll('[data-eta-text]').forEach(el=> el.textContent = state.etaText);
 }
-
-// 👇 Compatibilidad: si tu DB no tiene subscribeOrders, usamos onOrdersSnapshot o subscribeActiveOrders
 function subscribeOrdersShim(cb){
   if (typeof DB.subscribeOrders === 'function') return DB.subscribeOrders(cb);
   if (typeof DB.onOrdersSnapshot === 'function') return DB.onOrdersSnapshot(cb);
@@ -1216,7 +1119,6 @@ function setupReadyFeed(){
     const ready = (list||[]).filter(o=> (o.status||'')==='READY')
       .sort((a,b)=> oTime(b) - oTime(a))
       .slice(0,6);
-
     const rows = ready.map(o=>{
       const items = (o.items||[]);
       const count = items.reduce((n,i)=> n + (i.qty||1), 0);
@@ -1232,11 +1134,9 @@ function setupReadyFeed(){
     container.innerHTML = rows || '<li><div class="muted small">—</div></li>';
   });
 }
-function oTime(o){
-  return o.createdAt?.toMillis?.() ?? new Date(o.createdAt||0).getTime();
-}
+function oTime(o){ return o.createdAt?.toMillis?.() ?? new Date(o.createdAt||0).getTime(); }
 
-/* ======================= Upsell: agregar rápido ======================= */
+/* ======================= Upsell rápido ======================= */
 document.addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-add]'); if(!btn) return;
   const id = btn.getAttribute('data-add');
@@ -1249,7 +1149,6 @@ document.addEventListener('click', (e)=>{
   if (item.type==='drink' || item.type==='side'){
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
-
     state.cart.push({
       id:item.id, name:item.name, mini:false, qty:1,
       unitPrice:Number(item.price||0),
@@ -1265,10 +1164,9 @@ document.addEventListener('click', (e)=>{
   }
 }, false);
 
-/* ======================= THEME: panel flotante (tester local + aplicar GLOBAL si admin) ======================= */
+/* ======================= THEME panel ======================= */
 function mountThemePanel() {
   if (document.getElementById('theme-floating-panel')) return;
-
   const box = document.createElement('div');
   box.id = 'theme-floating-panel';
   Object.assign(box.style, {
@@ -1340,7 +1238,7 @@ function mountThemePanel() {
 
   btnLocal.addEventListener('click', ()=>{
     applyThemeLocal(select.value);
-    state.themeName = select.value; // sincroniza íconos inmediatamente
+    state.themeName = select.value;
     renderCards();
     setMsg('Tema aplicado localmente.', 'ok');
   });
