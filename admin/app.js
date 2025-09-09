@@ -1,5 +1,6 @@
 // /admin/app.js — Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
 // + Panel de TEMAS festivos mexicanos (vista previa local + guardar GLOBAL en settings/theme)
+// + Panel “Productos” (CRUD sobre Artículos) — sin mover lo demás
 
 import {
   // Reportes
@@ -26,23 +27,23 @@ import {
   adjustStock,
   subscribeSettings,
 
-  // Artículos (nuevo módulo)
+  // Artículos (módulo base para CRUD de Productos)
   subscribeArticles,
   upsertArticle,
   deleteArticle,
 
-  // TEMAS (nuevo)
-  setTheme,            // guarda GLOBAL el tema: { name: 'Independencia' }
-  subscribeTheme       // puede no existir en algunas implementaciones; tenemos shim abajo
+  // TEMAS
+  setTheme,
+  subscribeTheme
 } from '../shared/db.js';
 
 import { toast, beep } from '../shared/notify.js';
 
-// 🎨 utilidades de tema (colores/vars CSS, tipografías) — vista previa local y lectura de lista
+// 🎨 utilidades de tema (colores/vars CSS, tipografías)
 import {
-  initThemeFromSettings, // suscribe y aplica el tema global al <document> cuando cambia settings/theme
-  applyThemeLocal,       // aplica un tema por nombre SOLO en este cliente (sin tocar settings)
-  listThemes             // devuelve array de nombres de temas disponibles
+  initThemeFromSettings,
+  applyThemeLocal,
+  listThemes
 } from '../shared/theme.js';
 
 /* ---------------- Tabs ---------------- */
@@ -969,25 +970,15 @@ function confirmDeleteArticle(article){
   deleteArticle(article.id).then(()=> toast('Artículo eliminado')).catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
 }
 
-/* ============== TEMAS FESTIVOS (nuevo panel) ============== */
-/**
- * Qué hace:
- * - Se suscribe a settings/theme y aplica en vivo (initThemeFromSettings)
- * - Muestra un panel flotante para:
- *     a) Probar localmente un tema (solo este admin)
- *     b) Guardar GLOBAL el tema (todos los kioskos/meseros/cocina)
- * - Si no existe subscribeTheme en tu DB, no truena (ya aplicamos initThemeFromSettings)
- */
+/* ============== TEMAS FESTIVOS (panel flotante) ============== */
 let THEME_UNSUB = null;
-initThemePanel(); // crea el panel UI
-bindThemeLive();  // engancha suscripción global
+initThemePanel();
+bindThemeLive();
 
 function bindThemeLive(){
-  // initThemeFromSettings ya aplica live el tema global, pero guardamos la unsub si la expone
   try {
     if (typeof subscribeTheme === 'function'){
       THEME_UNSUB = subscribeTheme((t)=> {
-        // opcional: puedes reflejar el nombre en el select si quieres
         const sel = document.getElementById('admThemeSelect');
         if (sel && t?.name) {
           const opt = [...sel.options].find(o=>o.value===t.name);
@@ -996,14 +987,11 @@ function bindThemeLive(){
       });
     }
   } catch (_){}
-  // además, arrancamos el listener de theme.js para aplicar estilos del backend
   try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch(_){}
 }
 
 function initThemePanel(){
   if (document.getElementById('admThemePanel')) return;
-
-  // Panel flotante discreto (no interfiere con tabs)
   const box = document.createElement('div');
   box.id = 'admThemePanel';
   Object.assign(box.style, {
@@ -1039,7 +1027,6 @@ function initThemePanel(){
   `;
   document.body.appendChild(box);
 
-  // Poblar lista de temas desde theme.js
   const sel = document.getElementById('admThemeSelect');
   try {
     const names = listThemes();
@@ -1048,20 +1035,17 @@ function initThemePanel(){
     sel.innerHTML = `<option value="default">default</option>`;
   }
 
-  // Toggle de colapsado
   const body = document.getElementById('admThemeBody');
   document.getElementById('admThemeToggle')?.addEventListener('click', ()=>{
     body.style.display = (body.style.display==='none') ? 'block' : 'none';
   });
 
-  // Probar local (no persiste en settings)
   document.getElementById('admThemePreview')?.addEventListener('click', ()=>{
     const name = sel.value;
     try { applyThemeLocal(name); setThemeMsg('Tema aplicado localmente.'); }
     catch(e){ console.error(e); setThemeMsg('No se pudo aplicar local.'); }
   });
 
-  // Guardar GLOBAL (todos los kioskos)
   document.getElementById('admThemeSave')?.addEventListener('click', async ()=>{
     const name = sel.value;
     try { await setTheme({ name }); setThemeMsg('Tema GLOBAL guardado. Kioskos lo aplicarán en vivo.'); }
@@ -1083,5 +1067,372 @@ function esc(s=''){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':
 function escAttr(s=''){ return String(s).replace(/"/g, '&quot;'); }
 function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&gt;','>':'&quot;'}[m])); }
 
+/* =========================================================
+   PANEL: Productos (CRUD sobre Artículos)
+   - Crear, editar, eliminar, duplicar
+   - Activo / En espera (onHold)
+   - Destacado (featured)
+   - Edición limitada (limitedTime / limitedUntil)
+   - Búsqueda y orden por columnas
+   ========================================================= */
+(function initProductsPanel(){
+  const TABS = document.getElementById('admTabs');
+  if (!TABS) return;
+
+  // 1) Inyectar tab y panel
+  if (!TABS.querySelector('[data-tab="prod"]')){
+    const tab = document.createElement('button');
+    tab.className = 'tab';
+    tab.dataset.tab = 'prod';
+    tab.type = 'button';
+    tab.textContent = 'Productos';
+    tab.setAttribute('role','tab');
+    tab.setAttribute('aria-selected','false');
+    TABS.appendChild(tab);
+  }
+  if (!document.getElementById('panel-prod')){
+    const panel = document.createElement('section');
+    panel.id = 'panel-prod';
+    panel.className = 'panel';
+    panel.innerHTML = `
+      <div class="row" style="justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap">
+        <div class="row" style="gap:8px; flex-wrap:wrap">
+          <input id="prodSearch" class="input" placeholder="Buscar producto..." style="min-width:220px">
+          <select id="prodFilter" class="input">
+            <option value="all">Todos</option>
+            <option value="active">Activos</option>
+            <option value="hold">En espera</option>
+            <option value="featured">Destacados</option>
+            <option value="limited">Edición limitada</option>
+          </select>
+        </div>
+        <div class="row" style="gap:8px; flex-wrap:wrap">
+          <button class="btn" id="prodNew">Nuevo producto</button>
+          <button class="btn ghost" id="prodRefresh">Refrescar</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:10px">
+        <table class="tbl" id="tblProd">
+          <thead>
+            <tr>
+              <th data-sort="name"   style="cursor:pointer">Nombre</th>
+              <th data-sort="price"  style="cursor:pointer">Precio</th>
+              <th data-sort="status" style="cursor:pointer">Estado</th>
+              <th data-sort="category" style="cursor:pointer">Categoría</th>
+              <th style="min-width:220px">Flags</th>
+              <th class="right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="6">—</td></tr></tbody>
+        </table>
+      </div>
+    `;
+    (document.getElementById('admTabs').parentElement || document.body).appendChild(panel);
+  }
+
+  // 2) Estado y suscripción
+  let PROD = [];
+  let PROD_SORT = { by:'name', dir:'asc' };
+  let PROD_FILTER = 'all';
+  let PROD_QUERY = '';
+
+  subscribeArticles(arr => { PROD = Array.isArray(arr) ? arr : []; renderProd(); });
+
+  // 3) UI events
+  document.getElementById('prodSearch')?.addEventListener('input', (e)=>{
+    PROD_QUERY = String(e.target.value||'').toLowerCase().trim(); renderProd();
+  });
+  document.getElementById('prodFilter')?.addEventListener('change', (e)=>{
+    PROD_FILTER = e.target.value || 'all'; renderProd();
+  });
+  document.getElementById('prodRefresh')?.addEventListener('click', ()=> renderProd());
+  document.getElementById('prodNew')?.addEventListener('click', ()=> openProdModal());
+
+  document.getElementById('tblProd')?.addEventListener('click', async (e)=>{
+    const th = e.target.closest('thead [data-sort]');
+    if (th){
+      const by = th.dataset.sort;
+      if (PROD_SORT.by === by) PROD_SORT.dir = (PROD_SORT.dir==='asc'?'desc':'asc');
+      else { PROD_SORT.by = by; PROD_SORT.dir = 'asc'; }
+      renderProd(); return;
+    }
+
+    const btn = e.target.closest('[data-a]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const row = PROD.find(x=>x.id===id);
+    const act = btn.dataset.a;
+
+    if (act==='edit'){ openProdModal(row); return; }
+    if (act==='dup'){
+      try{
+        const copy = {
+          name: (row?.name||'Producto')+' (copia)',
+          price: Number(row?.price||0),
+          active: false,
+          onHold: true,
+          desc: row?.desc||'',
+          category: row?.category||'burgers',
+          featured: !!row?.featured,
+          limitedTime: !!row?.limitedTime,
+          limitedUntil: row?.limitedUntil||null,
+          sound: row?.sound||'',
+          themeTag: row?.themeTag||'',
+          ingredients: row?.ingredients||[]
+        };
+        await upsertArticle(copy);
+        toast('Producto duplicado (en espera)');
+      }catch(e){ console.error(e); toast('No se pudo duplicar'); }
+      return;
+    }
+    if (act==='del'){
+      if (!confirm(`¿Eliminar "${row?.name||'producto'}"?`)) return;
+      try{ await deleteArticle(id); toast('Producto eliminado'); }
+      catch(e){ console.error(e); toast('No se pudo eliminar'); }
+      return;
+    }
+    if (act==='toggle-active'){
+      try{ await upsertArticle({ ...row, active: !row?.active, onHold: row?.onHold && !row?.active ? false : row?.onHold }); toast(row?.active?'Desactivado':'Activado'); }
+      catch(e){ console.error(e); toast('No se pudo cambiar estado'); }
+      return;
+    }
+    if (act==='hold'){
+      try{ await upsertArticle({ ...row, onHold: !row?.onHold, active: row?.onHold ? true : false }); toast(row?.onHold?'Quitado de espera':'Puesto en espera'); }
+      catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
+      return;
+    }
+    if (act==='feature'){
+      try{ await upsertArticle({ ...row, featured: !row?.featured }); toast(row?.featured?'Quitado de destacados':'Destacado'); }
+      catch(e){ console.error(e); toast('No se pudo destacar'); }
+      return;
+    }
+  });
+
+  // 4) Render
+  function renderProd(){
+    const tb = document.querySelector('#tblProd tbody'); if (!tb) return;
+
+    let rows = PROD.slice().filter(p=>{
+      const hay = `${p.name||''} ${p.desc||''} ${p.category||''}`.toLowerCase();
+      if (PROD_QUERY && !hay.includes(PROD_QUERY)) return false;
+      if (PROD_FILTER==='active' && !p.active) return false;
+      if (PROD_FILTER==='hold'   && !p.onHold) return false;
+      if (PROD_FILTER==='featured' && !p.featured) return false;
+      if (PROD_FILTER==='limited' && !p.limitedTime) return false;
+      return true;
+    });
+
+    const dir = (PROD_SORT.dir==='asc')?1:-1;
+    rows.sort((a,b)=>{
+      const ka = (PROD_SORT.by==='price')? Number(a.price||0)
+               : (PROD_SORT.by==='status')? (a.onHold?0:(a.active?2:1))
+               : (PROD_SORT.by==='category')? String(a.category||'').toLowerCase()
+               : String(a.name||'').toLowerCase();
+      const kb = (PROD_SORT.by==='price')? Number(b.price||0)
+               : (PROD_SORT.by==='status')? (b.onHold?0:(b.active?2:1))
+               : (PROD_SORT.by==='category')? String(b.category||'').toLowerCase()
+               : String(b.name||'').toLowerCase();
+      if (ka<kb) return -1*dir; if (ka>kb) return 1*dir; return 0;
+    });
+
+    tb.innerHTML = rows.map(p=>{
+      const badgeSt =
+        p.onHold ? `<span class="k-badge warn">En espera</span>` :
+        p.active ? `<span class="k-badge ok">Activo</span>` :
+                   `<span class="k-badge">Inactivo</span>`;
+      const flags = [
+        p.featured ? '⭐ Destacado' : '',
+        p.limitedTime ? `⏳ Limitado${p.limitedUntil?` (hasta ${new Date(Number(p.limitedUntil)).toLocaleDateString()})`:''}` : '',
+        p.sound ? '🔊 Sonido' : ''
+      ].filter(Boolean).join(' · ') || '—';
+
+      return `<tr>
+        <td style="min-width:200px">${esc(p.name||'—')}<div class="muted small">${esc(p.desc||'')}</div></td>
+        <td>${fmtMoney(p.price||0)}</td>
+        <td>${badgeSt}</td>
+        <td>${esc(p.category||'-')}</td>
+        <td>${flags}</td>
+        <td class="right" style="white-space:nowrap; gap:6px">
+          <button class="btn small" data-a="edit" data-id="${p.id}">Editar</button>
+          <button class="btn small ghost" data-a="feature" data-id="${p.id}">${p.featured?'Quitar dest.':'Destacar'}</button>
+          <button class="btn small ghost" data-a="hold" data-id="${p.id}">${p.onHold?'Quitar espera':'En espera'}</button>
+          <button class="btn small ghost" data-a="toggle-active" data-id="${p.id}">${p.active?'Desactivar':'Activar'}</button>
+          <button class="btn small ghost" data-a="dup" data-id="${p.id}">Duplicar</button>
+          <button class="btn small danger" data-a="del" data-id="${p.id}">Eliminar</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6">—</td></tr>';
+  }
+
+  // 5) Modal
+  function openProdModal(prod = null){
+    const isEdit = !!(prod && prod.id);
+    const data = {
+      id: prod?.id || null,
+      name: prod?.name || '',
+      price: Number(prod?.price || 0),
+      active: prod?.active ?? true,
+      onHold: prod?.onHold ?? false,
+      category: prod?.category || 'burgers',
+      desc: prod?.desc || '',
+      featured: !!prod?.featured,
+      limitedTime: !!prod?.limitedTime,
+      limitedUntil: prod?.limitedUntil ? new Date(Number(prod.limitedUntil)) : null,
+      sound: prod?.sound || '',
+      themeTag: prod?.themeTag || '',
+      ingredients: Array.isArray(prod?.ingredients) ? prod.ingredients : []
+    };
+
+    const wrap = document.createElement('div');
+    wrap.className = 'modal'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.style.display = 'grid';
+    const dateVal = data.limitedUntil ? new Date(data.limitedUntil.getTime()-data.limitedUntil.getTimezoneOffset()*60000).toISOString().slice(0,16) : '';
+    wrap.innerHTML = `
+      <div class="modal-card" style="max-width:920px">
+        <div class="modal-head">
+          <div>${isEdit?'Editar producto':'Nuevo producto'}</div>
+          <button class="btn ghost small" id="pClose" aria-label="Cerrar">Cerrar</button>
+        </div>
+        <div class="modal-body">
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
+            <div class="field">
+              <label>Nombre *</label>
+              <input id="pName" type="text" value="${escAttr(data.name)}" required>
+              <div class="muted small" id="pNameErr" style="display:none;color:#ffb4b4">Requerido</div>
+            </div>
+            <div class="field">
+              <label>Precio</label>
+              <input id="pPrice" type="number" min="0" step="0.01" value="${String(data.price)}">
+            </div>
+            <div class="field">
+              <label>Categoría</label>
+              <select id="pCat">
+                <option value="burgers" ${data.category==='burgers'?'selected':''}>Burgers</option>
+                <option value="minis"   ${data.category==='minis'?'selected':''}>Minis</option>
+                <option value="drinks"  ${data.category==='drinks'?'selected':''}>Drinks</option>
+                <option value="sides"   ${data.category==='sides'?'selected':''}>Sides</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Estado</label>
+              <select id="pState">
+                <option value="active" ${(!data.onHold && data.active)?'selected':''}>Activo</option>
+                <option value="hold"   ${(data.onHold)?'selected':''}>En espera</option>
+                <option value="off"    ${(!data.onHold && !data.active)?'selected':''}>Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:6px">
+            <div class="field">
+              <label>Destacado</label>
+              <select id="pFeatured">
+                <option value="no" ${!data.featured?'selected':''}>No</option>
+                <option value="si" ${data.featured?'selected':''}>Sí</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Edición limitada</label>
+              <select id="pLimited">
+                <option value="no" ${!data.limitedTime?'selected':''}>No</option>
+                <option value="si" ${data.limitedTime?'selected':''}>Sí</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Vence (si limitada)</label>
+              <input id="pUntil" type="datetime-local" value="${dateVal}">
+            </div>
+            <div class="field">
+              <label>Audio (ruta)</label>
+              <input id="pSound" type="text" placeholder="/sounds/viva-mexico.mp3" value="${escAttr(data.sound)}">
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns:1fr; gap:10px; margin-top:6px">
+            <div class="field">
+              <label>Descripción</label>
+              <textarea id="pDesc" placeholder="Opcional">${escHtml(data.desc)}</textarea>
+            </div>
+            <div class="field">
+              <label>Ingredientes (uno por línea)</label>
+              <textarea id="pIngs" placeholder="Pan&#10;Carne 85g&#10;Queso blanco&#10;...">${escHtml((data.ingredients||[]).join('\n'))}</textarea>
+              <div class="muted small">Solo informativo para el kiosko / ficha.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <div class="row" style="gap:8px">
+            ${isEdit?'<button class="btn ghost danger" id="pDelete">Eliminar</button>':''}
+          </div>
+          <div class="row" style="gap:8px">
+            <button class="btn ghost" id="pHold">${data.onHold?'Quitar de espera':'Dejar en espera'}</button>
+            <button class="btn" id="pSave">Guardar</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    const $ = sel => wrap.querySelector(sel);
+    const close = ()=> wrap.remove();
+    $('#pClose')?.addEventListener('click', close);
+    wrap.addEventListener('keydown', (e)=>{ if (e.key==='Escape') close(); });
+
+    function validate(){ const ok = !!$('#pName')?.value.trim(); $('#pNameErr').style.display = ok ? 'none' : ''; return ok; }
+    $('#pName')?.addEventListener('input', validate);
+
+    $('#pHold')?.addEventListener('click', async ()=>{
+      try{
+        const wantHold = !data.onHold;
+        const payload = { ...(data.id?{id:data.id}:{}) , onHold: wantHold, active: wantHold?false:true };
+        await upsertArticle(payload);
+        toast(wantHold?'Puesto en espera':'Quitado de espera');
+        close();
+      }catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
+    });
+
+    if (isEdit){
+      $('#pDelete')?.addEventListener('click', async ()=>{
+        if (!confirm(`¿Eliminar "${data.name||'producto'}"?`)) return;
+        try{ await deleteArticle(data.id); toast('Producto eliminado'); close(); }
+        catch(e){ console.error(e); toast('No se pudo eliminar'); }
+      });
+    }
+
+    $('#pSave')?.addEventListener('click', async ()=>{
+      if (!validate()){ beep(); return; }
+      const state = $('#pState')?.value || 'active';
+      const lim = ($('#pLimited')?.value === 'si');
+      const untilRaw = $('#pUntil')?.value || '';
+      const until = lim && untilRaw ? new Date(untilRaw).getTime() : null;
+
+      const payload = {
+        id: data.id || undefined,
+        name: $('#pName').value.trim(),
+        price: Number($('#pPrice').value || 0),
+        category: $('#pCat').value || 'burgers',
+        desc: $('#pDesc').value.trim(),
+        featured: ($('#pFeatured').value==='si'),
+        limitedTime: lim,
+        limitedUntil: until,
+        sound: $('#pSound').value.trim(),
+        themeTag: data.themeTag || '',
+        ingredients: ($('#pIngs').value || '').split('\n').map(s=>s.trim()).filter(Boolean)
+      };
+
+      if (state==='hold'){ payload.onHold = true; payload.active = false; }
+      else if (state==='active'){ payload.onHold = false; payload.active = true; }
+      else { payload.onHold = false; payload.active = false; }
+
+      try{
+        await upsertArticle(payload);
+        toast('Producto guardado');
+        close();
+      }catch(e){ console.error(e); toast('No se pudo guardar'); }
+    });
+  }
+})();
+  
 /* ---------------- Arranque ---------------- */
 runReports(); // primer reporte al abrir
