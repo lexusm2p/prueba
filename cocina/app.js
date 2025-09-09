@@ -23,6 +23,8 @@ subscribeOrders((orders = [])=>{
   const uniq = new Map();
   for (const o of (Array.isArray(orders) ? orders : [])) {
     if (!o?.id) continue;
+    // Asegura que exista createdAt (si viene de kiosko debería venir)
+    if (!o.createdAt) o.createdAt = o.timestamps?.createdAt || new Date();
     uniq.set(o.id, o); // la última gana
   }
   CURRENT_LIST = Array.from(uniq.values());
@@ -32,6 +34,19 @@ subscribeOrders((orders = [])=>{
 /* ================== Helpers ================== */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
+const now = ()=> new Date();
+const toMs = (t)=> {
+  if (!t) return 0;
+  if (typeof t.toMillis === 'function') return t.toMillis();
+  if (t.seconds != null) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
+  const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
+};
+const fmtMMSS = (ms)=>{
+  const s = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(s/60);
+  const ss = s % 60;
+  return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+};
 
 /* ================== Render ================== */
 function render(list){
@@ -98,6 +113,22 @@ function renderCard(o={}){
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
+  // Timers
+  const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
+  const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
+  const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
+  const tNow     = Date.now();
+
+  const totalRunMs = (tReady || tNow) - (tCreated || tNow);
+  const inKitchenMs = (tReady || tNow) - (tStarted || tNow);
+
+  const timerHtml = `
+    <div class="muted small mono" style="margin-top:6px">
+      ⏱️ Total: <b>${fmtMMSS(totalRunMs)}</b>
+      ${tStarted ? ` · 👩‍🍳 En cocina: <b>${fmtMMSS(inKitchenMs)}</b>` : ''}
+    </div>
+  `;
+
   const itemsHtml = items.map(it=>{
     const ingr = (it.baseIngredients||[]).map(i=>`<div class="k-badge">${escapeHtml(i)}</div>`).join('');
     const extrasBadges = [
@@ -146,6 +177,7 @@ function renderCard(o={}){
   <div class="muted small mono" style="margin-top:4px">
     Total por cobrar: <b>${money(total)}</b> ${o.paid ? '· <span class="k-badge ok">Pagado</span>' : ''} ${hhSummary}
   </div>
+  ${timerHtml}
   ${itemsHtml}
   ${o.notes ? `<div class="muted small"><b>Notas generales:</b> ${escapeHtml(o.notes)}</div>` : ''}
   <div class="k-actions" style="margin-top:8px">${actions}</div>
@@ -171,7 +203,12 @@ document.addEventListener('click', async (e)=>{
       if(order){
         await applyInventoryForOrder({ ...order, id }); // asegura incluir id
       }
+      // Avanza estado y guarda sello de inicio
       await setStatus(id, Status.IN_PROGRESS);
+      await updateOrder(id, {
+        startedAt: now(),
+        'timestamps.startedAt': now()
+      });
       beep(); toast('En preparación');
       render(CURRENT_LIST); // rerender rápido
       return;
@@ -179,6 +216,10 @@ document.addEventListener('click', async (e)=>{
 
     if (a==='ready'){
       await setStatus(id, Status.READY);
+      await updateOrder(id, {
+        readyAt: now(),
+        'timestamps.readyAt': now()
+      });
       beep(); toast('Listo 🛎️');
       return;
     }
@@ -186,6 +227,10 @@ document.addEventListener('click', async (e)=>{
     // "Entregar" NO archiva. Pasa a DELIVERED (Por cobrar)
     if (a==='deliver'){
       await setStatus(id, Status.DELIVERED);
+      await updateOrder(id, {
+        deliveredAt: now(),
+        'timestamps.deliveredAt': now()
+      });
       beep(); toast('Entregado ✔️ · por cobrar');
       return;
     }
@@ -199,7 +244,7 @@ document.addEventListener('click', async (e)=>{
       const payMethod = String(method||'efectivo').toLowerCase();
       await updateOrder(id, {
         paid: true,
-        paidAt: new Date(),
+        paidAt: now(),
         payMethod,
         totalCharged: Number(total)
       });
@@ -232,7 +277,7 @@ document.addEventListener('click', async (e)=>{
       await updateOrder(id, {
         status: Status.CANCELLED,
         cancelReason: trimmed,
-        cancelledAt: new Date(),
+        cancelledAt: now(),
         cancelledBy: 'kitchen'
       });
       await archiveDelivered(id); // mover a orders_archive conservando los campos
@@ -249,6 +294,13 @@ document.addEventListener('click', async (e)=>{
     btn.disabled = false;
   }
 });
+
+/* ========== Refresco ligero de timers (sin golpear la DB) ========== */
+// Re-renderiza sólo los contenedores para refrescar mm:ss en pantalla.
+setInterval(()=>{
+  if (!CURRENT_LIST.length) return;
+  render(CURRENT_LIST);
+}, 15000); // cada 15 s
 
 /* ================== Utils ================== */
 function escapeHtml(s=''){
