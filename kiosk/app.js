@@ -46,11 +46,12 @@ const state = {
   // Admin local (desbloquea "Aplicar GLOBAL")
   adminMode: false,
 
-  // Nombre del tema activo (para sombrero)
+  // Nombre del tema activo (para sombrero y swap de íconos)
   themeName: ''
 };
 
 /* ======================= Recursos visuales ======================= */
+// Íconos base (tema normal)
 const ICONS = {
   starter:   "../shared/img/burgers/starter.png",
   koopa:     "../shared/img/burgers/koopa.png",
@@ -61,7 +62,18 @@ const ICONS = {
   finalboss: "../shared/img/burgers/finalboss.png"
 };
 
-// 🎩 Sombrero para tema Independencia
+// Íconos festivos (se usan SOLO cuando el tema MX está activo)
+const ICONS_MEX = {
+  starter:   "../shared/img/burgers_mex/starter.png",
+  koopa:     "../shared/img/burgers_mex/koopa.png",
+  fatality:  "../shared/img/burgers_mex/fatality.png",
+  mega:      "../shared/img/burgers_mex/mega.png",
+  hadouken:  "../shared/img/burgers_mex/hadouken.png",
+  nintendo:  "../shared/img/burgers_mex/nintendo.png",
+  finalboss: "../shared/img/burgers_mex/finalboss.png"
+};
+
+// 🎩 Sombrero para tema Independencia (solo se muestra con tema activo)
 const SOMBRERO_SRC = "../shared/img/sombrero.png";
 let hatCssInjected = false;
 function injectHatCssOnce(){
@@ -556,10 +568,12 @@ function renderCards(){
   items.forEach(it=>{
     const base = baseOfItem(it);
     const baseId = base?.id || it.id;
-    const iconSrc = ICONS[baseId] || null;
 
-    // Sombrero encendido si el nombre del tema "suena" a fiestas patrias
+    // Sombrero/tema encendido si el nombre del tema "suena" a fiestas patrias
     const hatOn = /independencia|méx|mex|patria|viva/i.test(String(state.themeName || ''));
+
+    // Swap de íconos: usa /burgers_mex/ SOLO cuando el tema está activo
+    const iconSrc = (hatOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null);
 
     const card = document.createElement('div');
     card.className='card';
@@ -971,7 +985,7 @@ function openCartModal(){
     beep();
     toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
     state.cart = []; updateCartBar();
-    if(m) m.style.display='none';
+    const m = document.getElementById('cartModal'); if(m) m.style.display='none';
 
     // ==== Modal de seguimiento tras confirmar ====
     setTimeout(()=>{
@@ -1317,7 +1331,7 @@ function mountThemePanel() {
 
   btnLocal.addEventListener('click', ()=>{
     applyThemeLocal(select.value);
-    state.themeName = select.value; // sincroniza sombrero inmediatamente
+    state.themeName = select.value; // sincroniza sombrero/íconos inmediatamente
     renderCards();
     setMsg('Tema aplicado localmente.', 'ok');
   });
