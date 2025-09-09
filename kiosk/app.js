@@ -76,6 +76,7 @@ function injectHatCssOnce(){
       image-rendering:pixelated; pointer-events:none;
       filter: drop-shadow(0 2px 0 rgba(0,0,0,.25));
       max-width:120px;
+      z-index:2; /* asegura que quede encima del ícono */
     }
     @media (max-width:520px){ .hat-overlay{ width:62%; top:-12%; } }
   `;
@@ -95,12 +96,14 @@ function readThemeNameFromDOM(){
 }
 function startThemeWatcher(){
   state.themeName = readThemeNameFromDOM();
+  console.debug('[kiosk] themeName:', state.themeName); // <-- log para depurar
 
   // Reactiva tarjetas cuando cambie atributo data-theme(-name)
   const mo = new MutationObserver(()=>{
     const newName = readThemeNameFromDOM();
     if (newName !== state.themeName){
       state.themeName = newName;
+      console.debug('[kiosk] themeName:', state.themeName);
       renderCards();
     }
   });
@@ -109,7 +112,11 @@ function startThemeWatcher(){
   // Evento opcional emitido por theme.js
   window.addEventListener('theme:changed', ()=>{
     const newName = readThemeNameFromDOM();
-    if (newName !== state.themeName){ state.themeName = newName; renderCards(); }
+    if (newName !== state.themeName){
+      state.themeName = newName;
+      console.debug('[kiosk] themeName:', state.themeName);
+      renderCards();
+    }
   });
 
   // Pequeño polling de arranque por si solo se setea var CSS
@@ -117,7 +124,9 @@ function startThemeWatcher(){
   const id = setInterval(()=>{
     const newName = readThemeNameFromDOM();
     if (newName !== state.themeName){
-      state.themeName = newName; renderCards();
+      state.themeName = newName;
+      console.debug('[kiosk] themeName:', state.themeName);
+      renderCards();
     }
     if (++ticks > 40) clearInterval(id);
   }, 500);
@@ -554,7 +563,8 @@ function renderCards(){
     const baseId = base?.id || it.id;
     const iconSrc = ICONS[baseId] || null;
 
-    const hatOn = String(state.themeName || '').toLowerCase() === 'independencia';
+    // Sombrero encendido si el nombre del tema "suena" a fiestas patrias
+    const hatOn = /independencia|mex|patria/i.test(String(state.themeName || ''));
 
     const card = document.createElement('div');
     card.className='card';
