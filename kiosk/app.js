@@ -282,6 +282,32 @@ function buildTrackUrl(phone){
   return u.toString();
 }
 
+/* ========= WhatsApp: confirmación opcional ========= */
+async function sendWaOrderCreated({ phone, name, orderId, subtotal, etaText, hhTotalDiscount=0 }) {
+  if (!phone) return;
+  try {
+    const trackUrl = buildTrackUrl(phone);
+    const etaLine = etaText ? `ETA: ${etaText}\n` : '';
+    const hhLine  = (Number(hhTotalDiscount||0) > 0) ? `Promo HH: -$${Number(hhTotalDiscount||0).toFixed(0)}\n` : '';
+    const text =
+      `¡Hola ${name || ''}! Recibimos tu pedido en Seven de Burgers 🍔.\n` +
+      etaLine +
+      hhLine +
+      `Total estimado: $${Number(subtotal||0).toFixed(0)}\n` +
+      `Sigue tu pedido aquí: ${trackUrl}`;
+
+    // db.js -> sendWhatsAppMessage lee settings/app.whatsappWebhookUrl o usa /api/wa
+    const res = await DB.sendWhatsAppMessage({
+      to: `52${phone}`, // ajusta el prefijo si lo necesitas
+      text,
+      meta: { kind: 'order_created', orderId }
+    });
+    if (!res?.ok) console.warn('WA not sent:', res);
+  } catch (e) {
+    console.warn('WA error:', e);
+  }
+}
+
 function ensureFollowModal(){
   if (document.getElementById('trackAskModal')) return;
   const wrap = document.createElement('div');
@@ -942,6 +968,15 @@ function openCartModal(){
     if (order.phone) {
       await DB.upsertCustomerFromOrder?.(order);
       await DB.attachLastOrderRef?.(order.phone, orderId);
+      // 🔔 WhatsApp de confirmación (opcional)
+      sendWaOrderCreated({
+        phone: order.phone,
+        name: order.customer,
+        orderId,
+        subtotal: order.subtotal,
+        etaText: state.etaText || '7–10 min',
+        hhTotalDiscount: order?.hh?.totalDiscount || 0
+      });
     }
 
     beep();
