@@ -6,7 +6,6 @@
 import * as DB from '../shared/db.js';
 
 const $  = (s, r=document)=> r.querySelector(s);
-const $$ = (s, r=document)=> [...r.querySelectorAll(s)];
 
 // ----------------- UI refs (existentes + nuevos) -----------------
 const hhPill = $('#hhPill');
@@ -53,7 +52,8 @@ function fmtMMSS(ms){
 function stopHHTimer(){ if(hhTimer){ clearInterval(hhTimer); hhTimer = null; } }
 
 function renderHHPill({ enabled, discountPercent }, extraText=''){
-  hhPill?.classList.toggle('on', !!enabled);
+  // 👇 Usa la clase correcta para tu CSS (.hh-on)
+  hhPill?.classList.toggle('hh-on', !!enabled);
   if (!hhText) return;
   hhText.textContent = enabled
     ? `Happy Hour – ${Number(discountPercent||0)}%${extraText? ` · ${extraText}` : ''}`
@@ -69,9 +69,12 @@ function tickHH(hh){
     const token = String(end || '0');
     if (guard !== token){
       sessionStorage.setItem(HH_REFRESH_GUARD_KEY, token);
-      setTimeout(()=> location.reload(), 300);
+      // Apaga visualmente antes del reload preventivo
+      renderHHPill({ enabled:false, discountPercent: hh.discountPercent });
+      setTimeout(()=> { try{ location.reload(); }catch{} }, 300);
       return;
     }
+    // Misma sesión ya refrescada: solo apagar visual sin recargar
     renderHHPill({ enabled:false, discountPercent: hh.discountPercent });
     return;
   }
@@ -85,6 +88,7 @@ function startHHCountdown(hh){
     hhTimer = setInterval(()=> tickHH(hh), 1000);
   }
 }
+// Suscripción HH (compatible con tu /shared/db.js)
 if (typeof DB.subscribeHappyHour === 'function'){
   DB.subscribeHappyHour(hh=>{
     const normalized = {
@@ -104,6 +108,7 @@ setETA('7–10 min');
 
 if (typeof DB.subscribeETA === 'function'){
   DB.subscribeETA((text)=>{
+    if (text == null) return;
     etaSource = 'settings';
     setETA(String(text || '7–10 min'));
   });
@@ -258,9 +263,11 @@ function renderMine(order){
   if (order.id === lastMineId && lastMineStatus !== 'READY' && st === 'READY') {
     try { ding?.play?.(); } catch {}
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Tu pedido está listo 🛎️', {
-        body: `${order.customer || '—'} · Total ${money(order.subtotal||0)}`
-      });
+      try {
+        new Notification('Tu pedido está listo 🛎️', {
+          body: `${order.customer || '—'} · Total ${money(order.subtotal||0)}`
+        });
+      } catch {}
     }
   }
 
@@ -269,7 +276,6 @@ function renderMine(order){
   const count = items.reduce((n,i)=> n + (i.qty||1), 0);
   const names = items.map(i=>i.name).slice(0,3).map(escapeHtml).join(', ');
   const subtotal = Number(order.subtotal || 0);
-  const hhDisc   = Number(order.hh?.totalDiscount || 0);
 
   // Cabecera textual (se mantiene como en tu versión)
   mineEl.innerHTML = `
@@ -345,10 +351,12 @@ let currentPhone = '';
     renderCollection(p);
     renderMine(null); // placeholder
   }
+  // Asegura QR inicial acorde a query param
+  setDefaultQrUrl();
 })();
 
-// Suscripción a órdenes activas
-(DB.subscribeActiveOrders || DB.subscribeOrders)?.((list)=>{
+// Suscripción a órdenes (activa o full)
+(DB.subscribeActiveOrders || DB.subscribeOrders)?.((list=[])=>{
   renderReady(list);
 
   // Fallback ETA si no viene de settings
@@ -357,8 +365,8 @@ let currentPhone = '';
   }
 
   if (currentPhone){
-    const mine = (list||[])
-      .filter(o => getPhone(o).endsWith(currentPhone))
+    const mine = list
+      .filter(o => normPhone(getPhone(o)) === currentPhone)
       .sort((a,b)=> ts(b.createdAt) - ts(a.createdAt))[0];
     renderMine(mine || null);
   }
@@ -372,13 +380,17 @@ goBtn?.addEventListener('click', ()=>{
   }
   renderCollection(currentPhone);
   renderMine(null); // placeholder hasta snapshot
+  // Refresca el QR con el phone actual
+  setDefaultQrUrl();
 });
 
 phoneIn?.addEventListener('input', ()=>{
+  const pos = phoneIn.selectionStart ?? phoneIn.value.length;
   phoneIn.value = normPhone(phoneIn.value);
+  try { phoneIn.setSelectionRange(pos, pos); } catch {}
 });
 
-// ===================== QR simple por URL =====================
+/* ===================== QR simple por URL ===================== */
 const qrImg   = $('#qrImg');
 const qrUrl   = $('#qrUrl');
 const qrUpdate= $('#qrUpdate');
@@ -387,6 +399,7 @@ const qrCopy  = $('#qrCopy');
 function buildSelfUrl({ phone }={}){
   const u = new URL(location.href);
   if (phone){ u.searchParams.set('phone', phone); }
+  else { u.searchParams.delete('phone'); }
   u.searchParams.set('autostart','1');
   return u.toString();
 }
@@ -399,7 +412,7 @@ function setDefaultQrUrl(){
 function updateQr(){
   const url = (qrUrl?.value || '').trim();
   if (!url) return;
-  const size = 160;
+  const size = 160; // coincide con tu CSS
   const api = 'https://api.qrserver.com/v1/create-qr-code/';
   const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
   if (qrImg) qrImg.src = src;
@@ -414,7 +427,6 @@ qrCopy?.addEventListener('click', async ()=>{
     alert('No pude copiar. Selecciona el texto y copia manualmente.');
   }
 });
-setDefaultQrUrl();
 
 // Compartir
 shareLink?.addEventListener('click', async (e)=>{
