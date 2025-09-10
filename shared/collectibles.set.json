@@ -1,0 +1,264 @@
+{
+"setName": "Seven Stickers S1",
+"rarities": [
+{"id":"common","label":"Común","color":"#6EE7B7","packOdds":65},
+{"id":"rare","label":"Raro","color":"#60A5FA","packOdds":25},
+{"id":"epic","label":"Épico","color":"#A78BFA","packOdds":9},
+{"id":"gold","label":"Dorado","color":"#FBBF24","packOdds":1,"foil":true}
+],
+"pack": {"size":5,"bonusOnExtra":true,"bonusNote":"+1 si el pedido lleva extras"},
+"album": [
+{"pageId":"minis","title":"Liga Mini"},
+{"pageId":"fire","title":"Fuego & Picante"},
+{"pageId":"boss","title":"Jefe Final"},
+{"pageId":"tech","title":"Tecno-Neón"},
+{"pageId":"ninja","title":"Ninja Dojo"},
+{"pageId":"classic","title":"Clásicos"},
+{"pageId":"mx","title":"Fiesta MX"}
+],
+"rewards": [
+{"trigger":"complete_page:minis","reward":"aderezo_sorpresa"},
+{"trigger":"complete_set:season1","reward":"upgrade_carne_85g"},
+{"trigger":"achievement:combo_3_minis","reward":"cupón_hh_base"},
+{"trigger":"collect:gold_5","reward":"fastlane_qr_support"}
+],
+"characters": [
+{
+"id":"starter-mini",
+"name":"Starter Mini",
+"lore":"Pequeña, poderosa y siempre lista para la aventura.",
+"palette":["#F59E0B","#22C55E","#EF4444","#0EA5E9"],
+"tags":["mini","clásico"],
+"poses":["idle","blink","wave"],
+"pages":["minis","classic"],
+"variants":[
+{"rarity":"common","file":"seven_starter-mini_common.png"},
+{"rarity":"rare","file":"seven_starter-mini_rare.png"},
+{"rarity":"epic","file":"seven_starter-mini_epic.png"},
+{"rarity":"gold","file":"seven_starter-mini_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"dread-lord",
+"name":"Dread Lord",
+"lore":"El sabor más audaz del menú. ¿Te atreves a enfrentarlo?",
+"palette":["#4B5563","#EF4444","#1F2937","#9CA3AF"],
+"tags":["jefe","fuego","oscuro"],
+"poses":["idle","roar","smirk"],
+"pages":["boss","fire"],
+"variants":[
+{"rarity":"common","file":"seven_dread-lord_common.png"},
+{"rarity":"rare","file":"seven_dread-lord_rare.png"},
+{"rarity":"epic","file":"seven_dread-lord_epic.png"},
+{"rarity":"gold","file":"seven_dread-lord_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"sparky",
+"name":"Sparky",
+"lore":"Una pequeña explosión de sabor y felicidad.",
+"palette":["#FBBF24","#FCD34D","#9CA3AF","#EF4444"],
+"tags":["mini","cute","electric"],
+"poses":["idle","happy","giggle"],
+"pages":["minis"],
+"variants":[
+{"rarity":"common","file":"seven_sparky_common.png"},
+{"rarity":"rare","file":"seven_sparky_rare.png"},
+{"rarity":"epic","file":"seven_sparky_epic.png"},
+{"rarity":"gold","file":"seven_sparky_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"sage-blaze",
+"name":"Sage Blaze",
+"lore":"La mente maestra detrás del fuego perfecto.",
+"palette":["#3B82F6","#F97316","#1C1917","#9CA3AF"],
+"tags":["fuego","sabio","tecnología"],
+"poses":["idle","ponder","focus"],
+"pages":["fire","tech"],
+"variants":[
+{"rarity":"common","file":"seven_sage-blaze_common.png"},
+{"rarity":"rare","file":"seven_sage-blaze_rare.png"},
+{"rarity":"epic","file":"seven_sage-blaze_epic.png"},
+{"rarity":"gold","file":"seven_sage-blaze_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"spicy-shell",
+"name":"Spicy Shell",
+"lore":"No lo subestimes, su temperamento es tan ardiente como su sabor.",
+"palette":["#10B981","#F97316","#DC2626","#FDBA74"],
+"tags":["picante","fuego"],
+"poses":["idle","growl","huff"],
+"pages":["fire","boss"],
+"variants":[
+{"rarity":"common","file":"seven_spicy-shell_common.png"},
+{"rarity":"rare","file":"seven_spicy-shell_rare.png"},
+{"rarity":"epic","file":"seven_spicy-shell_epic.png"},
+{"rarity":"gold","file":"seven_spicy-shell_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"ninja-bun",
+"name":"Ninja Bun",
+"lore":"Maestro del sigilo y del ataque sorpresa.",
+"palette":["#EF4444","#1F2937","#9CA3AF","#FBBF24"],
+"tags":["ninja","sigilo"],
+"poses":["idle","dash","hide"],
+"pages":["ninja"],
+"variants":[
+{"rarity":"common","file":"seven_ninja-bun_common.png"},
+{"rarity":"rare","file":"seven_ninja-bun_rare.png"},
+{"rarity":"epic","file":"seven_ninja-bun_epic.png"},
+{"rarity":"gold","file":"seven_ninja-bun_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"neon-chip",
+"name":"Neo-Chip",
+"lore":"El futuro del fast food, directo a tu paladar.",
+"palette":["#06B6D4","#1F2937","#6EE7B7","#9CA3AF"],
+"tags":["tecno","neón","futuro"],
+"poses":["idle","scan","upload"],
+"pages":["tech"],
+"variants":[
+{"rarity":"common","file":"seven_neon-chip_common.png"},
+{"rarity":"rare","file":"seven_neon-chip_rare.png"},
+{"rarity":"epic","file":"seven_neon-chip_epic.png"},
+{"rarity":"gold","file":"seven_neon-chip_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"sauce-boss",
+"name":"Sauce Boss",
+"lore":"Su secreto está en la salsa... ¡y es irresistible!",
+"palette":["#FCD34D","#FFFFFF","#DC2626","#9CA3AF"],
+"tags":["aderezo","chef","clásico"],
+"poses":["idle","pour","wink"],
+"pages":["classic"],
+"variants":[
+{"rarity":"common","file":"seven_sauce-boss_common.png"},
+{"rarity":"rare","file":"seven_sauce-boss_rare.png"},
+{"rarity":"epic","file":"seven_sauce-boss_epic.png"},
+{"rarity":"gold","file":"seven_sauce-boss_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"chilli-chomp",
+"name":"Chilli Chomp",
+"lore":"Un bocado de fuego que te dejará pidiendo más.",
+"palette":["#F97316","#22C55E","#DC2626","#9CA3AF"],
+"tags":["picante","fuego"],
+"poses":["idle","choke","gasp"],
+"pages":["fire","mx"],
+"variants":[
+{"rarity":"common","file":"seven_chilli-chomp_common.png"},
+{"rarity":"rare","file":"seven_chilli-chomp_rare.png"},
+{"rarity":"epic","file":"seven_chilli-chomp_epic.png"},
+{"rarity":"gold","file":"seven_chilli-chomp_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"golden-patty",
+"name":"Golden Patty",
+"lore":"El sabor que todos buscan, el tesoro que pocos encuentran.",
+"palette":["#FBBF24","#FCD34D","#9CA3AF","#1F2937"],
+"tags":["legendario","especial","raro"],
+"poses":["idle","sparkle","boast"],
+"pages":["boss","classic"],
+"variants":[
+{"rarity":"rare","file":"seven_golden-patty_rare.png"},
+{"rarity":"epic","file":"seven_golden-patty_epic.png"},
+{"rarity":"gold","file":"seven_golden-patty_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"mexi-bun",
+"name":"Mexi Bun",
+"lore":"¡El sabor de México en cada mordisco!",
+"palette":["#FBBF24","#DC2626","#22C55E","#FCD34D"],
+"tags":["mexico","fiesta","festivo"],
+"poses":["idle","dance","fiesta"],
+"pages":["mx"],
+"variants":[
+{"rarity":"common","file":"seven_mexi-bun_common.png"},
+{"rarity":"rare","file":"seven_mexi-bun_rare.png"},
+{"rarity":"epic","file":"seven_mexi-bun_epic.png"},
+{"rarity":"gold","file":"seven_mexi-bun_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"mega-stack",
+"name":"Mega Stack",
+"lore":"El tamaño sí importa, especialmente cuando el hambre aprieta.",
+"palette":["#F59E0B","#FBBF24","#EF4444","#1F2937"],
+"tags":["grande","jefe"],
+"poses":["idle","stretch","munch"],
+"pages":["boss","classic"],
+"variants":[
+{"rarity":"rare","file":"seven_mega-stack_rare.png"},
+{"rarity":"epic","file":"seven_mega-stack_epic.png"},
+{"rarity":"gold","file":"seven_mega-stack_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"glitch-burger",
+"name":"Glitch Burger",
+"lore":"Un error en la matriz que sabe increíblemente bien.",
+"palette":["#8B5CF6","#EC4899","#2DD4BF","#1F2937"],
+"tags":["tecno","misterio"],
+"poses":["idle","teleport","static"],
+"pages":["tech"],
+"variants":[
+{"rarity":"rare","file":"seven_glitch-burger_rare.png"},
+{"rarity":"epic","file":"seven_glitch-burger_epic.png"},
+{"rarity":"gold","file":"seven_glitch-burger_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"pixel-pal",
+"name":"Pixel Pal",
+"lore":"Tu compañero fiel en cada aventura de sabor.",
+"palette":["#F59E0B","#6B7280","#EF4444","#0EA5E9"],
+"tags":["clásico","gamer"],
+"poses":["idle","thumbs-up","game-on"],
+"pages":["classic","tech"],
+"variants":[
+{"rarity":"common","file":"seven_pixel-pal_common.png"},
+{"rarity":"rare","file":"seven_pixel-pal_rare.png"},
+{"rarity":"epic","file":"seven_pixel-pal_epic.png"},
+{"rarity":"gold","file":"seven_pixel-pal_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"mystery-bun",
+"name":"Mystery Bun",
+"lore":"¿Qué sabor se esconde detrás de esta máscara?",
+"palette":["#374151","#F59E0B","#FBBF24","#22C55E"],
+"tags":["misterio","ninja"],
+"poses":["idle","peek","shrug"],
+"pages":["ninja","boss"],
+"variants":[
+{"rarity":"rare","file":"seven_mystery-bun_rare.png"},
+{"rarity":"epic","file":"seven_mystery-bun_epic.png"},
+{"rarity":"gold","file":"seven_mystery-bun_gold.png","foil":true,"shineFrames":8}
+]
+},
+{
+"id":"party-burger",
+"name":"Party Burger",
+"lore":"¡Cada bocado es una celebración!",
+"palette":["#EC4899","#6EE7B7","#FBBF24","#EF4444"],
+"tags":["fiesta","festivo","alegre"],
+"poses":["idle","dance","cheer"],
+"pages":["mx","classic"],
+"variants":[
+{"rarity":"common","file":"seven_party-burger_common.png"},
+{"rarity":"rare","file":"seven_party-burger_rare.png"},
+{"rarity":"epic","file":"seven_party-burger_epic.png"},
+{"rarity":"gold","file":"seven_party-burger_gold.png","foil":true,"shineFrames":8}
+]
+}
+]
+}
+
