@@ -868,100 +868,104 @@ function openCartModal(){
     };
   }
 
-  document.getElementById('cartConfirm')?.addEventListener('click', async ()=>{
-    const name = (document.getElementById('cartName')?.value||'').trim();
-    if(!name){ alert('Escribe tu nombre'); return; }
-    state.customerName = name;
+  // ⚠️ Importante: evitar listeners acumulados en "Confirmar pedido"
+  if (confirmBtn) {
+    confirmBtn.onclick = null; // limpia cualquier handler anterior
+    confirmBtn.onclick = async ()=>{
+      const name = (document.getElementById('cartName')?.value||'').trim();
+      if(!name){ alert('Escribe tu nombre'); return; }
+      state.customerName = name;
 
-    state.orderMeta.type  = (document.getElementById('orderType')?.value||'pickup');
-    state.orderMeta.payMethodPref = (document.getElementById('payMethod')?.value || 'efectivo');
+      state.orderMeta.type  = (document.getElementById('orderType')?.value||'pickup');
+      state.orderMeta.payMethodPref = (document.getElementById('payMethod')?.value || 'efectivo');
 
-    if(state.orderMeta.type==='dinein'){
-      state.orderMeta.table = (document.getElementById('tableNum')?.value||'').trim();
-      if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
-      state.orderMeta.phone = '';
-    } else {
-      const raw = (document.getElementById('phoneNum')?.value || '');
-      const norm = normalizePhone(raw);
-      if(norm.length < 10){
-        alert('Para Pickup, ingresa un teléfono de 10 dígitos.');
-        return;
+      if(state.orderMeta.type==='dinein'){
+        state.orderMeta.table = (document.getElementById('tableNum')?.value||'').trim();
+        if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
+        state.orderMeta.phone = '';
+      } else {
+        const raw = (document.getElementById('phoneNum')?.value || '');
+        const norm = normalizePhone(raw);
+        if(norm.length < 10){
+          alert('Para Pickup, ingresa un teléfono de 10 dígitos.');
+          return;
+        }
+        state.orderMeta.phone = norm;
+        state.orderMeta.table = '';
       }
-      state.orderMeta.phone = norm;
-      state.orderMeta.table = '';
-    }
 
-    const generalNotes = (document.getElementById('cartNotes')?.value||'').trim();
+      const generalNotes = (document.getElementById('cartNotes')?.value||'').trim();
 
-    const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
-    const hhTotalDiscount = state.cart.reduce((a,l)=> a + (Number(l.hhDisc||0)), 0);
-    const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
-    const hhSummary = {
-      enabled: !!hh.enabled,
-      discountPercent: Number(hh.discountPercent||0),
-      applyEligibleOnly: hh.applyEligibleOnly!==false,
-      totalDiscount: Number(hhTotalDiscount||0)
+      const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
+      const hhTotalDiscount = state.cart.reduce((a,l)=> a + (Number(l.hhDisc||0)), 0);
+      const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
+      const hhSummary = {
+        enabled: !!hh.enabled,
+        discountPercent: Number(hh.discountPercent||0),
+        applyEligibleOnly: hh.applyEligibleOnly!==false,
+        totalDiscount: Number(hhTotalDiscount||0)
+      };
+
+      // ID de pedido: usar el devuelto por DB o generar uno
+      const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+      const orderBase = {
+        customer: state.customerName,
+        orderType: state.orderMeta.type,
+        table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null,
+        phone: state.orderMeta.type==='pickup' ? state.orderMeta.phone : null,
+        payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
+        items: state.cart.map(l=>({
+          id:l.id, name:l.name, mini:l.mini, qty:l.qty, unitPrice:l.unitPrice,
+          baseIngredients:l.baseIngredients, salsaDefault:l.salsaDefault,
+          salsaCambiada:l.salsaCambiada, extras:l.extras, notes:l.notes||null,
+          lineTotal:l.lineTotal, hhDisc: Number(l.hhDisc||0)
+        })),
+        subtotal,
+        notes: generalNotes,
+        hh: hhSummary,
+        // timestamps para métricas
+        createdAt: Date.now()
+      };
+
+      let orderId = null;
+      try {
+        orderId = await DB.createOrder(orderBase);
+      } catch (e) {
+        console.warn('createOrder error, usando provisional:', e);
+      }
+      if (!orderId) orderId = provisionalId;
+      state.lastOrderId = orderId;
+
+      // Guardar métrica local (para que track.js calcule duración si quiere)
+      try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
+
+      if (orderBase.phone) {
+        await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId });
+        await DB.attachLastOrderRef?.(orderBase.phone, orderId);
+        sendWaOrderCreated({
+          phone: orderBase.phone,
+          name: orderBase.customer,
+          orderId,
+          subtotal: orderBase.subtotal,
+          etaText: state.etaText || '7–10 min',
+          hhTotalDiscount: orderBase?.hh?.totalDiscount || 0
+        });
+      }
+
+      beep();
+      toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
+      state.cart = []; updateCartBar();
+      const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
+
+      // Abrir modal de seguimiento con orderId (funciona para Mesa y Pickup)
+      setTimeout(()=>{
+        openFollowModal({
+          phone: orderBase.phone || state.orderMeta.phone || '',
+          orderId
+        });
+      }, 200);
     };
-
-    // ID de pedido: usar el devuelto por DB o generar uno
-    const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-    const orderBase = {
-      customer: state.customerName,
-      orderType: state.orderMeta.type,
-      table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null,
-      phone: state.orderMeta.type==='pickup' ? state.orderMeta.phone : null,
-      payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
-      items: state.cart.map(l=>({
-        id:l.id, name:l.name, mini:l.mini, qty:l.qty, unitPrice:l.unitPrice,
-        baseIngredients:l.baseIngredients, salsaDefault:l.salsaDefault,
-        salsaCambiada:l.salsaCambiada, extras:l.extras, notes:l.notes||null,
-        lineTotal:l.lineTotal, hhDisc: Number(l.hhDisc||0)
-      })),
-      subtotal,
-      notes: generalNotes,
-      hh: hhSummary,
-      // timestamps para métricas
-      createdAt: Date.now()
-    };
-
-    let orderId = null;
-    try {
-      orderId = await DB.createOrder(orderBase);
-    } catch (e) {
-      console.warn('createOrder error, usando provisional:', e);
-    }
-    if (!orderId) orderId = provisionalId;
-    state.lastOrderId = orderId;
-
-    // Guardar métrica local (para que track.js calcule duración si quiere)
-    try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
-
-    if (orderBase.phone) {
-      await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId });
-      await DB.attachLastOrderRef?.(orderBase.phone, orderId);
-      sendWaOrderCreated({
-        phone: orderBase.phone,
-        name: orderBase.customer,
-        orderId,
-        subtotal: orderBase.subtotal,
-        etaText: state.etaText || '7–10 min',
-        hhTotalDiscount: orderBase?.hh?.totalDiscount || 0
-      });
-    }
-
-    beep();
-    toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
-    state.cart = []; updateCartBar();
-    const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
-
-    // Abrir modal de seguimiento con orderId (funciona para Mesa y Pickup)
-    setTimeout(()=>{
-      openFollowModal({
-        phone: orderBase.phone || state.orderMeta.phone || '',
-        orderId
-      });
-    }, 200);
-  }, { once:true });
+  }
 }
 
 function recomputeLine(line){
