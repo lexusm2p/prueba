@@ -2,6 +2,7 @@
 // Track gamificado: huevo -> se abre -> por romperse -> mascota 🍔
 // Mantiene: HH, ETA, QR, autostart, feed READY, notificaciones.
 // + Coleccionables (máx 7 / cliente; 2 raros)
+// + CORRECCIÓN: soporte OID para pedidos de mesa (sin teléfono) + métricas.
 
 import * as DB from '../shared/db.js';
 
@@ -33,7 +34,6 @@ const colCap  = $('#colCap');
 
 // Compartir / volver
 const shareLink = $('#shareLink');
-// El botón "Volver al kiosko" es solo un <a> en el HTML
 
 // === QR (MOVIDO ARRIBA para evitar TDZ) ===
 const qrImg    = $('#qrImg');
@@ -45,6 +45,13 @@ const qrCopy   = $('#qrCopy');
 if ('Notification' in window && Notification.permission === 'default') {
   Notification.requestPermission().catch(()=>{});
 }
+
+/* ===================== Query params ===================== */
+const QS = new URLSearchParams(location.search);
+let currentOID   = (QS.get('oid') || '').trim();     // 👈 seguimiento por ID de pedido
+let currentPhone = normPhone(QS.get('phone') || ''); // 👈 o por teléfono
+const autoStart  = QS.get('autostart') === '1';
+const GAMIFY     = QS.get('gamify') === '1';
 
 /* ===================== Happy Hour ===================== */
 let hhTimer = null;
@@ -117,7 +124,7 @@ if (typeof DB.subscribeETA === 'function'){
 }
 
 /* ===================== Helpers ===================== */
-const normPhone = (s='') => String(s).replace(/\D+/g,'').slice(0,15);
+function normPhone(s=''){ return String(s).replace(/\D+/g,'').slice(0,15); }
 const ts = (d)=> (d?.toMillis?.() ?? new Date(d||0).getTime());
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 const escapeHtml = (s='') => String(s).replace(/[&<>"']/g, m=>({
@@ -125,13 +132,26 @@ const escapeHtml = (s='') => String(s).replace(/[&<>"']/g, m=>({
 }[m]));
 const getPhone = (o)=> normPhone(o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '');
 
-// Persistencia de coleccionables por teléfono
-function lsKey(phone){ return `trackCollectibles:${phone}`; }
-function loadCollectibles(phone){
-  try{ return JSON.parse(localStorage.getItem(lsKey(phone))||'{}') || {}; }catch{ return {}; }
+function fmtSelfUrl({ oid, phone, gamify }={}){
+  const u = new URL(location.href);
+  if (oid)  u.searchParams.set('oid', oid);   else u.searchParams.delete('oid');
+  if (phone)u.searchParams.set('phone', phone); else u.searchParams.delete('phone');
+  if (gamify) u.searchParams.set('gamify','1'); else u.searchParams.delete('gamify');
+  u.searchParams.set('autostart','1');
+  return u.toString();
 }
-function saveCollectibles(phone, data){
-  try{ localStorage.setItem(lsKey(phone), JSON.stringify(data||{})); }catch{}
+
+/* ====== Coleccionables: clave por teléfono O por OID (mesa) ====== */
+function idForCollectibles(){
+  // Preferimos teléfono; si no hay, usamos OID para clientes de mesa
+  return currentPhone || currentOID || '';
+}
+function lsKeyCollect(){ return `trackCollectibles:${idForCollectibles()}`; }
+function loadCollectibles(){
+  try{ return JSON.parse(localStorage.getItem(lsKeyCollect())||'{}') || {}; }catch{ return {}; }
+}
+function saveCollectibles(data){
+  try{ localStorage.setItem(lsKeyCollect(), JSON.stringify(data||{})); }catch{}
 }
 
 /* ===================== Gamificación ===================== */
@@ -177,9 +197,9 @@ function pickReward(current){
   return pool[Math.floor(Math.random()*pool.length)];
 }
 
-function renderCollection(phone){
+function renderCollection(){
   if (!colGrid || !colCap) return;
-  const store = loadCollectibles(phone||currentPhone||'');
+  const store = loadCollectibles();
   const col = Array.isArray(store.collection) ? store.collection : [];
   colGrid.innerHTML = col.map(c=>`
     <div class="card-mini" title="${c.name}">
@@ -206,14 +226,14 @@ function flashNewReward(reward){
 }
 
 function awardIfEligible(order){
-  const phone = currentPhone;
-  if (!phone || !order) return;
+  if (!GAMIFY) return;
+  if (!order) return;
 
   const status = String(order.status||'').toUpperCase();
   if (!(status==='READY' || status==='DONE' || status==='PAID' || status==='DELIVERED')) return;
 
   const orderId = order.id || order.orderId || '';
-  const store = loadCollectibles(phone);
+  const store = loadCollectibles();
   const awarded = new Set(store.awardedOrderIds||[]);
   const col = Array.isArray(store.collection) ? store.collection : [];
 
@@ -225,10 +245,38 @@ function awardIfEligible(order){
 
   col.push(reward);
   awarded.add(orderId);
-  saveCollectibles(phone, { collection: col, awardedOrderIds:[...awarded] });
+  saveCollectibles({ collection: col, awardedOrderIds:[...awarded] });
 
-  renderCollection(phone);
+  renderCollection();
   flashNewReward(reward);
+}
+
+/* ===================== Métricas preparación (local + opcional DB) ===================== */
+function metricKey(id){ return `prepMetric:${id}`; }
+function seedCreatedAt(oid){
+  if (!oid) return;
+  try {
+    const k = metricKey(oid);
+    if (!localStorage.getItem(k)) {
+      localStorage.setItem(k, JSON.stringify({ createdAt: Date.now(), readyAt: null }));
+    }
+  } catch {}
+}
+function sealReadyMetric(oid){
+  if (!oid) return;
+  try {
+    const k = metricKey(oid);
+    const raw = localStorage.getItem(k);
+    if (!raw) return;
+    const m = JSON.parse(raw);
+    if (!m.readyAt) {
+      m.readyAt = Date.now();
+      localStorage.setItem(k, JSON.stringify(m));
+      if (typeof DB.logPrepMetric === 'function'){
+        DB.logPrepMetric({ orderId: oid, createdAtLocal: m.createdAt||null, readyAtLocal: m.readyAt, source:'track' }).catch(()=>{});
+      }
+    }
+  } catch {}
 }
 
 /* ===================== Render: Mi pedido (gamificado) ===================== */
@@ -260,6 +308,7 @@ function renderMine(order){
   let st = String(order.status || 'PENDING').toUpperCase();
   if (order.paid) st = 'PAID';
 
+  // sonido + notificación al pasar a READY
   if (order.id === lastMineId && lastMineStatus !== 'READY' && st === 'READY') {
     try { ding?.play?.(); } catch {}
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -277,6 +326,11 @@ function renderMine(order){
   const names = items.map(i=>i.name).slice(0,3).map(escapeHtml).join(', ');
   const subtotal = Number(order.subtotal || 0);
 
+  // Encabezado (mesa o pickup)
+  const headerRight = order.orderType==='dinein'
+    ? `Mesa ${escapeHtml(order.table||'—')}`
+    : `Pickup ${escapeHtml(order.phone||'')}`;
+
   mineEl.innerHTML = `
     <div style="display:flex; gap:10px; align-items:center; justify-content:space-between">
       <div style="min-width:0">
@@ -285,7 +339,7 @@ function renderMine(order){
       </div>
       <span class="tag">${label.tag}</span>
     </div>
-    <div class="muted" style="margin-top:4px">${label.sub}</div>
+    <div class="muted" style="margin-top:4px">${label.sub} · ${headerRight}</div>
   `;
 
   if (playBox) playBox.style.display = 'grid';
@@ -306,6 +360,12 @@ function renderMine(order){
         : 'Tu mascota evoluciona conforme avanza tu pedido.';
   }
 
+  // Métrica: sellar READY en la primera vez
+  if (st==='READY' || st==='DONE' || st==='PAID' || st==='DELIVERED') {
+    sealReadyMetric(order.id || currentOID);
+  }
+
+  // Premio si aplica
   awardIfEligible(order);
 
   lastMineId = order.id;
@@ -333,100 +393,6 @@ function renderReady(list){
     }).join('');
   readyEl.innerHTML = rows || '<li><div class="muted">—</div></li>';
 }
-
-/* ===================== Estado por teléfono + feed ===================== */
-let currentPhone = '';
-
-// Auto-start por URL (?autostart=1&phone=XXXXXXXXXX)
-(function(){
-  const qs = new URLSearchParams(location.search);
-  const autostart = qs.get('autostart') === '1';
-  const p = normPhone(qs.get('phone') || '');
-  if (p && phoneIn) phoneIn.value = p;
-  if (autostart && p.length >= 10) {
-    currentPhone = p;
-    renderCollection(p);
-    renderMine(null); // placeholder
-  }
-  // Asegura QR inicial acorde a query param
-  setDefaultQrUrl();
-})();
-
-// Suscripción a órdenes (activa o full)
-(DB.subscribeActiveOrders || DB.subscribeOrders)?.((list=[])=>{
-  renderReady(list);
-
-  if (etaSource !== 'settings'){
-    setETA(computeEtaFallback(list));
-  }
-
-  if (currentPhone){
-    const mine = list
-      .filter(o => normPhone(getPhone(o)) === currentPhone)
-      .sort((a,b)=> ts(b.createdAt) - ts(a.createdAt))[0];
-    renderMine(mine || null);
-  }
-});
-
-goBtn?.addEventListener('click', ()=>{
-  currentPhone = normPhone(phoneIn?.value || '');
-  if (currentPhone.length < 10){
-    alert('Ingresa un teléfono de 10 dígitos.');
-    return;
-  }
-  renderCollection(currentPhone);
-  renderMine(null);
-  setDefaultQrUrl();
-});
-
-phoneIn?.addEventListener('input', ()=>{
-  const pos = phoneIn.selectionStart ?? phoneIn.value.length;
-  phoneIn.value = normPhone(phoneIn.value);
-  try { phoneIn.setSelectionRange(pos, pos); } catch {}
-});
-
-/* ===================== QR simple por URL ===================== */
-function buildSelfUrl({ phone }={}){
-  const u = new URL(location.href);
-  if (phone){ u.searchParams.set('phone', phone); }
-  else { u.searchParams.delete('phone'); }
-  u.searchParams.set('autostart','1');
-  return u.toString();
-}
-
-function setDefaultQrUrl(){
-  const url = buildSelfUrl({ phone: currentPhone || '' });
-  if (qrUrl) qrUrl.value = url;
-  updateQr();
-}
-function updateQr(){
-  const url = (qrUrl?.value || '').trim();
-  if (!url) return;
-  const size = 160;
-  const api = 'https://api.qrserver.com/v1/create-qr-code/';
-  const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
-  if (qrImg) qrImg.src = src;
-}
-qrUpdate?.addEventListener('click', updateQr);
-qrCopy?.addEventListener('click', async ()=>{
-  try{
-    await navigator.clipboard.writeText(qrUrl.value);
-    qrCopy.textContent = '¡Copiado!';
-    setTimeout(()=> qrCopy.textContent = 'Copiar enlace', 1200);
-  }catch{
-    alert('No pude copiar. Selecciona el texto y copia manualmente.');
-  }
-});
-
-// Compartir
-shareLink?.addEventListener('click', async (e)=>{
-  e.preventDefault();
-  const url = qrUrl?.value || buildSelfUrl({ phone: currentPhone||'' });
-  try{
-    if (navigator.share) await navigator.share({ title:'Seguimiento Seven de Burgers', url });
-    else { await navigator.clipboard.writeText(url); alert('Enlace copiado'); }
-  }catch{}
-});
 
 /* ===================== ETA fallback ===================== */
 function tsToMs(t){
@@ -474,3 +440,140 @@ function computeEtaFallback(orders){
   }
   return `${base.min}–${base.max} min`;
 }
+
+/* ===================== Estado vivo (por OID o por teléfono) + Feed ===================== */
+let unsubOrders = null;
+const subOrders = (DB.subscribeActiveOrders || DB.subscribeOrders || DB.onOrdersSnapshot || null);
+
+function ensureOrdersSub(){
+  if (unsubOrders) return;
+  if (typeof subOrders === 'function'){
+    unsubOrders = subOrders((list=[])=>{
+      renderReady(list);
+      if (etaSource !== 'settings'){
+        setETA(computeEtaFallback(list));
+      }
+
+      // Actualiza mi pedido por phone
+      if (currentPhone){
+        const mine = list
+          .filter(o => normPhone(getPhone(o)) === currentPhone)
+          .sort((a,b)=> ts(b.createdAt) - ts(a.createdAt))[0];
+        if (mine){ seedCreatedAt(mine.id||currentOID); renderMine(mine); }
+      }
+
+      // O por OID (mesa)
+      if (!currentPhone && currentOID){
+        const order = list.find(o => (o.id||'') === currentOID);
+        if (order){ renderMine(order); }
+      }
+    });
+  }
+}
+
+// Suscripción puntual por OID si existe API directa
+let unsubMineByOid = null;
+function subscribeMineByOid(oid){
+  if (!oid) return;
+  if (unsubMineByOid) { try{unsubMineByOid();}catch{} unsubMineByOid=null; }
+  seedCreatedAt(oid);
+  if (typeof DB.subscribeOrder === 'function'){
+    unsubMineByOid = DB.subscribeOrder(oid, (o)=>{ if (o) renderMine(o); });
+  } else {
+    // si no hay API, nos apoyamos en la global
+    ensureOrdersSub();
+  }
+}
+
+/* ===================== QR ===================== */
+function updateQrWith(url){
+  if (!url) return;
+  const size = 160;
+  const api = 'https://api.qrserver.com/v1/create-qr-code/';
+  const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
+  if (qrImg) qrImg.src = src;
+  if (qrUrl) qrUrl.value = url;
+}
+function setDefaultQrUrl(){
+  const url = fmtSelfUrl({ oid: currentOID || null, phone: currentPhone || null, gamify: GAMIFY });
+  updateQrWith(url);
+}
+qrUpdate?.addEventListener('click', ()=>{
+  const raw = (qrUrl?.value||'').trim();
+  if (raw) updateQrWith(raw);
+});
+qrCopy?.addEventListener('click', async ()=>{
+  try{
+    await navigator.clipboard.writeText(qrUrl.value);
+    qrCopy.textContent = '¡Copiado!';
+    setTimeout(()=> qrCopy.textContent = 'Copiar enlace', 1200);
+  }catch{
+    alert('No pude copiar. Selecciona el texto y copia manualmente.');
+  }
+});
+
+// Compartir
+shareLink?.addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const url = qrUrl?.value || fmtSelfUrl({ oid: currentOID||null, phone: currentPhone||null, gamify: GAMIFY });
+  try{
+    if (navigator.share) await navigator.share({ title:'Seguimiento Seven de Burgers', url });
+    else { await navigator.clipboard.writeText(url); alert('Enlace copiado'); }
+  }catch{}
+});
+
+/* ===================== Entrada manual por teléfono ===================== */
+goBtn?.addEventListener('click', ()=>{
+  const p = normPhone(phoneIn?.value || '');
+  if (p.length < 10){
+    alert('Ingresa un teléfono de 10 dígitos.');
+    return;
+  }
+  currentPhone = p;
+  currentOID = ''; // si el usuario busca por teléfono, dejamos de anclar a OID
+  renderCollection();
+  renderMine(null);
+  setDefaultQrUrl();
+  ensureOrdersSub();
+});
+
+phoneIn?.addEventListener('input', ()=>{
+  const pos = phoneIn.selectionStart ?? phoneIn.value.length;
+  phoneIn.value = normPhone(phoneIn.value);
+  try { phoneIn.setSelectionRange(pos, pos); } catch {}
+});
+
+/* ===================== BOOT ===================== */
+(function boot(){
+  // Prefill teléfono si viene por query
+  if (currentPhone && phoneIn) phoneIn.value = currentPhone;
+
+  // Colección inicial (según phone u oid)
+  renderCollection();
+
+  // QR acorde al contexto
+  setDefaultQrUrl();
+
+  // Feed READY + ETA fallback
+  ensureOrdersSub();
+
+  // Si llega OID (mesa), nos suscribimos directo si es posible
+  if (currentOID) subscribeMineByOid(currentOID);
+
+  // Autostart:
+  // - Si viene OID: mostramos de inmediato.
+  // - Si viene phone: también.
+  if (autoStart){
+    if (currentPhone){
+      // Ya renderiza via ensureOrdersSub
+    } else if (currentOID){
+      // Ya renderiza via subscribeMineByOid/ensureOrdersSub
+    }
+  }
+})();
+
+// Limpieza
+window.addEventListener('beforeunload', ()=>{
+  try{ unsubOrders && unsubOrders(); }catch{}
+  try{ unsubMineByOid && unsubMineByOid(); }catch{}
+});
