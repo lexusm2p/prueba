@@ -35,6 +35,12 @@ const colCap  = $('#colCap');
 const shareLink = $('#shareLink');
 // El botón "Volver al kiosko" es solo un <a> en el HTML
 
+// === QR (MOVIDO ARRIBA para evitar TDZ) ===
+const qrImg    = $('#qrImg');
+const qrUrl    = $('#qrUrl');
+const qrUpdate = $('#qrUpdate');
+const qrCopy   = $('#qrCopy');
+
 // ---- Notificaciones (permiso) ----
 if ('Notification' in window && Notification.permission === 'default') {
   Notification.requestPermission().catch(()=>{});
@@ -52,7 +58,6 @@ function fmtMMSS(ms){
 function stopHHTimer(){ if(hhTimer){ clearInterval(hhTimer); hhTimer = null; } }
 
 function renderHHPill({ enabled, discountPercent }, extraText=''){
-  // 👇 Usa la clase correcta para tu CSS (.hh-on)
   hhPill?.classList.toggle('hh-on', !!enabled);
   if (!hhText) return;
   hhText.textContent = enabled
@@ -69,12 +74,10 @@ function tickHH(hh){
     const token = String(end || '0');
     if (guard !== token){
       sessionStorage.setItem(HH_REFRESH_GUARD_KEY, token);
-      // Apaga visualmente antes del reload preventivo
       renderHHPill({ enabled:false, discountPercent: hh.discountPercent });
       setTimeout(()=> { try{ location.reload(); }catch{} }, 300);
       return;
     }
-    // Misma sesión ya refrescada: solo apagar visual sin recargar
     renderHHPill({ enabled:false, discountPercent: hh.discountPercent });
     return;
   }
@@ -88,7 +91,6 @@ function startHHCountdown(hh){
     hhTimer = setInterval(()=> tickHH(hh), 1000);
   }
 }
-// Suscripción HH (compatible con tu /shared/db.js)
 if (typeof DB.subscribeHappyHour === 'function'){
   DB.subscribeHappyHour(hh=>{
     const normalized = {
@@ -169,7 +171,6 @@ function pickReward(current){
   const have = new Set(current.map(x=>x.id));
   const leftCommon = COMMON_POOL.filter(x=>!have.has(x.id));
   const leftRare   = RARE_POOL.filter(x=>!have.has(x.id));
-  // Prob. rara 10% si ya tiene >=3 y aún hay raras
   const tryRare = (current.length>=3) && leftRare.length>0 && Math.random()<0.10;
   const pool = tryRare ? leftRare : (leftCommon.length? leftCommon : leftRare);
   if (!pool || !pool.length) return null;
@@ -216,8 +217,8 @@ function awardIfEligible(order){
   const awarded = new Set(store.awardedOrderIds||[]);
   const col = Array.isArray(store.collection) ? store.collection : [];
 
-  if (awarded.has(orderId)) return;                 // ya premiado
-  if (col.length >= COL_CAP.limit) return;          // alcanzó límite
+  if (awarded.has(orderId)) return;
+  if (col.length >= COL_CAP.limit) return;
 
   const reward = pickReward(col);
   if (!reward) return;
@@ -259,7 +260,6 @@ function renderMine(order){
   let st = String(order.status || 'PENDING').toUpperCase();
   if (order.paid) st = 'PAID';
 
-  // Sonido + notificación cuando pasa a READY
   if (order.id === lastMineId && lastMineStatus !== 'READY' && st === 'READY') {
     try { ding?.play?.(); } catch {}
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -277,7 +277,6 @@ function renderMine(order){
   const names = items.map(i=>i.name).slice(0,3).map(escapeHtml).join(', ');
   const subtotal = Number(order.subtotal || 0);
 
-  // Cabecera textual (se mantiene como en tu versión)
   mineEl.innerHTML = `
     <div style="display:flex; gap:10px; align-items:center; justify-content:space-between">
       <div style="min-width:0">
@@ -289,7 +288,6 @@ function renderMine(order){
     <div class="muted" style="margin-top:4px">${label.sub}</div>
   `;
 
-  // Panel gamificado
   if (playBox) playBox.style.display = 'grid';
   const stInfo = stageForStatus(st);
   if (petEmoji)  petEmoji.textContent = stInfo.emoji;
@@ -308,7 +306,6 @@ function renderMine(order){
         : 'Tu mascota evoluciona conforme avanza tu pedido.';
   }
 
-  // Premio si procede
   awardIfEligible(order);
 
   lastMineId = order.id;
@@ -359,7 +356,6 @@ let currentPhone = '';
 (DB.subscribeActiveOrders || DB.subscribeOrders)?.((list=[])=>{
   renderReady(list);
 
-  // Fallback ETA si no viene de settings
   if (etaSource !== 'settings'){
     setETA(computeEtaFallback(list));
   }
@@ -379,8 +375,7 @@ goBtn?.addEventListener('click', ()=>{
     return;
   }
   renderCollection(currentPhone);
-  renderMine(null); // placeholder hasta snapshot
-  // Refresca el QR con el phone actual
+  renderMine(null);
   setDefaultQrUrl();
 });
 
@@ -391,11 +386,6 @@ phoneIn?.addEventListener('input', ()=>{
 });
 
 /* ===================== QR simple por URL ===================== */
-const qrImg   = $('#qrImg');
-const qrUrl   = $('#qrUrl');
-const qrUpdate= $('#qrUpdate');
-const qrCopy  = $('#qrCopy');
-
 function buildSelfUrl({ phone }={}){
   const u = new URL(location.href);
   if (phone){ u.searchParams.set('phone', phone); }
@@ -412,7 +402,7 @@ function setDefaultQrUrl(){
 function updateQr(){
   const url = (qrUrl?.value || '').trim();
   if (!url) return;
-  const size = 160; // coincide con tu CSS
+  const size = 160;
   const api = 'https://api.qrserver.com/v1/create-qr-code/';
   const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
   if (qrImg) qrImg.src = src;
