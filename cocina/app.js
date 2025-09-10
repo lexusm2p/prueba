@@ -2,6 +2,34 @@
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 
+/* ================== Modo PRUEBA ================== */
+function isTraining(){ return sessionStorage.getItem('training') === '1'; }
+function setTraining(on){
+  sessionStorage.setItem('training', on ? '1' : '0');
+  paintTrainingBadge();
+  document.title = (on ? '🧪 ' : '') + document.title.replace(/^🧪\s*/,'');
+  toast(on ? 'Modo PRUEBA activo (no escribe en Firestore)' : 'Modo PRUEBA desactivado');
+}
+function paintTrainingBadge(){
+  let b = document.getElementById('kitchenTrainingBadge');
+  if (!b) {
+    b = document.createElement('button');
+    b.id = 'kitchenTrainingBadge';
+    b.className = 'btn tiny';
+    Object.assign(b.style, {
+      position:'fixed', left:'14px', bottom:'14px', zIndex:9999,
+      borderRadius:'999px', opacity:.92
+    });
+    b.addEventListener('click', ()=> setTraining(!isTraining()));
+    document.body.appendChild(b);
+  }
+  const on = isTraining();
+  b.textContent = on ? 'PRUEBA: ON' : 'PRUEBA: OFF';
+  b.classList.toggle('danger', on);
+  b.classList.toggle('ghost', !on);
+}
+document.addEventListener('DOMContentLoaded', paintTrainingBadge);
+
 /* ================== Shims DB (compat) ================== */
 function subscribeOrdersShim(cb){
   if (typeof DB.subscribeOrders === 'function') return DB.subscribeOrders(cb);
@@ -9,27 +37,27 @@ function subscribeOrdersShim(cb){
   if (typeof DB.subscribeActiveOrders === 'function') return DB.subscribeActiveOrders(cb);
   console.warn('[cocina] No hay método de suscripción a órdenes en DB'); return ()=>{};
 }
-async function setStatusShim(id, status){
-  if (typeof DB.setOrderStatus === 'function') return DB.setOrderStatus(id, status);
-  if (typeof DB.setStatus === 'function') return DB.setStatus(id, status);
+async function setStatusShim(id, status, opts){
+  if (typeof DB.setOrderStatus === 'function') return DB.setOrderStatus(id, status, opts);
+  if (typeof DB.setStatus === 'function') return DB.setStatus(id, status, opts);
   throw new Error('No hay setOrderStatus/setStatus en DB');
 }
-async function updateOrderShim(id, patch){
+async function updateOrderShim(id, patch, opts){
   // Preferible: updateOrder → setDoc merge
-  if (typeof DB.updateOrder === 'function') return DB.updateOrder(id, patch);
+  if (typeof DB.updateOrder === 'function') return DB.updateOrder(id, patch, opts);
   // Fallback: intenta usar upsert genérico si existiera
-  if (typeof DB.upsertOrder === 'function') return DB.upsertOrder({ id, ...patch });
+  if (typeof DB.upsertOrder === 'function') return DB.upsertOrder({ id, ...patch }, opts);
   // Último recurso: no se puede (no rompe el flujo visual)
   console.warn('[cocina] updateOrder no disponible; patch ignorado:', patch);
 }
-async function archiveDeliveredShim(id, finalStatus='DONE'){
-  if (typeof DB.archiveDelivered === 'function') return DB.archiveDelivered(id);
+async function archiveDeliveredShim(id, finalStatus='DONE', opts){
+  if (typeof DB.archiveDelivered === 'function') return DB.archiveDelivered(id, opts);
   // Fallback: si no hay archivado, al menos “sácalo de vista” marcando DONE
-  await setStatusShim(id, finalStatus);
+  await setStatusShim(id, finalStatus, opts);
 }
-async function applyInventoryForOrderShim(order){
+async function applyInventoryForOrderShim(order, opts){
   if (typeof DB.applyInventoryForOrder === 'function') {
-    try { await DB.applyInventoryForOrder(order); } catch(e){ console.warn('applyInventoryForOrder error', e); }
+    try { await DB.applyInventoryForOrder(order, opts); } catch(e){ console.warn('applyInventoryForOrder error', e); }
   }
 }
 
@@ -207,6 +235,7 @@ document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-a]'); if(!btn) return;
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
   const a = btn.dataset.a;
+  const OPTS = { training: isTraining() };
 
   btn.disabled = true;
   try{
@@ -214,24 +243,24 @@ document.addEventListener('click', async (e)=>{
       LOCALLY_TAKEN.add(id);
       btn.textContent = 'Tomando…';
       const order = CURRENT_LIST.find(x=>x.id===id);
-      if(order){ await applyInventoryForOrderShim({ ...order, id }); }
-      await setStatusShim(id, Status.IN_PROGRESS);
-      await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now() });
+      if(order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
+      await setStatusShim(id, Status.IN_PROGRESS, OPTS);
+      await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now() }, OPTS);
       beep(); toast('En preparación');
       render(CURRENT_LIST);
       return;
     }
 
     if (a==='ready'){
-      await setStatusShim(id, Status.READY);
-      await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now() });
+      await setStatusShim(id, Status.READY, OPTS);
+      await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now() }, OPTS);
       beep(); toast('Listo 🛎️');
       return;
     }
 
     if (a==='deliver'){
-      await setStatusShim(id, Status.DELIVERED);
-      await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now() });
+      await setStatusShim(id, Status.DELIVERED, OPTS);
+      await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now() }, OPTS);
       beep(); toast('Entregado ✔️ · por cobrar');
       return;
     }
@@ -248,11 +277,11 @@ document.addEventListener('click', async (e)=>{
         paidAt: now(),
         payMethod,
         totalCharged: Number(total)
-      });
+      }, OPTS);
 
       // Si hay archivado real, úsalo; si no, marca DONE para sacarlo de vista
-      await archiveDeliveredShim(id, Status.DONE);
-      beep(); toast('Cobro registrado');
+      await archiveDeliveredShim(id, Status.DONE, OPTS);
+      beep(); toast('Cobro registrado' + (isTraining() ? ' (PRUEBA)' : ''));
       card.remove();
       return;
     }
@@ -261,8 +290,8 @@ document.addEventListener('click', async (e)=>{
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const notes = prompt('Editar notas generales para cocina:', order.notes||'');
       if (notes!==null){
-        await updateOrderShim(id,{ notes });
-        toast('Notas actualizadas');
+        await updateOrderShim(id,{ notes }, OPTS);
+        toast('Notas actualizadas' + (isTraining() ? ' (PRUEBA)' : ''));
       }
       return;
     }
@@ -281,10 +310,10 @@ document.addEventListener('click', async (e)=>{
         cancelReason: trimmed,
         cancelledAt: now(),
         cancelledBy: 'kitchen'
-      });
+      }, OPTS);
       // Si no hay archivado, al menos márcalo DONE para esconderlo del tablero
-      await archiveDeliveredShim(id, Status.DONE);
-      beep(); toast('Pedido eliminado');
+      await archiveDeliveredShim(id, Status.DONE, OPTS);
+      beep(); toast('Pedido eliminado' + (isTraining() ? ' (PRUEBA)' : ''));
       card.remove();
       return;
     }
