@@ -97,10 +97,14 @@ function startThemeWatcher(){
     }
   });
   mo.observe(document.documentElement, { attributes:true, attributeFilter:['data-theme','data-theme-name'] });
+
+  // Listener opcional si alguien dispara theme:changed manualmente
   window.addEventListener('theme:changed', ()=>{
     const newName = readThemeNameFromDOM();
     if (newName !== state.themeName){ state.themeName = newName; renderCards(); }
   });
+
+  // Primeros segundos: chequeos extra por si el tema llega asíncrono
   let ticks = 0;
   const id = setInterval(()=>{
     const newName = readThemeNameFromDOM();
@@ -109,6 +113,7 @@ function startThemeWatcher(){
   }, 500);
 }
 
+/* ======================= SFX logro ======================= */
 let achievementAudio = null;
 try { achievementAudio = new Audio('../shared/sfx/achievement.mp3'); } catch {}
 async function playAchievement(){
@@ -183,16 +188,27 @@ async function init(){
   bindETA();
   setupReadyFeed();
   startOrdersAnalytics();
+
   if (state.unsubTheme) { try{ state.unsubTheme(); }catch{} state.unsubTheme = null; }
+
+  // Aplica tema de settings/localStorage
   state.unsubTheme = initThemeFromSettings({ defaultName: 'Independencia' });
+
+  // Si el backend publica un tema dedicado, lo aplicamos de inmediato
   if (typeof DB.subscribeTheme === 'function') {
     try {
       DB.subscribeTheme((t)=>{
         const name = (t?.name || '').trim();
-        if (name && name !== state.themeName) { state.themeName = name; renderCards(); }
+        if (name) {
+          applyThemeLocal(name);               // 👈 aplica en DOM
+          state.themeName = name;
+          renderCards();
+          try { window.dispatchEvent(new CustomEvent('theme:changed',{ detail:{ name } })); } catch {}
+        }
       });
     } catch {}
   }
+
   if (sessionStorage.getItem('kioskAdmin') === '1') {
     state.adminMode = true;
     mountThemePanel();
@@ -1113,8 +1129,8 @@ function startOrdersAnalytics(){
 
 /* ======================= Feed READY ======================= */
 function setupReadyFeed(){
-  if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
   const container = document.getElementById('readyFeed'); if (!container) return;
+  if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
   state.unsubReady = subscribeOrdersShim(list=>{
     const ready = (list||[]).filter(o=> (o.status||'')==='READY')
       .sort((a,b)=> oTime(b) - oTime(a))
@@ -1237,17 +1253,22 @@ function mountThemePanel() {
   const msg = document.createElement('div'); msg.style.marginTop = '6px'; msg.style.opacity = '.9';
 
   btnLocal.addEventListener('click', ()=>{
-    applyThemeLocal(select.value);
-    state.themeName = select.value;
+    const name = select.value;
+    applyThemeLocal(name);
+    state.themeName = name;
     renderCards();
+    try { window.dispatchEvent(new CustomEvent('theme:changed',{ detail:{ name } })); } catch {}
     setMsg('Tema aplicado localmente.', 'ok');
   });
 
   btnGlobal.addEventListener('click', async ()=>{
+    const name = select.value;
     try {
-      await setTheme({ name: select.value });
-      state.themeName = select.value;
+      await setTheme({ name });
+      applyThemeLocal(name);
+      state.themeName = name;
       renderCards();
+      try { window.dispatchEvent(new CustomEvent('theme:changed',{ detail:{ name } })); } catch {}
       setMsg('Tema GLOBAL actualizado. Kioskos lo aplicarán en vivo.', 'ok');
     } catch (e) {
       console.error(e); setMsg('Error al guardar tema global.', 'err');
