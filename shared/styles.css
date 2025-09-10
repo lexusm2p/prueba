@@ -786,6 +786,112 @@ html[data-theme-name="Lucha Libre"], body[data-theme-name="Lucha Libre"]{
   --snow-alpha: 0;
 }
 
+/* --- Pixel Art (8‑bit, saturado) --- */
+html[data-theme="Pixel Art"], body[data-theme="Pixel Art"],
+html[data-theme-name="Pixel Art"], body[data-theme-name="Pixel Art"]{
+  --bg:#0a0f1a;
+  --panel:#101a2c;
+  --panel-2:#0d1626;
+  --ink:#f0f6ff;
+  --muted:#c2d4f5;
+  --muted-2:#a8c4f0;
+  --accent:#ffd24a;    /* dorado pixel */
+  --accent-2:#55ff7f;  /* verde fosfo */
+  --ok:#2fe38b;
+  --danger:#ff6b6b;
+  --stroke:rgba(255,255,255,.12);
+  --decor-glow: 0 0 18px rgba(255,210,74,.22), 0 0 28px rgba(85,255,127,.16);
+  --snow-alpha:0;
+}
+html[data-theme="Pixel Art"] .icon-img,
+body[data-theme="Pixel Art"] .icon-img{
+  image-rendering: pixelated;
+}
+
+/* --- Retro Arcade (neón 80s/90s) --- */
+html[data-theme="Retro Arcade"], body[data-theme="Retro Arcade"],
+html[data-theme-name="Retro Arcade"], body[data-theme-name="Retro Arcade"]{
+  --bg:#0b0714;
+  --panel:#140f2a;
+  --panel-2:#0f0b20;
+  --ink:#fdf2ff;
+  --muted:#d9c6ff;
+  --muted-2:#bfa8ff;
+  --accent:#00e5ff;    /* cian neón */
+  --accent-2:#ff37a6;  /* magenta neón */
+  --ok:#41e3a2;
+  --danger:#ff6b8a;
+  --stroke:rgba(255,255,255,.14);
+  --decor-glow: 0 0 22px rgba(0,229,255,.25), 0 0 28px rgba(255,55,166,.18);
+  --snow-alpha:0;
+}
+/* Efecto CRT/scanlines (sutil) */
+html[data-theme="Retro Arcade"]::after,
+body[data-theme="Retro Arcade"]::after,
+html[data-theme-name="Retro Arcade"]::after,
+body[data-theme-name="Retro Arcade"]::after{
+  content:"";
+  position:fixed; inset:0; pointer-events:none; z-index:1;
+  background:
+    linear-gradient(transparent 95%, rgba(0,0,0,.35) 100%) 0 0/100% 3px,
+    repeating-linear-gradient(0deg, rgba(255,255,255,.04) 0 1px, transparent 1px 2px);
+  mix-blend-mode:soft-light; opacity:.18;
+}
+/* Glow neón en botones */
+html[data-theme="Retro Arcade"] .btn,
+body[data-theme="Retro Arcade"] .btn{
+  text-shadow: 0 0 6px rgba(255,55,166,.55);
+  box-shadow:
+    0 0 18px rgba(0,229,255,.16),
+    0 6px 0 rgba(18, 9, 38, .9),
+    0 10px 18px rgba(0,0,0,.35);
+}
+
+/* --- Y2K (90s/00s, glassy) --- */
+html[data-theme="Y2K (90s/00s)"], body[data-theme="Y2K (90s/00s)"],
+html[data-theme-name="Y2K (90s/00s)"], body[data-theme-name="Y2K (90s/00s)"]{
+  --bg:#0b0f14;
+  --panel:#0f1a24;
+  --panel-2:#0c1520;
+  --ink:#e8f7ff;
+  --muted:#b7d4e8;
+  --muted-2:#a0c6e0;
+  --accent:#6ee7ff;    /* celeste glossy */
+  --accent-2:#cc00ff;  /* púrpura Y2K */
+  --ok:#45e3b3;
+  --danger:#ff6bba;
+  --stroke:rgba(255,255,255,.10);
+  --decor-glow: 0 0 22px rgba(110,231,255,.22), 0 0 26px rgba(204,0,255,.16);
+  --snow-alpha:0;
+}
+/* “Brillo gel” en cards/botones */
+html[data-theme="Y2K (90s/00s)"] .card,
+body[data-theme="Y2K (90s/00s)"] .card,
+html[data-theme-name="Y2K (90s/00s)"] .card,
+body[data-theme-name="Y2K (90s/00s)"] .card{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.06), transparent 30%) ,
+    linear-gradient(180deg,#132232,#0f1a24);
+  border:1.5px solid rgba(255,255,255,.14);
+  box-shadow:
+    0 2px 0 rgba(0,0,0,.25),
+    inset 0 0 0 2px rgba(255,255,255,.04),
+    0 18px 28px rgba(0,0,0,.35),
+    0 0 28px rgba(110,231,255,.18);
+}
+html[data-theme="Y2K (90s/00s)"] .btn,
+body[data-theme="Y2K (90s/00s)"] .btn{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 40%) ,
+    linear-gradient(#7fe8ff,#56c9ff);
+  border-color: rgba(176, 218, 255, .8);
+  box-shadow:
+    0 6px 0 #1b3952,
+    0 10px 18px rgba(0,0,0,.35),
+    0 0 18px rgba(204,0,255,.16);
+  color:#05141d;
+}
+
 /* Efecto de brillo sutil a elementos clave bajo temas festivos */
 .card,
 .btn,
