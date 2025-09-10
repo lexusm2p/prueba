@@ -52,8 +52,8 @@ function fmtMMSS(ms){
 function stopHHTimer(){ if(hhTimer){ clearInterval(hhTimer); hhTimer = null; } }
 
 function renderHHPill({ enabled, discountPercent }, extraText=''){
-  // Usa la clase que tu CSS espera (.on)
-  hhPill?.classList.toggle('on', !!enabled);
+  // 👇 Usa la clase correcta para tu CSS (.hh-on)
+  hhPill?.classList.toggle('hh-on', !!enabled);
   if (!hhText) return;
   hhText.textContent = enabled
     ? `Happy Hour – ${Number(discountPercent||0)}%${extraText? ` · ${extraText}` : ''}`
@@ -273,7 +273,6 @@ function renderMine(order){
 
   const label = STATUS_TEXT[st] || STATUS_TEXT.PENDING;
   const items = order.items||[];
-  theCount:
   const count = items.reduce((n,i)=> n + (i.qty||1), 0);
   const names = items.map(i=>i.name).slice(0,3).map(escapeHtml).join(', ');
   const subtotal = Number(order.subtotal || 0);
@@ -412,17 +411,16 @@ function setDefaultQrUrl(){
 }
 function updateQr(){
   const url = (qrUrl?.value || '').trim();
-  if (!url || !qrImg) return;
+  if (!url) return;
   const size = 160; // coincide con tu CSS
   const api = 'https://api.qrserver.com/v1/create-qr-code/';
   const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
-  qrImg.src = src;
+  if (qrImg) qrImg.src = src;
 }
 qrUpdate?.addEventListener('click', updateQr);
 qrCopy?.addEventListener('click', async ()=>{
   try{
-    const url = (qrUrl?.value || buildSelfUrl({ phone: currentPhone || '' })).trim();
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(qrUrl.value);
     qrCopy.textContent = '¡Copiado!';
     setTimeout(()=> qrCopy.textContent = 'Copiar enlace', 1200);
   }catch{
