@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme-name="Independencia">
 <head>
   <meta charset="utf-8"/>
   <!-- Vista móvil con soporte para notch -->
@@ -193,6 +193,9 @@
     }
     /* Reutilizamos estilos de hh-pill también para móvil */
     .hh-pill.on #miHHText{ color:#2fe38b; }
+
+    /* (Opcional) Evitar salto del body al abrir modal si activas la clase desde JS */
+    /* body.modal-open { overflow: hidden; } */
   </style>
 </head>
 
@@ -224,7 +227,7 @@
 
     <div class="s-divider"></div>
     <div class="s-mini">Tiempo estimado</div>
-    <div class="s-eta" id="etaTime">7–10 min</div>
+    <div class="s-eta" id="etaTime" data-eta-text>7–10 min</div>
 
     <div class="s-divider"></div>
     <div class="s-mini">Ranking hoy</div>
@@ -260,7 +263,7 @@
       </div>
       <div class="mi-card">
         <div class="mi-title">Tiempo estimado</div>
-        <div class="mi-eta" id="miEta">7–10 min</div>
+        <div class="mi-eta" id="miEta" data-eta-text>7–10 min</div>
       </div>
     </div>
 
