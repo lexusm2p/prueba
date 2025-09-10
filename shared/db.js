@@ -3,12 +3,23 @@
 // Órdenes, settings (ETA/HH/Theme), inventario, recetas/producción, artículos, products (opcional) y clientes.
 // + Coleccionables (stickers/tarjetas) server‑backed con límites y suscripción
 // + Stub opcional para WhatsApp vía webhook en settings
+// + Modo PRUEBA (training): evita escrituras cuando opts.training=true
 
 import {
   db, ensureAuth,
   serverTimestamp, doc, getDoc, setDoc, updateDoc, addDoc, collection,
   onSnapshot, query, where, orderBy, limit, Timestamp, increment
 } from './firebase.js';
+
+/* =============== Training / Modo PRUEBA =============== */
+export function isTrainingTrigger(s=''){
+  return /^\s*prueba\s*$/i.test(String(s));
+}
+async function guardWrite(isTraining, realWriteFn, fakeValue=null){
+  if (!isTraining) return await realWriteFn();
+  await new Promise(r=>setTimeout(r, 60)); // simula latencia
+  return fakeValue ?? { ok:true, _training:true };
+}
 
 /* =============== Utilidades de fecha =============== */
 export function startOfToday() { const d = new Date(); d.setHours(0,0,0,0); return d; }
@@ -141,19 +152,26 @@ export function subscribeOrders(cb) {
 // Alias de compatibilidad
 export const onOrdersSnapshot = subscribeOrders;
 
-export async function createOrder(payload) {
-  await ensureAuth();
-  const ref = await addDoc(collection(db, 'orders'), {
-    ...payload,
-    status: 'PENDING',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-  return ref.id;
+export async function createOrder(payload, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    await ensureAuth();
+    const ref = await addDoc(collection(db, 'orders'), {
+      ...payload,
+      status: 'PENDING',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return ref.id;
+  }, `TRAIN-${Date.now()}`);
 }
-export async function setOrderStatus(id, status) {
-  await ensureAuth();
-  await updateDoc(doc(db, 'orders', id), { status, updatedAt: serverTimestamp() });
+export async function setOrderStatus(id, status, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    await ensureAuth();
+    await updateDoc(doc(db, 'orders', id), { status, updatedAt: serverTimestamp() });
+    return { ok:true, id, status };
+  }, { ok:true, id, status, _training:true });
 }
 
 export async function getOrdersRange({ from, to, includeArchive=false, orderType=null }) {
@@ -198,12 +216,16 @@ function assertAdminContext() {
 }
 
 // ETA
-export async function setETA(text) {
-  assertAdminContext();
-  await ensureAuth();
-  await setDoc(doc(db, SETTINGS, 'eta'),
-    { text: String(text), updatedAt: serverTimestamp() },
-    { merge: true });
+export async function setETA(text, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    await setDoc(doc(db, SETTINGS, 'eta'),
+      { text: String(text), updatedAt: serverTimestamp() },
+      { merge: true });
+    return { ok:true };
+  }, { ok:true, _training:true });
 }
 export function subscribeETA(cb) {
   return onSnapshot(doc(db, SETTINGS, 'eta'), (d) => {
@@ -215,27 +237,35 @@ export function subscribeETA(cb) {
 }
 
 // Happy Hour
-export async function setHappyHour(payload) {
-  assertAdminContext();
-  await ensureAuth();
-  const normalized = {
-    ...payload,
-    endsAt: toMillisFlexible(payload?.endsAt ?? null),
-    updatedAt: serverTimestamp()
-  };
-  await setDoc(doc(db, SETTINGS, 'happyHour'), normalized, { merge: true });
+export async function setHappyHour(payload, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    const normalized = {
+      ...payload,
+      endsAt: toMillisFlexible(payload?.endsAt ?? null),
+      updatedAt: serverTimestamp()
+    };
+    await setDoc(doc(db, SETTINGS, 'happyHour'), normalized, { merge: true });
+    return { ok:true };
+  }, { ok:true, _training:true });
 }
 export function subscribeHappyHour(cb) {
   return onSnapshot(doc(db, SETTINGS, 'happyHour'), (d) => cb(d.data() ?? null));
 }
 
 // THEME
-export async function setTheme({ name, overrides = {} }) {
-  assertAdminContext();
-  await ensureAuth();
-  await setDoc(doc(db, SETTINGS, 'theme'),
-    { name, overrides, updatedAt: serverTimestamp() },
-    { merge: true });
+export async function setTheme({ name, overrides = {} }, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    await setDoc(doc(db, SETTINGS, 'theme'),
+      { name, overrides, updatedAt: serverTimestamp() },
+      { merge: true });
+    return { ok:true };
+  }, { ok:true, _training:true });
 }
 export function subscribeTheme(cb) {
   return onSnapshot(doc(db, SETTINGS, 'theme'), (d) => cb(d.data() ?? null));
@@ -251,56 +281,70 @@ export function subscribeInventory(cb) {
   const qy = query(collection(db, 'inventory'), orderBy('name','asc'));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
-export async function upsertInventoryItem(item) {
-  assertAdminContext();
-  await ensureAuth();
-  const ref = item.id ? doc(db,'inventory', item.id) : doc(collection(db,'inventory'));
-  await setDoc(ref, { ...item, updatedAt: serverTimestamp() }, { merge: true });
-  return ref.id;
+export async function upsertInventoryItem(item, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    const ref = item.id ? doc(db,'inventory', item.id) : doc(collection(db,'inventory'));
+    await setDoc(ref, { ...item, updatedAt: serverTimestamp() }, { merge: true });
+    return ref.id;
+  }, item.id ?? `TRAIN-INV-${Date.now()}`);
 }
 
 export function subscribeSuppliers(cb) {
   const qy = query(collection(db, 'suppliers'), orderBy('name','asc'));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
-export async function upsertSupplier(supp) {
-  assertAdminContext();
-  await ensureAuth();
-  const ref = supp.id ? doc(db,'suppliers', supp.id) : doc(collection(db,'suppliers'));
-  await setDoc(ref, { ...supp, updatedAt: serverTimestamp() }, { merge: true });
-  return ref.id;
+export async function upsertSupplier(supp, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    const ref = supp.id ? doc(db,'suppliers', supp.id) : doc(collection(db,'suppliers'));
+    await setDoc(ref, { ...supp, updatedAt: serverTimestamp() }, { merge: true });
+    return ref.id;
+  }, supp.id ?? `TRAIN-SUP-${Date.now()}`);
 }
 
-export async function recordPurchase(purchase) {
-  assertAdminContext();
-  await ensureAuth();
-  const { itemId, qty=0, unitCost=0 } = purchase || {};
-  await addDoc(collection(db,'purchases'), { ...purchase, createdAt: serverTimestamp() });
+export async function recordPurchase(purchase, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    const { itemId, qty=0, unitCost=0 } = purchase || {};
+    await addDoc(collection(db,'purchases'), { ...purchase, createdAt: serverTimestamp() });
 
-  if (itemId && qty > 0) {
-    const ref = doc(db,'inventory', itemId);
-    const snap = await getDoc(ref);
-    const cur  = snap.exists() ? (snap.data().currentStock||0) : 0;
-    const prevCost = snap.exists() ? Number(snap.data().costAvg||0) : 0;
-    const newStock = Number(cur) + Number(qty);
-    const newCost  = (prevCost>0 && cur>0) ? ((prevCost*cur + unitCost*qty) / newStock) : unitCost;
-    await setDoc(ref,
-      { currentStock: newStock, costAvg: newCost, updatedAt: serverTimestamp() },
-      { merge:true }
-    );
-  }
+    if (itemId && qty > 0) {
+      const ref = doc(db,'inventory', itemId);
+      const snap = await getDoc(ref);
+      const cur  = snap.exists() ? (snap.data().currentStock||0) : 0;
+      const prevCost = snap.exists() ? Number(snap.data().costAvg||0) : 0;
+      const newStock = Number(cur) + Number(qty);
+      const newCost  = (prevCost>0 && cur>0) ? ((prevCost*cur + unitCost*qty) / newStock) : unitCost;
+      await setDoc(ref,
+        { currentStock: newStock, costAvg: newCost, updatedAt: serverTimestamp() },
+        { merge:true }
+      );
+    }
+    return { ok:true };
+  }, { ok:true, _training:true });
 }
 
 // Movimiento directo de stock
-export async function adjustStock(itemId, delta, reason='use', meta={}) {
-  assertAdminContext();
+export async function adjustStock(itemId, delta, reason='use', meta={}, opts = {}) {
+  const { training=false } = opts;
   if (!itemId || !Number.isFinite(delta)) return;
-  await ensureAuth();
-  const ref = doc(db,'inventory', itemId);
-  await setDoc(ref, { currentStock: increment(Number(delta)), updatedAt: serverTimestamp() }, { merge:true });
-  await addDoc(collection(db,'inventory_moves'), {
-    itemId, delta:Number(delta), reason, meta, createdAt: serverTimestamp()
-  });
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    const ref = doc(db,'inventory', itemId);
+    await setDoc(ref, { currentStock: increment(Number(delta)), updatedAt: serverTimestamp() }, { merge:true });
+    await addDoc(collection(db,'inventory_moves'), {
+      itemId, delta:Number(delta), reason, meta, createdAt: serverTimestamp()
+    });
+    return { ok:true };
+  }, { ok:true, _training:true });
 }
 
 /* =============== Recetario / Producción =============== */
@@ -308,14 +352,18 @@ export function subscribeRecipes(cb) {
   const qy = query(collection(db, 'recipes'), orderBy('name','asc'));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
-export async function produceBatch({ recipeId, outputQty }) {
-  assertAdminContext();
+export async function produceBatch({ recipeId, outputQty }, opts = {}) {
+  const { training=false } = opts;
   if (!recipeId || !(outputQty > 0)) throw new Error('Datos de producción inválidos');
-  await ensureAuth();
-  await addDoc(collection(db, 'productions'), {
-    recipeId, outputQty,
-    createdAt: serverTimestamp()
-  });
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    await addDoc(collection(db, 'productions'), {
+      recipeId, outputQty,
+      createdAt: serverTimestamp()
+    });
+    return { ok:true };
+  }, { ok:true, _training:true });
 }
 
 /* =============== Artículos (CRUD Admin) =============== */
@@ -323,17 +371,24 @@ export function subscribeArticles(cb) {
   const qy = query(collection(db, 'articles'), orderBy('updatedAt','desc'), limit(100));
   return onSnapshot(qy, (snap)=> cb(snap.docs.map(d=>({ id:d.id, ...d.data() }))));
 }
-export async function upsertArticle(article) {
-  assertAdminContext();
-  await ensureAuth();
-  const ref = article.id ? doc(db,'articles', article.id) : doc(collection(db,'articles'));
-  await setDoc(ref, { ...article, updatedAt: serverTimestamp() }, { merge: true });
-  return ref.id;
+export async function upsertArticle(article, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    const ref = article.id ? doc(db,'articles', article.id) : doc(collection(db,'articles'));
+    await setDoc(ref, { ...article, updatedAt: serverTimestamp() }, { merge: true });
+    return ref.id;
+  }, article.id ?? `TRAIN-ART-${Date.now()}`);
 }
-export async function deleteArticle(id) {
-  assertAdminContext();
-  await ensureAuth();
-  await updateDoc(doc(db,'articles', id), { deletedAt: serverTimestamp() });
+export async function deleteArticle(id, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    await updateDoc(doc(db,'articles', id), { deletedAt: serverTimestamp() });
+    return { ok:true, id };
+  }, { ok:true, id, _training:true });
 }
 export async function fetchFeaturedArticles() {
   return new Promise((resolve) => {
@@ -370,23 +425,30 @@ export function subscribeProductsLive(cb) {
   const qy = query(collection(db, 'products'), orderBy('updatedAt','desc'), limit(200));
   return onSnapshot(qy, snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
-export async function upsertProduct(product) {
-  assertAdminContext();
-  await ensureAuth();
-  const ref = product?.id
-    ? doc(db, 'products', product.id)
-    : doc(collection(db, 'products'));
-  await setDoc(ref, {
-    ...product,
-    updatedAt: serverTimestamp(),
-    createdAt: product?.createdAt ?? serverTimestamp()
-  }, { merge: true });
-  return ref.id;
+export async function upsertProduct(product, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    const ref = product?.id
+      ? doc(db, 'products', product.id)
+      : doc(collection(db, 'products'));
+    await setDoc(ref, {
+      ...product,
+      updatedAt: serverTimestamp(),
+      createdAt: product?.createdAt ?? serverTimestamp()
+    }, { merge: true });
+    return ref.id;
+  }, product?.id ?? `TRAIN-PROD-${Date.now()}`);
 }
-export async function deleteProduct(id) {
-  assertAdminContext();
-  await ensureAuth();
-  await setDoc(doc(db, 'products', id), { deletedAt: serverTimestamp() }, { merge: true });
+export async function deleteProduct(id, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    assertAdminContext();
+    await ensureAuth();
+    await setDoc(doc(db, 'products', id), { deletedAt: serverTimestamp() }, { merge: true });
+    return { ok:true, id };
+  }, { ok:true, id, _training:true });
 }
 
 /* =============== Clientes (kiosko: autocompletar por teléfono) =============== */
@@ -396,21 +458,29 @@ export async function fetchCustomer(phoneDigits) {
   const d1 = await getDoc(doc(db,'customers', id));
   return d1.exists() ? d1.data() : null;
 }
-export async function upsertCustomerFromOrder(order) {
+export async function upsertCustomerFromOrder(order, opts = {}) {
+  const { training=false } = opts;
   const phone = String(order?.phone||'').replace(/\D+/g,'');
   if (!phone) return;
-  await ensureAuth();
-  await setDoc(doc(db,'customers', phone), {
-    phone, name: order?.customer || null, updatedAt: serverTimestamp()
-  }, { merge:true });
+  return guardWrite(training, async ()=>{
+    await ensureAuth();
+    await setDoc(doc(db,'customers', phone), {
+      phone, name: order?.customer || null, updatedAt: serverTimestamp()
+    }, { merge:true });
+    return { ok:true, phone };
+  }, { ok:true, phone, _training:true });
 }
-export async function attachLastOrderRef(phone, orderId) {
+export async function attachLastOrderRef(phone, orderId, opts = {}) {
+  const { training=false } = opts;
   const id = String(phone||'').replace(/\D+/g,'');
   if (!id || !orderId) return;
-  await ensureAuth();
-  await setDoc(doc(db,'customers', id), {
-    lastOrderId: orderId, lastOrderAt: serverTimestamp()
-  }, { merge:true });
+  return guardWrite(training, async ()=>{
+    await ensureAuth();
+    await setDoc(doc(db,'customers', id), {
+      lastOrderId: orderId, lastOrderAt: serverTimestamp()
+    }, { merge:true });
+    return { ok:true, id, orderId };
+  }, { ok:true, id, orderId, _training:true });
 }
 
 /* =============== Coleccionables (stickers/tarjetas) =============== */
@@ -486,9 +556,17 @@ export function subscribeCollectibles(phoneRaw, cb){
  * respetando límites: máx. 7 totales, máx. 2 raros.
  * Devuelve { awarded: boolean, reward, collection }.
  */
-export async function awardCollectible({ phone: phoneRaw, orderId, forceReward=null }){
+export async function awardCollectible({ phone: phoneRaw, orderId, forceReward=null }, opts = {}){
+  const { training=false } = opts;
   const phone = normalizePhone(phoneRaw);
   if (!phone || !orderId) return { awarded:false, reward:null, collection:[] };
+
+  if (training){
+    const { collection } = await getCollectibles(phone);
+    const reward0 = forceReward || pickCollectible(collection);
+    if (!reward0) return { awarded:false, reward:null, collection, _training:true };
+    return { awarded:true, reward:reward0, collection:[...collection, reward0], _training:true };
+  }
 
   await ensureAuth();
 
@@ -555,22 +633,25 @@ export async function awardCollectible({ phone: phoneRaw, orderId, forceReward=n
  * En Firestore: settings/app.whatsappWebhookUrl = 'https://tu-backend/wa'
  * payload: { to: "52XXXXXXXXXX", text: "mensaje", meta?: {...} }
  */
-export async function sendWhatsAppMessage(payload) {
-  try {
-    // lee settings/app una vez
-    const appDoc = await getDoc(doc(db, SETTINGS, 'app'));
-    const webhook = appDoc.exists() ? (appDoc.data()?.whatsappWebhookUrl || '') : '';
-    const url = webhook || '/api/wa'; // fallback local si montas un proxy
-    if (!url) return { ok:false, error:'No webhook configured' };
+export async function sendWhatsAppMessage(payload, opts = {}) {
+  const { training=false } = opts;
+  return guardWrite(training, async ()=>{
+    try {
+      // lee settings/app una vez
+      const appDoc = await getDoc(doc(db, SETTINGS, 'app'));
+      const webhook = appDoc.exists() ? (appDoc.data()?.whatsappWebhookUrl || '') : '';
+      const url = webhook || '/api/wa'; // fallback local si montas un proxy
+      if (!url) return { ok:false, error:'No webhook configured' };
 
-    const res = await fetch(url, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify(payload || {})
-    });
-    const json = await res.json().catch(()=> ({}));
-    return { ok: res.ok, ...json };
-  } catch (e) {
-    return { ok:false, error: String(e?.message||e) };
-  }
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload || {})
+      });
+      const json = await res.json().catch(()=> ({}));
+      return { ok: res.ok, ...json };
+    } catch (e) {
+      return { ok:false, error: String(e?.message||e) };
+    }
+  }, { ok:true, _training:true });
 }
