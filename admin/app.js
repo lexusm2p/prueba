@@ -1,6 +1,6 @@
 // /admin/app.js — Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
 // + Panel de TEMAS festivos mexicanos (vista previa local + guardar GLOBAL en settings/theme)
-// + Panel “Productos” (CRUD sobre Artículos) — sin mover lo demás
+// + Panel “Productos” (CRUD sobre Artículos) — con Modo PRUEBA integrado
 
 import {
   // Reportes
@@ -45,6 +45,34 @@ import {
   applyThemeLocal,
   listThemes
 } from '../shared/theme.js';
+
+/* ===== Training (PRUEBA) ===== */
+function isTraining(){ return sessionStorage.getItem('training') === '1'; }
+function setTraining(on){
+  sessionStorage.setItem('training', on ? '1' : '0');
+  paintTrainingBadge();
+  document.title = (on ? '🧪 ' : '') + document.title.replace(/^🧪\s*/,'');
+  toast(on ? 'Modo PRUEBA activo (no escribe en Firestore)' : 'Modo PRUEBA desactivado');
+}
+function paintTrainingBadge(){
+  let b = document.getElementById('admTrainingBadge');
+  if (!b) {
+    b = document.createElement('button');
+    b.id = 'admTrainingBadge';
+    b.className = 'btn tiny';
+    Object.assign(b.style, {
+      position:'fixed', left:'14px', bottom:'14px', zIndex:9999,
+      borderRadius:'999px', opacity:.92
+    });
+    b.addEventListener('click', ()=> setTraining(!isTraining()));
+    document.body.appendChild(b);
+  }
+  const on = isTraining();
+  b.textContent = on ? 'PRUEBA: ON' : 'PRUEBA: OFF';
+  b.classList.toggle('danger', on);
+  b.classList.toggle('ghost', !on);
+}
+document.addEventListener('DOMContentLoaded', paintTrainingBadge);
 
 /* ---------------- Tabs ---------------- */
 const tabs = document.getElementById('admTabs') || document;
@@ -326,13 +354,13 @@ btnAddPurchase && (btnAddPurchase.onclick = async () => {
     const found = invRows.find(it => norm(it.name) === norm(name));
     let itemId = found?.id;
     if (!itemId) {
-      itemId = await upsertInventoryItem({ name, unit:'unit', currentStock:0, min:0, max:0, perish:false });
+      itemId = await upsertInventoryItem({ name, unit:'unit', currentStock:0, min:0, max:0, perish:false }, { training: isTraining() });
       toast('Ingrediente nuevo creado en inventario');
     }
-    await recordPurchase({ itemId, qty, unitCost: cost, supplierId });
+    await recordPurchase({ itemId, qty, unitCost: cost, supplierId }, { training: isTraining() });
     if (q('#pQty'))  q('#pQty').value = '1';
     if (q('#pCost')) q('#pCost').value = '0';
-    toast('Compra registrada');
+    toast('Compra registrado' + (isTraining() ? ' (PRUEBA)' : 'a'));
   } catch (e) { console.error(e); toast('Error al registrar compra'); }
 });
 
@@ -345,7 +373,7 @@ q('#btnSaveVendor')?.addEventListener('click', async () => {
   const name = (q('#vName')?.value || '').trim();
   const contact = (q('#vContact')?.value || '').trim();
   if (!name) { toast('Nombre del proveedor requerido'); return; }
-  try { await upsertSupplier({ name, contact }); toast('Proveedor guardado'); }
+  try { await upsertSupplier({ name, contact }, { training: isTraining() }); toast('Proveedor guardado' + (isTraining() ? ' (PRUEBA)' : '')); }
   catch (e) { console.error(e); toast('Error al guardar proveedor'); }
 });
 
@@ -402,24 +430,24 @@ q('#btnSaveHappy')?.addEventListener('click', async () => {
   else if (enabled && endsEl && endsEl.value){
     const t = new Date(endsEl.value); if (!isNaN(t.getTime())) patch.endsAt = t.getTime();
   }
-  try { await setHappyHour(patch); toast('Happy Hour guardada'); }
+  try { await setHappyHour(patch, { training: isTraining() }); toast('Happy Hour guardada' + (isTraining() ? ' (PRUEBA)' : '')); }
   catch (e) { console.error(e); toast('No se pudo guardar HH'); }
 });
 q('#btnHH30')?.addEventListener('click', ()=> quickHH(30));
 q('#btnHH60')?.addEventListener('click', ()=> quickHH(60));
 q('#btnHH90')?.addEventListener('click', ()=> quickHH(90));
 q('#btnHHStop')?.addEventListener('click', async ()=>{
-  try{ await setHappyHour({ enabled:false, discountPercent:Number(q('#hhDisc')?.value||0), bannerText:(q('#hhMsg')?.value||'') }); toast('Happy Hour desactivada'); }
+  try{ await setHappyHour({ enabled:false, discountPercent:Number(q('#hhDisc')?.value||0), bannerText:(q('#hhMsg')?.value||'') }, { training: isTraining() }); toast('Happy Hour desactivada' + (isTraining() ? ' (PRUEBA)' : '')); }
   catch(e){ console.error(e); toast('No se pudo desactivar'); }
 });
 q('#btnHHExtend15')?.addEventListener('click', async ()=>{
   try{ const disc=Number(q('#hhDisc')?.value||0); const msg=(q('#hhMsg')?.value||'');
-    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:15 }); toast('Extendido 15 min'); }
+    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:15 }, { training: isTraining() }); toast('Extendido 15 min' + (isTraining() ? ' (PRUEBA)' : '')); }
   catch(e){ console.error(e); toast('No se pudo extender'); }
 });
 async function quickHH(mins){
   try{ const disc=Number(q('#hhDisc')?.value||0); const msg=(q('#hhMsg')?.value||'');
-    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:mins }); toast(`Happy Hour por ${mins} min`); }
+    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:mins }, { training: isTraining() }); toast(`Happy Hour por ${mins} min` + (isTraining() ? ' (PRUEBA)' : '')); }
   catch(e){ console.error(e); toast('No se pudo activar'); }
 }
 
@@ -565,16 +593,16 @@ async function doPrepareFromView(){
   const outQty = Number(document.getElementById('rcpOutQty')?.value || CURRENT_OUT_QTY || 0);
   if (!outQty || outQty<=0){ toast('Indica cantidad de salida en ml'); return; }
   try{
-    await produceBatch({ recipeId: CURRENT_R.id, outputQty: outQty });
+    await produceBatch({ recipeId: CURRENT_R.id, outputQty: outQty }, { training: isTraining() });
     const cups = Number(document.getElementById('rcpCups')?.value || 0);
     const cupId = APP_SETTINGS?.sauceCupItemId || null;
-    if (cupId && cups>0){ await adjustStock(cupId, -cups, 'use', { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty }); }
+    if (cupId && cups>0){ await adjustStock(cupId, -cups, 'use', { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty }, { training: isTraining() }); }
     const store = (document.getElementById('rcpStore')?.value === 'si');
     const storeQty = Number(document.getElementById('rcpStoreQty')?.value || 0);
     if (store && CURRENT_R.outputItemId){
-      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', { recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty });
+      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', { recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty }, { training: isTraining() });
     }
-    toast('Lote preparado'); document.getElementById('rcpClose')?.click();
+    toast('Lote preparado' + (isTraining() ? ' (PRUEBA)' : '')); document.getElementById('rcpClose')?.click();
   }catch(e){ console.error(e); toast('No se pudo preparar el lote'); }
 }
 
@@ -657,10 +685,10 @@ function openQuickPrepDialog(prefRecipe = null){
           const cost = Number(row.querySelector('[data-cost]')?.value || 0);
           const supplierId = row.querySelector('[data-sup]')?.value || null;
           if (itemId && qty>0 && cost>0){
-            await recordPurchase({ itemId, qty, unitCost: cost, supplierId });
+            await recordPurchase({ itemId, qty, unitCost: cost, supplierId }, { training: isTraining() });
           }
         }
-        toast('Compras registradas');
+        toast('Compras registradas' + (isTraining() ? ' (PRUEBA)' : ''));
         renderAll(); // vuelve a calcular con stocks/costos actualizados
       }catch(err){ console.error(err); toast('No se pudieron registrar compras'); }
       return;
@@ -668,10 +696,10 @@ function openQuickPrepDialog(prefRecipe = null){
 
     if (e.target.id==='qpConfirm'){
       try{
-        await produceBatch({ recipeId: state.r.id, outputQty: state.qty });
+        await produceBatch({ recipeId: state.r.id, outputQty: state.qty }, { training: isTraining() });
         // marcar meta almacenada (informativo)
-        await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty });
-        toast('Producción confirmada');
+        await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty }, { training: isTraining() });
+        toast('Producción confirmada' + (isTraining() ? ' (PRUEBA)' : ''));
         close();
       }catch(err){ console.error(err); toast('No se pudo confirmar producción'); }
     }
@@ -820,7 +848,7 @@ document.addEventListener('click', async (e)=>{
     if (act === 'dup')  { if(a) duplicateArticle(a); return; }
     if (act === 'del')  { if(a) confirmDeleteArticle(a); return; }
     if (act === 'toggle'){
-      try { await upsertArticle({ ...a, active: !a?.active }); toast(a?.active ? 'Artículo desactivado' : 'Artículo activado'); }
+      try { await upsertArticle({ ...a, active: !a?.active }, { training: isTraining() }); toast(a?.active ? 'Artículo desactivado' : 'Artículo activado'); }
       catch(err){ console.error(err); toast('No se pudo actualizar activo'); }
       return;
     }
@@ -949,7 +977,7 @@ function openArticleModal(article = null){
       active: $('#aActive').value === 'on',
       desc: $('#aDesc').value.trim()
     };
-    try{ await upsertArticle(payload); toast('Artículo guardado'); close(); }
+    try{ await upsertArticle(payload, { training: isTraining() }); toast('Artículo guardado' + (isTraining() ? ' (PRUEBA)' : '')); close(); }
     catch(err){ console.error(err); toast('No se pudo guardar el artículo'); }
   }
   $('#aSave')?.addEventListener('click', save);
@@ -961,13 +989,15 @@ function openArticleModal(article = null){
 async function duplicateArticle(a){
   try{
     const copy = { name:(a.name || 'Artículo') + ' (copia)', price:Number(a.price||0), active:false, desc:a.desc || '' };
-    await upsertArticle(copy); toast('Artículo duplicado (quedó inactivo)');
+    await upsertArticle(copy, { training: isTraining() }); toast('Artículo duplicado (quedó inactivo)' + (isTraining() ? ' (PRUEBA)' : ''));
   }catch(err){ console.error(err); toast('No se pudo duplicar'); }
 }
 function confirmDeleteArticle(article){
   if (!article) return;
   if (!confirm(`¿Eliminar artículo "${article.name}"?`)) return;
-  deleteArticle(article.id).then(()=> toast('Artículo eliminado')).catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
+  deleteArticle(article.id, { training: isTraining() })
+    .then(()=> toast('Artículo eliminado' + (isTraining() ? ' (PRUEBA)' : '')))
+    .catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
 }
 
 /* ============== TEMAS FESTIVOS (panel flotante) ============== */
@@ -1048,7 +1078,7 @@ function initThemePanel(){
 
   document.getElementById('admThemeSave')?.addEventListener('click', async ()=>{
     const name = sel.value;
-    try { await setTheme({ name }); setThemeMsg('Tema GLOBAL guardado. Kioskos lo aplicarán en vivo.'); }
+    try { await setTheme({ name }, { training: isTraining() }); setThemeMsg('Tema GLOBAL guardado. Kioskos lo aplicarán en vivo.' + (isTraining() ? ' (PRUEBA)' : '')); }
     catch(e){ console.error(e); setThemeMsg('No se pudo guardar GLOBAL.'); }
   });
 
@@ -1065,7 +1095,7 @@ function setMoney(id,v){ const el=document.getElementById(id); if(el) el.textCon
 const fmtMoney = n => '$' + Number(n||0).toFixed(0);
 function esc(s=''){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])).replace(/'/g, '&#39;'); }
 function escAttr(s=''){ return String(s).replace(/"/g, '&quot;'); }
-function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&gt;','>':'&quot;'}[m])); }
+function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&gt;','"':'&quot;'}[m])); }
 
 /* =========================================================
    PANEL: Productos (CRUD sobre Artículos)
@@ -1181,29 +1211,29 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
           themeTag: row?.themeTag||'',
           ingredients: row?.ingredients||[]
         };
-        await upsertArticle(copy);
-        toast('Producto duplicado (en espera)');
+        await upsertArticle(copy, { training: isTraining() });
+        toast('Producto duplicado (en espera)' + (isTraining() ? ' (PRUEBA)' : ''));
       }catch(e){ console.error(e); toast('No se pudo duplicar'); }
       return;
     }
     if (act==='del'){
       if (!confirm(`¿Eliminar "${row?.name||'producto'}"?`)) return;
-      try{ await deleteArticle(id); toast('Producto eliminado'); }
+      try{ await deleteArticle(id, { training: isTraining() }); toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : '')); }
       catch(e){ console.error(e); toast('No se pudo eliminar'); }
       return;
     }
     if (act==='toggle-active'){
-      try{ await upsertArticle({ ...row, active: !row?.active, onHold: row?.onHold && !row?.active ? false : row?.onHold }); toast(row?.active?'Desactivado':'Activado'); }
+      try{ await upsertArticle({ ...row, active: !row?.active, onHold: row?.onHold && !row?.active ? false : row?.onHold }, { training: isTraining() }); toast(row?.active?'Desactivado':'Activado'); }
       catch(e){ console.error(e); toast('No se pudo cambiar estado'); }
       return;
     }
     if (act==='hold'){
-      try{ await upsertArticle({ ...row, onHold: !row?.onHold, active: row?.onHold ? true : false }); toast(row?.onHold?'Quitado de espera':'Puesto en espera'); }
+      try{ await upsertArticle({ ...row, onHold: !row?.onHold, active: row?.onHold ? true : false }, { training: isTraining() }); toast(row?.onHold?'Quitado de espera':'Puesto en espera'); }
       catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
       return;
     }
     if (act==='feature'){
-      try{ await upsertArticle({ ...row, featured: !row?.featured }); toast(row?.featured?'Quitado de destacados':'Destacado'); }
+      try{ await upsertArticle({ ...row, featured: !row?.featured }, { training: isTraining() }); toast(row?.featured?'Quitado de destacados':'Destacado'); }
       catch(e){ console.error(e); toast('No se pudo destacar'); }
       return;
     }
@@ -1386,7 +1416,7 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
       try{
         const wantHold = !data.onHold;
         const payload = { ...(data.id?{id:data.id}:{}) , onHold: wantHold, active: wantHold?false:true };
-        await upsertArticle(payload);
+        await upsertArticle(payload, { training: isTraining() });
         toast(wantHold?'Puesto en espera':'Quitado de espera');
         close();
       }catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
@@ -1395,7 +1425,7 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
     if (isEdit){
       $('#pDelete')?.addEventListener('click', async ()=>{
         if (!confirm(`¿Eliminar "${data.name||'producto'}"?`)) return;
-        try{ await deleteArticle(data.id); toast('Producto eliminado'); close(); }
+        try{ await deleteArticle(data.id, { training: isTraining() }); toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : '')); close(); }
         catch(e){ console.error(e); toast('No se pudo eliminar'); }
       });
     }
@@ -1426,8 +1456,8 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
       else { payload.onHold = false; payload.active = false; }
 
       try{
-        await upsertArticle(payload);
-        toast('Producto guardado');
+        await upsertArticle(payload, { training: isTraining() });
+        toast('Producto guardado' + (isTraining() ? ' (PRUEBA)' : ''));
         close();
       }catch(e){ console.error(e); toast('No se pudo guardar'); }
     });
