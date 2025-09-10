@@ -31,7 +31,7 @@ const state = {
 
   // Analytics UI
   etaText: '7–10 min',
-  etaSource: 'fallback', // 'settings' si viene de subscribeETA
+  etaSource: 'fallback',
   topToday: [],
 
   comboUnlocked: false,
@@ -42,14 +42,17 @@ const state = {
   // Happy Hour countdown (solo UI)
   hhLeftText: '',
 
-  // Admin local (desbloquea "Aplicar GLOBAL")
+  // Admin local
   adminMode: false,
 
-  // Nombre del tema activo (para swap de íconos)
-  themeName: ''
+  // Tema activo
+  themeName: '',
+
+  // Última orden creada (para seguimiento sin teléfono)
+  lastOrderId: null
 };
 
-/* ====== ETA tuning (suavizado y ventana móvil) ====== */
+/* ====== ETA tuning ====== */
 let etaSmoothed = null;
 const ETA_MAX_SAMPLES = 30;
 const ETA_ALPHA = 0.4;
@@ -104,7 +107,7 @@ function startThemeWatcher(){
     if (newName !== state.themeName){ state.themeName = newName; renderCards(); }
   });
 
-  // Primeros segundos: chequeos extra por si el tema llega asíncrono
+  // Chequeos extra por si el tema llega asíncrono
   let ticks = 0;
   const id = setInterval(()=>{
     const newName = readThemeNameFromDOM();
@@ -200,7 +203,7 @@ async function init(){
       DB.subscribeTheme((t)=>{
         const name = (t?.name || '').trim();
         if (name) {
-          applyThemeLocal(name);               // 👈 aplica en DOM
+          applyThemeLocal(name);
           state.themeName = name;
           renderCards();
           try { window.dispatchEvent(new CustomEvent('theme:changed',{ detail:{ name } })); } catch {}
@@ -257,11 +260,15 @@ function escapeHtml(s=''){
 
 /* ========= Seguimiento ========= */
 function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
-function buildTrackUrl(phone){
+
+/** Construye URL de tracking. Ahora soporta teléfono o orderId (para “Mesa”). */
+function buildTrackUrl({ phone='', orderId=null } = {}){
   const u = new URL('./track.html', location.href);
   const clean = normalizePhone(phone || '');
-  if (clean) u.searchParams.set('phone', clean);
-  if (clean) u.searchParams.set('autostart', '1');
+  if (orderId) u.searchParams.set('oid', String(orderId));
+  if (clean)   u.searchParams.set('phone', clean);
+  u.searchParams.set('autostart', '1');
+  u.searchParams.set('gamify', '1'); // activa tamagochi/coleccionable en track.js
   return u.toString();
 }
 
@@ -269,7 +276,7 @@ function buildTrackUrl(phone){
 async function sendWaOrderCreated({ phone, name, orderId, subtotal, etaText, hhTotalDiscount=0 }) {
   if (!phone) return;
   try {
-    const trackUrl = buildTrackUrl(phone);
+    const trackUrl = buildTrackUrl({ phone, orderId });
     const etaLine = etaText ? `ETA: ${etaText}\n` : '';
     const hhLine  = (Number(hhTotalDiscount||0) > 0) ? `Promo HH: -$${Number(hhTotalDiscount||0).toFixed(0)}\n` : '';
     const text =
@@ -329,32 +336,37 @@ function ensureFollowModal(){
   wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFollowModal(); });
 }
 function closeFollowModal(){ const m = document.getElementById('trackAskModal'); if (m) m.style.display = 'none'; }
-function openFollowModal({ phone } = {}){
+function openFollowModal({ phone, orderId } = {}){
   ensureFollowModal();
   const m = document.getElementById('trackAskModal'); if (!m) return;
-  const url = buildTrackUrl(phone || '');
+
+  const url = buildTrackUrl({ phone: phone || '', orderId: orderId || state.lastOrderId || null });
   const qr = m.querySelector('#trackQrImg');
   const linkEl = m.querySelector('#trackUrl');
   const copyBtn = m.querySelector('#trackCopy');
   const openNow = m.querySelector('#trackOpenNow');
+
   const size = 200;
   const api = 'https://api.qrserver.com/v1/create-qr-code/';
   const src = `${api}?size=${size}x${size}&qzone=2&data=${encodeURIComponent(url)}`;
   if (qr) qr.src = src;
   if (linkEl) linkEl.value = url;
+
   if (openNow){
-    const hasPhone = !!normalizePhone(phone || '');
-    openNow.disabled = !hasPhone;
-    openNow.title = hasPhone ? '' : 'Requiere teléfono (también puedes usar el QR o enlace)';
+    const hasKey = !!normalizePhone(phone || '') || !!(orderId || state.lastOrderId);
+    openNow.disabled = !hasKey;
+    openNow.title = hasKey ? '' : 'No tengo teléfono ni ID de pedido';
     openNow.onclick = ()=> { window.location.href = url; };
   }
-  copyBtn.onclick = async ()=>{
-    try{
-      await navigator.clipboard.writeText(url);
-      copyBtn.textContent = '¡Copiado!';
-      setTimeout(()=> copyBtn.textContent = 'Copiar enlace', 1200);
-    }catch{ alert('No pude copiar. Selecciona el texto y copia manualmente.'); }
-  };
+  if (copyBtn){
+    copyBtn.onclick = async ()=>{
+      try{
+        await navigator.clipboard.writeText(url);
+        copyBtn.textContent = '¡Copiado!';
+        setTimeout(()=> copyBtn.textContent = 'Copiar enlace', 1200);
+      }catch{ alert('No pude copiar. Selecciona el texto y copia manualmente.'); }
+    };
+  }
   m.style.display = 'grid';
   setTimeout(()=> openNow?.focus(), 0);
 }
@@ -386,7 +398,10 @@ function ensureFollowCta(){
   cta.querySelector('#ctaFollowClose')?.addEventListener('click', ()=> hideFollowCta());
   cta.querySelector('#ctaFollowOpen')?.addEventListener('click', ()=>{
     hideFollowCta();
-    openFollowModal({ phone: (state.orderMeta?.type==='pickup' ? state.orderMeta?.phone : '') || '' });
+    openFollowModal({
+      phone: (state.orderMeta?.type==='pickup' ? state.orderMeta?.phone : '') || '',
+      orderId: (state.orderMeta?.type==='dinein' ? state.lastOrderId : null)
+    });
   });
 }
 function showFollowCta(){ ensureFollowCta(); const c = document.getElementById('followCta'); if (c) c.style.display='block'; }
@@ -888,7 +903,9 @@ function openCartModal(){
       totalDiscount: Number(hhTotalDiscount||0)
     };
 
-    const order = {
+    // ID de pedido: usar el devuelto por DB o generar uno
+    const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+    const orderBase = {
       customer: state.customerName,
       orderType: state.orderMeta.type,
       table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null,
@@ -902,20 +919,33 @@ function openCartModal(){
       })),
       subtotal,
       notes: generalNotes,
-      hh: hhSummary
+      hh: hhSummary,
+      // timestamps para métricas
+      createdAt: Date.now()
     };
 
-    const orderId = await DB.createOrder(order);
-    if (order.phone) {
-      await DB.upsertCustomerFromOrder?.(order);
-      await DB.attachLastOrderRef?.(order.phone, orderId);
+    let orderId = null;
+    try {
+      orderId = await DB.createOrder(orderBase);
+    } catch (e) {
+      console.warn('createOrder error, usando provisional:', e);
+    }
+    if (!orderId) orderId = provisionalId;
+    state.lastOrderId = orderId;
+
+    // Guardar métrica local (para que track.js calcule duración si quiere)
+    try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
+
+    if (orderBase.phone) {
+      await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId });
+      await DB.attachLastOrderRef?.(orderBase.phone, orderId);
       sendWaOrderCreated({
-        phone: order.phone,
-        name: order.customer,
+        phone: orderBase.phone,
+        name: orderBase.customer,
         orderId,
-        subtotal: order.subtotal,
+        subtotal: orderBase.subtotal,
         etaText: state.etaText || '7–10 min',
-        hhTotalDiscount: order?.hh?.totalDiscount || 0
+        hhTotalDiscount: orderBase?.hh?.totalDiscount || 0
       });
     }
 
@@ -924,8 +954,12 @@ function openCartModal(){
     state.cart = []; updateCartBar();
     const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
 
+    // Abrir modal de seguimiento con orderId (funciona para Mesa y Pickup)
     setTimeout(()=>{
-      openFollowModal({ phone: order.phone || state.orderMeta.phone || '' });
+      openFollowModal({
+        phone: orderBase.phone || state.orderMeta.phone || '',
+        orderId
+      });
     }, 200);
   }, { once:true });
 }
@@ -1011,8 +1045,7 @@ function setupSidebars(){
 
 /* ======================= Dashboard móvil ======================= */
 function renderMobileInfo(){
-  const box = document.getElementById('mobileInfo');
-  if(!box) return;
+  const box = document.getElementById('mobileInfo'); if(!box) return;
 
   const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
   const pill = document.getElementById('miHHPill');
@@ -1061,7 +1094,6 @@ function computeTopToday(orders){
     const created = tsToMs(o.createdAt);
     if (!isToday(created)) continue;
     const s = (o.status||'').toUpperCase();
-    // Ignorar cancelados, soportando ambas ortografías
     if (s==='CANCELLED' || s==='CANCELED') continue;
     for (const it of (o.items||[])){
       const k = it.name || it.id || '—';
@@ -1098,7 +1130,7 @@ function computeETA(orders){
     const hi = Math.min(ETA_MAX, Math.round(etaSmoothed + 2));
     state.etaText = `${lo}–${hi} min`;
   } else {
-    // Ajuste de cola: solo PENDING e IN_PROGRESS
+    // Ajuste por carga actual
     const q = (orders||[]).filter(o=>{
       const s = (o.status||'').toUpperCase();
       return s==='PENDING' || s==='IN_PROGRESS';
