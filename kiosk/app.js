@@ -722,61 +722,61 @@ function openCartModal(){
 
   if(body) body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
-      <input id="cartName" type="text" required value="\${state.customerName||''}" /></div>
+      <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
 
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
       <div class="field">
         <label>Tipo de pedido</label>
         <select id="orderType">
-          <option value="pickup" \${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
-          <option value="dinein"  \${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
+          <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
+          <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
         </select>
       </div>
 
-      <div class="field" id="phoneField" style="\${state.orderMeta.type==='pickup'?'':'display:none'}">
+      <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
         <label>Teléfono de contacto (Pickup)</label>
         <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
-               placeholder="10 dígitos" pattern="[0-9]{10}" value="\${state.orderMeta.phone||''}" />
+               placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
         <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
       </div>
 
-      <div class="field" id="mesaField" style="\${state.orderMeta.type==='dinein'?'':'display:none'}">
+      <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
         <label>Número de mesa</label>
-        <input id="tableNum" type="text" placeholder="Ej. 4" value="\${state.orderMeta.table||''}" />
+        <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
       </div>
 
       <div class="field">
         <label>Método de pago</label>
         <select id="payMethod">
-          <option value="efectivo" \${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
-          <option value="tarjeta" \${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
-          <option value="transferencia" \${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
+          <option value="efectivo" ${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
+          <option value="tarjeta" ${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
+          <option value="transferencia" ${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
         </select>
       </div>
     </div>
 
     <div class="field">
-      \${state.cart.map((l,idx)=>{
+      ${state.cart.map((l,idx)=>{
         const extrasTxt = [
           (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
           ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
           ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
           (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
         ].filter(Boolean).join(', ');
-        return \`
-        <div class="k-card" style="margin:8px 0" data-i="\${idx}">
-          <h4>\${l.name} · x\${l.qty}</h4>
-          \${l.salsaCambiada ? \`<div class="muted small">Cambio de salsa: \${l.salsaCambiada}</div>\`:''}
-          \${extrasTxt? \`<div class="muted small">\${extrasTxt}</div>\`:''}
-          \${l.notes ? \`<div class="muted small">Notas: \${escapeHtml(l.notes)}</div>\`:''}
+        return `
+        <div class="k-card" style="margin:8px 0" data-i="${idx}">
+          <h4>${l.name} · x${l.qty}</h4>
+          ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
+          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
+          ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
           <div class="k-actions" style="gap:6px">
             <button class="btn small ghost" data-a="less">-</button>
             <button class="btn small ghost" data-a="more">+</button>
             <button class="btn small" data-a="edit">Editar</button>
             <button class="btn small danger" data-a="remove">Eliminar</button>
-            <div style="margin-left:auto" class="price">\${money(l.lineTotal)}</div>
+            <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
           </div>
-        </div>\`;}).join('')}
+        </div>`;}).join('')}
     </div>
 
     <div class="field"><label>Comentarios generales</label>
