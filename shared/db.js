@@ -4,6 +4,7 @@
 // + Coleccionables (stickers/tarjetas) server‑backed con límites y suscripción
 // + Stub opcional para WhatsApp vía webhook en settings
 // + Modo PRUEBA (training): evita escrituras cuando opts.training=true
+// + FIXES: subscribeOrder() y logPrepMetric() (usados por /kiosk/track.js); normalización robusta de HH; helpers extra.
 
 import {
   db, ensureAuth,
@@ -29,7 +30,7 @@ export function toTs(d) { return Timestamp.fromDate(new Date(d)); }
 function toMillisFlexible(raw) {
   if (raw == null) return null;
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
-  if (raw?.toMillis?.()) return raw.toMillis();
+  if (typeof raw?.toMillis === 'function') return raw.toMillis();
   if (raw?.seconds != null) {
     return (raw.seconds * 1000) + Math.floor((raw.nanoseconds || 0) / 1e6);
   }
@@ -128,6 +129,14 @@ export function subscribeProducts(cb) {
 }
 
 /* =============== Órdenes =============== */
+// 🔎 Un pedido por ID (usado por track.js cuando llega ?oid=)
+export function subscribeOrder(id, cb){
+  if (!id) return ()=>{};
+  return onSnapshot(doc(db, 'orders', id), (snap)=>{
+    cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  });
+}
+
 export function subscribeActiveOrders(cb) {
   const active = ['PENDING','COOKING','IN_PROGRESS','READY'];
   const qy = query(
@@ -625,6 +634,28 @@ export async function awardCollectible({ phone: phoneRaw, orderId, forceReward=n
   }, { merge: true });
 
   return { awarded:true, reward, collection: newCollection };
+}
+
+/* =============== Métricas preparación (para track.js) =============== */
+/**
+ * Persiste una métrica de preparación (opcional).
+ * payload: { orderId, createdAtLocal, readyAtLocal, source }
+ */
+export async function logPrepMetric(payload, opts = {}){
+  const { training=false } = opts;
+  const { orderId, createdAtLocal=null, readyAtLocal=null, source='track' } = payload || {};
+  if (!orderId) return { ok:false, error:'orderId requerido' };
+  return guardWrite(training, async ()=>{
+    await ensureAuth();
+    await addDoc(collection(db,'metrics_prep'), {
+      orderId,
+      createdAtLocal: Number(createdAtLocal) || null,
+      readyAtLocal: Number(readyAtLocal) || null,
+      source: String(source||'track'),
+      createdAt: serverTimestamp()
+    });
+    return { ok:true };
+  }, { ok:true, _training:true });
 }
 
 /* =============== WhatsApp (opcional vía webhook) =============== */
