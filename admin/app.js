@@ -1,6 +1,8 @@
 // /admin/app.js — Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
 // + Panel de TEMAS festivos mexicanos (vista previa local + guardar GLOBAL en settings/theme)
 // + Panel “Productos” (CRUD sobre Artículos) — con Modo PRUEBA integrado
+// Actualizado: robustez en null/NaN, mejoras de accesibilidad/UX pequeñas, fixes de dinero/dates,
+// limpieza en unload, atajos de teclado y pequeños safeguards.
 
 import {
   // Reportes
@@ -60,6 +62,8 @@ function paintTrainingBadge(){
     b = document.createElement('button');
     b.id = 'admTrainingBadge';
     b.className = 'btn tiny';
+    b.type = 'button';
+    b.setAttribute('aria-live','polite');
     Object.assign(b.style, {
       position:'fixed', left:'14px', bottom:'14px', zIndex:9999,
       borderRadius:'999px', opacity:.92
@@ -73,12 +77,18 @@ function paintTrainingBadge(){
   b.classList.toggle('ghost', !on);
 }
 document.addEventListener('DOMContentLoaded', paintTrainingBadge);
+// Atajo: Ctrl+T alterna PRUEBA
+document.addEventListener('keydown', (e)=>{
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='t'){
+    e.preventDefault(); setTraining(!isTraining());
+  }
+});
 
 /* ---------------- Tabs ---------------- */
 const tabs = document.getElementById('admTabs') || document;
 tabs.addEventListener('click', (e) => {
   const t = e.target.closest('.tab'); if (!t) return;
-  tabs.querySelectorAll('.tab').forEach(b => { b.classList.remove('is-active'); b.setAttribute('aria-selected','false'); });
+  (tabs.querySelectorAll?.('.tab')||[]).forEach(b => { b.classList.remove('is-active'); b.setAttribute?.('aria-selected','false'); });
   t.classList.add('is-active'); t.setAttribute('aria-selected','true');
   const target = t.dataset.tab;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -106,12 +116,12 @@ if (fromEl && toEl) {
 
 async function runReports() {
   try {
-    const from = new Date((fromEl?.value||'') + 'T00:00:00');
-    const to   = new Date((toEl?.value||'')   + 'T23:59:59');
+    const from = new Date(((fromEl?.value||'') + 'T00:00:00').replace('Z',''));
+    const to   = new Date(((toEl?.value||'')   + 'T23:59:59').replace('Z',''));
     const type = typeEl?.value || 'all';
     const includeArchive = (histEl?.value !== 'No');
 
-    const orders = await getOrdersRange({ from, to, includeArchive, orderType: type === 'all' ? null : type });
+    const orders = await getOrdersRange({ from, to, includeArchive, orderType: type === 'all' ? null : type }) || [];
     const agg = aggregateOrders(orders);
 
     setTxt('kpiOrders', agg.orders);
@@ -125,24 +135,28 @@ async function runReports() {
     const rows = agg.byHour.map(h =>
       `<tr><td>${h.hour}:00</td><td>${h.orders}</td><td>${fmtMoney(h.revenue)}</td></tr>`
     ).join('');
-    q('#tblHours tbody').innerHTML = rows || '<tr><td colspan="3">—</td></tr>';
+    q('#tblHours tbody') && (q('#tblHours tbody').innerHTML = rows || '<tr><td colspan="3">—</td></tr>');
 
     toast('Reporte listo');
   } catch (e) { console.error(e); toast('No se pudo generar el reporte'); }
 }
 
 function aggregateOrders(orders) {
+  const safeNum = (v)=> Number(v ?? 0) || 0;
+
   const ordersCount = orders.length;
-  const revenue = orders.reduce((a, o) => a + (o.subtotal || 0), 0);
-  const units = orders.reduce((a, o) => a + (o.items || []).reduce((s, i) => s + (i.qty || 1), 0), 0);
+  const revenue = orders.reduce((a, o) => a + safeNum(o.subtotal ?? o.total), 0);
+  const units = orders.reduce((a, o) => a + (o.items || []).reduce((s, i) => s + safeNum(i.qty || 1), 0), 0);
   const avgTicket = ordersCount ? revenue / ordersCount : 0;
 
   const map = new Map();
   orders.forEach(o => (o.items || []).forEach(i => {
-    const key = i.name || i.id;
+    const key = i.name || i.id || '—';
     const prev = map.get(key) || { name: key, units: 0, revenue: 0 };
-    prev.units += (i.qty || 1);
-    prev.revenue += (i.lineTotal || (i.unitPrice || 0) * (i.qty || 1));
+    prev.units += safeNum(i.qty || 1);
+    const unitPrice = safeNum(i.unitPrice);
+    const lineTotal = ('lineTotal' in i) ? safeNum(i.lineTotal) : unitPrice * safeNum(i.qty||1);
+    prev.revenue += lineTotal;
     map.set(key, prev);
   }));
   const arr = [...map.values()];
@@ -156,7 +170,7 @@ function aggregateOrders(orders) {
     const k = String(h).padStart(2, '0');
     by[k] ||= { hour: k, orders: 0, revenue: 0 };
     by[k].orders += 1;
-    by[k].revenue += (o.subtotal || 0);
+    by[k].revenue += safeNum(o.subtotal ?? o.total);
   });
   const byHour = Object.values(by).sort((a, b) => a.hour.localeCompare(b.hour));
   return { orders: ordersCount, revenue, units, avgTicket, topItems, lowItems, byHour };
@@ -200,7 +214,7 @@ async function loadHistory(showToast = true){
     const to   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59);
     const includeArchive = (document.getElementById('repHist')?.value !== 'No');
 
-    const ords = await getOrdersRange({ from, to, includeArchive, orderType: null });
+    const ords = await getOrdersRange({ from, to, includeArchive, orderType: null }) || [];
     HIST_ALL = (ords||[]).map(o=>{
       const t = o.createdAt?.toDate?.() || o.createdAt || new Date();
       const when = new Date(t);
@@ -315,8 +329,9 @@ function csvEscape(v){ const s=String(v??''); return /[",\n]/.test(s)?`"${s.repl
 const invRows = [];
 const invMap  = new Map();
 subscribeInventory(items => {
-  invRows.length = 0; invRows.push(...items);
-  invMap.clear(); items.forEach(it => invMap.set(it.id, it));
+  const arr = Array.isArray(items) ? items : [];
+  invRows.length = 0; invRows.push(...arr);
+  invMap.clear(); arr.forEach(it => invMap.set(it.id, it));
   renderInventoryTable();
   renderRecipeTable(); // refresca nombres en recetario
 });
@@ -327,7 +342,7 @@ function renderInventoryTable() {
   const qstr = (q('#invSearch')?.value || '').toLowerCase();
   const tb = q('#tblInv tbody'); if (!tb) return;
   const rows = invRows
-    .filter(x => x.name.toLowerCase().includes(qstr))
+    .filter(x => (x.name||'').toLowerCase().includes(qstr))
     .map(i => `<tr>
       <td>${esc(i.name)}</td>
       <td>${Number(i.currentStock ?? 0).toFixed(2)}</td>
@@ -366,7 +381,7 @@ btnAddPurchase && (btnAddPurchase.onclick = async () => {
 
 function renderVendors(arr = []) {
   const tb = q('#tblVendors tbody'); if (!tb) return;
-  tb.innerHTML = arr.map(v => `<tr><td>${esc(v.name)}</td><td>${esc(v.contact || '-')}</td><td>${v.id}</td></tr>`).join('')
+  tb.innerHTML = (arr||[]).map(v => `<tr><td>${esc(v.name)}</td><td>${esc(v.contact || '-')}</td><td>${v.id}</td></tr>`).join('')
     || '<tr><td colspan="3">—</td></tr>';
 }
 q('#btnSaveVendor')?.addEventListener('click', async () => {
@@ -381,8 +396,8 @@ q('#btnSaveVendor')?.addEventListener('click', async () => {
 subscribeProducts(renderProducts);
 function renderProducts(items = []) {
   const tb = q('#tblProducts tbody'); if (!tb) return;
-  tb.innerHTML = items.map(p =>
-    `<tr><td>${esc(p.name)}</td><td>${esc(p.type)}</td><td>${fmtMoney(p.price)}</td><td>${p.active ? 'Sí' : 'No'}</td><td>${p.id}</td></tr>`
+  tb.innerHTML = (items||[]).map(p =>
+    `<tr><td>${esc(p.name)}</td><td>${esc(p.type||'-')}</td><td>${fmtMoney(p.price)}</td><td>${p.active ? 'Sí' : 'No'}</td><td>${p.id}</td></tr>`
   ).join('') || '<tr><td colspan="5">—</td></tr>';
 }
 document.getElementById('btnReloadCatalog')?.addEventListener('click', async ()=>{
@@ -812,12 +827,14 @@ async function suggestQty(recipe){
     const now = new Date();
     const from = new Date(now); from.setDate(now.getDate()-7); from.setHours(0,0,0,0);
     const to   = new Date(now); to.setHours(23,59,59,999);
-    const orders = await getOrdersRange({ from, to, includeArchive:true, orderType:null });
+    const orders = await getOrdersRange({ from, to, includeArchive:true, orderType:null }) || [];
 
     const perOrderMl = Number(recipe?.suggestMlPerOrder || APP_SETTINGS?.defaultSuggestMlPerOrder || 20);
-    const totalOrders = (orders||[]).length || 1;
+    const totalOrders = (orders||[]).length || 0;
     const dailyAvgOrders = totalOrders / 7;
-    const qty = Math.ceil(dailyAvgOrders * perOrderMl * 1.2 / 10) * 10; // +20% colchón y redondeo
+    // mínimo razonable de 100ml cuando no hay historial
+    const qtyRaw = Math.max(100, dailyAvgOrders * perOrderMl * 1.2);
+    const qty = Math.ceil(qtyRaw / 10) * 10; // +20% colchón y redondeo a 10ml
     toast(`Sugerencia basada en ventas: ~${qty} ml`);
     return qty;
   }catch(e){ console.error(e); toast('No se pudo calcular sugerencia'); return null; }
@@ -1018,6 +1035,8 @@ function bindThemeLive(){
     }
   } catch (_){}
   try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch(_){}
+  // Limpieza al abandonar la página
+  window.addEventListener('beforeunload', ()=>{ try{ THEME_UNSUB?.(); }catch(_){} });
 }
 
 function initThemePanel(){
@@ -1041,7 +1060,7 @@ function initThemePanel(){
   box.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
       <strong style="font-size:12px">Tema (Kiosko/UI)</strong>
-      <button id="admThemeToggle" class="btn tiny ghost" style="padding:2px 8px">—</button>
+      <button id="admThemeToggle" class="btn tiny ghost" style="padding:2px 8px" type="button" aria-expanded="true">—</button>
     </div>
     <div id="admThemeBody" style="margin-top:8px">
       <div class="field">
@@ -1049,8 +1068,8 @@ function initThemePanel(){
         <select id="admThemeSelect" style="width:100%"></select>
       </div>
       <div class="row" style="gap:8px; margin-top:6px; flex-wrap:wrap">
-        <button class="btn small" id="admThemePreview">Probar local</button>
-        <button class="btn small" id="admThemeSave">Guardar GLOBAL</button>
+        <button class="btn small" id="admThemePreview" type="button">Probar local</button>
+        <button class="btn small" id="admThemeSave" type="button">Guardar GLOBAL</button>
       </div>
       <div class="muted small" id="admThemeMsg" style="margin-top:6px;opacity:.9"></div>
     </div>
@@ -1066,8 +1085,10 @@ function initThemePanel(){
   }
 
   const body = document.getElementById('admThemeBody');
-  document.getElementById('admThemeToggle')?.addEventListener('click', ()=>{
-    body.style.display = (body.style.display==='none') ? 'block' : 'none';
+  document.getElementById('admThemeToggle')?.addEventListener('click', (e)=>{
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    e.currentTarget.setAttribute('aria-expanded', String(!open));
   });
 
   document.getElementById('admThemePreview')?.addEventListener('click', ()=>{
@@ -1091,8 +1112,12 @@ function initThemePanel(){
 /* ---------------- helpers ---------------- */
 function q(sel){ return document.querySelector(sel); }
 function setTxt(id,v){ const el=document.getElementById(id); if(el) el.textContent=String(v); }
+// Muestra 2 decimales si hay centavos reales, si no sin decimales (configurable)
 function setMoney(id,v){ const el=document.getElementById(id); if(el) el.textContent=fmtMoney(v); }
-const fmtMoney = n => '$' + Number(n||0).toFixed(0);
+const fmtMoney = (n) => {
+  const x = Number(n||0);
+  return '$' + (Math.abs(x % 1) > 0.0001 ? x.toFixed(2) : x.toFixed(0));
+};
 function esc(s=''){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])).replace(/'/g, '&#39;'); }
 function escAttr(s=''){ return String(s).replace(/"/g, '&quot;'); }
 function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&gt;','"':'&quot;'}[m])); }
@@ -1127,8 +1152,8 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
     panel.innerHTML = `
       <div class="row" style="justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap">
         <div class="row" style="gap:8px; flex-wrap:wrap">
-          <input id="prodSearch" class="input" placeholder="Buscar producto..." style="min-width:220px">
-          <select id="prodFilter" class="input">
+          <input id="prodSearch" class="input" placeholder="Buscar producto..." style="min-width:220px" aria-label="Buscar producto">
+          <select id="prodFilter" class="input" aria-label="Filtrar productos">
             <option value="all">Todos</option>
             <option value="active">Activos</option>
             <option value="hold">En espera</option>
@@ -1137,8 +1162,8 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
           </select>
         </div>
         <div class="row" style="gap:8px; flex-wrap:wrap">
-          <button class="btn" id="prodNew">Nuevo producto</button>
-          <button class="btn ghost" id="prodRefresh">Refrescar</button>
+          <button class="btn" id="prodNew" type="button">Nuevo producto</button>
+          <button class="btn ghost" id="prodRefresh" type="button">Refrescar</button>
         </div>
       </div>
 
@@ -1223,18 +1248,24 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
       return;
     }
     if (act==='toggle-active'){
-      try{ await upsertArticle({ ...row, active: !row?.active, onHold: row?.onHold && !row?.active ? false : row?.onHold }, { training: isTraining() }); toast(row?.active?'Desactivado':'Activado'); }
-      catch(e){ console.error(e); toast('No se pudo cambiar estado'); }
+      try{
+        await upsertArticle({ ...row, active: !row?.active, onHold: row?.onHold && !row?.active ? false : row?.onHold }, { training: isTraining() });
+        toast(row?.active?'Desactivado':'Activado');
+      }catch(e){ console.error(e); toast('No se pudo cambiar estado'); }
       return;
     }
     if (act==='hold'){
-      try{ await upsertArticle({ ...row, onHold: !row?.onHold, active: row?.onHold ? true : false }, { training: isTraining() }); toast(row?.onHold?'Quitado de espera':'Puesto en espera'); }
-      catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
+      try{
+        await upsertArticle({ ...row, onHold: !row?.onHold, active: row?.onHold ? true : false }, { training: isTraining() });
+        toast(row?.onHold?'Quitado de espera':'Puesto en espera');
+      }catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
       return;
     }
     if (act==='feature'){
-      try{ await upsertArticle({ ...row, featured: !row?.featured }, { training: isTraining() }); toast(row?.featured?'Quitado de destacados':'Destacado'); }
-      catch(e){ console.error(e); toast('No se pudo destacar'); }
+      try{
+        await upsertArticle({ ...row, featured: !row?.featured }, { training: isTraining() });
+        toast(row?.featured?'Quitado de destacados':'Destacado');
+      }catch(e){ console.error(e); toast('No se pudo destacar'); }
       return;
     }
   });
@@ -1370,7 +1401,7 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
             </div>
             <div class="field">
               <label>Vence (si limitada)</label>
-              <input id="pUntil" type="datetime-local" value="${dateVal}">
+              <input id="pUntil" type="datetime-local" value="${dateVal}" ${data.limitedTime?'':'disabled'}>
             </div>
             <div class="field">
               <label>Audio (ruta)</label>
@@ -1411,6 +1442,14 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
 
     function validate(){ const ok = !!$('#pName')?.value.trim(); $('#pNameErr').style.display = ok ? 'none' : ''; return ok; }
     $('#pName')?.addEventListener('input', validate);
+
+    // Habilitar/deshabilitar fecha límite según "Edición limitada"
+    wrap.addEventListener('change', (e)=>{
+      if (e.target?.id==='pLimited'){
+        const on = e.target.value==='si';
+        $('#pUntil').disabled = !on;
+      }
+    });
 
     $('#pHold')?.addEventListener('click', async ()=>{
       try{
@@ -1466,3 +1505,14 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
   
 /* ---------------- Arranque ---------------- */
 runReports(); // primer reporte al abrir
+// Atajos útiles
+document.addEventListener('keydown',(e)=>{
+  // Ctrl/Cmd+K: foco a búsquedas (prioridad Productos si visible)
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){
+    e.preventDefault();
+    const prodVisible = document.getElementById('panel-prod')?.classList.contains('active');
+    const el = prodVisible ? document.getElementById('prodSearch')
+                           : document.getElementById('histSearch') || document.getElementById('rcpSearch');
+    el?.focus();
+  }
+});
