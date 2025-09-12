@@ -8,6 +8,7 @@
 // + CTA flotante para promover seguimiento al cerrar carrito sin confirmar.
 // + Cuenta regresiva HH con auto-refresh al terminar.
 // + Sistema de temas festivos mexicanos (local/global) — requiere /shared/theme.js y /shared/db.js
+// + Lealtad: registro sencillo + tarjeta coleccionable con chance Dorado (cupón -30%)
 
 import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
@@ -49,7 +50,14 @@ const state = {
   themeName: '',
 
   // Última orden creada (para seguimiento sin teléfono)
-  lastOrderId: null
+  lastOrderId: null,
+
+  // ===== Lealtad / coleccionables =====
+  loyaltyEnabled: true,
+  loyaltyAskShown: false,
+  loyaltyOptIn: false,
+  lastCollectible: null,   // {rarity, name, title, palette, meta}
+  lastVoucher: null        // {code, pct, expiresAt}
 };
 
 /* ====== ETA tuning ====== */
@@ -216,6 +224,9 @@ async function init(){
     state.adminMode = true;
     mountThemePanel();
   }
+
+  // Montar modal de lealtad
+  ensureLoyaltyModal();
 }
 
 /* ======================= Utilidades base ======================= */
@@ -256,6 +267,16 @@ function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
+}
+function randomPick(weighted){
+  // weighted: [{value, w}]
+  const sum = weighted.reduce((a,x)=>a+(x.w||0),0);
+  let r = Math.random() * sum;
+  for (const x of weighted){
+    r -= (x.w||0);
+    if (r <= 0) return x.value;
+  }
+  return weighted[weighted.length-1]?.value;
 }
 
 /* ========= Seguimiento ========= */
@@ -592,7 +613,7 @@ function openItemModal(item, base, existingIndex=null){
   if (!body) return;
   body.innerHTML = `
     <div class="field"><label>Tu nombre</label>
-      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/></div>
+      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="\${state.customerName||''}"/></div>
     ${ item.mini && (DLC > 0) ? `
     <div class="field"><label>DLC de Carne grande</label>
       <div class="ul-clean">
@@ -605,23 +626,23 @@ function openItemModal(item, base, existingIndex=null){
     <div class="field"><label>Potenciar sabor (cambio sin costo)</label>
       <select id="swapSauce"><option value="">Dejar salsa por defecto</option>
         ${((base?.salsasSugeridas || [base?.suggested]).filter(Boolean) || [])
-           .map(s=>`<option value="${s}" ${swapVal===s?'selected':''}>${s}</option>`).join('')}
+           .map(s=>`<option value="\${s}" ${swapVal===s?'selected':''}>\${s}</option>`).join('')}
       </select>
       <div class="muted small">* Extras se cobran aparte.</div>
     </div>
     <div class="field"><label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
         ${sauces.map((s,i)=>`
-          <input type="checkbox" id="s${i}" ${hasSauce(s)?'checked':''}/>
-          <label for="s${i}">${s}</label>
+          <input type="checkbox" id="s\${i}" ${hasSauce(s)?'checked':''}/>
+          <label for="s\${i}">\${s}</label>
           <span class="tag">(+${money(SP)})</span>`).join('')}
       </div>
     </div>
     <div class="field"><label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
         ${extrasIngr.map((obj,i)=>`
-          <input type="checkbox" id="e${i}" ${hasIngr(obj.name)?'checked':''}/>
-          <label for="e${i}">${obj.name}</label>
+          <input type="checkbox" id="e\${i}" ${hasIngr(obj.name)?'checked':''}/>
+          <label for="e\${i}">\${obj.name}</label>
           <span class="tag">(+${money(obj.price)})</span>`).join('')}
       </div>
     </div>
@@ -753,6 +774,12 @@ function openCartModal(){
         <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
                placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
         <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
+        <div class="muted small" style="margin-top:6px">
+          <label style="display:flex;gap:8px;align-items:center">
+            <input id="loyaltyOpt" type="checkbox" ${state.loyaltyOptIn?'checked':''}/>
+            <span>Quiero guardar mi tarjeta y participar por premios</span>
+          </label>
+        </div>
       </div>
 
       <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
@@ -802,6 +829,13 @@ function openCartModal(){
   const phoneField = document.getElementById('phoneField');
   const phoneInput = document.getElementById('phoneNum');
   const paySel     = document.getElementById('payMethod');
+  const loyaltyOpt = document.getElementById('loyaltyOpt');
+
+  if (loyaltyOpt){
+    loyaltyOpt.addEventListener('change', ()=>{
+      state.loyaltyOptIn = !!loyaltyOpt.checked;
+    });
+  }
 
   if (phoneInput){
     phoneInput.addEventListener('input', ()=>{
@@ -812,7 +846,7 @@ function openCartModal(){
     phoneInput.addEventListener('change', async ()=>{
       const p = normalizePhone(phoneInput.value);
       if (p.length >= 10){
-        const c = await DB.fetchCustomer(p);
+        const c = await DB.fetchCustomer?.(p);
         if (c?.name){
           const nameEl = document.getElementById('cartName');
           if (nameEl && !nameEl.value) nameEl.value = c.name;
@@ -861,7 +895,7 @@ function openCartModal(){
       if (act === 'edit') {
         const item = findItemById(line.id);
         const base = baseOfItem(item);
-        if(m) m.style.display='none';
+        const m2 = document.getElementById('cartModal'); if(m2) m2.style.display='none';
         openItemModal(item, base, i);
         return;
       }
@@ -964,6 +998,18 @@ function openCartModal(){
           orderId
         });
       }, 200);
+
+      // Ofrecer registro + coleccionable
+      if (state.loyaltyEnabled && !state.loyaltyAskShown) {
+        state.loyaltyAskShown = true;
+        setTimeout(()=>{
+          openLoyaltyModal({
+            name: orderBase.customer || '',
+            phone: orderBase.phone || '',
+            orderId
+          });
+        }, 500);
+      }
     };
   }
 }
@@ -1328,6 +1374,192 @@ function mountThemePanel() {
   if (state.adminMode) {
     const g = document.getElementById('btnThemeGlobal');
     if (g) g.style.display = '';
+  }
+}
+
+/* ======================= Lealtad / Coleccionables ======================= */
+function ensureLoyaltyModal(){
+  if (document.getElementById('loyaltyModal')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'loyaltyModal';
+  wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:10000;place-items:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)';
+  wrap.innerHTML = `
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loyTtl"
+         style="max-width:760px;width:calc(100% - 24px);background:#0f182a;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px">
+      <div class="modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h3 id="loyTtl" style="margin:0">¡Guarda tu tarjeta y destapa tu recompensa!</h3>
+        <button id="loyClose" class="btn ghost" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="muted" style="margin:6px 0 10px">Regístrate para conservar tus coleccionables y desbloquear sorpresas. Si te sale Dorado obtienes <b>30% de descuento</b> en tu siguiente visita.</p>
+
+      <div id="loyStepForm">
+        <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+          <div class="field"><label>Nombre</label><input id="loyName" type="text" placeholder="Tu nombre"/></div>
+          <div class="field"><label>Teléfono</label><input id="loyPhone" type="tel" inputmode="numeric" placeholder="10 dígitos"/></div>
+          <div class="field"><label>Cumpleaños</label><input id="loyBirth" type="date"/></div>
+          <div class="field"><label>Picor favorito</label>
+            <select id="loyHeat">
+              <option value="">Elige…</option>
+              <option>Suave</option><option>Medio</option><option>Picante</option><option>🔥 Brutal</option>
+            </select>
+          </div>
+          <div class="field"><label>Salsa favorita</label>
+            <select id="loySauce">
+              <option value="">Elige…</option>
+              ${(state.menu?.extras?.sauces||['BBQ','Chipotle','Ajo','Habanero']).map(s=>`<option>${s}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="row" style="gap:8px;margin-top:10px">
+          <button id="loyOpen" class="btn">Destapar tarjeta</button>
+          <button id="loySkip" class="btn ghost">Luego</button>
+        </div>
+      </div>
+
+      <div id="loyStepResult" style="display:none">
+        <div id="loyCard" class="k-card" style="margin:8px 0;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.08)"></div>
+        <div id="loyVoucher" class="muted" style="margin-top:8px"></div>
+        <div class="row" style="gap:8px;margin-top:12px">
+          <button id="loyDone" class="btn">Listo</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', (e)=>{ if(e.target===wrap) closeLoyaltyModal(); });
+  wrap.querySelector('#loyClose')?.addEventListener('click', closeLoyaltyModal);
+  wrap.querySelector('#loySkip')?.addEventListener('click', closeLoyaltyModal);
+  wrap.querySelector('#loyDone')?.addEventListener('click', closeLoyaltyModal);
+
+  // acciones
+  wrap.querySelector('#loyOpen')?.addEventListener('click', async ()=>{
+    const name  = (document.getElementById('loyName')?.value||'').trim() || state.customerName || '';
+    const phone = normalizePhone((document.getElementById('loyPhone')?.value||state.orderMeta.phone||'').trim());
+    const birth = (document.getElementById('loyBirth')?.value||'').trim();
+    const heat  = (document.getElementById('loyHeat')?.value||'').trim();
+    const sauce = (document.getElementById('loySauce')?.value||'').trim();
+
+    if (phone.length < 10){
+      alert('Para guardar tu tarjeta, ingresa un teléfono de 10 dígitos.'); return;
+    }
+
+    // Persistir perfil (best-effort)
+    try{
+      await DB.upsertCustomerProfile?.({ phone, name, birthday: birth || null, prefs: { heat, sauce } });
+    }catch(e){ console.warn('upsertCustomerProfile fail', e); }
+
+    // Roll coleccionable
+    const roll = rollCollectible(); // {rarity, title, meta}
+    state.lastCollectible = roll;
+
+    // Guardar coleccionable (best-effort)
+    try{
+      await DB.saveCollectibleCard?.({
+        phone, // dueño
+        orderId: state.lastOrderId || null,
+        rarity: roll.rarity,
+        title: roll.title,
+        name: roll.meta?.name,
+        theme: roll.meta?.theme || 'default',
+        palette: roll.meta?.palette,
+        createdAt: Date.now()
+      });
+    }catch(e){ console.warn('saveCollectibleCard fail', e); }
+
+    // Si Dorado => crear cupón 30%
+    let voucher = null;
+    if (roll.rarity === 'Dorado'){
+      try{
+        const expiresAt = Date.now() + 1000*60*60*24*14; // 14 días
+        voucher = await DB.createVoucher?.({
+          phone, pct: 30, kind: 'golden_card', expiresAt
+        });
+      }catch(e){ console.warn('createVoucher fail', e); }
+    }
+    state.lastVoucher = voucher || null;
+
+    // Render resultado
+    renderLoyaltyResult(roll, voucher);
+  });
+}
+function openLoyaltyModal({ name='', phone='', orderId=null } = {}){
+  ensureLoyaltyModal();
+  const wrap = document.getElementById('loyaltyModal'); if(!wrap) return;
+  // Prefill
+  const nameEl = wrap.querySelector('#loyName');
+  const phoneEl= wrap.querySelector('#loyPhone');
+  if (nameEl && !nameEl.value) nameEl.value = name || state.customerName || '';
+  if (phoneEl && !phoneEl.value) phoneEl.value = normalizePhone(phone || state.orderMeta.phone || '');
+  wrap.querySelector('#loyStepForm')!.style.display = 'block';
+  wrap.querySelector('#loyStepResult')!.style.display = 'none';
+  wrap.style.display = 'grid';
+}
+function closeLoyaltyModal(){
+  const m = document.getElementById('loyaltyModal');
+  if (m) m.style.display = 'none';
+}
+function rollCollectible(){
+  // Probabilidades (suman 100)
+  const rarity = randomPick([
+    { value: 'Dorado', w: 3 },
+    { value: 'Épico',  w: 12 },
+    { value: 'Raro',   w: 35 },
+    { value: 'Común',  w: 50 }
+  ]);
+  // Elegimos familia temática simple (ej. Mexi Bun o Pixel Pal)
+  const families = [
+    { name:'Mexi Bun', theme:'mex', palette:['#FBBF24','#DC2626','#22C55E','#FCD34D'] },
+    { name:'Pixel Pal', theme:'pixel', palette:['#F59E0B','#6B7280','#EF4444','#0EA5E9'] },
+    { name:'Glitch Burger', theme:'glitch', palette:['#8B5CF6','#EC4899','#2DD4BF','#1F2937'] },
+    { name:'Golden Patty', theme:'gold', palette:['#FBBF24','#FCD34D','#9CA3AF','#1F2937'] },
+    { name:'Party Burger', theme:'party', palette:['#EC4899','#6EE7B7','#FBBF24','#EF4444'] }
+  ];
+  const fam = families[Math.floor(Math.random()*families.length)];
+  const byR = {
+    'Común':  `Common collectible of "${fam.name}"`,
+    'Raro':   `Rare collectible of "${fam.name}"`,
+    'Épico':  `Epic collectible of "${fam.name}"`,
+    'Dorado': `Gold collectible of "${fam.name}"`
+  }[rarity];
+  const title = `${byR}`;
+  return {
+    rarity,
+    title,
+    meta: { name: fam.name, theme: fam.theme, palette: fam.palette }
+  };
+}
+function renderLoyaltyResult(roll, voucher){
+  const wrap = document.getElementById('loyaltyModal'); if(!wrap) return;
+  const stepForm = wrap.querySelector('#loyStepForm');
+  const stepRes  = wrap.querySelector('#loyStepResult');
+  const cardBox  = wrap.querySelector('#loyCard');
+  const vBox     = wrap.querySelector('#loyVoucher');
+  if (stepForm) stepForm.style.display = 'none';
+  if (stepRes)  stepRes.style.display  = 'block';
+
+  const pal = (roll.meta?.palette||[]).join(', ');
+  cardBox.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
+                  display:grid;place-items:center;font-size:28px">🍔</div>
+      <div>
+        <div style="font-weight:800">${roll.title}</div>
+        <div class="muted small">Palette (${pal}) · rareza: <b>${roll.rarity}</b></div>
+      </div>
+    </div>
+  `;
+
+  if (roll.rarity === 'Dorado'){
+    const code = voucher?.code || '(cupón generado)';
+    const until = voucher?.expiresAt ? new Date(voucher.expiresAt).toLocaleDateString() : '';
+    vBox.innerHTML = `
+      <div class="k-card" style="margin-top:8px;padding:10px;border-radius:12px;border:1px dashed rgba(255,255,255,.25)">
+        <div style="font-weight:700">🎉 ¡Tarjeta Dorada! Cupón -30%</div>
+        <div class="muted small">Código: <b>${code}</b> ${until?`· vence ${until}`:''}</div>
+        <div class="muted small">Canjeable 1 vez. No acumulable con otras promos.</div>
+      </div>`;
+  } else {
+    vBox.textContent = 'Sigue coleccionando — cada visita te da otra oportunidad de ganar premios. 🙌';
   }
 }
 
