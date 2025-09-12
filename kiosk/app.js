@@ -613,7 +613,7 @@ function openItemModal(item, base, existingIndex=null){
   if (!body) return;
   body.innerHTML = `
     <div class="field"><label>Tu nombre</label>
-      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="\${state.customerName||''}"/></div>
+      <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/></div>
     ${ item.mini && (DLC > 0) ? `
     <div class="field"><label>DLC de Carne grande</label>
       <div class="ul-clean">
@@ -626,23 +626,23 @@ function openItemModal(item, base, existingIndex=null){
     <div class="field"><label>Potenciar sabor (cambio sin costo)</label>
       <select id="swapSauce"><option value="">Dejar salsa por defecto</option>
         ${((base?.salsasSugeridas || [base?.suggested]).filter(Boolean) || [])
-           .map(s=>`<option value="\${s}" ${swapVal===s?'selected':''}>\${s}</option>`).join('')}
+           .map(s=>`<option value="${s}" ${swapVal===s?'selected':''}>${s}</option>`).join('')}
       </select>
       <div class="muted small">* Extras se cobran aparte.</div>
     </div>
     <div class="field"><label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
         ${sauces.map((s,i)=>`
-          <input type="checkbox" id="s\${i}" ${hasSauce(s)?'checked':''}/>
-          <label for="s\${i}">\${s}</label>
+          <input type="checkbox" id="s${i}" ${hasSauce(s)?'checked':''}/>
+          <label for="s${i}">${s}</label>
           <span class="tag">(+${money(SP)})</span>`).join('')}
       </div>
     </div>
     <div class="field"><label>Ingredientes extra</label>
       <div class="ul-clean" id="ingrs">
         ${extrasIngr.map((obj,i)=>`
-          <input type="checkbox" id="e\${i}" ${hasIngr(obj.name)?'checked':''}/>
-          <label for="e\${i}">\${obj.name}</label>
+          <input type="checkbox" id="e${i}" ${hasIngr(obj.name)?'checked':''}/>
+          <label for="e${i}">${obj.name}</label>
           <span class="tag">(+${money(obj.price)})</span>`).join('')}
       </div>
     </div>
@@ -1490,8 +1490,10 @@ function openLoyaltyModal({ name='', phone='', orderId=null } = {}){
   const phoneEl= wrap.querySelector('#loyPhone');
   if (nameEl && !nameEl.value) nameEl.value = name || state.customerName || '';
   if (phoneEl && !phoneEl.value) phoneEl.value = normalizePhone(phone || state.orderMeta.phone || '');
-  wrap.querySelector('#loyStepForm')!.style.display = 'block';
-  wrap.querySelector('#loyStepResult')!.style.display = 'none';
+  const sf = wrap.querySelector('#loyStepForm');
+  const sr = wrap.querySelector('#loyStepResult');
+  if (sf) sf.style.display = 'block';
+  if (sr) sr.style.display = 'none';
   wrap.style.display = 'grid';
 }
 function closeLoyaltyModal(){
@@ -1536,6 +1538,7 @@ function renderLoyaltyResult(roll, voucher){
   const vBox     = wrap.querySelector('#loyVoucher');
   if (stepForm) stepForm.style.display = 'none';
   if (stepRes)  stepRes.style.display  = 'block';
+  if (!cardBox || !vBox) return;
 
   const pal = (roll.meta?.palette||[]).join(', ');
   cardBox.innerHTML = `
