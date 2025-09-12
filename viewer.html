@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="theme-color" content="#0b1220">
 <title>Seven Stickers S1 · Viewer</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -17,6 +18,7 @@
   body{
     margin:0; background: radial-gradient(1200px 600px at 10% -10%, #14203c 0%, #0b1220 50%, #0b1220 100%);
     color:var(--text); font: 14px/1.4 Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    -webkit-text-size-adjust:100%;
   }
   header{
     position:sticky; top:0; z-index:10;
@@ -33,6 +35,7 @@
     background:#0f182a; border:1px solid var(--border); color:var(--text);
     padding:8px 10px; border-radius:10px; min-width:120px;
   }
+  input[type="search"]{ width:210px }
   button{
     border:1px solid var(--border); color:var(--text); background:#0f182a;
     padding:8px 12px; border-radius:10px; cursor:pointer;
@@ -41,7 +44,7 @@
   button.ghost{background:#0f182a}
   button:disabled{opacity:.5; cursor:not-allowed}
   .chips{display:flex; gap:8px; flex-wrap:wrap}
-  .chip{background:var(--chip); border:1px solid var(--border); border-radius:999px; padding:6px 10px; cursor:pointer}
+  .chip{background:var(--chip); border:1px solid var(--border); border-radius:999px; padding:6px 10px; cursor:pointer; user-select:none}
   .chip.active{background:var(--chip-b)}
   /* grid */
   .grid{
@@ -61,15 +64,22 @@
   }
   .media img{ width:100%; height:100%; object-fit:contain; image-rendering:pixelated }
   .placeholder{
-    width:100%; height:100%; display:grid; place-items:center; color:#fff; font-weight:700;
+    width:100%; height:100%; display:grid; place-items:center; color:#fff; font-weight:700; padding:8px; text-align:center;
     background: repeating-linear-gradient(45deg, #162546, #162546 10px, #0f1b36 10px, #0f1b36 20px);
   }
   .title{font-weight:800}
-  .rar{font-weight:700; padding:2px 8px; border-radius:999px; font-size:12px;}
-  .rar.common{background:color-mix(in oklab,var(--common) 30%, black); color:var(--common); border:1px solid color-mix(in oklab,var(--common) 40%, black)}
-  .rar.rare{background:color-mix(in oklab,var(--rare) 25%, black); color:var(--rare); border:1px solid color-mix(in oklab,var(--rare) 45%, black)}
-  .rar.epic{background:color-mix(in oklab,var(--epic) 25%, black); color:var(--epic); border:1px solid color-mix(in oklab,var(--epic) 45%, black)}
-  .rar.gold{background:color-mix(in oklab,var(--gold) 25%, black); color:var(--gold); border:1px solid color-mix(in oklab,var(--gold) 45%, black)}
+  .rar{font-weight:700; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid transparent}
+  /* color-mix con fallback */
+  .rar.common{ color:var(--common); background:#0d1f1a; border-color:#134733; }
+  .rar.rare{   color:var(--rare);   background:#0c1629; border-color:#1c3e7a; }
+  .rar.epic{   color:var(--epic);   background:#140f25; border-color:#3f2f78; }
+  .rar.gold{   color:var(--gold);   background:#201703; border-color:#6b530c; }
+  @supports (background: color-mix(in oklab, white 10%, black)) {
+    .rar.common{background:color-mix(in oklab,var(--common) 22%, black); border-color:color-mix(in oklab,var(--common) 45%, black)}
+    .rar.rare{  background:color-mix(in oklab,var(--rare) 22%, black); border-color:color-mix(in oklab,var(--rare) 45%, black)}
+    .rar.epic{  background:color-mix(in oklab,var(--epic) 22%, black); border-color:color-mix(in oklab,var(--epic) 45%, black)}
+    .rar.gold{  background:color-mix(in oklab,var(--gold) 22%, black); border-color:color-mix(in oklab,var(--gold) 45%, black)}
+  }
   .progress{height:8px;background:#0e172a;border:1px solid var(--border);border-radius:999px;overflow:hidden}
   .progress>i{display:block;height:100%;background:linear-gradient(90deg,var(--success),#a7f3d0)}
   /* modal */
@@ -86,10 +96,19 @@
       conic-gradient(from var(--a,0deg), #fff0 0%, rgba(255,241,175,.35) 10%, #fff0 20%, rgba(173,216,230,.25) 35%, #fff0 55%, rgba(255,201,125,.35) 70%, #fff0 100%);
     animation: foil 4s linear infinite;
   }
+  @media (prefers-reduced-motion: reduce){ .foil{ animation:none } }
   @keyframes foil{ to{ --a: 360deg; } }
   .footer{position:sticky; bottom:0; padding:10px 0; background:linear-gradient(180deg,transparent,rgba(0,0,0,.25))}
   .tiny{font-size:12px}
   .badge{font-weight:700; font-size:12px; padding:2px 8px; border-radius:999px; background:#13203a; border:1px solid var(--border); color:var(--muted)}
+  /* Toast */
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:50;
+    background:#0f182a; border:1px solid var(--border); border-radius:12px; padding:10px 12px; display:none; max-width:min(92vw,520px);
+    box-shadow:0 10px 24px rgba(0,0,0,.3);
+  }
+  .toast.show{ display:block; animation:pop .18s ease-out }
+  @keyframes pop{ from{ transform:translate(-50%,8px); opacity:.3 } to{ transform:translate(-50%,0); opacity:1 } }
 </style>
 </head>
 <body>
@@ -102,31 +121,31 @@
         <div class="muted tiny">Viewer · sobres, álbum y progreso</div>
       </div>
       <div class="sp"></div>
-      <div class="row">
-        <select id="fPage"></select>
-        <select id="fRarity">
+      <div class="row" role="group" aria-label="Filtros">
+        <select id="fPage" aria-label="Página del álbum"></select>
+        <select id="fRarity" aria-label="Rareza">
           <option value="">Todas las rarezas</option>
         </select>
-        <input id="fSearch" type="search" placeholder="Buscar personaje…"/>
-        <button class="ghost" id="btnReset">Reset</button>
+        <input id="fSearch" type="search" placeholder="Buscar personaje…" aria-label="Buscar personaje"/>
+        <button class="ghost" id="btnReset" title="Limpiar filtros">Reset</button>
         <button class="primary" id="btnOpen">Abrir sobre</button>
       </div>
     </div>
     <div class="row" style="margin-top:10px">
-      <div class="badge" id="albumProgress">Álbum 0/0</div>
-      <div class="badge" id="goldCount">Dorados 0</div>
+      <div class="badge" id="albumProgress" aria-live="polite">Álbum 0/0</div>
+      <div class="badge" id="goldCount" aria-live="polite">Dorados 0</div>
       <div class="sp"></div>
-      <div class="chips" id="pageChips"></div>
+      <div class="chips" id="pageChips" role="group" aria-label="Páginas del álbum"></div>
     </div>
   </div>
 </header>
 
 <main class="wrap">
   <div style="margin:12px 0">
-    <div class="progress"><i id="bar" style="width:0%"></i></div>
+    <div class="progress" aria-label="Progreso del álbum" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="bar" style="width:0%"></i></div>
   </div>
 
-  <section id="grid" class="grid"></section>
+  <section id="grid" class="grid" aria-live="polite"></section>
 
   <div class="footer row">
     <div class="muted tiny">Tip: tus coleccionables se guardan en este dispositivo.</div>
@@ -145,12 +164,12 @@
     <div>
       <div class="row">
         <h2 id="dlgTitle" style="margin:0; font-weight:800"></h2>
-        <span id="dlgRarity" class="rar"></span>
+        <span id="dlgRarity" class="rar" aria-label="Rareza"></span>
       </div>
       <div class="muted" id="dlgLore"></div>
       <div class="row" style="margin:8px 0">
-        <span class="badge" id="dlgPages"></span>
-        <span class="badge" id="dlgTags"></span>
+        <span class="badge" id="dlgPages" title="Páginas"></span>
+        <span class="badge" id="dlgTags" title="Etiquetas"></span>
       </div>
 
       <div class="row" style="gap:10px; margin-top:4px">
@@ -161,9 +180,11 @@
     </div>
   </div>
   <form method="dialog" style="padding:0 12px 12px">
-    <button>✕ Cerrar</button>
+    <button aria-label="Cerrar">✕ Cerrar</button>
   </form>
 </dialog>
+
+<div id="toast" class="toast"></div>
 
 <script>
 /* ====== Datos del set (los tuyos tal cual) ====== */
@@ -215,10 +236,12 @@ const DATA = {
 const $ = sel => document.querySelector(sel);
 const $$ = sel => [...document.querySelectorAll(sel)];
 const storeKey = 'seven:coll:v1';
-let collection = JSON.parse(localStorage.getItem(storeKey) || '{}'); // { cardId@rarity : count }
+let collection = safeParse(localStorage.getItem(storeKey)) || {};
 const rarityMap = new Map(DATA.rarities.map(r=>[r.id,r]));
 const allCards = buildCardList(DATA.characters);
-let filters = { page:'', rarity:'', q:'' };
+let filters = restoreFilters();
+
+function safeParse(s){ try{ return JSON.parse(s||''); }catch{ return null; } }
 
 function buildCardList(chars){
   const list=[];
@@ -234,14 +257,17 @@ function buildCardList(chars){
   return list;
 }
 function own(key){ return Number(collection[key]||0); }
-function setOwn(key,val){ if(val<=0) delete collection[key]; else collection[key]=val; localStorage.setItem(storeKey, JSON.stringify(collection)); }
+function setOwn(key,val){
+  if(val<=0) delete collection[key]; else collection[key]=val;
+  localStorage.setItem(storeKey, JSON.stringify(collection));
+}
 
 /* ====== UI ====== */
 function initFilters(){
   const fPage = $('#fPage');
   fPage.innerHTML = `<option value="">Todas las páginas</option>` +
     DATA.album.map(a=>`<option value="${a.pageId}">${a.title}</option>`).join('');
-  const chips = DATA.album.map(a=> `<span class="chip" data-page="${a.pageId}">${a.title}</span>`).join('');
+  const chips = DATA.album.map(a=> `<button type="button" class="chip" data-page="${a.pageId}" aria-pressed="false">${a.title}</button>`).join('');
   $('#pageChips').innerHTML = chips;
 
   const fR = $('#fRarity');
@@ -251,19 +277,55 @@ function initFilters(){
     fR.appendChild(opt);
   }
 
-  fPage.onchange = ()=>{ filters.page = fPage.value; renderGrid(); };
-  fR.onchange = ()=>{ filters.rarity = fR.value; renderGrid(); };
-  $('#fSearch').oninput = e=>{ filters.q = e.target.value.toLowerCase().trim(); renderGrid(); };
-  $('#btnReset').onclick = ()=>{ filters={page:'',rarity:'',q:''}; fPage.value=''; fR.value=''; $('#fSearch').value=''; $$('#pageChips .chip').forEach(c=>c.classList.remove('active')); renderGrid(); };
+  // restaurar valores
+  fPage.value = filters.page || '';
+  fR.value = filters.rarity || '';
+  $('#fSearch').value = filters.q || '';
+  if(filters.page){
+    const chip = $(`#pageChips .chip[data-page="${filters.page}"]`);
+    chip?.classList.add('active'); chip?.setAttribute('aria-pressed','true');
+  }
+
+  fPage.onchange = ()=>{ filters.page = fPage.value; syncChipToSelect(); persistFilters(); renderGrid(); };
+  fR.onchange = ()=>{ filters.rarity = fR.value; persistFilters(); renderGrid(); };
+
+  const debounced = debounce((v)=>{ filters.q = v.toLowerCase().trim(); persistFilters(); renderGrid(); }, 120);
+  $('#fSearch').addEventListener('input', e=> debounced(e.target.value));
+
+  $('#btnReset').onclick = ()=>{
+    filters={page:'',rarity:'',q:''};
+    fPage.value=''; fR.value=''; $('#fSearch').value='';
+    $$('#pageChips .chip').forEach(c=>{ c.classList.remove('active'); c.setAttribute('aria-pressed','false'); });
+    persistFilters();
+    renderGrid();
+  };
 
   $$('#pageChips .chip').forEach(ch=>{
     ch.onclick = ()=>{
       const p = ch.dataset.page;
-      if(filters.page===p){ filters.page=''; ch.classList.remove('active'); $('#fPage').value=''; }
-      else { filters.page=p; $$('#pageChips .chip').forEach(c=>c.classList.remove('active')); ch.classList.add('active'); $('#fPage').value=p; }
+      if(filters.page===p){
+        filters.page=''; ch.classList.remove('active'); ch.setAttribute('aria-pressed','false'); $('#fPage').value='';
+      } else {
+        filters.page=p;
+        $$('#pageChips .chip').forEach(c=>{ c.classList.remove('active'); c.setAttribute('aria-pressed','false'); });
+        ch.classList.add('active'); ch.setAttribute('aria-pressed','true');
+        $('#fPage').value=p;
+      }
+      persistFilters();
       renderGrid();
     };
   });
+
+  // atajo: / para enfocar búsqueda
+  window.addEventListener('keydown', (e)=>{
+    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey){
+      e.preventDefault();
+      $('#fSearch').focus();
+    }
+  });
+}
+function syncChipToSelect(){
+  $$('#pageChips .chip').forEach(c=>{ c.classList.toggle('active', c.dataset.page===filters.page); c.setAttribute('aria-pressed', String(c.dataset.page===filters.page)); });
 }
 function renderGrid(){
   const g = $('#grid'); g.innerHTML='';
@@ -273,18 +335,21 @@ function renderGrid(){
   if(filters.rarity){ list = list.filter(c=> c.rarity===filters.rarity); }
   if(filters.q){ list = list.filter(c=> (c.name.toLowerCase().includes(filters.q) || c.id.includes(filters.q))); }
 
+  const frag = document.createDocumentFragment();
   for(const c of list){
     const r = rarityMap.get(c.rarity);
     const card = document.createElement('article');
     card.className='card';
+    const alt = `${c.name} — ${r.label}`;
+    const img = c.file ? `<img loading="lazy" src="${c.file}" alt="${alt}" onerror="this.replaceWith(createPh('${c.name}'))">` : `<div class="placeholder">${c.name}</div>`;
     card.innerHTML = `
       <div class="media">
-        ${c.file ? `<img src="${c.file}" alt="${c.name}" onerror="this.replaceWith(createPh('${c.name}'))">` : `<div class="placeholder">${c.name}</div>`}
-        ${c.foil ? `<i class="foil"></i>`:''}
+        ${img}
+        ${c.foil ? `<i class="foil" aria-hidden="true"></i>`:''}
       </div>
       <div class="row">
         <div class="title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</div>
-        <span class="rar ${c.rarity}" style="margin-left:auto">${r.label}</span>
+        <span class="rar ${c.rarity}" style="margin-left:auto" aria-label="Rareza: ${r.label}">${r.label}</span>
       </div>
       <div class="row tiny muted">
         <span>${c.pages.map(p=>DATA.album.find(a=>a.pageId===p)?.title||p).join(' • ')}</span>
@@ -292,11 +357,12 @@ function renderGrid(){
       <div class="row">
         <button class="primary" data-k="${c.key}">Ver</button>
         <div class="sp"></div>
-        <span class="muted tiny">Tengo: <b>${own(c.key)}</b></span>
+        <span class="muted tiny">Tengo: <b data-own="${c.key}">${own(c.key)}</b></span>
       </div>
     `;
-    g.appendChild(card);
+    frag.appendChild(card);
   }
+  g.appendChild(frag);
   $$('#grid [data-k]').forEach(btn=> btn.onclick = ()=> openDialog(btn.dataset.k));
   updateProgress();
 }
@@ -308,21 +374,35 @@ function openDialog(key){
   const r = rarityMap.get(c.rarity);
   const dlg = $('#dlg');
   const media = $('#dlgMedia'); media.innerHTML='';
-  const w = document.createElement('div'); w.className='media'; w.innerHTML = c.file ? `<img src="${c.file}" alt="${c.name}" onerror="this.replaceWith(createPh('${c.name}'))">` : `<div class="placeholder">${c.name}</div>`;
-  if(c.foil) { const fx=document.createElement('i'); fx.className='foil'; w.appendChild(fx); }
+  const w = document.createElement('div'); w.className='media';
+  w.innerHTML = c.file
+    ? `<img loading="lazy" src="${c.file}" alt="${c.name}" onerror="this.replaceWith(createPh('${c.name}'))">`
+    : `<div class="placeholder">${c.name}</div>`;
+  if(c.foil) { const fx=document.createElement('i'); fx.className='foil'; fx.setAttribute('aria-hidden','true'); w.appendChild(fx); }
   media.appendChild(w);
 
   $('#dlgTitle').textContent = c.name;
-  const rar = $('#dlgRarity'); rar.textContent = r.label; rar.className = 'rar ' + c.rarity;
+  const rar = $('#dlgRarity'); rar.textContent = r.label; rar.className = 'rar ' + c.rarity; rar.setAttribute('aria-label', `Rareza: ${r.label}`);
   $('#dlgLore').textContent = c.lore || '';
   $('#dlgPages').textContent = c.pages.map(p=>DATA.album.find(a=>a.pageId===p)?.title||p).join(' • ') || '—';
   $('#dlgTags').textContent = (c.tags||[]).join(' • ') || '—';
   $('#dlgOwned').textContent = own(key);
 
-  $('#btnMarkOwned').onclick = ()=>{ setOwn(key, own(key)+1); $('#dlgOwned').textContent = own(key); renderGrid(); };
-  $('#btnRemoveOwned').onclick = ()=>{ setOwn(key, Math.max(0,own(key)-1)); $('#dlgOwned').textContent = own(key); renderGrid(); };
+  $('#btnMarkOwned').onclick = ()=>{ setOwn(key, own(key)+1); reflectOwn(key); };
+  $('#btnRemoveOwned').onclick = ()=>{ setOwn(key, Math.max(0,own(key)-1)); reflectOwn(key); };
+
+  // backdrop click to close
+  dlg.addEventListener('click', onBackdrop);
+  dlg.addEventListener('close', ()=> dlg.removeEventListener('click', onBackdrop));
+  function onBackdrop(e){ const r = dlg.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close(); }
 
   dlg.showModal();
+
+  function reflectOwn(k){
+    $('#dlgOwned').textContent = own(k);
+    const b = document.querySelector(`[data-own="${k}"]`); if (b) b.textContent = own(k);
+    updateProgress();
+  }
 }
 /* progreso general + dorados */
 function updateProgress(){
@@ -330,6 +410,7 @@ function updateProgress(){
   const ownedUnique = allCards.filter(c=> own(c.key)>0).length;
   const percent = Math.round( ownedUnique / totalKeys * 100 );
   $('#bar').style.width = percent + '%';
+  const pb = document.querySelector('.progress'); pb.setAttribute('aria-valuenow', String(percent));
   $('#albumProgress').textContent = `Álbum ${ownedUnique}/${totalKeys} (${percent}%)`;
   const goldCount = allCards.filter(c=> c.rarity==='gold' && own(c.key)>0).length;
   $('#goldCount').textContent = `Dorados ${goldCount}`;
@@ -350,21 +431,22 @@ function openPack({ bonus=false }={}){
   const picks = [];
   for(let i=0;i<size;i++){
     const rar = rollRarity();
-    const pool = allCards.filter(c=> c.rarity===rar); // podría balancear por página/tema si quieres.
+    const pool = allCards.filter(c=> c.rarity===rar);
     const pick = pool[Math.floor(Math.random()*pool.length)];
     picks.push(pick);
     setOwn(pick.key, own(pick.key)+1);
   }
   renderGrid();
-  // mostrar mini stack animado
-  alert(`¡Sobre abierto!\n${picks.map(p=>`• ${p.name} (${rarityMap.get(p.rarity).label})`).join('\n')}${bonus?'\\n(Bonus por extras)':''}`);
+  showToast(`¡Sobre abierto!`, picks.map(p=>`<li>${escapeHtml(p.name)} <span class="rar ${p.rarity}">${rarityMap.get(p.rarity).label}</span></li>`).join(''), bonus);
 }
 $('#btnOpen').onclick = ()=> openPack({ bonus:false });
 
 /* ====== Import/Export ====== */
 $('#btnExport').onclick = ()=>{
   const blob = new Blob([JSON.stringify(collection,null,2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'coleccion_seven.json'; a.click();
+  const a = document.createElement('a'); const url = URL.createObjectURL(blob);
+  a.href = url; a.download = 'coleccion_seven.json'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 0);
 };
 $('#btnImport').onclick = ()=>{
   const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
@@ -372,20 +454,63 @@ $('#btnImport').onclick = ()=>{
     const f = inp.files?.[0]; if(!f) return;
     const r = new FileReader();
     r.onload = ()=>{
-      try{ collection = JSON.parse(r.result); localStorage.setItem(storeKey, JSON.stringify(collection)); renderGrid(); alert('Colección importada.'); }
-      catch{ alert('Archivo inválido'); }
+      try{
+        const loaded = JSON.parse(r.result);
+        if (loaded && typeof loaded === 'object'){ collection = loaded; localStorage.setItem(storeKey, JSON.stringify(collection)); renderGrid(); showToast('Colección importada'); }
+        else throw new Error('bad');
+      }catch{ showToast('Archivo inválido'); }
     };
     r.readAsText(f);
   };
   inp.click();
 };
 $('#btnClear').onclick = ()=>{
-  if(confirm('¿Borrar colección local?')){ collection={}; localStorage.removeItem(storeKey); renderGrid(); }
+  if(confirm('¿Borrar colección local?')){ collection={}; localStorage.removeItem(storeKey); renderGrid(); showToast('Colección borrada'); }
 };
+
+/* ====== Filtros en URL/localStorage ====== */
+function persistFilters(){
+  localStorage.setItem('seven:viewer:filters', JSON.stringify(filters));
+  const u = new URL(location.href);
+  setOrDel(u.searchParams, 'page', filters.page);
+  setOrDel(u.searchParams, 'rarity', filters.rarity);
+  setOrDel(u.searchParams, 'q', filters.q);
+  history.replaceState(null,'',u);
+}
+function restoreFilters(){
+  const u = new URL(location.href);
+  const fromUrl = { page:u.searchParams.get('page')||'', rarity:u.searchParams.get('rarity')||'', q:u.searchParams.get('q')||'' };
+  const fromLs = safeParse(localStorage.getItem('seven:viewer:filters')) || {};
+  return { page: fromUrl.page || fromLs.page || '', rarity: fromUrl.rarity || fromLs.rarity || '', q: fromUrl.q || fromLs.q || '' };
+}
+function setOrDel(sp, k, v){ if (v) sp.set(k,v); else sp.delete(k); }
+
+/* ====== Utils ====== */
+function debounce(fn, ms=100){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+/* ====== Toast ====== */
+function showToast(title, htmlList='', bonus=false){
+  const t = $('#toast');
+  t.innerHTML = `
+    <div class="row" style="gap:10px; align-items:flex-start">
+      <strong>${escapeHtml(title)}</strong>
+      ${bonus?'<span class="badge">Bonus</span>':''}
+      <div class="sp"></div>
+      <button class="ghost" onclick="this.closest('#toast').classList.remove('show')">Cerrar</button>
+    </div>
+    ${htmlList?`<ul class="tiny" style="margin:6px 0 0 18px; padding:0">${htmlList}</ul>`:''}
+  `;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 3500);
+}
 
 /* ====== Arranque ====== */
 initFilters();
 renderGrid();
+
+/* Exponer createPh para manejador inline */
+window.createPh = createPh;
 </script>
 </body>
 </html>
