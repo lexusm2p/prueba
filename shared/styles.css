@@ -3,6 +3,7 @@
    Archivo: shared/styles.css
    =========================== */
 :root{
+  color-scheme: dark;
   --bg:#0b0f19;
   --panel:#121a2a;
   --panel-2:#0f1726;
@@ -19,6 +20,12 @@
   --gap:16px;
   --pad:16px;
   --font:'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+
+  /* Safe areas (iOS notch) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 
   /* ---- decor / extras por tema ---- */
   --decor-glow: 0 0 18px rgba(255,210,74,.25);
@@ -57,10 +64,14 @@ body{
   background:
     radial-gradient(120% 90% at 0% 0%, #141b2b 0%, #0f1420 40%, #0b0f19 100%),
     var(--bg);
+  -webkit-text-size-adjust:100%;
 }
+
+::selection{ background:rgba(124,201,255,.28); color:#fff; }
 
 /* ===== Utilidades ===== */
 a{ color:var(--accent-2); text-decoration:none }
+a:hover{ text-decoration:underline }
 .row{ display:flex; align-items:center; gap:8px }
 .right{ text-align:right }
 .center{ text-align:center }
@@ -68,12 +79,13 @@ a{ color:var(--accent-2); text-decoration:none }
 .mono{ font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace }
 .muted{ color:var(--muted) }
 .small{ font-size:12px }
+.visually-hidden{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
 /* ===== Header ===== */
 .header{
   position:sticky; top:0; z-index:30; /* ↑ antes 20 */
   display:flex; align-items:center; justify-content:space-between;
-  padding:10px 14px;
+  padding:calc(10px + var(--safe-top)) 14px 10px;
   background:rgba(10,14,24,.85);
   backdrop-filter:blur(6px);
   border-bottom:1px solid var(--stroke);
@@ -102,8 +114,10 @@ a{ color:var(--accent-2); text-decoration:none }
   border-radius:12px;
   cursor:pointer;
   box-shadow:0 6px 0 #b37d08, 0 10px 18px rgba(0,0,0,.35);
-  transition:transform .12s ease;
+  transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease;
   white-space:nowrap;
+  user-select:none;
+  touch-action:manipulation;
 }
 .btn:hover{ transform:translateY(-1px) }
 .btn:active{ transform:translateY(0) }
@@ -111,6 +125,10 @@ a{ color:var(--accent-2); text-decoration:none }
   outline:3px solid var(--accent-2);
   outline-offset:2px;
   box-shadow:0 0 0 3px rgba(124,201,255,.3)
+}
+.btn[disabled], .btn:disabled{
+  opacity:.55; cursor:not-allowed; transform:none;
+  box-shadow:0 0 0 #000, 0 6px 12px rgba(0,0,0,.15);
 }
 .btn.small{ font-size:12px; padding:8px 12px }
 .btn.ghost{
@@ -232,12 +250,19 @@ a{ color:var(--accent-2); text-decoration:none }
 /* ===== Campos ===== */
 .field{ margin:10px 0 }
 label{ display:block; margin-bottom:6px; color:var(--muted); font-size:12px }
-input[type=text],input[type=number],input[type=date],input[type=datetime-local],select,textarea{
+input[type=text],input[type=number],input[type=date],input[type=datetime-local],input[type=url],input[type=tel],select,textarea{
   width:100%; padding:12px; border-radius:10px; border:1px solid var(--stroke);
   background:#0c1322; color:var(--ink);
 }
 textarea{ min-height:80px }
 .hr{ height:1px; background:var(--stroke); margin:12px 0 }
+
+/* Autofill fix (Chrome/Safari) */
+input:-webkit-autofill{
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0px 1000px #0c1322 inset;
+  box-shadow: 0 0 0px 1000px #0c1322 inset;
+}
 
 /* ===== Lista de extras (alineada) ===== */
 .ul-clean{
@@ -967,4 +992,27 @@ body[data-font="cantina"] h1, body[data-font="cantina"] h2, body[data-font="cant
 /* Acento de enfoque accesible respeta acentos de tema */
 :focus-visible{
   outline-color: var(--accent-2);
+}
+
+/* =========================================================
+   Preferencias del usuario y pulidos
+   ========================================================= */
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
+}
+
+/* Scrollbar sutil (webkit/Chromium) */
+*::-webkit-scrollbar{ width:10px; height:10px }
+*::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:8px; border:2px solid transparent; background-clip:padding-box }
+*::-webkit-scrollbar-track{ background:transparent }
+
+/* Tap highlight (mobile) */
+*{ -webkit-tap-highlight-color: rgba(255,255,255,.08); }
+
+/* Impresión básica (oculta fondos/gradientes pesados) */
+@media print{
+  body{ background:#fff; color:#000; }
+  .header, .side, .toast, .modal{ display:none !important; }
+  .card{ box-shadow:none; background:#fff; border-color:#000; }
 }
