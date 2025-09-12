@@ -3,6 +3,7 @@
 // Mantiene: HH, ETA, QR, autostart, feed READY, notificaciones.
 // + Coleccionables (máx 7 / cliente; 2 raros)
 // + CORRECCIÓN: soporte OID para pedidos de mesa (sin teléfono) + métricas.
+// + UX: Enter en teléfono, “Buscando…” amable, copy de desbloqueo incluye DELIVERED.
 
 import * as DB from '../shared/db.js';
 
@@ -355,7 +356,7 @@ function renderMine(order){
   }
   if (stCap){
     stCap.textContent =
-      (st==='READY' || st==='DONE' || st==='PAID')
+      (st==='READY' || st==='DONE' || st==='PAID' || st==='DELIVERED')
         ? '¡Felicidades! Se desbloquea un coleccionable.'
         : 'Tu mascota evoluciona conforme avanza tu pedido.';
   }
@@ -445,6 +446,9 @@ function computeEtaFallback(orders){
 let unsubOrders = null;
 const subOrders = (DB.subscribeActiveOrders || DB.subscribeOrders || DB.onOrdersSnapshot || null);
 
+// UX: mostrar “Buscando…” tras un pequeño delay si no hay coincidencias
+let searchingTimer = null;
+
 function ensureOrdersSub(){
   if (unsubOrders) return;
   if (typeof subOrders === 'function'){
@@ -459,7 +463,23 @@ function ensureOrdersSub(){
         const mine = list
           .filter(o => normPhone(getPhone(o)) === currentPhone)
           .sort((a,b)=> ts(b.createdAt) - ts(a.createdAt))[0];
-        if (mine){ seedCreatedAt(mine.id||currentOID); renderMine(mine); }
+
+        if (mine){
+          if (searchingTimer){ clearTimeout(searchingTimer); searchingTimer=null; }
+          seedCreatedAt(mine.id||currentOID);
+          renderMine(mine);
+        } else {
+          // Mensaje amable tras 800ms para evitar parpadeos
+          if (!searchingTimer){
+            searchingTimer = setTimeout(()=>{
+              if (mineEl) {
+                mineEl.classList.remove('ok');
+                mineEl.innerHTML = '<div class="muted">Buscando… Si no ves tu pedido, verifica el número o pide al staff que lo asocie.</div>';
+                if (playBox) playBox.style.display = 'none';
+              }
+            }, 800);
+          }
+        }
       }
 
       // O por OID (mesa)
@@ -523,7 +543,7 @@ shareLink?.addEventListener('click', async (e)=>{
 });
 
 /* ===================== Entrada manual por teléfono ===================== */
-goBtn?.addEventListener('click', ()=>{
+function triggerSearchByPhone(){
   const p = normPhone(phoneIn?.value || '');
   if (p.length < 10){
     alert('Ingresa un teléfono de 10 dígitos.');
@@ -535,12 +555,18 @@ goBtn?.addEventListener('click', ()=>{
   renderMine(null);
   setDefaultQrUrl();
   ensureOrdersSub();
-});
+}
+
+goBtn?.addEventListener('click', triggerSearchByPhone);
 
 phoneIn?.addEventListener('input', ()=>{
   const pos = phoneIn.selectionStart ?? phoneIn.value.length;
   phoneIn.value = normPhone(phoneIn.value);
   try { phoneIn.setSelectionRange(pos, pos); } catch {}
+});
+// UX: Enter = click “Ver estado”
+phoneIn?.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') { e.preventDefault(); triggerSearchByPhone(); }
 });
 
 /* ===================== BOOT ===================== */
@@ -564,11 +590,7 @@ phoneIn?.addEventListener('input', ()=>{
   // - Si viene OID: mostramos de inmediato.
   // - Si viene phone: también.
   if (autoStart){
-    if (currentPhone){
-      // Ya renderiza via ensureOrdersSub
-    } else if (currentOID){
-      // Ya renderiza via subscribeMineByOid/ensureOrdersSub
-    }
+    // Ya renderiza via ensureOrdersSub / subscribeMineByOid
   }
 })();
 
@@ -576,4 +598,5 @@ phoneIn?.addEventListener('input', ()=>{
 window.addEventListener('beforeunload', ()=>{
   try{ unsubOrders && unsubOrders(); }catch{}
   try{ unsubMineByOid && unsubMineByOid(); }catch{}
+  try{ if (searchingTimer) clearTimeout(searchingTimer); }catch{}
 });
