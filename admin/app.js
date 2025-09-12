@@ -360,7 +360,7 @@ btnAddPurchase && (btnAddPurchase.onclick = async () => {
     await recordPurchase({ itemId, qty, unitCost: cost, supplierId }, { training: isTraining() });
     if (q('#pQty'))  q('#pQty').value = '1';
     if (q('#pCost')) q('#pCost').value = '0';
-    toast('Compra registrado' + (isTraining() ? ' (PRUEBA)' : 'a'));
+    toast('Compra registrada' + (isTraining() ? ' (PRUEBA)' : ''));
   } catch (e) { console.error(e); toast('Error al registrar compra'); }
 });
 
