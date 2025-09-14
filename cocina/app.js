@@ -43,16 +43,12 @@ async function setStatusShim(id, status, opts){
   throw new Error('No hay setOrderStatus/setStatus en DB');
 }
 async function updateOrderShim(id, patch, opts){
-  // Preferible: updateOrder → setDoc merge
   if (typeof DB.updateOrder === 'function') return DB.updateOrder(id, patch, opts);
-  // Fallback: intenta usar upsert genérico si existiera
   if (typeof DB.upsertOrder === 'function') return DB.upsertOrder({ id, ...patch }, opts);
-  // Último recurso: no se puede (no rompe el flujo visual)
   console.warn('[cocina] updateOrder no disponible; patch ignorado:', patch);
 }
 async function archiveDeliveredShim(id, finalStatus='DONE', opts){
   if (typeof DB.archiveDelivered === 'function') return DB.archiveDelivered(id, opts);
-  // Fallback: si no hay archivado, al menos “sácalo de vista” marcando DONE
   await setStatusShim(id, finalStatus, opts);
 }
 async function applyInventoryForOrderShim(order, opts){
@@ -66,30 +62,15 @@ const Status = {
   PENDING: 'PENDING',
   IN_PROGRESS: 'IN_PROGRESS',
   READY: 'READY',
-  DELIVERED: 'DELIVERED',   // entregado, pendiente de cobro
+  DELIVERED: 'DELIVERED',
   CANCELLED: 'CANCELLED',
   DONE: 'DONE'
 };
 
 let CURRENT_LIST = [];
-const LOCALLY_TAKEN = new Set(); // ids tomadas en esta sesión (oculta botón “Tomar” al instante)
+const LOCALLY_TAKEN = new Set();
 
-/* ================== Data stream ================== */
-const unsub = subscribeOrdersShim((orders = [])=>{
-  // Dedup por id
-  const uniq = new Map();
-  for (const o of (Array.isArray(orders) ? orders : [])) {
-    if (!o?.id) continue;
-    if (!o.createdAt) o.createdAt = o.timestamps?.createdAt || new Date();
-    uniq.set(o.id, o);
-  }
-  CURRENT_LIST = Array.from(uniq.values());
-  render(CURRENT_LIST);
-});
-
-/* ================== Helpers ================== */
-const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
-const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
+/* ================== Time helpers ================== */
 const now = ()=> new Date();
 const toMs = (t)=> {
   if (!t) return 0;
@@ -97,6 +78,8 @@ const toMs = (t)=> {
   if (t.seconds != null) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
   const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
 };
+const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
+const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
 const fmtMMSS = (ms)=>{
   const s = Math.max(0, Math.floor(ms/1000));
   const m = Math.floor(s/60);
@@ -108,6 +91,58 @@ function escapeHtml(s=''){
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 }
+
+/* ================== Dedupe & merge helpers ================== */
+function updatedAtMs(o){
+  return toMs(o.updatedAt || o.timestamps?.updatedAt || o.readyAt || o.startedAt || o.createdAt || o.timestamps?.createdAt);
+}
+function mergeByNewest(list){
+  const byId = new Map();
+  for (const raw of (Array.isArray(list) ? list : [])) {
+    if (!raw?.id) continue;
+    const o = { ...raw };
+    if (!o.createdAt) o.createdAt = o.timestamps?.createdAt || new Date();
+    const prev = byId.get(o.id);
+    if (!prev || updatedAtMs(o) >= updatedAtMs(prev)) byId.set(o.id, o);
+  }
+  return Array.from(byId.values());
+}
+function patchLocal(id, patch){
+  let changed = false;
+  CURRENT_LIST = CURRENT_LIST.map(o=>{
+    if (o.id !== id) return o;
+    changed = true;
+    return { ...o, ...patch, timestamps: { ...(o.timestamps||{}), ...extractTimestamps(patch) } };
+  });
+  if (!changed) {
+    // si no estaba (raro), al menos créalo para que no duplique
+    CURRENT_LIST.push({ id, ...patch, timestamps: extractTimestamps(patch) });
+  }
+}
+function extractTimestamps(patch){
+  const t = {};
+  for (const k of Object.keys(patch||{})){
+    if (k.startsWith('timestamps.')){
+      const sub = k.split('.').slice(1).join('.');
+      t[sub] = patch[k];
+    }
+  }
+  return t;
+}
+
+/* ================== Data stream ================== */
+// Guard contra múltiples suscripciones accidentales
+let __streamLocked = false;
+const unsub = subscribeOrdersShim((orders = [])=>{
+  if (__streamLocked) return;           // evita carrera si el proveedor llama múltiple en el mismo tick
+  __streamLocked = true;
+  try {
+    CURRENT_LIST = mergeByNewest(orders);
+    render(CURRENT_LIST);
+  } finally {
+    queueMicrotask(()=>{ __streamLocked = false; });
+  }
+});
 
 /* ================== Totales ================== */
 function calcSubtotal(o={}){
@@ -230,7 +265,7 @@ function renderCard(o={}){
 </article>`;
 }
 
-/* ================== Actions ================== */
+/* ================== Actions (optimistas) ================== */
 document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-a]'); if(!btn) return;
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
@@ -244,23 +279,29 @@ document.addEventListener('click', async (e)=>{
       btn.textContent = 'Tomando…';
       const order = CURRENT_LIST.find(x=>x.id===id);
       if(order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
-      await setStatusShim(id, Status.IN_PROGRESS, OPTS);
-      await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now() }, OPTS);
-      beep(); toast('En preparación');
+      // ⬇️ Optimista: mover a IN_PROGRESS en el cliente para evitar duplicado
+      patchLocal(id, { status: Status.IN_PROGRESS, startedAt: now(), 'timestamps.startedAt': now() });
       render(CURRENT_LIST);
+      await setStatusShim(id, Status.IN_PROGRESS, OPTS);
+      await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+      beep(); toast('En preparación');
       return;
     }
 
     if (a==='ready'){
+      patchLocal(id, { status: Status.READY, readyAt: now(), 'timestamps.readyAt': now() });
+      render(CURRENT_LIST);
       await setStatusShim(id, Status.READY, OPTS);
-      await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now() }, OPTS);
+      await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
       beep(); toast('Listo 🛎️');
       return;
     }
 
     if (a==='deliver'){
+      patchLocal(id, { status: Status.DELIVERED, deliveredAt: now(), 'timestamps.deliveredAt': now() });
+      render(CURRENT_LIST);
       await setStatusShim(id, Status.DELIVERED, OPTS);
-      await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now() }, OPTS);
+      await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
       beep(); toast('Entregado ✔️ · por cobrar');
       return;
     }
@@ -272,14 +313,17 @@ document.addEventListener('click', async (e)=>{
       if (method === null) { btn.disabled=false; return; }
       const payMethod = String(method||'efectivo').toLowerCase();
 
+      patchLocal(id, { paid: true, paidAt: now(), payMethod, totalCharged: Number(total) });
+      render(CURRENT_LIST);
+
       await updateOrderShim(id, {
         paid: true,
         paidAt: now(),
         payMethod,
-        totalCharged: Number(total)
+        totalCharged: Number(total),
+        updatedAt: now(), 'timestamps.updatedAt': now()
       }, OPTS);
 
-      // Si hay archivado real, úsalo; si no, marca DONE para sacarlo de vista
       await archiveDeliveredShim(id, Status.DONE, OPTS);
       beep(); toast('Cobro registrado' + (isTraining() ? ' (PRUEBA)' : ''));
       card.remove();
@@ -290,7 +334,9 @@ document.addEventListener('click', async (e)=>{
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const notes = prompt('Editar notas generales para cocina:', order.notes||'');
       if (notes!==null){
-        await updateOrderShim(id,{ notes }, OPTS);
+        patchLocal(id, { notes, updatedAt: now(), 'timestamps.updatedAt': now() });
+        render(CURRENT_LIST);
+        await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
         toast('Notas actualizadas' + (isTraining() ? ' (PRUEBA)' : ''));
       }
       return;
@@ -305,13 +351,17 @@ document.addEventListener('click', async (e)=>{
       const trimmed = String(reason).trim();
       if (!trimmed) { alert('Por favor escribe un motivo.'); return; }
 
+      patchLocal(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now() });
+      render(CURRENT_LIST);
+
       await updateOrderShim(id, {
         status: Status.CANCELLED,
         cancelReason: trimmed,
         cancelledAt: now(),
-        cancelledBy: 'kitchen'
+        cancelledBy: 'kitchen',
+        updatedAt: now(), 'timestamps.updatedAt': now()
       }, OPTS);
-      // Si no hay archivado, al menos márcalo DONE para esconderlo del tablero
+
       await archiveDeliveredShim(id, Status.DONE, OPTS);
       beep(); toast('Pedido eliminado' + (isTraining() ? ' (PRUEBA)' : ''));
       card.remove();
