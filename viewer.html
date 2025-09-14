@@ -117,7 +117,6 @@
   @keyframes pop{ from{ transform:translate(-50%,8px); opacity:.3 } to{ transform:translate(-50%,0); opacity:1 } }
 
   /* ======================= RESPONSIVE ======================= */
-  /* Fila superior: titulo + filtros en columnas cuando no cabe */
   @media (max-width: 820px){
     header .row:first-child{ align-items:flex-start }
     header .row[role="group"]{ width:100%; display:grid; grid-template-columns:1fr 1fr; gap:8px }
@@ -130,16 +129,10 @@
     header .row[role="group"]{ grid-template-columns:1fr; }
     .badge{ font-size:11px; }
   }
-
-  /* Chips a una línea con scroll ya definido (arriba) */
-
-  /* Modal a una columna en móvil */
   @media (max-width: 720px){
     .d-body{ grid-template-columns: 1fr; }
     #dlgMedia .media{ max-width:min(92vw,420px); margin:0 auto; }
   }
-
-  /* Footer: botones se apilan en móvil */
   @media (max-width: 540px){
     .footer.row{ flex-direction:column; align-items:stretch; gap:8px }
     .footer .sp{ display:none }
@@ -223,7 +216,10 @@
 <div id="toast" class="toast"></div>
 
 <script>
-/* ====== Datos del set (los tuyos tal cual) ====== */
+/* ====== Ruta base de assets ====== */
+const ASSET_BASE = 'shared/img/stickers/';
+
+/* ====== Datos del set (sin tocar nombres de archivo) ====== */
 const DATA = {
   "setName": "Seven Stickers S1",
   "rarities": [
@@ -279,6 +275,7 @@ let filters = restoreFilters();
 
 function safeParse(s){ try{ return JSON.parse(s||''); }catch{ return null; } }
 
+/* 👉 AQUI se pega la ruta base a cada archivo */
 function buildCardList(chars){
   const list=[];
   for(const ch of chars){
@@ -286,7 +283,9 @@ function buildCardList(chars){
       list.push({
         key: `${ch.id}__${v.rarity}`,
         id: ch.id, name: ch.name, pages: ch.pages||[], tags: ch.tags||[],
-        rarity: v.rarity, file: v.file, foil: !!v.foil, lore: ch.lore||'',
+        rarity: v.rarity,
+        file: ASSET_BASE + v.file,  // <—— ruta completa
+        foil: !!v.foil, lore: ch.lore||'',
       });
     }
   }
@@ -377,7 +376,9 @@ function renderGrid(){
     const card = document.createElement('article');
     card.className='card';
     const alt = `${c.name} — ${r.label}`;
-    const img = c.file ? `<img loading="lazy" src="${c.file}" alt="${alt}" onerror="this.replaceWith(createPh('${c.name}'))">` : `<div class="placeholder">${c.name}</div>`;
+    const img = c.file
+      ? `<img loading="lazy" decoding="async" src="${c.file}" alt="${alt}" onerror="this.replaceWith(createPh('${c.name}'))">`
+      : `<div class="placeholder">${c.name}</div>`;
     card.innerHTML = `
       <div class="media">
         ${img}
@@ -412,7 +413,7 @@ function openDialog(key){
   const media = $('#dlgMedia'); media.innerHTML='';
   const w = document.createElement('div'); w.className='media';
   w.innerHTML = c.file
-    ? `<img loading="lazy" src="${c.file}" alt="${c.name}" onerror="this.replaceWith(createPh('${c.name}'))">`
+    ? `<img loading="lazy" decoding="async" src="${c.file}" alt="${c.name}" onerror="this.replaceWith(createPh('${c.name}'))">`
     : `<div class="placeholder">${c.name}</div>`;
   if(c.foil) { const fx=document.createElement('i'); fx.className='foil'; fx.setAttribute('aria-hidden','true'); w.appendChild(fx); }
   media.appendChild(w);
