@@ -2,13 +2,11 @@
 <html lang="es" data-theme-name="Independencia">
 <head>
   <meta charset="utf-8"/>
-  <!-- Vista móvil con soporte para notch -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <link rel="preload" as="audio" href="../shared/sfx/achievement.mp3"><!-- opcional -->
-  <link rel="stylesheet" href="../shared/styles.css"/>
+  <link rel="preload" as="audio" href="../shared/sfx/achievement.mp3"><link rel="stylesheet" href="../shared/styles.css"/>
   <title>Kiosko — Seven de Burgers</title>
 
   <style>
@@ -251,7 +249,6 @@
 </aside>
 
 <main class="container" aria-live="polite">
-  <!-- ===== Dashboard móvil (solo se muestra cuando se ocultan laterales) ===== -->
   <section class="mi" id="mobileInfo" aria-label="Resumen rápido">
     <div class="mi-row">
       <div class="mi-card">
@@ -275,12 +272,9 @@
     <div class="mi-card" style="margin-top:12px;">
       <div class="mi-title">Más vendidos hoy</div>
       <div class="mi-chips" id="miTop">
-        <!-- Chips dinámicos -->
-      </div>
+        </div>
     </div>
   </section>
-  <!-- ===== /Dashboard móvil ===== -->
-
   <div class="card" id="mode">
     <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
     <div class="tabs" role="tablist" aria-label="Seleccionar categoría">
@@ -292,7 +286,6 @@
   <div class="grid" id="cards"></div>
 </main>
 
-<!-- Modal item -->
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
   <div class="modal-card">
     <div class="modal-head">
@@ -309,7 +302,6 @@
   </div>
 </div>
 
-<!-- Modal carrito -->
 <div class="modal" id="cartModal" role="dialog" aria-modal="true" aria-labelledby="cartTitle" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
@@ -326,14 +318,12 @@
   </div>
 </div>
 
-<!-- Burbuja carrito flotante -->
 <div id="cartBar" class="cartbar" role="button" aria-label="Revisar pedido">
   <span class="pill" id="cartCount">0 productos</span>
   <span class="total" id="cartBarTotal">$0</span>
   <button class="btn small" id="openCart">Revisar</button>
 </div>
 
-<!-- Modal PIN -->
 <div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
   <div class="modal-card">
     <div class="modal-head">
