@@ -232,16 +232,11 @@ async function init(){
 /* ======================= Utilidades base ======================= */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 function findItemById(id){
-  const menuItems = [
-    ...(state.menu?.burgers || []),
-    ...(state.menu?.minis || []),
-    ...(state.menu?.drinks || []),
-    ...(state.menu?.sides || [])
-  ];
+  const menuItems = (state.menu?.products || []);
   return menuItems.find(item => item.id === id) || null;
 }
 function baseOfItem(item){
-  return item?.baseOf ? state.menu?.burgers?.find?.(b=>b.id===item.baseOf) : item;
+  return item?.baseOf ? findItemById(item.baseOf) : item;
 }
 function formatIngredientsFor(item, base){
   const meatDefaultBig  = Number(state.menu?.appSettings?.meatGrams ?? 85);
@@ -560,7 +555,9 @@ function renderCards(){
   const grid = document.getElementById('cards');
   if(!grid) return;
   grid.innerHTML = '';
-  const items = state.mode==='mini' ? (state.menu?.minis||[]) : (state.menu?.burgers||[]);
+  // Filtramos por la categoría seleccionada ('mini' o 'burgers')
+  const items = (state.menu?.products || []).filter(p => p.category === state.mode);
+  
   items.forEach(it=>{
     const base = baseOfItem(it);
     const baseId = base?.id || it.id;
@@ -1074,9 +1071,11 @@ function setupSidebars(){
   const upsell = document.getElementById('upsellList');
   if (upsell){
     const picks = [];
-    if (state.menu?.drinks?.length) picks.push(...state.menu.drinks.slice(0,2));
-    if (state.menu?.sides?.length)  picks.push(...state.menu.sides.slice(0,2));
-    if (!picks.length) picks.push(...(state.menu?.minis||[]).slice(0,3));
+    const allProducts = state.menu?.products || [];
+    picks.push(...allProducts.filter(p => p.category === 'drinks').slice(0,2));
+    picks.push(...allProducts.filter(p => p.category === 'sides').slice(0,2));
+    if (!picks.length) picks.push(...allProducts.filter(p => p.category === 'minis').slice(0,3));
+    
     upsell.innerHTML = picks.map(p => `
       <li>
         <div style="flex:1 1 auto;min-width:0">
@@ -1090,17 +1089,19 @@ function setupSidebars(){
 
   const promo = document.getElementById('promoList');
   if (promo){
+    const minis = (state.menu?.products || []).filter(p => p.category === 'minis');
     promo.innerHTML = hh.enabled
       ? `<li><div style="flex:1">Combos con descuento</div><div class="price">-${hh.discountPercent}%</div></li>`
-      : `<li><div style="flex:1">Prueba nuestras minis ⭐</div><div class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</div></li>`;
+      : `<li><div style="flex:1">Prueba nuestras minis ⭐</div><div class="price">Desde ${money((minis?.[0]?.price)||0)}</div></li>`;
   }
 
   const rank = document.getElementById('rankToday');
   if (rank){
+    const fallbacks = (state.menu?.products || []).filter(p => p.category === 'minis').slice(0,3)
+                      .concat((state.menu?.products || []).filter(p => p.category === 'burgers').slice(0,2));
     const rows = (state.topToday.length
         ? state.topToday.map(t=>`<li><div style="flex:1">${t.name}</div><div class="muted small">🔥 ${t.count}</div></li>`)
-        : (state.menu?.minis||[]).slice(0,3).concat((state.menu?.burgers||[]).slice(0,2))
-            .map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`))
+        : fallbacks.map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`))
       .join('');
     rank.innerHTML = rows;
   }
@@ -1125,9 +1126,10 @@ function renderMobileInfo(){
 
   const promo = document.getElementById('miPromos');
   if (promo){
+    const minis = (state.menu?.products || []).filter(p => p.category === 'minis');
     promo.innerHTML = hh.enabled
       ? `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Combos con descuento</span><span class="price">-${hh.discountPercent}%</span></li>`
-      : `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Prueba nuestras minis ⭐</span><span class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</span></li>`;
+      : `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Prueba nuestras minis ⭐</span><span class="price">Desde ${money((minis?.[0]?.price)||0)}</span></li>`;
   }
 
   const top = document.getElementById('miTop');
@@ -1253,13 +1255,10 @@ function oTime(o){ return o.createdAt?.toMillis?.() ?? new Date(o.createdAt||0).
 document.addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-add]'); if(!btn) return;
   const id = btn.getAttribute('data-add');
-  const all = [
-    ...(state.menu?.drinks||[]), ...(state.menu?.sides||[]),
-    ...(state.menu?.minis||[]),  ...(state.menu?.burgers||[])
-  ];
+  const all = (state.menu?.products || []);
   const item = all.find(x=>x.id===id); if(!item) return;
 
-  if (item.type==='drink' || item.type==='side'){
+  if (item.category === 'drinks' || item.category === 'sides'){
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
     state.cart.push({
@@ -1273,7 +1272,7 @@ document.addEventListener('click', (e)=>{
     });
     updateCartBar(); beep(); toast(`${item.name} agregado`);
   } else {
-    openItemModal(item, item.baseOf ? state.menu?.burgers?.find(b=>b.id===item.baseOf) : item);
+    openItemModal(item, item.baseOf ? findItemById(item.baseOf) : item);
   }
 }, false);
 
@@ -1373,20 +1372,8 @@ function mountThemePanel() {
   });
 
   function setMsg(text, kind='ok'){
-    msg.textContent = text;
-    msg.style.color = (kind==='ok'?'#A7F3D0': kind==='warn'?'#FFE082':'#FFABAB');
-  }
-
-  head.appendChild(title); head.appendChild(toggle);
-  row1.appendChild(labelSel); row1.appendChild(select);
-  row2.appendChild(btnLocal); row2.appendChild(btnGlobal);
-  body.appendChild(row1); body.appendChild(row2); body.appendChild(msg);
-  box.appendChild(head); box.appendChild(body);
-  document.body.appendChild(box);
-
-  if (state.adminMode) {
-    const g = document.getElementById('btnThemeGlobal');
-    if (g) g.style.display = '';
+    const msg = document.getElementById('admThemeMsg');
+    if (msg) msg.textContent = text;
   }
 }
 
