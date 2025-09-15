@@ -172,15 +172,15 @@ function openPinModal(){
 }
 
 /* ======================= Tabs ======================= */
-document.getElementById('btnMinis')?.addEventListener('click', ()=> setMode('mini'));
-document.getElementById('btnBig')?.addEventListener('click', ()=> setMode('big'));
+document.getElementById('btnMinis')?.addEventListener('click', ()=> setMode('minis'));
+document.getElementById('btnBig')?.addEventListener('click', ()=> setMode('burgers'));
 function setMode(mode){ state.mode = mode; renderCards(); setActiveTab(mode); }
 function setActiveTab(mode=state.mode){
   const btnMinis = document.getElementById('btnMinis');
   const btnBig   = document.getElementById('btnBig');
   const on  = el => { el?.classList.add('is-active'); el?.setAttribute('aria-selected','true'); };
   const off = el => { el?.classList.remove('is-active'); el?.setAttribute('aria-selected','false'); };
-  if(mode==='mini'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
+  if(mode==='minis'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
 }
 
 /* ======================= Init ======================= */
@@ -189,7 +189,7 @@ async function init(){
   state.menu = (await DB.fetchCatalogWithFallback()) || {};
   startThemeWatcher();
   renderCards();
-  setActiveTab('mini');
+  setActiveTab('minis');
   updateCartBar();
   setupSidebars();
   renderMobileInfo();
