@@ -737,6 +737,7 @@ html[data-theme-name="Fiestas"], body[data-theme-name="Fiestas"]{
   --danger:#ff6b6b;
   --stroke:rgba(255,255,255,.12);
   --decor-glow: 0 0 18px rgba(66,227,138,.25), 0 0 28px rgba(248,95,95,.18);
+  --snow-alpha: 0;
 }
 
 /* --- San Valentín --- */
@@ -943,8 +944,8 @@ body[data-theme-name="Navidad"]::before{
   animation: snowFloat 18s linear infinite;
 }
 @keyframes snowFloat{
-  from{ background-position: 0 0, 1px 1px; }
-  to  { background-position: 0 200px, 1px 201px; }
+  from{ background-position: 0 0, 1px 200px; }
+  to  { background-position: 0 200px, 1px 401px; }
 }
 
 /* “Papel picado” decorativo (opcional: añade .papel-picado a un contenedor superior) */
