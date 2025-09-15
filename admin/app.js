@@ -644,8 +644,8 @@ function openQuickPrepDialog(prefRecipe = null){
   wrap.className = 'modal'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.style.display='grid';
 
   const quickDefault = Number(document.getElementById('rcpQuickPort')?.value || 100);
-  const options = (RECIPES || []).map(r=>`<option value="${r.id}" ${prefRecipe && prefRecipe.id===r.id?'selected':''}>${esc(r.name||'Receta')}</option>`).join('');
-  const r0 = prefRecipe || (RECIPES && RECIPES[0]) || null;
+  const options = RECIPES.map(r=>`<option value="${r.id}" ${prefRecipe && prefRecipe.id===r.id?'selected':''}>${esc(r.name||'Receta')}</option>`).join('');
+  const r0 = prefRecipe || RECIPES[0];
 
   wrap.innerHTML = `
     <div class="modal-card">
@@ -757,7 +757,7 @@ function openQuickPrepDialog(prefRecipe = null){
           </div>`;
         }).join('')}
       </div>
-      ${state.r.method ? `<div class="field"><label>Método</label><div class="muted sm" style="white-space:pre-wrap">${esc(state.r.method)}</div></div>`:''}
+      ${state.r.method ? `<div class="muted sm" style="margin-top:8px; white-space:pre-wrap"><b>Método:</b>\n${esc(state.r.method)}</div>`:''}
     `;
   }
 
@@ -1373,7 +1373,7 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
         <div class="modal-body">
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
             <div class="field">
-              <label>Nombre <span class="muted small">*</span></label>
+              <label>Nombre *</label>
               <input id="pName" type="text" value="${escAttr(data.name)}" required>
               <div class="muted small" id="pNameErr" style="display:none;color:#ffb4b4">Requerido</div>
             </div>
@@ -1451,8 +1451,8 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
     `;
     document.body.appendChild(wrap);
 
-    const $ = (sel)=> wrap.querySelector(sel);
-    const close = ()=>{ wrap.remove(); };
+    const $ = sel => wrap.querySelector(sel);
+    const close = ()=> wrap.remove();
     $('#pClose')?.addEventListener('click', close);
     wrap.addEventListener('keydown', (e)=>{ if (e.key==='Escape') close(); });
 
