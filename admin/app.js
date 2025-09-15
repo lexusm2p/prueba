@@ -121,7 +121,23 @@ async function runReports() {
     const type = typeEl?.value || 'all';
     const includeArchive = (histEl?.value !== 'No');
 
-    const orders = await getOrdersRange({ from, to, includeArchive, orderType: type === 'all' ? null : type }) || [];
+    // Validación y asignación segura: asegura que `orders` siempre sea un array,
+    // incluso si la función de la base de datos devuelve null o undefined.
+    const orders = (await getOrdersRange({ from, to, includeArchive, orderType: type === 'all' ? null : type })) || [];
+    
+    // Si no hay órdenes, limpia la interfaz y muestra un mensaje
+    if (orders.length === 0) {
+      setTxt('kpiOrders', 0);
+      setTxt('kpiUnits', 0);
+      setMoney('kpiRevenue', 0);
+      setMoney('kpiAvg', 0);
+      fillTable('tblTop', []);
+      fillTable('tblLow', []);
+      q('#tblHours tbody') && (q('#tblHours tbody').innerHTML = '<tr><td colspan="3">—</td></tr>');
+      toast('No se encontraron ventas en este periodo');
+      return;
+    }
+
     const agg = aggregateOrders(orders);
 
     setTxt('kpiOrders', agg.orders);
@@ -190,7 +206,7 @@ let HIST_TIMER = null;
 const histSearchEl = document.getElementById('histSearch');
 const histTypeEl   = document.getElementById('histType');
 const histStateEl  = document.getElementById('histState');
-const histLimitEl  = document.getElementById('histLimit');
+const histLimitEl = document.getElementById('histLimit');
 
 document.getElementById('btnHistLoad')?.addEventListener('click', ()=> loadHistory());
 document.getElementById('btnHistCSV')?.addEventListener('click', exportHistoryCSV);
@@ -214,7 +230,7 @@ async function loadHistory(showToast = true){
     const to   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59);
     const includeArchive = (document.getElementById('repHist')?.value !== 'No');
 
-    const ords = await getOrdersRange({ from, to, includeArchive, orderType: null }) || [];
+    const ords = (await getOrdersRange({ from, to, includeArchive, orderType: null })) || [];
     HIST_ALL = (ords||[]).map(o=>{
       const t = o.createdAt?.toDate?.() || o.createdAt || new Date();
       const when = new Date(t);
@@ -827,7 +843,7 @@ async function suggestQty(recipe){
     const now = new Date();
     const from = new Date(now); from.setDate(now.getDate()-7); from.setHours(0,0,0,0);
     const to   = new Date(now); to.setHours(23,59,59,999);
-    const orders = await getOrdersRange({ from, to, includeArchive:true, orderType:null }) || [];
+    const orders = (await getOrdersRange({ from, to, includeArchive:true, orderType:null })) || [];
 
     const perOrderMl = Number(recipe?.suggestMlPerOrder || APP_SETTINGS?.defaultSuggestMlPerOrder || 20);
     const totalOrders = (orders||[]).length || 0;
