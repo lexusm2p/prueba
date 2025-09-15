@@ -1373,7 +1373,7 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
         <div class="modal-body">
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
             <div class="field">
-              <label>Nombre *</label>
+              <label>Nombre <span class="muted small">*</span></label>
               <input id="pName" type="text" value="${escAttr(data.name)}" required>
               <div class="muted small" id="pNameErr" style="display:none;color:#ffb4b4">Requerido</div>
             </div>
@@ -1451,8 +1451,8 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
     `;
     document.body.appendChild(wrap);
 
-    const $ = sel => wrap.querySelector(sel);
-    const close = ()=> wrap.remove();
+    const $ = (sel)=> wrap.querySelector(sel);
+    const close = ()=>{ wrap.remove(); };
     $('#pClose')?.addEventListener('click', close);
     wrap.addEventListener('keydown', (e)=>{ if (e.key==='Escape') close(); });
 
