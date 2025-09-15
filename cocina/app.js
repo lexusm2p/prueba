@@ -134,7 +134,7 @@ function extractTimestamps(patch){
 // Guard contra múltiples suscripciones accidentales
 let __streamLocked = false;
 const unsub = subscribeOrdersShim((orders = [])=>{
-  if (__streamLocked) return;           // evita carrera si el proveedor llama múltiple en el mismo tick
+  if (__streamLocked) return;
   __streamLocked = true;
   try {
     CURRENT_LIST = mergeByNewest(orders);
