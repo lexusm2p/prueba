@@ -18,7 +18,7 @@ import { setTheme } from '../shared/db.js';
 /* ======================= Estado global ======================= */
 const state = {
   menu: null,
-  mode: 'mini',
+  mode: 'minis',
   cart: [],
   customerName: '',
   orderMeta: { type: 'pickup', table: '', phone: '', payMethodPref: 'efectivo' },
