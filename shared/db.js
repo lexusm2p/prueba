@@ -390,7 +390,7 @@ export async function recordPurchase(purchase, opts = {}) {
       const cur  = snap.exists() ? (snap.data().currentStock||0) : 0;
       const prevCost = snap.exists() ? Number(snap.data().costAvg||0) : 0;
       const newStock = Number(cur) + Number(qty);
-      const newCost  = (prevCost>0 && cur>0) ? ((prevCost*cur + unitCost*qty) / newStock) : unitCost;
+      const newCost  = (prevCost*cur + unitCost*qty) / newStock;
       await setDoc(ref,
         { currentStock: newStock, costAvg: newCost, updatedAt: serverTimestamp() },
         { merge:true }
