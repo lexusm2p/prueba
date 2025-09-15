@@ -186,7 +186,7 @@ function setActiveTab(mode=state.mode){
 /* ======================= Init ======================= */
 init();
 async function init(){
-  state.menu = await DB.fetchCatalogWithFallback();
+  state.menu = (await DB.fetchCatalogWithFallback()) || {};
   startThemeWatcher();
   renderCards();
   setActiveTab('mini');
@@ -232,11 +232,13 @@ async function init(){
 /* ======================= Utilidades base ======================= */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 function findItemById(id){
-  return state.menu?.burgers?.find?.(b=>b.id===id)
-      || state.menu?.minis?.find?.(m=>m.id===id)
-      || state.menu?.drinks?.find?.(d=>d.id===id)
-      || state.menu?.sides?.find?.(s=>s.id===id)
-      || null;
+  const menuItems = [
+    ...(state.menu?.burgers || []),
+    ...(state.menu?.minis || []),
+    ...(state.menu?.drinks || []),
+    ...(state.menu?.sides || [])
+  ];
+  return menuItems.find(item => item.id === id) || null;
 }
 function baseOfItem(item){
   return item?.baseOf ? state.menu?.burgers?.find?.(b=>b.id===item.baseOf) : item;
@@ -457,12 +459,20 @@ function updateHHPill(hh, extraText=''){
   const pill = document.getElementById('hhPill');
   const txt  = document.getElementById('hhText');
   const msg  = document.getElementById('hhMsg');
-  if (!pill || !txt) return;
-  pill.classList.toggle('on', !!hh.enabled);
-  txt.textContent = hh.enabled
+  const miPill = document.getElementById('miHHPill');
+  const miTxt  = document.getElementById('miHHText');
+  const miMsg  = document.getElementById('miHHMsg');
+
+  [pill, miPill].forEach(el => el?.classList.toggle('on', !!hh.enabled));
+  
+  if (txt) txt.textContent = hh.enabled
     ? `Happy Hour – ${Number(hh.discountPercent||0)}%${extraText ? ' · ' + extraText : ''}`
     : 'HH OFF';
-  if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
+  if (miTxt) miTxt.textContent = hh.enabled
+    ? `${Number(hh.discountPercent||0)}% OFF${extraText ? ' · ' + extraText : ''}`
+    : 'OFF';
+
+  [msg, miMsg].forEach(el => el ? el.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '') : null);
 }
 function startHHCountdown(hh){
   stopHHTimer();
@@ -535,7 +545,7 @@ function bindETA(){
 
 /* ======================= Carrito / logro ======================= */
 function miniCount(cart=state.cart){
-  return cart.reduce((sum, l)=> sum + ((l.mini ? l.qty||1 : 0)), 0);
+  return cart.reduce((sum, l)=> sum + (l.mini ? (l.qty||1) : 0), 0);
 }
 function checkComboAchievement(){
   if (!state.comboUnlocked && miniCount() >= 3){
@@ -673,7 +683,7 @@ function openItemModal(item, base, existingIndex=null){
     const extraDlc = dlcChk ? DLC : 0;
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
-    const subtotal = (unitBaseAfterHH + extraDlc)*qty + (costS + costI)*qty;
+    const subtotal = (unitBaseAfterHH + extraDlc + costS + costI) * qty;
     if(totalEl) totalEl.textContent = money(subtotal);
     return { qty, subtotal, dlcChk, hhDiscTotal: hhDiscPerUnit * qty };
   };
@@ -756,6 +766,29 @@ function openCartModal(){
   if (confirmBtn) confirmBtn.style.display = '';
   if (totalEl) totalEl.style.display = '';
 
+  const cartItemsHtml = state.cart.map((l,idx)=>{
+    const extrasTxt = [
+      (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
+      ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
+      ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
+      (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
+    ].filter(Boolean).join(', ');
+    return `
+    <div class="k-card" style="margin:8px 0" data-i="${idx}">
+      <h4>${l.name} · x${l.qty}</h4>
+      ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
+      ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
+      ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
+      <div class="k-actions" style="gap:6px">
+        <button class="btn small ghost" data-a="less">-</button>
+        <button class="btn small ghost" data-a="more">+</button>
+        <button class="btn small" data-a="edit">Editar</button>
+        <button class="btn small danger" data-a="remove">Eliminar</button>
+        <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
   if(body) body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
       <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
@@ -798,27 +831,7 @@ function openCartModal(){
     </div>
 
     <div class="field">
-      ${state.cart.map((l,idx)=>{
-        const extrasTxt = [
-          (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
-          ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
-          ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
-          (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
-        ].filter(Boolean).join(', ');
-        return `
-        <div class="k-card" style="margin:8px 0" data-i="${idx}">
-          <h4>${l.name} · x${l.qty}</h4>
-          ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
-          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
-          ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
-          <div class="k-actions" style="gap:6px">
-            <button class="btn small ghost" data-a="less">-</button>
-            <button class="btn small ghost" data-a="more">+</button>
-            <button class="btn small" data-a="edit">Editar</button>
-            <button class="btn small danger" data-a="remove">Eliminar</button>
-            <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
-          </div>
-        </div>`;}).join('')}
+      ${cartItemsHtml}
     </div>
 
     <div class="field"><label>Comentarios generales</label>
@@ -846,11 +859,11 @@ function openCartModal(){
     phoneInput.addEventListener('change', async ()=>{
       const p = normalizePhone(phoneInput.value);
       if (p.length >= 10){
-        const c = await DB.fetchCustomer?.(p);
-        if (c?.name){
+        try{
+          const c = (await DB.fetchCustomer?.(p)) || {};
           const nameEl = document.getElementById('cartName');
-          if (nameEl && !nameEl.value) nameEl.value = c.name;
-        }
+          if (nameEl && !nameEl.value && c.name) nameEl.value = c.name;
+        }catch(e){ console.warn("Error fetching customer", e); }
       }
     });
   }
