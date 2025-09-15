@@ -644,8 +644,8 @@ function openQuickPrepDialog(prefRecipe = null){
   wrap.className = 'modal'; wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.style.display='grid';
 
   const quickDefault = Number(document.getElementById('rcpQuickPort')?.value || 100);
-  const options = RECIPES.map(r=>`<option value="${r.id}" ${prefRecipe && prefRecipe.id===r.id?'selected':''}>${esc(r.name||'Receta')}</option>`).join('');
-  const r0 = prefRecipe || RECIPES[0];
+  const options = (RECIPES || []).map(r=>`<option value="${r.id}" ${prefRecipe && prefRecipe.id===r.id?'selected':''}>${esc(r.name||'Receta')}</option>`).join('');
+  const r0 = prefRecipe || (RECIPES && RECIPES[0]) || null;
 
   wrap.innerHTML = `
     <div class="modal-card">
@@ -757,7 +757,7 @@ function openQuickPrepDialog(prefRecipe = null){
           </div>`;
         }).join('')}
       </div>
-      ${state.r.method ? `<div class="muted sm" style="margin-top:8px; white-space:pre-wrap"><b>Método:</b>\n${esc(state.r.method)}</div>`:''}
+      ${state.r.method ? `<div class="field"><label>Método</label><div class="muted sm" style="white-space:pre-wrap">${esc(state.r.method)}</div></div>`:''}
     `;
   }
 
