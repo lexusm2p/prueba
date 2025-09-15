@@ -1,147 +1,145 @@
 {
-  "burgers": [
+  "products": [
     {
       "id": "starter",
       "name": "Starter Burger",
       "price": 47,
-      "category": "big",
+      "category": "burgers",
       "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "ingredients": ["Pan", "Carne 85g", "Queso amarillo", "Queso blanco", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"],
       "suggested": "Mostaza dulce"
     },
     {
       "id": "koopa",
       "name": "Koopa Crunch",
       "price": 57,
-      "category": "big",
+      "category": "burgers",
       "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso blanco","Piña","Tocino","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "ingredients": ["Pan", "Carne 85g", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"],
       "suggested": "Chimichurri"
     },
     {
       "id": "fatality",
       "name": "Fatality Flame",
       "price": 67,
-      "category": "big",
+      "category": "burgers",
       "mini": false,
-      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Tocino","Salsa habanero","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "ingredients": ["Pan", "Carne 85g", "Salsa Cheddar", "Tocino", "Salsa habanero", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"],
       "suggested": "Habanero"
     },
     {
       "id": "mega",
       "name": "Mega Byte",
       "price": 77,
-      "category": "big",
+      "category": "burgers",
       "mini": false,
-      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Queso blanco","Tocino","Salchicha","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup"],
+      "ingredients": ["Pan", "Carne 85g", "Salsa Cheddar", "Queso blanco", "Tocino", "Salchicha", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup"],
       "suggested": "Cheddar"
     },
     {
       "id": "hadouken",
       "name": "Hadouken",
       "price": 77,
-      "category": "big",
+      "category": "burgers",
       "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso blanco","Queso amarillo","Salchicha","Aderezo chipotle","Lechuga","Jitomate","Cebolla"],
+      "ingredients": ["Pan", "Carne 85g", "Queso blanco", "Queso amarillo", "Salchicha", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla"],
       "suggested": "Chipotle"
     },
     {
       "id": "nintendo",
       "name": "Nintendo Nostalgia",
       "price": 67,
-      "category": "big",
+      "category": "burgers",
       "mini": false,
-      "ingredients": ["Pan","Carne 85g","Queso blanco","Piña","Jamón","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"],
+      "ingredients": ["Pan", "Carne 85g", "Queso blanco", "Piña", "Jamón", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"],
       "suggested": "Mostaza dulce"
     },
     {
       "id": "finalboss",
       "name": "Final Boss Burger",
       "price": 97,
-      "category": "big",
+      "category": "burgers",
       "mini": false,
-      "ingredients": ["Pan","Carne 85g","Salsa Cheddar","Queso blanco","Queso amarillo","Tocino","Jamón","Salchicha","Piña","Salsa habanero","Aderezo chipotle"],
+      "ingredients": ["Pan", "Carne 85g", "Salsa Cheddar", "Queso blanco", "Queso amarillo", "Tocino", "Jamón", "Salchicha", "Piña", "Salsa habanero", "Aderezo chipotle"],
       "suggested": "Chipotle"
-    }
-  ],
-  "minis": [
+    },
     {
       "id": "starter_m",
       "name": "Starter Mini",
       "price": 27,
-      "category": "mini",
+      "category": "minis",
       "mini": true,
       "baseOf": "starter",
-      "ingredients": ["Pan mini","Carne 45g","Queso amarillo","Queso blanco","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"]
+      "ingredients": ["Pan mini", "Carne 45g", "Queso amarillo", "Queso blanco", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"]
     },
     {
       "id": "koopa_m",
       "name": "Koopa Mini",
       "price": 33,
-      "category": "mini",
+      "category": "minis",
       "mini": true,
       "baseOf": "koopa",
-      "ingredients": ["Pan mini","Carne 45g","Queso blanco","Piña","Tocino","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"]
+      "ingredients": ["Pan mini", "Carne 45g", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"]
     },
     {
       "id": "fatality_m",
       "name": "Fatality Mini",
       "price": 37,
-      "category": "mini",
+      "category": "minis",
       "mini": true,
       "baseOf": "fatality",
-      "ingredients": ["Pan mini","Carne 45g","Salsa Cheddar","Tocino","Salsa habanero","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"]
+      "ingredients": ["Pan mini", "Carne 45g", "Salsa Cheddar", "Tocino", "Salsa habanero", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"]
     },
     {
       "id": "mega_m",
       "name": "Mega Mini",
       "price": 42,
-      "category": "mini",
+      "category": "minis",
       "mini": true,
       "baseOf": "mega",
-      "ingredients": ["Pan mini","Carne 45g","Salsa Cheddar","Queso blanco","Tocino","Salchicha","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup"]
+      "ingredients": ["Pan mini", "Carne 45g", "Salsa Cheddar", "Queso blanco", "Tocino", "Salchicha", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup"]
     },
     {
       "id": "hadouken_m",
       "name": "Hadouken Mini",
       "price": 37,
-      "category": "mini",
+      "category": "minis",
       "mini": true,
       "baseOf": "hadouken",
-      "ingredients": ["Pan mini","Carne 45g","Queso blanco","Queso amarillo","Salchicha","Aderezo chipotle","Lechuga","Jitomate","Cebolla"]
+      "ingredients": ["Pan mini", "Carne 45g", "Queso blanco", "Queso amarillo", "Salchicha", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla"]
     },
     {
       "id": "nintendo_m",
       "name": "Nintendo Mini",
       "price": 37,
-      "category": "mini",
+      "category": "minis",
       "mini": true,
       "baseOf": "nintendo",
-      "ingredients": ["Pan mini","Carne 45g","Queso blanco","Piña","Jamón","Lechuga","Jitomate","Cebolla","Mayonesa","Catsup","Mostaza"]
+      "ingredients": ["Pan mini", "Carne 45g", "Queso blanco", "Piña", "Jamón", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"]
     },
     {
       "id": "final_m",
       "name": "Final Boss Mini",
       "price": 47,
-      "category": "mini",
+      "category": "minis",
       "mini": true,
       "baseOf": "finalboss",
-      "ingredients": ["Pan mini","Carne 45g","Salsa Cheddar","Queso blanco","Queso amarillo","Tocino","Jamón","Salchicha","Piña","Salsa habanero","Aderezo chipotle"]
+      "ingredients": ["Pan mini", "Carne 45g", "Salsa Cheddar", "Queso blanco", "Queso amarillo", "Tocino", "Jamón", "Salchicha", "Piña", "Salsa habanero", "Aderezo chipotle"]
     }
   ],
   "extras": {
     "sauces": [
-      "Aderezo Cheddar","Aderezo Chipotle","Aderezo Habanero","Salsa Chimichurri",
-      "Mostaza dulce","Jalapeño rostizado","Curry suave","Salsa Secreta Seven"
+      "Aderezo Cheddar", "Aderezo Chipotle", "Aderezo Habanero", "Salsa Chimichurri",
+      "Mostaza dulce", "Jalapeño rostizado", "Curry suave", "Salsa Secreta Seven"
     ],
     "saucePrice": 5,
     "ingredients": [
-      { "id":"tocino", "name":"Tocino", "price":6 },
-      { "id":"piña", "name":"Piña", "price":5 },
-      { "id":"jamon", "name":"Jamón", "price":5 },
-      { "id":"salchicha", "name":"Salchicha", "price":12 },
-      { "id":"cebolla-caram", "name":"Cebolla caramelizada", "price":5 },
-      { "id":"carne-extra", "name":"Carne extra 85g", "price":22 }
+      { "id": "tocino", "name": "Tocino", "price": 6 },
+      { "id": "piña", "name": "Piña", "price": 5 },
+      { "id": "jamon", "name": "Jamón", "price": 5 },
+      { "id": "salchicha", "name": "Salchicha", "price": 12 },
+      { "id": "cebolla-caram", "name": "Cebolla caramelizada", "price": 5 },
+      { "id": "carne-extra", "name": "Carne extra 85g", "price": 22 }
     ],
     "dlcCarneMini": 12
   },
