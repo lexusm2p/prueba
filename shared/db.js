@@ -61,11 +61,16 @@ function normalizeCatalog(cat = {}) {
     endsAt: toMillisFlexible(cat?.happyHour?.endsAt ?? null)
   };
 
+  // Ahora el catálogo se unifica en un solo array 'products' para ser dinámico
+  const allProducts = [
+    ...safe(cat.burgers).map(p => ({...p, category: p.category || 'burgers'})),
+    ...safe(cat.minis).map(p => ({...p, category: p.category || 'minis'})),
+    ...safe(cat.drinks).map(p => ({...p, category: p.category || 'drinks'})),
+    ...safe(cat.sides).map(p => ({...p, category: p.category || 'sides'})),
+  ];
+
   return {
-    burgers: safe(cat.burgers),
-    minis:   safe(cat.minis),
-    drinks:  safe(cat.drinks),
-    sides:   safe(cat.sides),
+    products: allProducts,
     extras: {
       sauces: safe(cat?.extras?.sauces ?? []),
       ingredients: safe(cat?.extras?.ingredients ?? []),
@@ -80,8 +85,8 @@ function normalizeCatalog(cat = {}) {
 
 // Ruta relativa segura desde /kiosk/ y /admin/
 function guessDataPath() {
-  // /kiosk/*  -> ../data/menu.json
-  // /admin/*  -> ../data/menu.json
+  // /kiosk/* -> ../data/menu.json
+  // /admin/* -> ../data/menu.json
   return '../data/menu.json';
 }
 
@@ -113,17 +118,12 @@ export async function fetchCatalogWithFallback() {
   return normalizeCatalog({});
 }
 
-/* Solo lectura para Admin (tabla de productos derivados del catálogo) */
+// Solo lectura para Admin (tabla de productos derivados del catálogo)
 export function subscribeProducts(cb) {
   (async () => {
     const cat = await fetchCatalogWithFallback();
-    const items = [
-      ...(cat.burgers||[]).map(p => ({...p, type:'burger'})),
-      ...(cat.minis||[]).map(p => ({...p, type:'mini'})),
-      ...(cat.drinks||[]).map(p => ({...p, type:'drink'})),
-      ...(cat.sides||[]).map(p => ({...p, type:'side'})),
-    ];
-    cb(items);
+    // La función fetchCatalogWithFallback ya devuelve un formato unificado en 'products'
+    cb(cat.products || []);
   })();
 }
 
@@ -218,7 +218,7 @@ export async function getOrdersRange(params = {}) {
     );
     if (type && type !== 'all') {
       // Ajusta el campo si usas otro para “tipo de pedido”
-      qy = query(qy, where('orderMeta.type', '==', String(type)));
+      qy = query(qy, where('orderType', '==', String(type)));
     }
     return qy;
   };
