@@ -1,5 +1,5 @@
 // /admin/app.js — Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
-// + Panel de TEMAS festivos mexicanos (vista previa local + guardar GLOBAL en settings/theme)
+// + Pestaña TEMAS (vista previa local + guardar GLOBAL en settings/theme)
 // + Panel “Productos” (CRUD sobre Artículos) — con Modo PRUEBA integrado
 // Actualizado: robustez en null/NaN, mejoras de accesibilidad/UX pequeñas, fixes de dinero/dates,
 // limpieza en unload, atajos de teclado y pequeños safeguards.
@@ -1017,97 +1017,125 @@ function confirmDeleteArticle(article){
     .catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
 }
 
-/* ============== TEMAS FESTIVOS (panel flotante) ============== */
-let THEME_UNSUB = null;
-initThemePanel();
-bindThemeLive();
+/* ============== TEMAS — Pestaña fija (sustituye panel flotante) ============== */
+(function initThemesTab(){
+  const TABS = document.getElementById('admTabs');
+  if (!TABS) return;
 
-function bindThemeLive(){
-  try {
-    if (typeof subscribeTheme === 'function'){
-      THEME_UNSUB = subscribeTheme((t)=> {
-        const sel = document.getElementById('admThemeSelect');
-        if (sel && t?.name) {
-          const opt = [...sel.options].find(o=>o.value===t.name);
-          if (opt) sel.value = t.name;
-        }
-      });
-    }
-  } catch (_){}
-  try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch(_){}
-  // Limpieza al abandonar la página
-  window.addEventListener('beforeunload', ()=>{ try{ THEME_UNSUB?.(); }catch(_){} });
-}
+  // 1) Agregar botón de tab si no existe
+  if (!TABS.querySelector('[data-tab="temas"]')){
+    const tab = document.createElement('button');
+    tab.className = 'tab';
+    tab.dataset.tab = 'temas';
+    tab.type = 'button';
+    tab.textContent = 'Temas';
+    tab.setAttribute('role','tab');
+    tab.setAttribute('aria-selected','false');
+    TABS.appendChild(tab);
+  }
 
-function initThemePanel(){
-  if (document.getElementById('admThemePanel')) return;
-  const box = document.createElement('div');
-  box.id = 'admThemePanel';
-  Object.assign(box.style, {
-    position: 'fixed',
-    right: '14px',
-    bottom: '14px',
-    background: 'rgba(15,24,42,.92)',
-    border: '1px solid rgba(255,255,255,.12)',
-    borderRadius: '14px',
-    padding: '10px',
-    color: 'var(--text, #fff)',
-    zIndex: 9999,
-    width: 'min(320px, 92vw)',
-    boxShadow: '0 10px 26px rgba(0,0,0,.35)',
-    fontSize: '12px'
-  });
-  box.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <strong style="font-size:12px">Tema (Kiosko/UI)</strong>
-      <button id="admThemeToggle" class="btn tiny ghost" style="padding:2px 8px" type="button" aria-expanded="true">—</button>
-    </div>
-    <div id="admThemeBody" style="margin-top:8px">
-      <div class="field">
-        <label>Selecciona tema</label>
-        <select id="admThemeSelect" style="width:100%"></select>
+  // 2) Agregar panel si no existe
+  if (!document.getElementById('panel-temas')){
+    const panel = document.createElement('section');
+    panel.id = 'panel-temas';
+    panel.className = 'panel';
+    panel.innerHTML = `
+      <div class="card" style="max-width:680px;margin:auto">
+        <h3>Tema (Kiosko/UI)</h3>
+        <div class="field">
+          <label>Selecciona tema</label>
+          <select id="themeSelect" style="width:100%"></select>
+        </div>
+        <div class="row" style="gap:12px;margin-top:12px;flex-wrap:wrap">
+          <button id="btnThemePreview" class="btn" type="button">Probar local</button>
+          <button id="btnThemeSave" class="btn primary" type="button">Guardar GLOBAL</button>
+        </div>
+        <p class="muted small" id="themeHint" style="margin-top:10px">
+          “Probar local” solo cambia tu pantalla (sessionStorage). “Guardar GLOBAL” escribe en <code>settings/theme</code>.
+        </p>
       </div>
-      <div class="row" style="gap:8px; margin-top:6px; flex-wrap:wrap">
-        <button class="btn small" id="admThemePreview" type="button">Probar local</button>
-        <button class="btn small" id="admThemeSave" type="button">Guardar GLOBAL</button>
-      </div>
-      <div class="muted small" id="admThemeMsg" style="margin-top:6px;opacity:.9"></div>
-    </div>
-  `;
-  document.body.appendChild(box);
+    `;
+    (document.getElementById('admTabs').parentElement || document.body).appendChild(panel);
+  }
 
-  const sel = document.getElementById('admThemeSelect');
+  const sel = document.getElementById('themeSelect');
+  const btnPrev = document.getElementById('btnThemePreview');
+  const btnSave = document.getElementById('btnThemeSave');
+  const hint    = document.getElementById('themeHint');
+
+  // 3) Llenar lista de temas (desde settings.themes o fallback local)
+  function renderThemeOptions(names){
+    const current = sel.value;
+    sel.innerHTML = (names||[]).map(n => `<option value="${n}">${n}</option>`).join('') || `<option value="Base">Base</option>`;
+    if (current && [...sel.options].some(o=>o.value===current)) sel.value = current;
+  }
+
   try {
     const names = listThemes();
-    sel.innerHTML = names.map(n=> `<option value="${n}">${n}</option>`).join('');
+    renderThemeOptions(names);
   } catch {
-    sel.innerHTML = `<option value="default">default</option>`;
+    renderThemeOptions(['Base','Independencia','Muertos','Navidad','Fiestas','San Valentín','Halloween','Fútbol','Lucha Libre','Pixel Art','Retro Arcade','Y2K']);
   }
 
-  const body = document.getElementById('admThemeBody');
-  document.getElementById('admThemeToggle')?.addEventListener('click', (e)=>{
-    const open = body.style.display !== 'none';
-    body.style.display = open ? 'none' : 'block';
-    e.currentTarget.setAttribute('aria-expanded', String(!open));
+  // 4) Suscripciones
+  let unsubTheme = null;
+  try {
+    initThemeFromSettings({ defaultName: 'Independencia' });
+  } catch {}
+  try {
+    unsubTheme = subscribeTheme((t)=>{
+      // cuando cambie el GLOBAL desde otro cliente
+      if (t?.name && sel && [...sel.options].some(o=>o.value===t.name)) {
+        sel.value = t.name;
+      }
+    });
+  } catch {}
+
+  subscribeSettings((s)=>{
+    // si settings expone lista de temas, úsala
+    if (Array.isArray(s?.themes) && s.themes.length) {
+      renderThemeOptions(s.themes);
+      if (s.theme && [...sel.options].some(o=>o.value===s.theme)) sel.value = s.theme;
+    }
   });
 
-  document.getElementById('admThemePreview')?.addEventListener('click', ()=>{
-    const name = sel.value;
-    try { applyThemeLocal(name); setThemeMsg('Tema aplicado localmente.'); }
-    catch(e){ console.error(e); setThemeMsg('No se pudo aplicar local.'); }
+  // 5) Acciones
+  btnPrev?.addEventListener('click', ()=>{
+    const name = sel.value || 'Base';
+    try {
+      applyThemeLocal(name);
+      try { sessionStorage.setItem('localTheme', name); } catch {}
+      hint.textContent = `Tema aplicado localmente: ${name}`;
+      toast(`Tema local: ${name}`);
+    } catch (e) {
+      console.error(e); hint.textContent = 'No se pudo aplicar local.';
+    }
   });
 
-  document.getElementById('admThemeSave')?.addEventListener('click', async ()=>{
-    const name = sel.value;
-    try { await setTheme({ name }, { training: isTraining() }); setThemeMsg('Tema GLOBAL guardado. Kioskos lo aplicarán en vivo.' + (isTraining() ? ' (PRUEBA)' : '')); }
-    catch(e){ console.error(e); setThemeMsg('No se pudo guardar GLOBAL.'); }
+  btnSave?.addEventListener('click', async ()=>{
+    const name = sel.value || 'Base';
+    try {
+      await setTheme({ name }, { training: isTraining() });
+      hint.textContent = `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : '');
+      toast(`Tema global: ${name}`);
+    } catch (e) {
+      console.error(e); hint.textContent = 'No se pudo guardar GLOBAL.';
+    }
   });
 
-  function setThemeMsg(text){
-    const msg = document.getElementById('admThemeMsg');
-    if (msg) msg.textContent = text;
-  }
-}
+  // 6) Aplicar tema local si existe en sessionStorage (solo Admin)
+  try {
+    const local = sessionStorage.getItem('localTheme');
+    if (local) document.documentElement.setAttribute('data-theme', local);
+  } catch {}
+
+  // 7) Limpieza
+  window.addEventListener('beforeunload', ()=>{ try{ unsubTheme?.(); }catch(_){} });
+
+  // 8) Si existiera el panel flotante viejo en el DOM, ocúltalo (por compatibilidad)
+  const oldFloat = document.getElementById('admThemePanel');
+  if (oldFloat) oldFloat.style.display = 'none';
+})();
 
 /* ---------------- helpers ---------------- */
 function q(sel){ return document.querySelector(sel); }
@@ -1124,11 +1152,6 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
 
 /* =========================================================
    PANEL: Productos (CRUD sobre Artículos)
-   - Crear, editar, eliminar, duplicar
-   - Activo / En espera (onHold)
-   - Destacado (featured)
-   - Edición limitada (limitedTime / limitedUntil)
-   - Búsqueda y orden por columnas
    ========================================================= */
 (function initProductsPanel(){
   const TABS = document.getElementById('admTabs');
@@ -1464,8 +1487,8 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
     if (isEdit){
       $('#pDelete')?.addEventListener('click', async ()=>{
         if (!confirm(`¿Eliminar "${data.name||'producto'}"?`)) return;
-        try{ await deleteArticle(data.id, { training: isTraining() }); toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : '')); close(); }
-        catch(e){ console.error(e); toast('No se pudo eliminar'); }
+        try{ await deleteArticle(data.id, { training: isTraining() }); toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : '')); close();
+        } catch(e){ console.error(e); toast('No se pudo eliminar'); }
       });
     }
 
@@ -1502,7 +1525,7 @@ function escHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
     });
   }
 })();
-  
+
 /* ---------------- Arranque ---------------- */
 runReports(); // primer reporte al abrir
 // Atajos útiles
