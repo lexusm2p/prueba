@@ -1,4 +1,3 @@
-// /cocina/app.js
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 
