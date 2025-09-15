@@ -18,7 +18,7 @@ import { setTheme } from '../shared/db.js';
 /* ======================= Estado global ======================= */
 const state = {
   menu: null,
-  mode: 'minis',
+  mode: 'mini',
   cart: [],
   customerName: '',
   orderMeta: { type: 'pickup', table: '', phone: '', payMethodPref: 'efectivo' },
@@ -172,24 +172,24 @@ function openPinModal(){
 }
 
 /* ======================= Tabs ======================= */
-document.getElementById('btnMinis')?.addEventListener('click', ()=> setMode('minis'));
-document.getElementById('btnBig')?.addEventListener('click', ()=> setMode('burgers'));
+document.getElementById('btnMinis')?.addEventListener('click', ()=> setMode('mini'));
+document.getElementById('btnBig')?.addEventListener('click', ()=> setMode('big'));
 function setMode(mode){ state.mode = mode; renderCards(); setActiveTab(mode); }
 function setActiveTab(mode=state.mode){
   const btnMinis = document.getElementById('btnMinis');
   const btnBig   = document.getElementById('btnBig');
   const on  = el => { el?.classList.add('is-active'); el?.setAttribute('aria-selected','true'); };
   const off = el => { el?.classList.remove('is-active'); el?.setAttribute('aria-selected','false'); };
-  if(mode==='minis'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
+  if(mode==='mini'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
 }
 
 /* ======================= Init ======================= */
 init();
 async function init(){
-  state.menu = (await DB.fetchCatalogWithFallback()) || {};
+  state.menu = await DB.fetchCatalogWithFallback();
   startThemeWatcher();
   renderCards();
-  setActiveTab('minis');
+  setActiveTab('mini');
   updateCartBar();
   setupSidebars();
   renderMobileInfo();
@@ -232,11 +232,14 @@ async function init(){
 /* ======================= Utilidades base ======================= */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 function findItemById(id){
-  const menuItems = (state.menu?.products || []);
-  return menuItems.find(item => item.id === id) || null;
+  return state.menu?.burgers?.find?.(b=>b.id===id)
+      || state.menu?.minis?.find?.(m=>m.id===id)
+      || state.menu?.drinks?.find?.(d=>d.id===id)
+      || state.menu?.sides?.find?.(s=>s.id===id)
+      || null;
 }
 function baseOfItem(item){
-  return item?.baseOf ? findItemById(item.baseOf) : item;
+  return item?.baseOf ? state.menu?.burgers?.find?.(b=>b.id===item.baseOf) : item;
 }
 function formatIngredientsFor(item, base){
   const meatDefaultBig  = Number(state.menu?.appSettings?.meatGrams ?? 85);
@@ -454,20 +457,12 @@ function updateHHPill(hh, extraText=''){
   const pill = document.getElementById('hhPill');
   const txt  = document.getElementById('hhText');
   const msg  = document.getElementById('hhMsg');
-  const miPill = document.getElementById('miHHPill');
-  const miTxt  = document.getElementById('miHHText');
-  const miMsg  = document.getElementById('miHHMsg');
-
-  [pill, miPill].forEach(el => el?.classList.toggle('on', !!hh.enabled));
-  
-  if (txt) txt.textContent = hh.enabled
+  if (!pill || !txt) return;
+  pill.classList.toggle('on', !!hh.enabled);
+  txt.textContent = hh.enabled
     ? `Happy Hour – ${Number(hh.discountPercent||0)}%${extraText ? ' · ' + extraText : ''}`
     : 'HH OFF';
-  if (miTxt) miTxt.textContent = hh.enabled
-    ? `${Number(hh.discountPercent||0)}% OFF${extraText ? ' · ' + extraText : ''}`
-    : 'OFF';
-
-  [msg, miMsg].forEach(el => el ? el.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '') : null);
+  if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
 }
 function startHHCountdown(hh){
   stopHHTimer();
@@ -540,7 +535,7 @@ function bindETA(){
 
 /* ======================= Carrito / logro ======================= */
 function miniCount(cart=state.cart){
-  return cart.reduce((sum, l)=> sum + (l.mini ? (l.qty||1) : 0), 0);
+  return cart.reduce((sum, l)=> sum + ((l.mini ? l.qty||1 : 0)), 0);
 }
 function checkComboAchievement(){
   if (!state.comboUnlocked && miniCount() >= 3){
@@ -555,9 +550,7 @@ function renderCards(){
   const grid = document.getElementById('cards');
   if(!grid) return;
   grid.innerHTML = '';
-  // Filtramos por la categoría seleccionada ('mini' o 'burgers')
-  const items = (state.menu?.products || []).filter(p => p.category === state.mode);
-  
+  const items = state.mode==='mini' ? (state.menu?.minis||[]) : (state.menu?.burgers||[]);
   items.forEach(it=>{
     const base = baseOfItem(it);
     const baseId = base?.id || it.id;
@@ -680,7 +673,7 @@ function openItemModal(item, base, existingIndex=null){
     const extraDlc = dlcChk ? DLC : 0;
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
-    const subtotal = (unitBaseAfterHH + extraDlc + costS + costI) * qty;
+    const subtotal = (unitBaseAfterHH + extraDlc)*qty + (costS + costI)*qty;
     if(totalEl) totalEl.textContent = money(subtotal);
     return { qty, subtotal, dlcChk, hhDiscTotal: hhDiscPerUnit * qty };
   };
@@ -763,29 +756,6 @@ function openCartModal(){
   if (confirmBtn) confirmBtn.style.display = '';
   if (totalEl) totalEl.style.display = '';
 
-  const cartItemsHtml = state.cart.map((l,idx)=>{
-    const extrasTxt = [
-      (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
-      ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
-      ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
-      (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
-    ].filter(Boolean).join(', ');
-    return `
-    <div class="k-card" style="margin:8px 0" data-i="${idx}">
-      <h4>${l.name} · x${l.qty}</h4>
-      ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
-      ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
-      ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
-      <div class="k-actions" style="gap:6px">
-        <button class="btn small ghost" data-a="less">-</button>
-        <button class="btn small ghost" data-a="more">+</button>
-        <button class="btn small" data-a="edit">Editar</button>
-        <button class="btn small danger" data-a="remove">Eliminar</button>
-        <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
-      </div>
-    </div>`;
-  }).join('');
-
   if(body) body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
       <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
@@ -828,7 +798,27 @@ function openCartModal(){
     </div>
 
     <div class="field">
-      ${cartItemsHtml}
+      ${state.cart.map((l,idx)=>{
+        const extrasTxt = [
+          (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
+          ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
+          ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
+          (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
+        ].filter(Boolean).join(', ');
+        return `
+        <div class="k-card" style="margin:8px 0" data-i="${idx}">
+          <h4>${l.name} · x${l.qty}</h4>
+          ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
+          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
+          ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
+          <div class="k-actions" style="gap:6px">
+            <button class="btn small ghost" data-a="less">-</button>
+            <button class="btn small ghost" data-a="more">+</button>
+            <button class="btn small" data-a="edit">Editar</button>
+            <button class="btn small danger" data-a="remove">Eliminar</button>
+            <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
+          </div>
+        </div>`;}).join('')}
     </div>
 
     <div class="field"><label>Comentarios generales</label>
@@ -856,11 +846,11 @@ function openCartModal(){
     phoneInput.addEventListener('change', async ()=>{
       const p = normalizePhone(phoneInput.value);
       if (p.length >= 10){
-        try{
-          const c = (await DB.fetchCustomer?.(p)) || {};
+        const c = await DB.fetchCustomer?.(p);
+        if (c?.name){
           const nameEl = document.getElementById('cartName');
-          if (nameEl && !nameEl.value && c.name) nameEl.value = c.name;
-        }catch(e){ console.warn("Error fetching customer", e); }
+          if (nameEl && !nameEl.value) nameEl.value = c.name;
+        }
       }
     });
   }
@@ -1071,11 +1061,9 @@ function setupSidebars(){
   const upsell = document.getElementById('upsellList');
   if (upsell){
     const picks = [];
-    const allProducts = state.menu?.products || [];
-    picks.push(...allProducts.filter(p => p.category === 'drinks').slice(0,2));
-    picks.push(...allProducts.filter(p => p.category === 'sides').slice(0,2));
-    if (!picks.length) picks.push(...allProducts.filter(p => p.category === 'minis').slice(0,3));
-    
+    if (state.menu?.drinks?.length) picks.push(...state.menu.drinks.slice(0,2));
+    if (state.menu?.sides?.length)  picks.push(...state.menu.sides.slice(0,2));
+    if (!picks.length) picks.push(...(state.menu?.minis||[]).slice(0,3));
     upsell.innerHTML = picks.map(p => `
       <li>
         <div style="flex:1 1 auto;min-width:0">
@@ -1089,19 +1077,17 @@ function setupSidebars(){
 
   const promo = document.getElementById('promoList');
   if (promo){
-    const minis = (state.menu?.products || []).filter(p => p.category === 'minis');
     promo.innerHTML = hh.enabled
       ? `<li><div style="flex:1">Combos con descuento</div><div class="price">-${hh.discountPercent}%</div></li>`
-      : `<li><div style="flex:1">Prueba nuestras minis ⭐</div><div class="price">Desde ${money((minis?.[0]?.price)||0)}</div></li>`;
+      : `<li><div style="flex:1">Prueba nuestras minis ⭐</div><div class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</div></li>`;
   }
 
   const rank = document.getElementById('rankToday');
   if (rank){
-    const fallbacks = (state.menu?.products || []).filter(p => p.category === 'minis').slice(0,3)
-                      .concat((state.menu?.products || []).filter(p => p.category === 'burgers').slice(0,2));
     const rows = (state.topToday.length
         ? state.topToday.map(t=>`<li><div style="flex:1">${t.name}</div><div class="muted small">🔥 ${t.count}</div></li>`)
-        : fallbacks.map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`))
+        : (state.menu?.minis||[]).slice(0,3).concat((state.menu?.burgers||[]).slice(0,2))
+            .map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`))
       .join('');
     rank.innerHTML = rows;
   }
@@ -1126,10 +1112,9 @@ function renderMobileInfo(){
 
   const promo = document.getElementById('miPromos');
   if (promo){
-    const minis = (state.menu?.products || []).filter(p => p.category === 'minis');
     promo.innerHTML = hh.enabled
       ? `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Combos con descuento</span><span class="price">-${hh.discountPercent}%</span></li>`
-      : `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Prueba nuestras minis ⭐</span><span class="price">Desde ${money((minis?.[0]?.price)||0)}</span></li>`;
+      : `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Prueba nuestras minis ⭐</span><span class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</span></li>`;
   }
 
   const top = document.getElementById('miTop');
@@ -1255,10 +1240,13 @@ function oTime(o){ return o.createdAt?.toMillis?.() ?? new Date(o.createdAt||0).
 document.addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-add]'); if(!btn) return;
   const id = btn.getAttribute('data-add');
-  const all = (state.menu?.products || []);
+  const all = [
+    ...(state.menu?.drinks||[]), ...(state.menu?.sides||[]),
+    ...(state.menu?.minis||[]),  ...(state.menu?.burgers||[])
+  ];
   const item = all.find(x=>x.id===id); if(!item) return;
 
-  if (item.category === 'drinks' || item.category === 'sides'){
+  if (item.type==='drink' || item.type==='side'){
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
     state.cart.push({
@@ -1272,7 +1260,7 @@ document.addEventListener('click', (e)=>{
     });
     updateCartBar(); beep(); toast(`${item.name} agregado`);
   } else {
-    openItemModal(item, item.baseOf ? findItemById(item.baseOf) : item);
+    openItemModal(item, item.baseOf ? state.menu?.burgers?.find(b=>b.id===item.baseOf) : item);
   }
 }, false);
 
@@ -1372,8 +1360,20 @@ function mountThemePanel() {
   });
 
   function setMsg(text, kind='ok'){
-    const msg = document.getElementById('admThemeMsg');
-    if (msg) msg.textContent = text;
+    msg.textContent = text;
+    msg.style.color = (kind==='ok'?'#A7F3D0': kind==='warn'?'#FFE082':'#FFABAB');
+  }
+
+  head.appendChild(title); head.appendChild(toggle);
+  row1.appendChild(labelSel); row1.appendChild(select);
+  row2.appendChild(btnLocal); row2.appendChild(btnGlobal);
+  body.appendChild(row1); body.appendChild(row2); body.appendChild(msg);
+  box.appendChild(head); box.appendChild(body);
+  document.body.appendChild(box);
+
+  if (state.adminMode) {
+    const g = document.getElementById('btnThemeGlobal');
+    if (g) g.style.display = '';
   }
 }
 
