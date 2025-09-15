@@ -13,19 +13,21 @@ export const THEMES = {
   /* ========== BASE (look por defecto) ========== */
   'Base': {
     vars: {
-      '--bg':'#0b1424',
-      '--panel':'#0f182a',
-      '--panel-2':'#131f33',
-      '--ink':'#e6edf7',
-      '--muted':'#aeb9cd',
-      '--muted-2':'#9fb0c7',
-      '--accent':'#5ac8fa',
-      '--accent-2':'#a78bfa',
+      '--bg':'#0b0f19',
+      '--panel':'#121a2a',
+      '--panel-2':'#0f1726',
+      '--ink':'#eef4ff',
+      '--muted':'#b8c6d8',
+      '--muted-2':'#90a4bd',
+      '--accent':'#ffd24a',
+      '--accent-2':'#7cc9ff',
       '--danger':'#ff6b6b',
-      '--ok':'#2fe38b',
-      '--stroke':'rgba(255,255,255,.08)',
+      '--ok':'#2fd27d',
+      '--stroke':'rgba(255,255,255,.10)',
+      '--decor-glow': '0 0 18px rgba(255,210,74,.25)',
+      '--snow-alpha': '0',
     },
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
     fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
@@ -33,64 +35,70 @@ export const THEMES = {
   /* ========== Septiembre / Grito ========== */
   'Independencia': {
     vars: {
-      '--bg':'#09100b',
-      '--panel':'#0f1a12',
-      '--panel-2':'#0b130d',
-      '--ink':'#f7fff7',
-      '--muted':'#bfe7c7',
-      '--muted-2':'#9dd7a7',
-      '--accent':'#17c964',     // verde
-      '--accent-2':'#ff4d4d',   // rojo
-      '--danger':'#ff6b6b',
-      '--ok':'#24d36b',
-      '--stroke':'rgba(255,255,255,.10)',
+      '--bg':'#08110a',
+      '--panel':'#0e1b12',
+      '--panel-2':'#0b1510',
+      '--ink':'#f6fff4',
+      '--muted':'#c9e7d1',
+      '--muted-2':'#a6d1b0',
+      '--accent':'#ffd24a',     // dorado
+      '--accent-2':'#4be37a',   // verde vivo
+      '--danger':'#ff5656',
+      '--ok':'#3ae08a',
+      '--stroke':'rgba(255,255,255,.12)',
+      '--decor-glow': '0 0 18px rgba(75,227,122,.25), 0 0 28px rgba(255,210,74,.18)',
+      '--snow-alpha': '0',
     },
-    fontFamily: '"Chakra Petch", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '', // Se usará la fuente base
     decorations: { vivaBanner: true, papelPicado: true, sombrero: true }
   },
 
-  /* ========== Noviembre ========== */
+  /* ========== Día de Muertos ========== */
   'Día de Muertos': {
     vars: {
-      '--bg':'#0e0a14',
-      '--panel':'#1a1426',
-      '--panel-2':'#150f20',
-      '--ink':'#fff7f1',
-      '--muted':'#e6c7ff',
-      '--muted-2':'#eab1ff',
-      '--accent':'#ff9f1a',
-      '--accent-2':'#7c5cff',
-      '--danger':'#ff7a7a',
-      '--ok':'#35e0a1',
+      '--bg':'#140b11',
+      '--panel':'#1b1020',
+      '--panel-2':'#130a18',
+      '--ink':'#fff7fb',
+      '--muted':'#e7cbe0',
+      '--muted-2':'#d9a6cc',
+      '--accent':'#ffa620',     /* cempasúchil */
+      '--accent-2':'#9b6bff',   /* morado vivo */
+      '--ok':'#39e0a7',
+      '--danger':'#ff6b8a',
       '--stroke':'rgba(255,255,255,.12)',
+      '--decor-glow': '0 0 18px rgba(155,107,255,.25), 0 0 28px rgba(255,166,32,.18)',
+      '--snow-alpha': '0',
     },
-    fontFamily: '"Nova Round", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Nova+Round&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
-
-  /* ========== Diciembre ========== */
+  
+  /* ========== Navidad ========== */
   'Navidad': {
     vars: {
-      '--bg':'#0b0f0b',
-      '--panel':'#0f1a12',
-      '--panel-2':'#0b130d',
-      '--ink':'#f5fff5',
-      '--muted':'#c8e9c8',
-      '--muted-2':'#a9d9b0',
-      '--accent':'#e63946',   // rojo
-      '--accent-2':'#57cc99', // verde
+      '--bg':'#0b1210',
+      '--panel':'#12201a',
+      '--panel-2':'#0f1915',
+      '--ink':'#f6fff8',
+      '--muted':'#c8e9d6',
+      '--muted-2':'#a5d7be',
+      '--accent':'#ff6060',     /* rojo */
+      '--accent-2':'#5fe08a',   /* verde */
+      '--ok':'#4fe59f',
       '--danger':'#ff6b6b',
-      '--ok':'#2fd27d',
       '--stroke':'rgba(255,255,255,.12)',
+      '--decor-glow': '0 0 18px rgba(95,224,138,.25), 0 0 28px rgba(255,96,96,.18)',
+      '--snow-alpha': '.35',
     },
-    fontFamily: '"Nunito", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Nunito:wght@800&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  /* ========== Febrero ========== */
+  /* ========== San Valentín ========== */
   'San Valentín': {
     vars: {
       '--bg':'#160b12',
@@ -104,13 +112,15 @@ export const THEMES = {
       '--danger':'#ff6b6b',
       '--ok':'#2fd27d',
       '--stroke':'rgba(255,255,255,.12)',
+      '--decor-glow': '0 0 18px rgba(255,77,141,.18)',
+      '--snow-alpha': '0',
     },
-    fontFamily: '"Baloo 2", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  /* ========== Octubre ========== */
+  /* ========== Halloween ========== */
   'Halloween': {
     vars: {
       '--bg':'#0b0b12',
@@ -123,14 +133,16 @@ export const THEMES = {
       '--accent-2':'#7c5cff', // morado
       '--danger':'#ff6b6b',
       '--ok':'#2fd27d',
-      '--stroke':'rgba(255,255,255,.12)'
+      '--stroke':'rgba(255,255,255,.12)',
+      '--decor-glow': '0 0 18px rgba(124,92,255,.25), 0 0 28px rgba(255,122,0,.18)',
+      '--snow-alpha': '0',
     },
-    fontFamily: '"Changa One", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Changa+One:ital@0;1&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  /* ========== EXTRA: Fútbol / Mundial ========== */
+  /* ========== Fútbol / Mundial ========== */
   'Fútbol': {
     vars: {
       '--bg':'#07131c',
@@ -141,16 +153,18 @@ export const THEMES = {
       '--muted-2':'#9eb5d3',
       '--accent':'#22c55e', // césped
       '--accent-2':'#3b82f6', // cielo
-      '--danger':'#fb7185',
       '--ok':'#34d399',
-      '--stroke':'rgba(255,255,255,.10)'
+      '--danger':'#fb7185',
+      '--stroke':'rgba(255,255,255,.10)',
+      '--decor-glow': '0 0 18px rgba(34,197,94,.22)',
+      '--snow-alpha': '0',
     },
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
     fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  /* ========== EXTRA: Lucha Libre ========== */
+  /* ========== Lucha Libre ========== */
   'Lucha Libre': {
     vars: {
       '--bg':'#0a0a1a',
@@ -161,16 +175,18 @@ export const THEMES = {
       '--muted-2':'#a5b4fc',
       '--accent':'#f59e0b',  // dorado
       '--accent-2':'#06b6d4',// cian
-      '--danger':'#f87171',
       '--ok':'#34d399',
-      '--stroke':'rgba(255,255,255,.10)'
+      '--danger':'#f87171',
+      '--stroke':'rgba(255,255,255,.10)',
+      '--decor-glow': '0 0 18px rgba(245,158,11,.22), 0 0 28px rgba(6,182,212,.18)',
+      '--snow-alpha': '0',
     },
-    fontFamily: '"Chakra Petch", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  /* ========== NUEVO 1: Pixel Art (8‑bit) ========== */
+  /* ========== Pixel Art (8‑bit) ========== */
   'Pixel Art': {
     vars: {
       '--bg':'#0a0f1a',
@@ -183,15 +199,16 @@ export const THEMES = {
       '--accent-2':'#55ff7f',  // verde fosfo
       '--danger':'#ff6b6b',
       '--ok':'#2fe38b',
-      '--stroke':'rgba(255,255,255,.12)'
+      '--stroke':'rgba(255,255,255,.12)',
+      '--decor-glow': '0 0 18px rgba(255,210,74,.22), 0 0 28px rgba(85,255,127,.16)',
+      '--snow-alpha': '0',
     },
-    // Press Start 2P ya está en tu CSS base
     fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
     fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  /* ========== NUEVO 2: Retro Arcade (neón 80s/90s) ========== */
+  /* ========== Retro Arcade (neón 80s/90s) ========== */
   'Retro Arcade': {
     vars: {
       '--bg':'#0b0714',
@@ -202,16 +219,18 @@ export const THEMES = {
       '--muted-2':'#bfa8ff',
       '--accent':'#00e5ff',   // cian neón
       '--accent-2':'#ff37a6', // magenta neón
-      '--danger':'#ff6b8a',
       '--ok':'#41e3a2',
-      '--stroke':'rgba(255,255,255,.14)'
+      '--danger':'#ff6b8a',
+      '--stroke':'rgba(255,255,255,.14)',
+      '--decor-glow': '0 0 22px rgba(0,229,255,.25), 0 0 28px rgba(255,55,166,.18)',
+      '--snow-alpha': '0',
     },
-    fontFamily: '"Audiowide", "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Audiowide&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   },
 
-  /* ========== NUEVO 3: Y2K (90s/00s) ========== */
+  /* ========== Y2K (90s/00s) ========== */
   'Y2K (90s/00s)': {
     vars: {
       '--bg':'#0b0f14',
@@ -222,29 +241,30 @@ export const THEMES = {
       '--muted-2':'#a0c6e0',
       '--accent':'#6ee7ff',   // celeste glossy
       '--accent-2':'#c0f',    // púrpura Y2K
-      '--danger':'#ff6bba',
       '--ok':'#45e3b3',
-      '--stroke':'rgba(255,255,255,.10)'
+      '--danger':'#ff6bba',
+      '--stroke':'rgba(255,255,255,.10)',
+      '--decor-glow': '0 0 22px rgba(110,231,255,.22), 0 0 26px rgba(204,0,255,.16)',
+      '--snow-alpha': '0',
     },
-    fontFamily: '"Orbitron", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Orbitron:wght@600..900&display=swap',
+    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
+    fontUrl: '',
     decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
   }
 };
 
 /* ================= utilidades base ================= */
+const FONT_LINK_ID = 'theme-font-link';
 function ensureFontLoaded(url){
   if (!url) return;
-  const id = 'theme-font-link';
-  const link = document.getElementById(id);
-  if (link) {
-    // Si ya existe pero con otro href, actualízalo
-    if (link.href !== url) link.href = url;
-    return;
+  let link = document.getElementById(FONT_LINK_ID);
+  if (!link){
+    link = document.createElement('link');
+    link.id = FONT_LINK_ID;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
   }
-  const l = document.createElement('link');
-  l.id = id; l.rel = 'stylesheet'; l.href = url;
-  document.head.appendChild(l);
+  if (link.href !== url) link.href = url;
 }
 function applyVars(vars){
   const root = document.documentElement;
@@ -350,7 +370,7 @@ function applyDecorations(themeName){
     viva.style.display = 'block';
   } else { removeNode('mx-viva'); }
 
-  // Sombrero sobre brand
+  // Sombrero sobre el brand
   if (conf.sombrero){
     const sombrero = ensureNode('mx-sombrero','img');
     sombrero.src = SVG_SOMBRERO;
