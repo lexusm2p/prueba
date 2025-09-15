@@ -519,7 +519,7 @@ function isLowStock(itemId){
 
 /* ---- Modal de receta (solo lectura) ---- */
 const rcpModal = document.getElementById('rcpModal');
-document.getElementById('rcpClose')?.addEventListener('click', ()=> rcpModal.style.display='none');
+document.getElementById('rcpClose')?.addEventListener('click', ()=>{ if (rcpModal) rcpModal.style.display='none'; });
 
 let CURRENT_R = null;
 let CURRENT_OUT_QTY = 100;
@@ -532,10 +532,11 @@ function scaleIngredients(r, outQty){
 
 function renderRecipeModal(){
   if(!CURRENT_R) return;
+  // safeguards suaves si no existe estructura del modal
+  const body = document.getElementById('rcpBody'); if (!body) return;
+  const hint = document.getElementById('rcpHint');
   const outItem = invMap.get(CURRENT_R.outputItemId)?.name || CURRENT_R.outputItemId || '—';
   const list = scaleIngredients(CURRENT_R, CURRENT_OUT_QTY);
-  const body = document.getElementById('rcpBody');
-  const hint = document.getElementById('rcpHint');
 
   body.innerHTML = `
     <div class="field"><label>Receta</label>
@@ -580,14 +581,14 @@ function renderRecipeModal(){
 
     ${CURRENT_R.method ? `<div class="field"><label>Método</label><div class="muted sm" style="white-space:pre-wrap">${esc(CURRENT_R.method)}</div></div>`:''}
   `;
-  hint.textContent = `Salida: ${CURRENT_OUT_QTY} ml`;
-  document.getElementById('rcpTitle').textContent = CURRENT_R.name || 'Receta';
+  if (hint) hint.textContent = `Salida: ${CURRENT_OUT_QTY} ml`;
+  const titleEl = document.getElementById('rcpTitle'); if (titleEl) titleEl.textContent = CURRENT_R.name || 'Receta';
 }
 
 function openRecipeModal(r){
   CURRENT_R = r;
   CURRENT_OUT_QTY = Number(document.getElementById('rcpQuickPort')?.value || 100);
-  rcpModal.style.display='grid';
+  if (rcpModal) rcpModal.style.display='grid';
   renderRecipeModal();
 }
 document.getElementById('rcpScale500')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=500; renderRecipeModal(); });
@@ -714,7 +715,8 @@ function openQuickPrepDialog(prefRecipe = null){
         await produceBatch({ recipeId: state.r.id, outputQty: state.qty }, { training: isTraining() });
         // marcar meta almacenada (informativo)
         await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty }, { training: isTraining() });
-        toast('Producción confirmada' + (isTraining) ? ' (PRUEBA)' : '');
+        // FIX: llamada correcta + precedencia
+        toast('Producción confirmada' + ( isTraining() ? ' (PRUEBA)' : '' ));
         close();
       }catch(err){ console.error(err); toast('No se pudo confirmar producción'); }
     }
