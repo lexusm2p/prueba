@@ -714,7 +714,7 @@ function openQuickPrepDialog(prefRecipe = null){
         await produceBatch({ recipeId: state.r.id, outputQty: state.qty }, { training: isTraining() });
         // marcar meta almacenada (informativo)
         await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty }, { training: isTraining() });
-        toast('Producción confirmada' + (isTraining() ? ' (PRUEBA)' : ''));
+        toast('Producción confirmada' + (isTraining) ? ' (PRUEBA)' : '');
         close();
       }catch(err){ console.error(err); toast('No se pudo confirmar producción'); }
     }
