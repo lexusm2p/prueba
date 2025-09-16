@@ -1,8 +1,9 @@
-// /admin/app.js — Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
+// /admin/app.js
+// Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
 // + Pestaña TEMAS (vista previa local + guardar GLOBAL en settings/theme)
 // + Panel “Productos” (CRUD sobre Artículos) — con Modo PRUEBA integrado
 // Mejoras: robustez ante null/NaN, helpers de money/date correctos, accesibilidad/UX,
-// limpieza en unload, atajos de teclado y pequeños safeguards.
+// limpieza en unload, atajos de teclado y safeguards.
 
 /* ========================= Imports ========================= */
 import {
@@ -37,7 +38,7 @@ import {
 
   // TEMAS
   setTheme,
-  subscribeTheme
+  subscribeTheme,
 } from '../shared/db.js';
 
 import { toast, beep } from '../shared/notify.js';
@@ -50,11 +51,15 @@ const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const noop = () => {};
 
-const safeNum = (v, def = 0) => Number.isFinite(Number(v)) ? Number(v) : def;
-const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
+const safeNum = (v, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
+const clamp = (n, min, max) => Math.min(Math.max(safeNum(n, min), min), max);
 
 const toLocalISO = (d) => {
   const t = (d instanceof Date ? d : new Date(d));
+  if (!Number.isFinite(t?.getTime?.())) return '';
   const tz = t.getTimezoneOffset() * 60000;
   return new Date(t - tz).toISOString().slice(0, 16); // yyyy-MM-ddTHH:mm
 };
@@ -64,11 +69,12 @@ const parseLocalDate = (input, fallback = null) => {
   return Number.isFinite(d.getTime()) ? d : fallback;
 };
 
-// Money helpers (muestran 2 decimales solo si hay centavos “reales”)
+// Money helpers (2 decimales solo si hay centavos “reales”)
 const money = (n) => {
   const x = safeNum(n, 0);
   const hasCents = Math.abs(x % 1) > 0.0001;
-  return '$' + (hasCents ? x.toFixed(2) : x.toFixed(0));
+  const s = hasCents ? x.toFixed(2) : x.toFixed(0);
+  return '$' + s;
 };
 function setTxt(id, v) {
   const el = document.getElementById(id);
@@ -82,11 +88,11 @@ function setMoney(id, v) {
 // Escapes correctos
 function esc(s = '') {
   return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 function escAttr(s = '') { return esc(s); }
 function escHtml(s = '') { return esc(s); }
@@ -120,8 +126,12 @@ function paintTrainingBadge() {
     b.setAttribute('aria-live', 'polite');
     b.setAttribute('title', 'Alternar modo PRUEBA (Ctrl/Cmd+T)');
     Object.assign(b.style, {
-      position: 'fixed', left: '14px', bottom: '14px',
-      zIndex: 9999, borderRadius: '999px', opacity: .92
+      position: 'fixed',
+      left: '14px',
+      bottom: '14px',
+      zIndex: 9999,
+      borderRadius: '999px',
+      opacity: .92,
     });
     b.addEventListener('click', () => setTraining(!isTraining()));
     document.body.appendChild(b);
@@ -147,7 +157,7 @@ tabs.addEventListener('click', (e) => {
   const t = e.target.closest('.tab');
   if (!t) return;
 
-  $$('.tab', tabs).forEach(b => {
+  $$('.tab', tabs).forEach((b) => {
     b.classList.remove('is-active');
     b.setAttribute?.('aria-selected', 'false');
   });
@@ -155,7 +165,7 @@ tabs.addEventListener('click', (e) => {
   t.setAttribute('aria-selected', 'true');
 
   const target = t.dataset.tab;
-  $$('.panel').forEach(p => p.classList.remove('active'));
+  $$('.panel').forEach((p) => p.classList.remove('active'));
   document.getElementById('panel-' + target)?.classList.add('active');
 
   if (target === 'hist') {
@@ -175,6 +185,7 @@ const fromEl = document.getElementById('repFrom');
 const toEl   = document.getElementById('repTo');
 const typeEl = document.getElementById('repType');
 const histEl = document.getElementById('repHist');
+
 document.getElementById('btnRepGen')?.addEventListener('click', runReports);
 
 (function initDefaultReportRange() {
@@ -183,29 +194,31 @@ document.getElementById('btnRepGen')?.addEventListener('click', runReports);
   weekAgo.setDate(today.getDate() - 7);
   if (fromEl && toEl) {
     // yyyy-MM-dd
-    fromEl.value = new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate()).toISOString().slice(0, 10);
-    toEl.value   = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString().slice(0, 10);
+    fromEl.value = new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate())
+      .toISOString().slice(0, 10);
+    toEl.value   = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      .toISOString().slice(0, 10);
   }
 })();
 
 async function runReports() {
   try {
     const from = parseLocalDate((fromEl?.value || '') + 'T00:00:00');
-    const to   = parseLocalDate((toEl?.value || '')   + 'T23:59:59');
+    const to   = parseLocalDate((toEl?.value   || '') + 'T23:59:59');
     const type = typeEl?.value || 'all';
     const includeArchive = (histEl?.value !== 'No');
 
     const orders = await getOrdersRange({
       from, to, includeArchive,
-      orderType: type === 'all' ? null : type
+      orderType: type === 'all' ? null : type,
     }) || [];
 
     const agg = aggregateOrders(orders);
 
-    setTxt('kpiOrders', agg.orders);
-    setTxt('kpiUnits',  agg.units);
+    setTxt('kpiOrders',  agg.orders);
+    setTxt('kpiUnits',   agg.units);
     setMoney('kpiRevenue', agg.revenue);
-    setMoney('kpiAvg', agg.avgTicket);
+    setMoney('kpiAvg',     agg.avgTicket);
 
     fillTable('tblTop', agg.topItems);
     fillTable('tblLow', agg.lowItems);
@@ -226,7 +239,8 @@ async function runReports() {
 function aggregateOrders(orders = []) {
   const ordersCount = orders.length;
   const revenue = orders.reduce((a, o) => a + safeNum(o.subtotal ?? o.total, 0), 0);
-  const units = orders.reduce((a, o) => a + (o.items || []).reduce((s, i) => s + safeNum(i.qty || 1, 0), 0), 0);
+  const units   = orders.reduce((a, o) =>
+    a + (o.items || []).reduce((s, i) => s + safeNum(i.qty || 1, 0), 0), 0);
   const avgTicket = ordersCount ? revenue / ordersCount : 0;
 
   const map = new Map();
@@ -235,7 +249,8 @@ function aggregateOrders(orders = []) {
     const prev = map.get(key) || { name: key, units: 0, revenue: 0 };
     prev.units += safeNum(i.qty || 1, 0);
     const unitPrice = safeNum(i.unitPrice, NaN);
-    const lineTotal = ('lineTotal' in i) ? safeNum(i.lineTotal, 0)
+    const lineTotal = ('lineTotal' in i)
+      ? safeNum(i.lineTotal, 0)
       : (Number.isFinite(unitPrice) ? unitPrice * safeNum(i.qty || 1, 0) : 0);
     prev.revenue += lineTotal;
     map.set(key, prev);
@@ -262,7 +277,9 @@ function fillTable(id, arr = []) {
   const tb = document.querySelector('#' + id + ' tbody');
   if (!tb) return;
   tb.innerHTML = (arr.length)
-    ? arr.map(r => `<tr><td>${esc(r.name)}</td><td>${r.units}</td><td>${money(r.revenue)}</td></tr>`).join('')
+    ? arr.map(r =>
+        `<tr><td>${esc(r.name)}</td><td>${r.units}</td><td>${money(r.revenue)}</td></tr>`
+      ).join('')
     : '<tr><td colspan="3">—</td></tr>';
 }
 
@@ -276,28 +293,35 @@ const histStateEl  = document.getElementById('histState');
 const histLimitEl  = document.getElementById('histLimit');
 
 $('#btnHistLoad')?.addEventListener('click', () => loadHistory());
-$('#btnHistCSV')?.addEventListener('click', exportHistoryCSV);
+$('#btnHistCSV') ?.addEventListener('click', exportHistoryCSV);
 histSearchEl?.addEventListener('input', debounce(renderHistory, 120));
-histTypeEl?.addEventListener('change', renderHistory);
-histStateEl?.addEventListener('change', renderHistory);
-histLimitEl?.addEventListener('input', renderHistory);
+histTypeEl  ?.addEventListener('change', renderHistory);
+histStateEl ?.addEventListener('change', renderHistory);
+histLimitEl ?.addEventListener('input', renderHistory);
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopHistAutoRefresh();
   else if (isHistActive()) startHistAutoRefresh();
 });
-function isHistActive() { return document.getElementById('panel-hist')?.classList.contains('active'); }
+function isHistActive() {
+  return document.getElementById('panel-hist')?.classList.contains('active');
+}
 function startHistAutoRefresh() {
   stopHistAutoRefresh();
-  HIST_TIMER = setInterval(() => { if (isHistActive()) loadHistory(false); }, 10000);
+  HIST_TIMER = setInterval(() => {
+    if (isHistActive()) loadHistory(false);
+  }, 10000);
 }
 function stopHistAutoRefresh() {
-  if (HIST_TIMER) { clearInterval(HIST_TIMER); HIST_TIMER = null; }
+  if (HIST_TIMER) {
+    clearInterval(HIST_TIMER);
+    HIST_TIMER = null;
+  }
 }
 
 async function loadHistory(showToast = true) {
   try {
-    const now = new Date();
+    const now  = new Date();
     const from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     const to   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     const includeArchive = ($('#repHist')?.value !== 'No');
@@ -308,11 +332,14 @@ async function loadHistory(showToast = true) {
       const when = new Date(t);
       const num = o.number ?? o.orderNumber ?? o.no ?? null;
       const custName = o.customerName ?? o.customer?.name ?? o.client?.name ?? '';
-      const phone = o.customerPhone ?? o.customer?.phone ?? o.client?.phone ?? '';
+      const phone    = o.customerPhone ?? o.customer?.phone ?? o.client?.phone ?? '';
       const state = (o.state || o.status || '').toString().toUpperCase();
       const type  = (o.orderType || o.type || '').toString().toLowerCase();
       const total = safeNum(o.total ?? o.subtotal, 0);
-      const items = (o.items || []).map(i => ({ name: i.name || i.id || '', qty: safeNum(i.qty || 1, 0) }));
+      const items = (o.items || []).map(i => ({
+        name: i.name || i.id || '',
+        qty:  safeNum(i.qty || 1, 0),
+      }));
       return { id: o.id, _ts: when.getTime(), when, num, custName, phone, state, type, total, items };
     }).sort((a, b) => b._ts - a._ts);
 
@@ -330,10 +357,11 @@ async function loadHistory(showToast = true) {
 function renderHistory() {
   const tb = document.querySelector('#tblHist tbody');
   if (!tb) return;
-  const qraw  = (histSearchEl?.value || '').trim();
-  const qstr  = qraw.toLowerCase();
-  const typeF = histTypeEl?.value || 'all';
-  const stateF= (histStateEl?.value || 'all').toUpperCase();
+
+  const qraw   = (histSearchEl?.value || '').trim();
+  const qstr   = qraw.toLowerCase();
+  const typeF  = histTypeEl?.value || 'all';
+  const stateF = (histStateEl?.value || 'all').toUpperCase();
 
   if (histLimitEl) histLimitEl.dataset.touched = '1';
   const limit = Math.max(1, safeNum(histLimitEl?.value, 5) || 5);
@@ -380,11 +408,11 @@ function renderHistory() {
 }
 
 function exportHistoryCSV() {
-  const qraw  = (histSearchEl?.value || '').trim();
-  const qstr  = qraw.toLowerCase();
-  const typeF = histTypeEl?.value || 'all';
-  const stateF= (histStateEl?.value || 'all').toUpperCase();
-  const limit = Math.max(1, safeNum(histLimitEl?.value, 5) || 5);
+  const qraw   = (histSearchEl?.value || '').trim();
+  const qstr   = qraw.toLowerCase();
+  const typeF  = histTypeEl?.value || 'all';
+  const stateF = (histStateEl?.value || 'all').toUpperCase();
+  const limit  = Math.max(1, safeNum(histLimitEl?.value, 5) || 5);
 
   const rows = HIST_ALL.filter(o => {
     if (typeF !== 'all' && o.type !== typeF) return false;
@@ -395,7 +423,8 @@ function exportHistoryCSV() {
     const type=(o.type||'').toLowerCase(), state=(o.state||'').toLowerCase();
     const items=o.items.map(i=>`${i.name} x${i.qty}`).join(' ').toLowerCase();
     if (qraw && /^\d+$/.test(qraw) && num === qraw) return true;
-    return id.includes(qstr)||num.includes(qstr)||name.includes(qstr)||phone.includes(qstr)||type.includes(qstr)||state.includes(qstr)||items.includes(qstr);
+    return id.includes(qstr)||num.includes(qstr)||name.includes(qstr)||
+           phone.includes(qstr)||type.includes(qstr)||state.includes(qstr)||items.includes(qstr);
   }).slice(0,limit);
 
   const header=['Fecha','Numero/ID','Cliente','Teléfono','Tipo','Estado','Artículos','Total'];
@@ -405,7 +434,8 @@ function exportHistoryCSV() {
     const fecha=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     const numTxt=(o.num!=null)?`#${o.num}`:(o.id||'');
     const items=o.items.map(i=>`${i.name} x${i.qty}`).join(' | ');
-    const csvRow=[fecha,numTxt,o.custName||'',o.phone||'',o.type||'',o.state||'',items,safeNum(o.total,0).toFixed(2)].map(csvEscape).join(',');
+    const csvRow=[fecha,numTxt,o.custName||'',o.phone||'',o.type||'',o.state||'',items,safeNum(o.total,0).toFixed(2)]
+      .map(csvEscape).join(',');
     lines.push(csvRow);
   }
   const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
@@ -462,10 +492,7 @@ function renderInventoryTable() {
 
 /* ========================= Compras / Proveedores ========================= */
 let SUPPLIERS = [];
-subscribeSuppliers(arr => {
-  SUPPLIERS = arr || [];
-  renderVendors(arr);
-});
+subscribeSuppliers(arr => { SUPPLIERS = arr || []; renderVendors(arr); });
 
 const btnAddPurchase = document.getElementById('btnAddPurchase');
 btnAddPurchase && (btnAddPurchase.onclick = async () => {
@@ -509,10 +536,7 @@ function renderVendors(arr = []) {
 $('#btnSaveVendor')?.addEventListener('click', async () => {
   const name = ($('#vName')?.value || '').trim();
   const contact = ($('#vContact')?.value || '').trim();
-  if (!name) {
-    toast('Nombre del proveedor requerido');
-    return;
-  }
+  if (!name) { toast('Nombre del proveedor requerido'); return; }
   try {
     await upsertSupplier({ name, contact }, { training: isTraining() });
     toast('Proveedor guardado' + (isTraining() ? ' (PRUEBA)' : ''));
@@ -575,7 +599,9 @@ subscribeHappyHour(hh => {
         const ms = endsAt - Date.now();
         if (ms <= 0) {
           lbl.textContent = 'Finalizó';
-          clearInterval(HH_TIMER); HH_TIMER = null; return;
+          clearInterval(HH_TIMER);
+          HH_TIMER = null;
+          return;
         }
         const m = Math.floor(ms / 60000);
         const s = Math.floor((ms % 60000) / 1000);
@@ -604,6 +630,7 @@ $('#btnSaveHappy')?.addEventListener('click', async () => {
     const t = parseLocalDate(endsEl.value);
     if (t) patch.endsAt = t.getTime();
   }
+
   try {
     await setHappyHour(patch, { training: isTraining() });
     toast('Happy Hour guardada' + (isTraining() ? ' (PRUEBA)' : ''));
@@ -617,9 +644,15 @@ $('#btnHH60')?.addEventListener('click', ()=> quickHH(60));
 $('#btnHH90')?.addEventListener('click', ()=> quickHH(90));
 $('#btnHHStop')?.addEventListener('click', async ()=>{
   try{
-    await setHappyHour({ enabled:false, discountPercent:safeNum($('#hhDisc')?.value,0), bannerText:($('#hhMsg')?.value||'') }, { training: isTraining() });
+    await setHappyHour(
+      { enabled:false, discountPercent:safeNum($('#hhDisc')?.value,0), bannerText:($('#hhMsg')?.value||'') },
+      { training: isTraining() }
+    );
     toast('Happy Hour desactivada' + (isTraining() ? ' (PRUEBA)' : ''));
-  } catch(e){ console.error(e); toast('No se pudo desactivar'); }
+  } catch(e){
+    console.error(e);
+    toast('No se pudo desactivar');
+  }
 });
 $('#btnHHExtend15')?.addEventListener('click', async ()=>{
   try{
@@ -627,7 +660,10 @@ $('#btnHHExtend15')?.addEventListener('click', async ()=>{
     const msg=($('#hhMsg')?.value||'');
     await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:15 }, { training: isTraining() });
     toast('Extendido 15 min' + (isTraining() ? ' (PRUEBA)' : ''));
-  }catch(e){ console.error(e); toast('No se pudo extender'); }
+  }catch(e){
+    console.error(e);
+    toast('No se pudo extender');
+  }
 });
 async function quickHH(mins){
   try{
@@ -635,7 +671,10 @@ async function quickHH(mins){
     const msg=($('#hhMsg')?.value||'');
     await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:mins }, { training: isTraining() });
     toast(`Happy Hour por ${mins} min` + (isTraining() ? ' (PRUEBA)' : ''));
-  } catch(e){ console.error(e); toast('No se pudo activar'); }
+  } catch(e){
+    console.error(e);
+    toast('No se pudo activar');
+  }
 }
 
 /* ========================= Ajustes globales ========================= */
@@ -647,6 +686,7 @@ let RECIPES = [];
 subscribeRecipes(list => { RECIPES = list || []; renderRecipeTable(); });
 
 $('#rcpSearch')?.addEventListener('input', debounce(renderRecipeTable, 120));
+
 document.addEventListener('click', (e)=>{
   const viewBtn = e.target.closest('#tblRecipes [data-a="view"]');
   if (viewBtn){
@@ -712,7 +752,10 @@ let CURRENT_OUT_QTY = 100;
 function scaleIngredients(r, outQty){
   const base = safeNum(r.yieldQty||0, 0) || 1;
   const factor = safeNum(outQty, 0) / base;
-  return (r.ingredients||[]).map(ing => ({ ...ing, qtyScaled: safeNum(ing.qty||0, 0) * factor }));
+  return (r.ingredients||[]).map(ing => ({
+    ...ing,
+    qtyScaled: safeNum(ing.qty||0, 0) * factor
+  }));
 }
 
 function renderRecipeModal(){
@@ -724,24 +767,30 @@ function renderRecipeModal(){
   const list = scaleIngredients(CURRENT_R, CURRENT_OUT_QTY);
 
   body.innerHTML = `
-    <div class="field"><label class="muted">Receta</label><div><b>${esc(CURRENT_R.name||'Receta')}</b></div></div>
+    <div class="field">
+      <label>Receta</label>
+      <div><strong>${esc(CURRENT_R.name||'Receta')}</strong></div>
+    </div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
       <div class="field">
         <label>Porción (ml)</label>
-        <input id="rcpOutQty" type="number" min="10" step="10" value="${CURRENT_OUT_QTY}"/>
+        <input id="rcpOutQty" type="number" min="10" step="10" value="${String(CURRENT_OUT_QTY)}" />
       </div>
       <div class="field">
         <label>Vasos 2oz usados (opcional)</label>
-        <input id="rcpCups" type="number" min="0" step="1" placeholder="0"/>
+        <input id="rcpCups" type="number" min="0" step="1" value="0" />
         <div class="muted small">Si configuraste <code>sauceCupItemId</code> en settings, se descuentan.</div>
       </div>
       <div class="field">
         <label>Guardar para almacenar</label>
-        <select id="rcpStore"><option value="no">No</option><option value="si">Sí</option></select>
+        <select id="rcpStore">
+          <option value="no" selected>No</option>
+          <option value="si">Sí</option>
+        </select>
       </div>
       <div class="field">
         <label>Cantidad almacenada (ml)</label>
-        <input id="rcpStoreQty" type="number" min="0" step="10" value="${CURRENT_OUT_QTY}"/>
+        <input id="rcpStoreQty" type="number" min="0" step="10" value="${String(CURRENT_OUT_QTY)}" />
       </div>
     </div>
 
@@ -764,7 +813,7 @@ function renderRecipeModal(){
       </div>
     </div>
 
-    ${CURRENT_R.method ? `<div class="field"><label>Método</label><div class="muted sm" style="white-space:pre-wrap">${esc(CURRENT_R.method)}</div></div>`:''}
+    ${CURRENT_R.method ? `<div class="field"><label>Método</label><div class="muted sm" style="white-space:pre-wrap">${esc(CURRENT_R.method)}</div></div>` : ''}
   `;
   if (hint) hint.textContent = `Salida: ${CURRENT_OUT_QTY} ml`;
   const titleEl = document.getElementById('rcpTitle');
@@ -777,10 +826,18 @@ function openRecipeModal(r){
   if (rcpModal) rcpModal.style.display='grid';
   renderRecipeModal();
 }
-document.getElementById('rcpScale500')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=500; renderRecipeModal(); });
-document.getElementById('rcpScale250')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=250; renderRecipeModal(); });
-document.getElementById('rcpScale200')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=200; renderRecipeModal(); });
-document.getElementById('rcpScale100')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=100; renderRecipeModal(); });
+document.getElementById('rcpScale500')?.addEventListener('click', ()=>{
+  CURRENT_OUT_QTY=500; renderRecipeModal();
+});
+document.getElementById('rcpScale250')?.addEventListener('click', ()=>{
+  CURRENT_OUT_QTY=250; renderRecipeModal();
+});
+document.getElementById('rcpScale200')?.addEventListener('click', ()=>{
+  CURRENT_OUT_QTY=200; renderRecipeModal();
+});
+document.getElementById('rcpScale100')?.addEventListener('click', ()=>{
+  CURRENT_OUT_QTY=100; renderRecipeModal();
+});
 document.getElementById('rcpBody')?.addEventListener('input', (e)=>{
   if (e.target && e.target.id==='rcpOutQty'){
     const v = safeNum(e.target.value, 10);
@@ -804,7 +861,9 @@ async function doPrepareFromView(){
     const store = (document.getElementById('rcpStore')?.value === 'si');
     const storeQty = safeNum(document.getElementById('rcpStoreQty')?.value, 0);
     if (store && CURRENT_R.outputItemId){
-      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', { recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty }, { training: isTraining() });
+      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', {
+        recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty
+      }, { training: isTraining() });
     }
     toast('Lote preparado' + (isTraining() ? ' (PRUEBA)' : ''));
     document.getElementById('rcpClose')?.click();
@@ -816,7 +875,10 @@ async function doPrepareFromView(){
 
 /* ---- Diálogo rápido “Preparar receta” (validación inversa) ---- */
 function openQuickPrepDialog(prefRecipe = null){
-  if (!RECIPES.length){ toast('No hay recetas registradas'); return; }
+  if (!RECIPES.length){
+    toast('No hay recetas registradas');
+    return;
+  }
   const wrap = document.createElement('div');
   wrap.className = 'modal';
   wrap.setAttribute('role','dialog');
@@ -828,27 +890,23 @@ function openQuickPrepDialog(prefRecipe = null){
   const r0 = prefRecipe || RECIPES[0];
 
   wrap.innerHTML = `
-    <div class="modal-card" style="max-width:820px">
+    <div class="modal-card">
       <div class="modal-head">
         <div>Preparar receta</div>
         <button class="btn ghost small" data-close aria-label="Cerrar">Cerrar</button>
       </div>
-      <div class="modal-body" id="qpBody">
-        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px">
+      <div class="modal-body">
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px">
           <div class="field">
             <label>Receta</label>
             <select id="qpRecipe">${options}</select>
           </div>
           <div class="field">
             <label>Cantidad a preparar (ml)</label>
-            <input id="qpQty" type="number" min="10" step="10" value="${quickDefault}">
-          </div>
-          <div class="field">
-            <label>&nbsp;</label>
-            <button class="btn ghost" id="qpSuggest">Sugerir cantidad</button>
+            <input id="qpQty" type="number" min="10" step="10" value="${String(quickDefault)}" />
+            <div class="row" style="margin-top:6px"><button class="btn tiny ghost" id="qpSuggest" type="button">Sugerir cantidad</button></div>
           </div>
         </div>
-
         <div id="qpPreview" class="field" style="margin-top:8px"></div>
         <div id="qpIssues"  class="field" style="margin-top:6px"></div>
         <div id="qpCost"    class="field" style="margin-top:6px"></div>
@@ -888,7 +946,11 @@ function openQuickPrepDialog(prefRecipe = null){
     if (e.target.id==='qpSuggest'){
       e.preventDefault();
       const q = await suggestQty(state.r);
-      if (q){ _('#qpQty').value = q; state.qty = q; renderAll(); }
+      if (q){
+        _('#qpQty').value = q;
+        state.qty = q;
+        renderAll();
+      }
       return;
     }
     if (e.target.id==='qpBuyMissing'){
@@ -915,7 +977,9 @@ function openQuickPrepDialog(prefRecipe = null){
     if (e.target.id==='qpConfirm'){
       try{
         await produceBatch({ recipeId: state.r.id, outputQty: state.qty }, { training: isTraining() });
-        await adjustStock(state.r.outputItemId, 0, 'production_meta', { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty }, { training: isTraining() });
+        await adjustStock(state.r.outputItemId, 0, 'production_meta', {
+          recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty
+        }, { training: isTraining() });
         toast('Producción confirmada' + ( isTraining() ? ' (PRUEBA)' : '' ));
         close();
       }catch(err){
@@ -936,13 +1000,13 @@ function openQuickPrepDialog(prefRecipe = null){
         ${list.map(ing=>{
           const name = invMap.get(ing.itemId)?.name || ing.itemId;
           const unit = ing.unit || 'ml';
-          return `<div class="row" style="justify-content:space-between; gap:8px">
+          return `<div class="row" style="justify-content:space-between">
             <div>${esc(name)}</div>
             <div>${ing.qtyScaled.toFixed(1)} ${esc(unit)}</div>
           </div>`;
         }).join('')}
       </div>
-      ${state.r.method ? `<div class="muted sm" style="white-space:pre-wrap"><b>Método:</b>\n${esc(state.r.method)}</div>`:''}
+      ${state.r.method ? `<div class="muted small" style="white-space:pre-wrap"><strong>Método:</strong>\n${esc(state.r.method)}</div>`:''}
     `;
   }
 
@@ -958,7 +1022,9 @@ function openQuickPrepDialog(prefRecipe = null){
       const faltaStock = have < need;
       const faltaCosto = costAvg <= 0;
 
-      if (faltaStock || faltaCosto){ needs.push({ itemId: ing.itemId, need, have, faltaStock, faltaCosto }); }
+      if (faltaStock || faltaCosto){
+        needs.push({ itemId: ing.itemId, need, have, faltaStock, faltaCosto });
+      }
       return { ing, inv, have, need, costAvg, faltaStock, faltaCosto };
     });
 
@@ -972,7 +1038,9 @@ function openQuickPrepDialog(prefRecipe = null){
       return;
     }
 
-    const supplierOpts = `<option value="">— proveedor —</option>` + (SUPPLIERS||[]).map(s=>`<option value="${s.id}">${esc(s.name||s.id)}</option>`).join('');
+    const supplierOpts = `<option value="">— proveedor —</option>` + (SUPPLIERS||[])
+      .map(s=>`<option value="${s.id}">${esc(s.name||s.id)}</option>`).join('');
+
     _('#qpIssues').innerHTML = `
       <label>Faltantes / datos requeridos</label>
       <div class="muted small" style="margin-bottom:6px">Debes completar estos datos antes de confirmar.</div>
@@ -1023,12 +1091,17 @@ function openQuickPrepDialog(prefRecipe = null){
 async function suggestQty(recipe){
   try{
     const now = new Date();
-    const from = new Date(now); from.setDate(now.getDate()-7); from.setHours(0,0,0,0);
-    const to   = new Date(now); to.setHours(23,59,59,999);
+    const from = new Date(now);
+    from.setDate(now.getDate()-7);
+    from.setHours(0,0,0,0);
+    const to   = new Date(now);
+    to.setHours(23,59,59,999);
+
     const orders = await getOrdersRange({ from, to, includeArchive:true, orderType:null }) || [];
     const perOrderMl = safeNum(recipe?.suggestMlPerOrder || APP_SETTINGS?.defaultSuggestMlPerOrder, 20);
     const totalOrders = (orders||[]).length || 0;
     const dailyAvgOrders = totalOrders / 7;
+
     const qtyRaw = Math.max(100, dailyAvgOrders * perOrderMl * 1.2); // +20% colchón
     const qty = Math.ceil(qtyRaw / 10) * 10; // redondeo a 10ml
     toast(`Sugerencia basada en ventas: ~${qty} ml`);
@@ -1061,6 +1134,7 @@ document.addEventListener('click', async (e)=>{
     const id = btn.dataset.id;
     const a  = ARTICLES.find(x=>x.id===id);
     const act = btn.dataset.a;
+
     if (act === 'edit') { openArticleModal(a); return; }
     if (act === 'dup')  { if(a) duplicateArticle(a); return; }
     if (act === 'del')  { if(a) confirmDeleteArticle(a); return; }
@@ -1068,15 +1142,23 @@ document.addEventListener('click', async (e)=>{
       try {
         await upsertArticle({ ...a, active: !a?.active }, { training: isTraining() });
         toast(a?.active ? 'Artículo desactivado' : 'Artículo activado');
-      } catch(err){ console.error(err); toast('No se pudo actualizar activo'); }
+      } catch(err){
+        console.error(err);
+        toast('No se pudo actualizar activo');
+      }
       return;
     }
   }
+
   const th = e.target.closest('#tblArticulos thead [data-sort]');
   if (th){
     const by = th.dataset.sort;
-    if (ART_SORT.by === by){ ART_SORT.dir = (ART_SORT.dir==='asc'?'desc':'asc'); }
-    else { ART_SORT.by = by; ART_SORT.dir = 'asc'; }
+    if (ART_SORT.by === by){
+      ART_SORT.dir = (ART_SORT.dir==='asc'?'desc':'asc');
+    } else {
+      ART_SORT.by = by;
+      ART_SORT.dir = 'asc';
+    }
     renderArticles();
   }
 });
@@ -1084,6 +1166,7 @@ document.addEventListener('click', async (e)=>{
 function renderArticles(){
   const tb = $('#tblArticulos tbody');
   if (!tb) return;
+
   let rows = ARTICLES.slice();
   if (ART_FILTER){
     rows = rows.filter(a=>{
@@ -1091,6 +1174,7 @@ function renderArticles(){
       return hay.toLowerCase().includes(ART_FILTER);
     });
   }
+
   rows.sort((a,b)=>{
     const dir = ART_SORT.dir==='asc'?1:-1;
     const va = (ART_SORT.by==='price') ? safeNum(a.price||0,0)
@@ -1101,6 +1185,7 @@ function renderArticles(){
              : String(b.name||'').toLowerCase();
     if (va<vb) return -1*dir; if (va>vb) return 1*dir; return 0;
   });
+
   tb.innerHTML = rows.map(a => `
     <tr>
       <td style="min-width:180px">${esc(a.name||'—')}<div class="muted small">${esc(a.desc||'')}</div></td>
@@ -1134,8 +1219,9 @@ function openArticleModal(article = null){
     name: article?.name || '',
     price: safeNum(article?.price || 0, 0),
     active: article?.active ?? true,
-    desc: article?.desc || ''
+    desc: article?.desc || '',
   };
+
   const wrap = document.createElement('div');
   wrap.className = 'modal';
   wrap.setAttribute('role','dialog');
@@ -1175,7 +1261,7 @@ function openArticleModal(article = null){
         <div class="total-bar">
           <div></div>
           <div class="row" style="gap:8px">
-            ${isEdit ?`<button class="btn ghost danger" id="aDelete">Eliminar</button>`:''}
+            ${isEdit ?'<button class="btn ghost danger" id="aDelete">Eliminar</button>':''}
             <button class="btn" id="aSave">Guardar</button>
           </div>
         </div>
@@ -1186,6 +1272,7 @@ function openArticleModal(article = null){
 
   const q = (sel)=> wrap.querySelector(sel);
   const close = ()=>{ wrap.remove(); };
+
   q('#aClose')?.addEventListener('click', close);
   wrap.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
   setTimeout(()=> q('#aName')?.focus(), 0);
@@ -1196,7 +1283,9 @@ function openArticleModal(article = null){
     q('#aNameErr').style.display = ok ? 'none' : '';
     return ok;
   }
-  wrap.addEventListener('input', (e)=>{ if (e.target.id === 'aName') validate(); });
+  wrap.addEventListener('input', (e)=>{
+    if (e.target.id === 'aName') validate();
+  });
 
   async function save(){
     if (!validate()){ beep(); return; }
@@ -1205,7 +1294,7 @@ function openArticleModal(article = null){
       name: q('#aName').value.trim(),
       price: safeNum(q('#aPrice').value, 0),
       active: q('#aActive').value === 'on',
-      desc: q('#aDesc').value.trim()
+      desc: q('#aDesc').value.trim(),
     };
     try{
       await upsertArticle(payload, { training: isTraining() });
@@ -1234,7 +1323,10 @@ async function duplicateArticle(a){
     };
     await upsertArticle(copy, { training: isTraining() });
     toast('Artículo duplicado (quedó inactivo)' + (isTraining() ? ' (PRUEBA)' : ''));
-  }catch(err){ console.error(err); toast('No se pudo duplicar'); }
+  }catch(err){
+    console.error(err);
+    toast('No se pudo duplicar');
+  }
 }
 function confirmDeleteArticle(article){
   if (!article) return;
@@ -1285,7 +1377,7 @@ function confirmDeleteArticle(article){
     (document.getElementById('admTabs').parentElement || document.body).appendChild(panel);
   }
 
-  const sel = document.getElementById('themeSelect');
+  const sel   = document.getElementById('themeSelect');
   const btnPrev = document.getElementById('btnThemePreview');
   const btnSave = document.getElementById('btnThemeSave');
   const hint    = document.getElementById('themeHint');
@@ -1384,15 +1476,15 @@ function confirmDeleteArticle(article){
     panel.id = 'panel-prod';
     panel.className = 'panel';
     panel.innerHTML = `
-      <div class="row" style="gap:8px; flex-wrap:wrap; align-items:flex-end">
+      <div class="row" style="gap:8px; align-items:flex-end; flex-wrap:wrap">
         <div class="field">
           <label>Búsqueda</label>
-          <input id="prodSearch" type="search" placeholder="Nombre, descripción, categoría">
+          <input id="prodSearch" type="search" placeholder="Buscar por nombre, desc o categoría" />
         </div>
         <div class="field">
           <label>Filtro</label>
           <select id="prodFilter">
-            <option value="all" selected>Todos</option>
+            <option value="all">Todos</option>
             <option value="active">Activos</option>
             <option value="hold">En espera</option>
             <option value="featured">Destacados</option>
@@ -1400,8 +1492,8 @@ function confirmDeleteArticle(article){
           </select>
         </div>
         <div class="row" style="gap:8px">
-          <button class="btn" id="prodNew">Nuevo producto</button>
-          <button class="btn ghost" id="prodRefresh">Refrescar</button>
+          <button id="prodNew" class="btn" type="button">Nuevo producto</button>
+          <button id="prodRefresh" class="btn ghost" type="button">Refrescar</button>
         </div>
       </div>
 
@@ -1430,7 +1522,10 @@ function confirmDeleteArticle(article){
   let PROD_FILTER = 'all';
   let PROD_QUERY = '';
 
-  const unsubArticles = subscribeArticles(arr => { PROD = Array.isArray(arr) ? arr : []; renderProd(); });
+  const unsubArticles = subscribeArticles(arr => {
+    PROD = Array.isArray(arr) ? arr : [];
+    renderProd();
+  });
 
   // 3) UI events
   document.getElementById('prodSearch')?.addEventListener('input', debounce((e)=>{
@@ -1453,6 +1548,7 @@ function confirmDeleteArticle(article){
       renderProd();
       return;
     }
+
     const btn = e.target.closest('[data-a]');
     if (!btn) return;
     const id = btn.dataset.id;
@@ -1583,16 +1679,18 @@ function confirmDeleteArticle(article){
       limitedUntil: prod?.limitedUntil ? new Date(Number(prod.limitedUntil)) : null,
       sound: prod?.sound || '',
       themeTag: prod?.themeTag || '',
-      ingredients: Array.isArray(prod?.ingredients) ? prod.ingredients : []
+      ingredients: Array.isArray(prod?.ingredients) ? prod.ingredients : [],
     };
+
     const wrap = document.createElement('div');
     wrap.className = 'modal';
     wrap.setAttribute('role','dialog');
     wrap.setAttribute('aria-modal','true');
     wrap.style.display = 'grid';
+
     const dateVal = data.limitedUntil ? toLocalISO(data.limitedUntil) : '';
     wrap.innerHTML = `
-      <div class="modal-card" style="max-width:920px">
+      <div class="modal-card">
         <div class="modal-head">
           <div>${isEdit?'Editar producto':'Nuevo producto'}</div>
           <button class="btn ghost small" id="pClose" aria-label="Cerrar">Cerrar</button>
@@ -1601,12 +1699,12 @@ function confirmDeleteArticle(article){
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
             <div class="field">
               <label>Nombre *</label>
-              <input id="pName" type="text" value="${escAttr(data.name)}" required>
-              <div class="muted small" id="pNameErr" style="display:none;color:#ffb4b4">Requerido</div>
+              <input id="pName" type="text" placeholder="Nombre" value="${escAttr(data.name)}" />
+              <div class="muted small" id="pNameErr" style="color:#ffb4b4;display:none">Requerido</div>
             </div>
             <div class="field">
               <label>Precio</label>
-              <input id="pPrice" type="number" min="0" step="0.01" value="${String(data.price)}">
+              <input id="pPrice" type="number" min="0" step="0.01" value="${String(data.price)}" />
             </div>
             <div class="field">
               <label>Categoría</label>
@@ -1664,7 +1762,6 @@ function confirmDeleteArticle(article){
             </div>
           </div>
         </div>
-
         <div class="modal-foot">
           <div class="row" style="gap:8px">
             ${isEdit?'<button class="btn ghost danger" id="pDelete">Eliminar</button>':''}
@@ -1683,7 +1780,11 @@ function confirmDeleteArticle(article){
     q('#pClose')?.addEventListener('click', close);
     wrap.addEventListener('keydown', (e)=>{ if (e.key==='Escape') close(); });
 
-    function validate(){ const ok = !!q('#pName')?.value.trim(); q('#pNameErr').style.display = ok ? 'none' : ''; return ok; }
+    function validate(){
+      const ok = !!q('#pName')?.value.trim();
+      q('#pNameErr').style.display = ok ? 'none' : '';
+      return ok;
+    }
     q('#pName')?.addEventListener('input', validate);
 
     wrap.addEventListener('change', (e)=>{
@@ -1703,7 +1804,10 @@ function confirmDeleteArticle(article){
     if (isEdit){
       q('#pDelete')?.addEventListener('click', async ()=>{
         if (!confirm(`¿Eliminar "${data.name||'producto'}"?`)) return;
-        try{ await deleteArticle(data.id, { training: isTraining() }); toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : '')); close();
+        try{
+          await deleteArticle(data.id, { training: isTraining() });
+          toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : ''));
+          close();
         } catch(e){ console.error(e); toast('No se pudo eliminar'); }
       });
     }
@@ -1739,10 +1843,15 @@ function confirmDeleteArticle(article){
         close();
       }catch(e){ console.error(e); toast('No se pudo guardar'); }
     });
+
+    // Limpieza al salir del modal
+    wrap.addEventListener('beforeunload', ()=>{ /* no-op for modal */ });
   }
 
-  // Limpieza al salir
-  window.addEventListener('beforeunload', ()=>{ try{ unsubArticles?.(); }catch{} });
+  // Limpieza al salir del panel
+  window.addEventListener('beforeunload', ()=>{
+    try{ unsubArticles?.(); }catch{}
+  });
 })();
 
 /* ========================= Arranque / Atajos ========================= */
@@ -1754,7 +1863,9 @@ document.addEventListener('keydown',(e)=>{
   if ((e.ctrlKey||e.metaKey) && k==='k'){
     e.preventDefault();
     const prodVisible = document.getElementById('panel-prod')?.classList.contains('active');
-    const el = prodVisible ? document.getElementById('prodSearch') : document.getElementById('histSearch') || document.getElementById('rcpSearch');
+    const el = prodVisible
+      ? document.getElementById('prodSearch')
+      : document.getElementById('histSearch') || document.getElementById('rcpSearch');
     el?.focus();
   }
 });
