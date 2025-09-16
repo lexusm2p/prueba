@@ -60,6 +60,30 @@ const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const noop = () => {};
 
+/** subscripciones vivas para limpiar al salir */
+const SUBS = [];
+const addSub = (unsub) => { if (typeof unsub === 'function') SUBS.push(unsub); return unsub; };
+
+/** options para DB con flag de entrenamiento */
+const dbOpts = () => ({ training: isTraining() });
+
+/** estado busy para botones */
+function withBusy(btn, labelWhile = 'Guardando…', fn = async () => {}) {
+  if (!btn) return fn();
+  const prev = btn.textContent;
+  const prevDis = btn.disabled;
+  btn.disabled = true;
+  btn.dataset.busy = '1';
+  if (labelWhile) btn.textContent = labelWhile;
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      btn.disabled = prevDis;
+      btn.dataset.busy = '0';
+      btn.textContent = prev;
+    });
+}
+
 const safeNum = (v, def = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
@@ -206,8 +230,11 @@ document.getElementById('btnRepGen')?.addEventListener('click', runReports);
 
 async function runReports() {
   try {
-    const from = parseLocalDate((fromEl?.value || '') + 'T00:00:00');
-    const to   = parseLocalDate((toEl?.value   || '') + 'T23:59:59');
+    let from = parseLocalDate((fromEl?.value || '') + 'T00:00:00');
+    let to   = parseLocalDate((toEl?.value   || '') + 'T23:59:59');
+    if (from && to && from.getTime() > to.getTime()) {
+      const tmp = from; from = to; to = tmp;
+    }
     const type = typeEl?.value || 'all';
     const includeArchive = (histEl?.value !== 'No');
 
@@ -470,7 +497,7 @@ function csvEscape(v){
 const invRows = [];
 const invMap  = new Map();
 
-subscribeInventory(items => {
+addSub(subscribeInventory(items => {
   const arr = Array.isArray(items) ? items : [];
   invRows.length = 0;
   invRows.push(...arr);
@@ -478,7 +505,7 @@ subscribeInventory(items => {
   arr.forEach(it => invMap.set(it.id, it));
   renderInventoryTable();
   renderRecipeTable(); // refresca nombres en recetario
-});
+}));
 $('#btnInvRefresh')?.addEventListener('click', renderInventoryTable);
 $('#invSearch')?.addEventListener('input', debounce(renderInventoryTable, 120));
 
@@ -500,10 +527,10 @@ function renderInventoryTable() {
 
 /* ========================= Compras / Proveedores ========================= */
 let SUPPLIERS = [];
-subscribeSuppliers(arr => {
+addSub(subscribeSuppliers(arr => {
   SUPPLIERS = arr || [];
   renderVendors(arr);
-});
+}));
 
 const btnAddPurchase = document.getElementById('btnAddPurchase');
 btnAddPurchase && (btnAddPurchase.onclick = async () => {
@@ -523,11 +550,11 @@ btnAddPurchase && (btnAddPurchase.onclick = async () => {
     if (!itemId) {
       itemId = await upsertInventoryItem(
         { name, unit:'unit', currentStock:0, min:0, max:0, perish:false },
-        { training: isTraining() }
+        dbOpts()
       );
       toast('Ingrediente nuevo creado en inventario');
     }
-    await recordPurchase({ itemId, qty, unitCost: cost, supplierId }, { training: isTraining() });
+    await recordPurchase({ itemId, qty, unitCost: cost, supplierId }, dbOpts());
     if ($('#pQty'))  $('#pQty').value = '1';
     if ($('#pCost')) $('#pCost').value = '0';
     toast('Compra registrada' + (isTraining() ? ' (PRUEBA)' : ''));
@@ -544,24 +571,27 @@ function renderVendors(arr = []) {
     `<tr><td>${esc(v.name)}</td><td>${esc(v.contact || '-')}</td><td>${v.id}</td></tr>`
   ).join('') || '<tr><td colspan="3">—</td></tr>';
 }
-$('#btnSaveVendor')?.addEventListener('click', async () => {
+$('#btnSaveVendor')?.addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
   const name = ($('#vName')?.value || '').trim();
   const contact = ($('#vContact')?.value || '').trim();
   if (!name) {
     toast('Nombre del proveedor requerido');
     return;
   }
-  try {
-    await upsertSupplier({ name, contact }, { training: isTraining() });
-    toast('Proveedor guardado' + (isTraining() ? ' (PRUEBA)' : ''));
-  } catch (e) {
-    console.error(e);
-    toast('Error al guardar proveedor');
-  }
+  await withBusy(btn, 'Guardando…', async ()=>{
+    try {
+      await upsertSupplier({ name, contact }, dbOpts());
+      toast('Proveedor guardado' + (isTraining() ? ' (PRUEBA)' : ''));
+    } catch (e) {
+      console.error(e);
+      toast('Error al guardar proveedor');
+    }
+  });
 });
 
 /* ========================= Productos (solo lectura) ========================= */
-subscribeProducts(renderProducts);
+addSub(subscribeProducts(renderProducts));
 function renderProducts(items = []) {
   const tb = $('#tblProducts tbody');
   if (!tb) return;
@@ -575,19 +605,22 @@ function renderProducts(items = []) {
     </tr>
   `).join('') || '<tr><td colspan="5">—</td></tr>';
 }
-document.getElementById('btnReloadCatalog')?.addEventListener('click', async ()=>{
-  try {
-    await fetchCatalogWithFallback();
-    toast('Catálogo recargado para el kiosko');
-  } catch(e){
-    console.error(e);
-    toast('No se pudo recargar el catálogo');
-  }
+document.getElementById('btnReloadCatalog')?.addEventListener('click', async (e)=>{
+  const btn = e.currentTarget;
+  await withBusy(btn, 'Recargando…', async ()=>{
+    try {
+      await fetchCatalogWithFallback();
+      toast('Catálogo recargado para el kiosko');
+    } catch(e){
+      console.error(e);
+      toast('No se pudo recargar el catálogo');
+    }
+  });
 });
 
 /* ========================= Happy Hour ========================= */
 let HH_TIMER = null;
-subscribeHappyHour(hh => {
+addSub(subscribeHappyHour(hh => {
   $('#hhEnabled') && ($('#hhEnabled').value = hh?.enabled ? 'on' : 'off');
   $('#hhDisc')    && ($('#hhDisc').value    = safeNum(hh?.discountPercent || 0, 0));
   $('#hhMsg')     && ($('#hhMsg').value     = hh?.bannerText || '');
@@ -625,31 +658,34 @@ subscribeHappyHour(hh => {
       lbl.textContent = hh?.enabled ? 'Activo' : 'Inactivo';
     }
   }
-});
+}));
 
-$('#btnSaveHappy')?.addEventListener('click', async () => {
-  const enabled = $('#hhEnabled')?.value === 'on';
-  const discountPercent = safeNum($('#hhDisc')?.value, 0);
-  const bannerText = ($('#hhMsg')?.value || '').trim();
-  const durMinEl = $('#hhDurMin');
-  const endsEl = $('#hhEndsAt');
-  const patch = { enabled, discountPercent, bannerText };
+$('#btnSaveHappy')?.addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  await withBusy(btn, 'Guardando…', async ()=>{
+    const enabled = $('#hhEnabled')?.value === 'on';
+    const discountPercent = safeNum($('#hhDisc')?.value, 0);
+    const bannerText = ($('#hhMsg')?.value || '').trim();
+    const durMinEl = $('#hhDurMin');
+    const endsEl = $('#hhEndsAt');
+    const patch = { enabled, discountPercent, bannerText };
 
-  const durMin = durMinEl ? safeNum(durMinEl.value, 0) : 0;
-  if (enabled && Number.isFinite(durMin) && durMin > 0) {
-    patch.durationMin = durMin;
-  } else if (enabled && endsEl && endsEl.value) {
-    const t = parseLocalDate(endsEl.value);
-    if (t) patch.endsAt = t.getTime();
-  }
+    const durMin = durMinEl ? safeNum(durMinEl.value, 0) : 0;
+    if (enabled && Number.isFinite(durMin) && durMin > 0) {
+      patch.durationMin = durMin;
+    } else if (enabled && endsEl && endsEl.value) {
+      const t = parseLocalDate(endsEl.value);
+      if (t) patch.endsAt = t.getTime();
+    }
 
-  try {
-    await setHappyHour(patch, { training: isTraining() });
-    toast('Happy Hour guardada' + (isTraining() ? ' (PRUEBA)' : ''));
-  } catch (e) {
-    console.error(e);
-    toast('No se pudo guardar HH');
-  }
+    try {
+      await setHappyHour(patch, dbOpts());
+      toast('Happy Hour guardada' + (isTraining() ? ' (PRUEBA)' : ''));
+    } catch (e) {
+      console.error(e);
+      toast('No se pudo guardar HH');
+    }
+  });
 });
 $('#btnHH30')?.addEventListener('click', ()=> quickHH(30));
 $('#btnHH60')?.addEventListener('click', ()=> quickHH(60));
@@ -658,7 +694,7 @@ $('#btnHHStop')?.addEventListener('click', async ()=>{
   try{
     await setHappyHour(
       { enabled:false, discountPercent:safeNum($('#hhDisc')?.value,0), bannerText:($('#hhMsg')?.value||'') },
-      { training: isTraining() }
+      dbOpts()
     );
     toast('Happy Hour desactivada' + (isTraining() ? ' (PRUEBA)' : ''));
   } catch(e){
@@ -670,7 +706,7 @@ $('#btnHHExtend15')?.addEventListener('click', async ()=>{
   try{
     const disc=safeNum($('#hhDisc')?.value,0);
     const msg=($('#hhMsg')?.value||'');
-    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:15 }, { training: isTraining() });
+    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:15 }, dbOpts());
     toast('Extendido 15 min' + (isTraining() ? ' (PRUEBA)' : ''));
   }catch(e){
     console.error(e);
@@ -681,7 +717,7 @@ async function quickHH(mins){
   try{
     const disc=safeNum($('#hhDisc')?.value,0);
     const msg=($('#hhMsg')?.value||'');
-    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:mins }, { training: isTraining() });
+    await setHappyHour({ enabled:true, discountPercent:disc, bannerText:msg, durationMin:mins }, dbOpts());
     toast(`Happy Hour por ${mins} min` + (isTraining() ? ' (PRUEBA)' : ''));
   } catch(e){
     console.error(e);
@@ -691,16 +727,16 @@ async function quickHH(mins){
 
 /* ========================= Ajustes globales ========================= */
 let APP_SETTINGS = {};
-subscribeSettings(s => {
+addSub(subscribeSettings(s => {
   APP_SETTINGS = s || {};
-});
+}));
 
 /* ========================= RECETARIO ========================= */
 let RECIPES = [];
-subscribeRecipes(list => {
+addSub(subscribeRecipes(list => {
   RECIPES = list || [];
   renderRecipeTable();
-});
+}));
 
 $('#rcpSearch')?.addEventListener('input', debounce(renderRecipeTable, 120));
 
@@ -772,7 +808,7 @@ function scaleIngredients(r, outQty){
   const base = safeNum(r.yieldQty||0, 0) || 1;
   const factor = safeNum(outQty, 0) / base;
   return (r.ingredients||[]).map(ing => ({
-    ...ing, qtyScaled: safeNum(ing.qty||0, 0) * factor
+    ...(ing||{}), qtyScaled: safeNum(ing.qty||0, 0) * factor
   }));
 }
 
@@ -875,20 +911,20 @@ async function doPrepareFromView(){
     return;
   }
   try{
-    await produceBatch({ recipeId: CURRENT_R.id, outputQty: outQty }, { training: isTraining() });
+    await produceBatch({ recipeId: CURRENT_R.id, outputQty: outQty }, dbOpts());
     const cups = safeNum(document.getElementById('rcpCups')?.value, 0);
     const cupId = APP_SETTINGS?.sauceCupItemId || null;
     if (cupId && cups>0){
       await adjustStock(cupId, -cups, 'use',
         { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty },
-        { training: isTraining() });
+        dbOpts());
     }
     const store = (document.getElementById('rcpStore')?.value === 'si');
     const storeQty = safeNum(document.getElementById('rcpStoreQty')?.value, 0);
     if (store && CURRENT_R.outputItemId){
       await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta',
         { recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty },
-        { training: isTraining() });
+        dbOpts());
     }
     toast('Lote preparado' + (isTraining() ? ' (PRUEBA)' : ''));
     document.getElementById('rcpClose')?.click();
@@ -990,7 +1026,7 @@ function openQuickPrepDialog(prefRecipe = null){
           const cost = safeNum(row.querySelector('[data-cost]')?.value, 0);
           const supplierId = row.querySelector('[data-sup]')?.value || null;
           if (itemId && qty>0 && cost>0){
-            await recordPurchase({ itemId, qty, unitCost: cost, supplierId }, { training: isTraining() });
+            await recordPurchase({ itemId, qty, unitCost: cost, supplierId }, dbOpts());
           }
         }
         toast('Compras registradas' + (isTraining() ? ' (PRUEBA)' : ''));
@@ -1004,10 +1040,10 @@ function openQuickPrepDialog(prefRecipe = null){
 
     if (e.target.id==='qpConfirm'){
       try{
-        await produceBatch({ recipeId: state.r.id, outputQty: state.qty }, { training: isTraining() });
+        await produceBatch({ recipeId: state.r.id, outputQty: state.qty }, dbOpts());
         await adjustStock(state.r.outputItemId, 0, 'production_meta',
           { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty },
-          { training: isTraining() });
+          dbOpts());
         toast('Producción confirmada' + ( isTraining() ? ' (PRUEBA)' : '' ));
         close();
       }catch(err){
@@ -1147,10 +1183,10 @@ let ARTICLES = [];
 let ART_SORT = { by: 'name', dir: 'asc' };
 let ART_FILTER = '';
 
-subscribeArticles(arr => {
+addSub(subscribeArticles(arr => {
   ARTICLES = Array.isArray(arr) ? arr : [];
   renderArticles();
-});
+}));
 document.getElementById('btnAddArticulo')?.addEventListener('click', () => openArticleModal());
 
 document.addEventListener('input', (e)=>{
@@ -1172,7 +1208,7 @@ document.addEventListener('click', async (e)=>{
     if (act === 'del')  { if(a) confirmDeleteArticle(a); return; }
     if (act === 'toggle'){
       try {
-        await upsertArticle({ ...a, active: !a?.active }, { training: isTraining() });
+        await upsertArticle({ ...a, active: !a?.active }, dbOpts());
         toast(a?.active ? 'Artículo desactivado' : 'Artículo activado');
       } catch(err){
         console.error(err);
@@ -1329,7 +1365,7 @@ function openArticleModal(article = null){
       desc: q('#aDesc').value.trim(),
     };
     try{
-      await upsertArticle(payload, { training: isTraining() });
+      await upsertArticle(payload, dbOpts());
       toast('Artículo guardado' + (isTraining() ? ' (PRUEBA)' : ''));
       close();
     } catch(err){
@@ -1358,7 +1394,7 @@ async function duplicateArticle(a){
       active:false,
       desc:a.desc || ''
     };
-    await upsertArticle(copy, { training: isTraining() });
+    await upsertArticle(copy, dbOpts());
     toast('Artículo duplicado (quedó inactivo)' + (isTraining() ? ' (PRUEBA)' : ''));
   }catch(err){
     console.error(err);
@@ -1368,7 +1404,7 @@ async function duplicateArticle(a){
 function confirmDeleteArticle(article){
   if (!article) return;
   if (!confirm(`¿Eliminar artículo "${article.name}"?`)) return;
-  deleteArticle(article.id, { training: isTraining() })
+  deleteArticle(article.id, dbOpts())
     .then(()=> toast('Artículo eliminado' + (isTraining() ? ' (PRUEBA)' : '')))
     .catch((e)=>{
       console.error(e);
@@ -1444,14 +1480,15 @@ function confirmDeleteArticle(article){
         sel.value = t.name;
       }
     });
+    addSub(unsubTheme);
   } catch {}
 
-  subscribeSettings((s)=>{
+  addSub(subscribeSettings((s)=>{
     if (Array.isArray(s?.themes) && s.themes.length) {
       renderThemeOptions(s.themes);
       if (s.theme && [...sel.options].some(o=>o.value===s.theme)) sel.value = s.theme;
     }
-  });
+  }));
 
   // 5) Acciones
   btnPrev?.addEventListener('click', ()=>{
@@ -1467,16 +1504,19 @@ function confirmDeleteArticle(article){
     }
   });
 
-  btnSave?.addEventListener('click', async ()=>{
-    const name = sel.value || 'Base';
-    try {
-      await setTheme({ name }, { training: isTraining() });
-      hint.textContent = `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : '');
-      toast(`Tema global: ${name}`);
-    } catch (e) {
-      console.error(e);
-      hint.textContent = 'No se pudo guardar GLOBAL.';
-    }
+  btnSave?.addEventListener('click', async (e)=>{
+    const btn = e.currentTarget;
+    await withBusy(btn, 'Guardando…', async ()=>{
+      const name = sel.value || 'Base';
+      try {
+        await setTheme({ name }, dbOpts());
+        hint.textContent = `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : '');
+        toast(`Tema global: ${name}`);
+      } catch (e) {
+        console.error(e);
+        hint.textContent = 'No se pudo guardar GLOBAL.';
+      }
+    });
   });
 
   // 6) Aplicar tema local si existe en sessionStorage
@@ -1484,11 +1524,6 @@ function confirmDeleteArticle(article){
     const local = sessionStorage.getItem('localTheme');
     if (local) document.documentElement.setAttribute('data-theme', local);
   } catch {}
-
-  // 7) Limpieza
-  window.addEventListener('beforeunload', ()=>{
-    try{ unsubTheme?.(); }catch{}
-  });
 
   // 8) Ocultar panel flotante viejo si existe
   const oldFloat = document.getElementById('admThemePanel');
@@ -1568,6 +1603,7 @@ function confirmDeleteArticle(article){
     PROD = Array.isArray(arr) ? arr : [];
     renderProd();
   });
+  addSub(unsubArticles);
 
   // 3) UI events
   document.getElementById('prodSearch')?.addEventListener('input', debounce((e)=>{
@@ -1614,7 +1650,7 @@ function confirmDeleteArticle(article){
           themeTag: row?.themeTag||'',
           ingredients: row?.ingredients||[]
         };
-        await upsertArticle(copy, { training: isTraining() });
+        await upsertArticle(copy, dbOpts());
         toast('Producto duplicado (en espera)' + (isTraining() ? ' (PRUEBA)' : ''));
       }catch(e){ console.error(e); toast('No se pudo duplicar'); }
       return;
@@ -1622,7 +1658,7 @@ function confirmDeleteArticle(article){
     if (act==='del'){
       if (!confirm(`¿Eliminar "${row?.name||'producto'}"?`)) return;
       try{
-        await deleteArticle(id, { training: isTraining() });
+        await deleteArticle(id, dbOpts());
         toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : ''));
       }
       catch(e){ console.error(e); toast('No se pudo eliminar'); }
@@ -1630,21 +1666,21 @@ function confirmDeleteArticle(article){
     }
     if (act==='toggle-active'){
       try{
-        await upsertArticle({ ...row, active: !row?.active, onHold: row?.onHold && !row?.active ? false : row?.onHold }, { training: isTraining() });
+        await upsertArticle({ ...row, active: !row?.active, onHold: row?.onHold && !row?.active ? false : row?.onHold }, dbOpts());
         toast(row?.active?'Desactivado':'Activado');
       }catch(e){ console.error(e); toast('No se pudo cambiar estado'); }
       return;
     }
     if (act==='hold'){
       try{
-        await upsertArticle({ ...row, onHold: !row?.onHold, active: row?.onHold ? true : false }, { training: isTraining() });
+        await upsertArticle({ ...row, onHold: !row?.onHold, active: row?.onHold ? true : false }, dbOpts());
         toast(row?.onHold?'Quitado de espera':'Puesto en espera');
       }catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
       return;
     }
     if (act==='feature'){
       try{
-        await upsertArticle({ ...row, featured: !row?.featured }, { training: isTraining() });
+        await upsertArticle({ ...row, featured: !row?.featured }, dbOpts());
         toast(row?.featured?'Quitado de destacados':'Destacado');
       }catch(e){ console.error(e); toast('No se pudo destacar'); }
       return;
@@ -1840,7 +1876,7 @@ function confirmDeleteArticle(article){
       try{
         const wantHold = !data.onHold;
         const payload = { ...(data.id?{id:data.id}:{}) , onHold: wantHold, active: wantHold?false:true };
-        await upsertArticle(payload, { training: isTraining() });
+        await upsertArticle(payload, dbOpts());
         toast(wantHold?'Puesto en espera':'Quitado de espera');
         close();
       }catch(e){ console.error(e); toast('No se pudo cambiar a espera'); }
@@ -1850,7 +1886,7 @@ function confirmDeleteArticle(article){
       q('#pDelete')?.addEventListener('click', async ()=>{
         if (!confirm(`¿Eliminar "${data.name||'producto'}"?`)) return;
         try{
-          await deleteArticle(data.id, { training: isTraining() });
+          await deleteArticle(data.id, dbOpts());
           toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : ''));
           close();
         } catch(e){ console.error(e); toast('No se pudo eliminar'); }
@@ -1883,7 +1919,7 @@ function confirmDeleteArticle(article){
       else { payload.onHold = false; payload.active = false; }
 
       try{
-        await upsertArticle(payload, { training: isTraining() });
+        await upsertArticle(payload, dbOpts());
         toast('Producto guardado' + (isTraining() ? ' (PRUEBA)' : ''));
         close();
       }catch(e){ console.error(e); toast('No se pudo guardar'); }
@@ -1910,8 +1946,9 @@ document.addEventListener('keydown',(e)=>{
   }
 });
 
-// Limpieza de timers globales si quedara alguno
+// Limpieza de timers globales y subscripciones
 window.addEventListener('beforeunload', ()=>{
   try{ stopHistAutoRefresh(); }catch{}
   try{ if (HH_TIMER) clearInterval(HH_TIMER); }catch{}
+  try { for (const u of SUBS) { try { u(); } catch {} } } catch {}
 });
