@@ -9,7 +9,7 @@
 import {
   db, ensureAuth,
   serverTimestamp, doc, getDoc, setDoc, updateDoc, addDoc, collection,
-  onSnapshot, query, where, orderBy, limit, Timestamp, increment
+  onSnapshot, query, where, orderBy, limit, Timestamp, increment, getDocs
 } from './firebase.js';
 
 /* =============== Training / Modo PRUEBA =============== */
@@ -183,21 +183,33 @@ export async function setOrderStatus(id, status, opts = {}) {
   }, { ok:true, id, status, _training:true });
 }
 
+/* ------- FIX: versiones consistentes y archivo opcional unido ------- */
 export async function getOrdersRange({ from, to, includeArchive=false, orderType=null }) {
   const _from = toTs(from);
   const _to   = toTs(to);
-  const col   = includeArchive ? 'orders_archive' : 'orders';
 
-  const qy = query(
-    collection(db, col),
+  // Query principal (orders)
+  const qOrders = query(
+    collection(db, 'orders'),
     where('createdAt', '>=', _from),
-    where('createdAt', '<', _to),
+    where('createdAt', '<',  _to),
     orderBy('createdAt', 'asc')
   );
 
-  const { getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-  const snap = await getDocs(qy);
-  let rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Si se pide archivo, también consultar orders_archive
+  const reads = [ getDocs(qOrders) ];
+  if (includeArchive) {
+    const qArchive = query(
+      collection(db, 'orders_archive'),
+      where('createdAt', '>=', _from),
+      where('createdAt', '<',  _to),
+      orderBy('createdAt', 'asc')
+    );
+    reads.push(getDocs(qArchive));
+  }
+
+  const snaps = await Promise.all(reads);
+  let rows = snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })));
 
   if (orderType && orderType !== 'all') {
     rows = rows.filter(o =>
