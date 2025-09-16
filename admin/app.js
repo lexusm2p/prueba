@@ -1,9 +1,14 @@
-// /admin/app.js
-// Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
-// + Pestaña TEMAS (vista previa local + guardar GLOBAL en settings/theme)
-// + Panel “Productos” (CRUD sobre Artículos) — con Modo PRUEBA integrado
-// Mejoras: robustez ante null/NaN, helpers de money/date correctos, accesibilidad/UX,
-// limpieza en unload, atajos de teclado y safeguards.
+/* ========================================================================== *
+ * /admin/app.js
+ * Admin completo + Historial + Recetario (validación inversa) + CRUD Artículos
+ * + Pestaña TEMAS (preview local + guardar GLOBAL en settings/theme)
+ * + Panel “Productos” (CRUD sobre Artículos)
+ * Modo PRUEBA integrado (no escribe en Firestore cuando está ON)
+ *
+ * Requiere: ../shared/db.js, ../shared/notify.js, ../shared/theme.js
+ * ========================================================================== */
+
+'use strict';
 
 /* ========================= Imports ========================= */
 import {
@@ -44,7 +49,11 @@ import {
 import { toast, beep } from '../shared/notify.js';
 
 // 🎨 utilidades de tema (colores/vars CSS, tipografías)
-import { initThemeFromSettings, applyThemeLocal, listThemes } from '../shared/theme.js';
+import {
+  initThemeFromSettings,
+  applyThemeLocal,
+  listThemes,
+} from '../shared/theme.js';
 
 /* ========================= Utils base ========================= */
 const $  = (sel, root = document) => root.querySelector(sel);
@@ -108,7 +117,8 @@ function debounce(fn, wait = 200) {
 
 /* ========================= Training (PRUEBA) ========================= */
 function isTraining() {
-  try { return sessionStorage.getItem('training') === '1'; } catch { return false; }
+  try { return sessionStorage.getItem('training') === '1'; }
+  catch { return false; }
 }
 function setTraining(on) {
   try { sessionStorage.setItem('training', on ? '1' : '0'); } catch {}
@@ -126,12 +136,8 @@ function paintTrainingBadge() {
     b.setAttribute('aria-live', 'polite');
     b.setAttribute('title', 'Alternar modo PRUEBA (Ctrl/Cmd+T)');
     Object.assign(b.style, {
-      position: 'fixed',
-      left: '14px',
-      bottom: '14px',
-      zIndex: 9999,
-      borderRadius: '999px',
-      opacity: .92,
+      position: 'fixed', left: '14px', bottom: '14px',
+      zIndex: 9999, borderRadius: '999px', opacity: .92,
     });
     b.addEventListener('click', () => setTraining(!isTraining()));
     document.body.appendChild(b);
@@ -169,15 +175,12 @@ tabs.addEventListener('click', (e) => {
   document.getElementById('panel-' + target)?.classList.add('active');
 
   if (target === 'hist') {
-    startHistAutoRefresh();
-    loadHistory();
+    startHistAutoRefresh(); loadHistory();
   } else {
     stopHistAutoRefresh();
   }
 
-  if (target === 'recetas') {
-    openQuickPrepDialog();
-  }
+  if (target === 'recetas') { openQuickPrepDialog(); }
 });
 
 /* ========================= Reportes ========================= */
@@ -193,11 +196,11 @@ document.getElementById('btnRepGen')?.addEventListener('click', runReports);
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
   if (fromEl && toEl) {
-    // yyyy-MM-dd
-    fromEl.value = new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate())
-      .toISOString().slice(0, 10);
-    toEl.value   = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-      .toISOString().slice(0, 10);
+    // yyyy-MM-dd (local)
+    const d0 = new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate());
+    const d1 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    fromEl.value = d0.toISOString().slice(0, 10);
+    toEl.value   = d1.toISOString().slice(0, 10);
   }
 })();
 
@@ -215,8 +218,8 @@ async function runReports() {
 
     const agg = aggregateOrders(orders);
 
-    setTxt('kpiOrders',  agg.orders);
-    setTxt('kpiUnits',   agg.units);
+    setTxt('kpiOrders',   agg.orders);
+    setTxt('kpiUnits',    agg.units);
     setMoney('kpiRevenue', agg.revenue);
     setMoney('kpiAvg',     agg.avgTicket);
 
@@ -239,8 +242,8 @@ async function runReports() {
 function aggregateOrders(orders = []) {
   const ordersCount = orders.length;
   const revenue = orders.reduce((a, o) => a + safeNum(o.subtotal ?? o.total, 0), 0);
-  const units   = orders.reduce((a, o) =>
-    a + (o.items || []).reduce((s, i) => s + safeNum(i.qty || 1, 0), 0), 0);
+  const units   = orders.reduce((a, o) => a + (o.items || [])
+    .reduce((s, i) => s + safeNum(i.qty || 1, 0), 0), 0);
   const avgTicket = ordersCount ? revenue / ordersCount : 0;
 
   const map = new Map();
@@ -278,8 +281,8 @@ function fillTable(id, arr = []) {
   if (!tb) return;
   tb.innerHTML = (arr.length)
     ? arr.map(r =>
-        `<tr><td>${esc(r.name)}</td><td>${r.units}</td><td>${money(r.revenue)}</td></tr>`
-      ).join('')
+      `<tr><td>${esc(r.name)}</td><td>${r.units}</td><td>${money(r.revenue)}</td></tr>`
+    ).join('')
     : '<tr><td colspan="3">—</td></tr>';
 }
 
@@ -429,6 +432,7 @@ function exportHistoryCSV() {
 
   const header=['Fecha','Numero/ID','Cliente','Teléfono','Tipo','Estado','Artículos','Total'];
   const lines=[header.join(',')];
+
   for (const o of rows) {
     const d=o.when;
     const fecha=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -438,6 +442,7 @@ function exportHistoryCSV() {
       .map(csvEscape).join(',');
     lines.push(csvRow);
   }
+
   const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -453,7 +458,10 @@ function csvEscape(v){
 
 (function autoLoadHistOnBoot(){
   try{
-    if (histLimitEl) { histLimitEl.value = '5'; histLimitEl.dataset.touched = '1'; }
+    if (histLimitEl) {
+      histLimitEl.value = '5';
+      histLimitEl.dataset.touched = '1';
+    }
     loadHistory(false);
   }catch{}
 })();
@@ -492,7 +500,10 @@ function renderInventoryTable() {
 
 /* ========================= Compras / Proveedores ========================= */
 let SUPPLIERS = [];
-subscribeSuppliers(arr => { SUPPLIERS = arr || []; renderVendors(arr); });
+subscribeSuppliers(arr => {
+  SUPPLIERS = arr || [];
+  renderVendors(arr);
+});
 
 const btnAddPurchase = document.getElementById('btnAddPurchase');
 btnAddPurchase && (btnAddPurchase.onclick = async () => {
@@ -536,7 +547,10 @@ function renderVendors(arr = []) {
 $('#btnSaveVendor')?.addEventListener('click', async () => {
   const name = ($('#vName')?.value || '').trim();
   const contact = ($('#vContact')?.value || '').trim();
-  if (!name) { toast('Nombre del proveedor requerido'); return; }
+  if (!name) {
+    toast('Nombre del proveedor requerido');
+    return;
+  }
   try {
     await upsertSupplier({ name, contact }, { training: isTraining() });
     toast('Proveedor guardado' + (isTraining() ? ' (PRUEBA)' : ''));
@@ -599,9 +613,7 @@ subscribeHappyHour(hh => {
         const ms = endsAt - Date.now();
         if (ms <= 0) {
           lbl.textContent = 'Finalizó';
-          clearInterval(HH_TIMER);
-          HH_TIMER = null;
-          return;
+          clearInterval(HH_TIMER); HH_TIMER = null; return;
         }
         const m = Math.floor(ms / 60000);
         const s = Math.floor((ms % 60000) / 1000);
@@ -679,11 +691,16 @@ async function quickHH(mins){
 
 /* ========================= Ajustes globales ========================= */
 let APP_SETTINGS = {};
-subscribeSettings(s => { APP_SETTINGS = s || {}; });
+subscribeSettings(s => {
+  APP_SETTINGS = s || {};
+});
 
 /* ========================= RECETARIO ========================= */
 let RECIPES = [];
-subscribeRecipes(list => { RECIPES = list || []; renderRecipeTable(); });
+subscribeRecipes(list => {
+  RECIPES = list || [];
+  renderRecipeTable();
+});
 
 $('#rcpSearch')?.addEventListener('input', debounce(renderRecipeTable, 120));
 
@@ -712,7 +729,9 @@ function renderRecipeTable(){
     .filter(r=>{
       if(!term) return true;
       const name = (r.name||'').toLowerCase();
-      const ing  = (r.ingredients||[]).map(i=> (invMap.get(i.itemId)?.name || i.itemId)).join(' ').toLowerCase();
+      const ing  = (r.ingredients||[])
+        .map(i=> (invMap.get(i.itemId)?.name || i.itemId))
+        .join(' ').toLowerCase();
       return name.includes(term) || ing.includes(term);
     })
     .map(r=>{
@@ -753,8 +772,7 @@ function scaleIngredients(r, outQty){
   const base = safeNum(r.yieldQty||0, 0) || 1;
   const factor = safeNum(outQty, 0) / base;
   return (r.ingredients||[]).map(ing => ({
-    ...ing,
-    qtyScaled: safeNum(ing.qty||0, 0) * factor
+    ...ing, qtyScaled: safeNum(ing.qty||0, 0) * factor
   }));
 }
 
@@ -769,12 +787,19 @@ function renderRecipeModal(){
   body.innerHTML = `
     <div class="field">
       <label>Receta</label>
-      <div><strong>${esc(CURRENT_R.name||'Receta')}</strong></div>
+      <div><b>${esc(CURRENT_R.name||'Receta')}</b></div>
     </div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px">
       <div class="field">
         <label>Porción (ml)</label>
         <input id="rcpOutQty" type="number" min="10" step="10" value="${String(CURRENT_OUT_QTY)}" />
+        <div class="row" style="gap:6px;margin-top:6px">
+          <button class="btn tiny ghost" id="rcpScale500" type="button">500</button>
+          <button class="btn tiny ghost" id="rcpScale250" type="button">250</button>
+          <button class="btn tiny ghost" id="rcpScale200" type="button">200</button>
+          <button class="btn tiny ghost" id="rcpScale100" type="button">100</button>
+        </div>
       </div>
       <div class="field">
         <label>Vasos 2oz usados (opcional)</label>
@@ -787,16 +812,18 @@ function renderRecipeModal(){
           <option value="no" selected>No</option>
           <option value="si">Sí</option>
         </select>
-      </div>
-      <div class="field">
-        <label>Cantidad almacenada (ml)</label>
-        <input id="rcpStoreQty" type="number" min="0" step="10" value="${String(CURRENT_OUT_QTY)}" />
+        <div class="row" style="margin-top:6px;gap:6px">
+          <input id="rcpStoreQty" type="number" min="0" step="10" placeholder="Cantidad almacenada (ml)" />
+        </div>
       </div>
     </div>
 
     <div class="field">
       <label>Producto terminado</label>
-      <div>${esc(outItem)} ${isLowStock(CURRENT_R.outputItemId) ? '<span class="k-badge warn" style="margin-left:6px">⚠ Stock bajo</span>' : ''}</div>
+      <div>
+        ${esc(outItem)}
+        ${isLowStock(CURRENT_R.outputItemId) ? '<span class="k-badge warn" style="margin-left:6px">⚠ Stock bajo</span>' : ''}
+      </div>
     </div>
 
     <div class="field">
@@ -815,6 +842,7 @@ function renderRecipeModal(){
 
     ${CURRENT_R.method ? `<div class="field"><label>Método</label><div class="muted sm" style="white-space:pre-wrap">${esc(CURRENT_R.method)}</div></div>` : ''}
   `;
+
   if (hint) hint.textContent = `Salida: ${CURRENT_OUT_QTY} ml`;
   const titleEl = document.getElementById('rcpTitle');
   if (titleEl) titleEl.textContent = CURRENT_R.name || 'Receta';
@@ -826,18 +854,10 @@ function openRecipeModal(r){
   if (rcpModal) rcpModal.style.display='grid';
   renderRecipeModal();
 }
-document.getElementById('rcpScale500')?.addEventListener('click', ()=>{
-  CURRENT_OUT_QTY=500; renderRecipeModal();
-});
-document.getElementById('rcpScale250')?.addEventListener('click', ()=>{
-  CURRENT_OUT_QTY=250; renderRecipeModal();
-});
-document.getElementById('rcpScale200')?.addEventListener('click', ()=>{
-  CURRENT_OUT_QTY=200; renderRecipeModal();
-});
-document.getElementById('rcpScale100')?.addEventListener('click', ()=>{
-  CURRENT_OUT_QTY=100; renderRecipeModal();
-});
+document.getElementById('rcpScale500')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=500; renderRecipeModal(); });
+document.getElementById('rcpScale250')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=250; renderRecipeModal(); });
+document.getElementById('rcpScale200')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=200; renderRecipeModal(); });
+document.getElementById('rcpScale100')?.addEventListener('click', ()=>{ CURRENT_OUT_QTY=100; renderRecipeModal(); });
 document.getElementById('rcpBody')?.addEventListener('input', (e)=>{
   if (e.target && e.target.id==='rcpOutQty'){
     const v = safeNum(e.target.value, 10);
@@ -850,20 +870,25 @@ document.getElementById('rcpPrepare')?.addEventListener('click', doPrepareFromVi
 async function doPrepareFromView(){
   if (!CURRENT_R) return;
   const outQty = safeNum(document.getElementById('rcpOutQty')?.value, CURRENT_OUT_QTY || 0);
-  if (!outQty || outQty<=0){ toast('Indica cantidad de salida en ml'); return; }
+  if (!outQty || outQty<=0){
+    toast('Indica cantidad de salida en ml');
+    return;
+  }
   try{
     await produceBatch({ recipeId: CURRENT_R.id, outputQty: outQty }, { training: isTraining() });
     const cups = safeNum(document.getElementById('rcpCups')?.value, 0);
     const cupId = APP_SETTINGS?.sauceCupItemId || null;
     if (cupId && cups>0){
-      await adjustStock(cupId, -cups, 'use', { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty }, { training: isTraining() });
+      await adjustStock(cupId, -cups, 'use',
+        { reason:'sauce_cups', recipeId: CURRENT_R.id, outQty },
+        { training: isTraining() });
     }
     const store = (document.getElementById('rcpStore')?.value === 'si');
     const storeQty = safeNum(document.getElementById('rcpStoreQty')?.value, 0);
     if (store && CURRENT_R.outputItemId){
-      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta', {
-        recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty
-      }, { training: isTraining() });
+      await adjustStock(CURRENT_R.outputItemId, 0, 'production_meta',
+        { recipeId: CURRENT_R.id, stored:true, storedQtyMl:storeQty, outputQtyMl:outQty },
+        { training: isTraining() });
     }
     toast('Lote preparado' + (isTraining() ? ' (PRUEBA)' : ''));
     document.getElementById('rcpClose')?.click();
@@ -943,6 +968,7 @@ function openQuickPrepDialog(prefRecipe = null){
   });
   wrap.addEventListener('click', async (e)=>{
     if (e.target.matches('[data-close]')) { close(); return; }
+
     if (e.target.id==='qpSuggest'){
       e.preventDefault();
       const q = await suggestQty(state.r);
@@ -953,6 +979,7 @@ function openQuickPrepDialog(prefRecipe = null){
       }
       return;
     }
+
     if (e.target.id==='qpBuyMissing'){
       const rows = [...wrap.querySelectorAll('.qp-buyrow')];
       if (!rows.length) return;
@@ -974,12 +1001,13 @@ function openQuickPrepDialog(prefRecipe = null){
       }
       return;
     }
+
     if (e.target.id==='qpConfirm'){
       try{
         await produceBatch({ recipeId: state.r.id, outputQty: state.qty }, { training: isTraining() });
-        await adjustStock(state.r.outputItemId, 0, 'production_meta', {
-          recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty
-        }, { training: isTraining() });
+        await adjustStock(state.r.outputItemId, 0, 'production_meta',
+          { recipeId: state.r.id, stored:true, storedQtyMl: state.qty, outputQtyMl: state.qty },
+          { training: isTraining() });
         toast('Producción confirmada' + ( isTraining() ? ' (PRUEBA)' : '' ));
         close();
       }catch(err){
@@ -1000,13 +1028,14 @@ function openQuickPrepDialog(prefRecipe = null){
         ${list.map(ing=>{
           const name = invMap.get(ing.itemId)?.name || ing.itemId;
           const unit = ing.unit || 'ml';
-          return `<div class="row" style="justify-content:space-between">
-            <div>${esc(name)}</div>
-            <div>${ing.qtyScaled.toFixed(1)} ${esc(unit)}</div>
-          </div>`;
+          return `
+            <div class="row" style="justify-content:space-between">
+              <div>${esc(name)}</div>
+              <div>${ing.qtyScaled.toFixed(1)} ${esc(unit)}</div>
+            </div>`;
         }).join('')}
       </div>
-      ${state.r.method ? `<div class="muted small" style="white-space:pre-wrap"><strong>Método:</strong>\n${esc(state.r.method)}</div>`:''}
+      ${state.r.method ? `<div class="muted sm" style="white-space:pre-wrap"><b>Método:</b>\n${esc(state.r.method)}</div>`:''}
     `;
   }
 
@@ -1118,7 +1147,10 @@ let ARTICLES = [];
 let ART_SORT = { by: 'name', dir: 'asc' };
 let ART_FILTER = '';
 
-subscribeArticles(arr => { ARTICLES = Array.isArray(arr) ? arr : []; renderArticles(); });
+subscribeArticles(arr => {
+  ARTICLES = Array.isArray(arr) ? arr : [];
+  renderArticles();
+});
 document.getElementById('btnAddArticulo')?.addEventListener('click', () => openArticleModal());
 
 document.addEventListener('input', (e)=>{
@@ -1306,7 +1338,12 @@ function openArticleModal(article = null){
     }
   }
   q('#aSave')?.addEventListener('click', save);
-  wrap.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); save(); } });
+  wrap.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      save();
+    }
+  });
 
   if (isEdit){
     q('#aDelete')?.addEventListener('click', ()=> confirmDeleteArticle({ id:data.id, name:data.name }));
@@ -1333,7 +1370,10 @@ function confirmDeleteArticle(article){
   if (!confirm(`¿Eliminar artículo "${article.name}"?`)) return;
   deleteArticle(article.id, { training: isTraining() })
     .then(()=> toast('Artículo eliminado' + (isTraining() ? ' (PRUEBA)' : '')))
-    .catch((e)=>{ console.error(e); toast('No se pudo eliminar'); });
+    .catch((e)=>{
+      console.error(e);
+      toast('No se pudo eliminar');
+    });
 }
 
 /* ========================= TEMAS — Pestaña fija ========================= */
@@ -1476,41 +1516,43 @@ function confirmDeleteArticle(article){
     panel.id = 'panel-prod';
     panel.className = 'panel';
     panel.innerHTML = `
-      <div class="row" style="gap:8px; align-items:flex-end; flex-wrap:wrap">
-        <div class="field">
-          <label>Búsqueda</label>
-          <input id="prodSearch" type="search" placeholder="Buscar por nombre, desc o categoría" />
+      <div class="card" style="max-width:980px;margin:auto">
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <div class="field" style="flex:1 1 280px">
+            <label>Búsqueda</label>
+            <input id="prodSearch" type="search" placeholder="Nombre, descripción, categoría…" />
+          </div>
+          <div class="field">
+            <label>Filtro</label>
+            <select id="prodFilter">
+              <option value="all">Todos</option>
+              <option value="active">Activos</option>
+              <option value="hold">En espera</option>
+              <option value="featured">Destacados</option>
+              <option value="limited">Edición limitada</option>
+            </select>
+          </div>
+          <div class="row" style="align-items:flex-end;gap:8px">
+            <button class="btn" id="prodNew" type="button">Nuevo producto</button>
+            <button class="btn ghost" id="prodRefresh" type="button">Refrescar</button>
+          </div>
         </div>
-        <div class="field">
-          <label>Filtro</label>
-          <select id="prodFilter">
-            <option value="all">Todos</option>
-            <option value="active">Activos</option>
-            <option value="hold">En espera</option>
-            <option value="featured">Destacados</option>
-            <option value="limited">Edición limitada</option>
-          </select>
-        </div>
-        <div class="row" style="gap:8px">
-          <button id="prodNew" class="btn" type="button">Nuevo producto</button>
-          <button id="prodRefresh" class="btn ghost" type="button">Refrescar</button>
-        </div>
-      </div>
 
-      <div class="table-wrap" style="margin-top:10px">
-        <table class="tbl" id="tblProd">
-          <thead>
-            <tr>
-              <th data-sort="name"   style="cursor:pointer">Nombre</th>
-              <th data-sort="price"  style="cursor:pointer">Precio</th>
-              <th data-sort="status" style="cursor:pointer">Estado</th>
-              <th data-sort="category" style="cursor:pointer">Categoría</th>
-              <th style="min-width:220px">Flags</th>
-              <th class="right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody><tr><td colspan="6">—</td></tr></tbody>
-        </table>
+        <div class="table-wrap" style="margin-top:10px">
+          <table class="tbl" id="tblProd">
+            <thead>
+              <tr>
+                <th data-sort="name"   style="cursor:pointer">Nombre</th>
+                <th data-sort="price"  style="cursor:pointer">Precio</th>
+                <th data-sort="status" style="cursor:pointer">Estado</th>
+                <th data-sort="category" style="cursor:pointer">Categoría</th>
+                <th style="min-width:220px">Flags</th>
+                <th class="right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody><tr><td colspan="6">—</td></tr></tbody>
+          </table>
+        </div>
       </div>
     `;
     (document.getElementById('admTabs').parentElement || document.body).appendChild(panel);
@@ -1579,7 +1621,10 @@ function confirmDeleteArticle(article){
     }
     if (act==='del'){
       if (!confirm(`¿Eliminar "${row?.name||'producto'}"?`)) return;
-      try{ await deleteArticle(id, { training: isTraining() }); toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : '')); }
+      try{
+        await deleteArticle(id, { training: isTraining() });
+        toast('Producto eliminado' + (isTraining() ? ' (PRUEBA)' : ''));
+      }
       catch(e){ console.error(e); toast('No se pudo eliminar'); }
       return;
     }
@@ -1676,7 +1721,7 @@ function confirmDeleteArticle(article){
       desc: prod?.desc || '',
       featured: !!prod?.featured,
       limitedTime: !!prod?.limitedTime,
-      limitedUntil: prod?.limitedUntil ? new Date(Number(prod.limitedUntil)) : null,
+      limitedUntil: prod?.limitedUntil ? new Date(Number(prod?.limitedUntil)) : null,
       sound: prod?.sound || '',
       themeTag: prod?.themeTag || '',
       ingredients: Array.isArray(prod?.ingredients) ? prod.ingredients : [],
@@ -1843,9 +1888,6 @@ function confirmDeleteArticle(article){
         close();
       }catch(e){ console.error(e); toast('No se pudo guardar'); }
     });
-
-    // Limpieza al salir del modal
-    wrap.addEventListener('beforeunload', ()=>{ /* no-op for modal */ });
   }
 
   // Limpieza al salir del panel
@@ -1863,9 +1905,7 @@ document.addEventListener('keydown',(e)=>{
   if ((e.ctrlKey||e.metaKey) && k==='k'){
     e.preventDefault();
     const prodVisible = document.getElementById('panel-prod')?.classList.contains('active');
-    const el = prodVisible
-      ? document.getElementById('prodSearch')
-      : document.getElementById('histSearch') || document.getElementById('rcpSearch');
+    const el = prodVisible ? document.getElementById('prodSearch') : document.getElementById('histSearch') || document.getElementById('rcpSearch');
     el?.focus();
   }
 });
