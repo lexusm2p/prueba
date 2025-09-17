@@ -10,7 +10,11 @@
 
 'use strict';
 
-/* ========================= Imports ========================= */
+'use strict';
+
+/* ========================= Imports (único bloque) ========================= */
+
+// DB y servicios (reportes, inventario, HH, recetas, artículos, etc.)
 import {
   // Reportes
   getOrdersRange,
@@ -40,9 +44,12 @@ import {
   subscribeArticles,
   upsertArticle,
   deleteArticle,
+} from '../shared/db.js';
 
-  // TEMAS
-  // 🎨 utilidades de tema
+// Notificaciones
+import { toast, beep } from '../shared/notify.js';
+
+// 🎨 Temas (aplicar, listar, presets y constructor)
 import {
   initThemeFromSettings,
   applyThemeLocal,
@@ -50,8 +57,6 @@ import {
   subscribeThemePresets,
   saveThemePreset,
 } from '../shared/theme.js';
-}
-
 import { toast, beep } from '../shared/notify.js';
 
 // 🎨 utilidades de tema (colores/vars CSS, tipografías)
