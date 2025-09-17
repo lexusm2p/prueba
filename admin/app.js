@@ -10,7 +10,7 @@
 
 'use strict';
 
-'use strict';
+
 
 /* ========================= Imports (único bloque) ========================= */
 
@@ -59,12 +59,6 @@ import {
 } from '../shared/theme.js';
 
 // 🎨 utilidades de tema (colores/vars CSS, tipografías)
-import {
-  initThemeFromSettings,
-  applyThemeLocal,
-  listThemes,
-} from '../shared/theme.js';
-
 /* ========================= Utils base ========================= */
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
