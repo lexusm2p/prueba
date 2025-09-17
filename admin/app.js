@@ -1413,12 +1413,12 @@ function confirmDeleteArticle(article){
     });
 }
 
-/* ========================= TEMAS — Pestaña fija (con creador) ========================= */
+/* ========================= TEMAS — Pestaña fija (cards + fixes) ========================= */
 (function initThemesTab(){
   const TABS = document.getElementById('admTabs');
   if (!TABS) return;
 
-  // 1) Botón Tab
+  // --- Tab
   if (!TABS.querySelector('[data-tab="temas"]')){
     const tab = document.createElement('button');
     tab.className = 'tab';
@@ -1430,135 +1430,130 @@ function confirmDeleteArticle(article){
     TABS.appendChild(tab);
   }
 
-  // 2) Panel
+  // --- Panel (cards)
   if (!document.getElementById('panel-temas')){
     const panel = document.createElement('section');
     panel.id = 'panel-temas';
     panel.className = 'panel';
     panel.innerHTML = `
-      <div class="card" style="max-width:780px;margin:auto">
+      <div class="card" style="max-width:980px;margin:auto">
         <h3>Tema (Kiosko/UI)</h3>
-        <div class="field">
-          <label>Selecciona tema</label>
-          <select id="themeSelect" style="width:100%"></select>
+
+        <div class="muted small" style="margin-bottom:8px">
+          Selecciona una tarjeta para previsualizar localmente. “Guardar GLOBAL” escribe en <code>settings/theme</code>.
         </div>
 
+        <div id="themeCards" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px"></div>
+
         <div class="row" style="gap:12px;margin-top:12px;flex-wrap:wrap">
-          <button id="btnThemePreview" class="btn" type="button">Probar local</button>
-          <button id="btnThemeSave" class="btn primary" type="button">Guardar GLOBAL</button>
+          <button id="btnThemeSave" class="btn primary" type="button" disabled>Guardar GLOBAL</button>
           <button id="btnThemeBuilder" class="btn ghost" type="button">Crear/Editar tema</button>
         </div>
 
-        <p class="muted small" id="themeHint" style="margin-top:10px">
-          “Probar local” solo cambia este navegador (sessionStorage). “Guardar GLOBAL” escribe en <code>settings/theme</code>.
-        </p>
+        <p class="muted small" id="themeHint" style="margin-top:10px"></p>
       </div>
     `;
     (TABS.parentElement || document.body).appendChild(panel);
   }
 
+  // --- Estilos tarjetas
+  (function injectThemeCardStyles(){
+    if (document.getElementById('theme-card-styles')) return;
+    const st = document.createElement('style');
+    st.id = 'theme-card-styles';
+    st.textContent = `
+      .theme-card {
+        border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px;
+        cursor:pointer; transition:transform .08s ease, box-shadow .08s ease, border-color .12s;
+        display:flex; gap:10px; align-items:center; background:rgba(0,0,0,.1);
+      }
+      .theme-card:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.25); }
+      .theme-card[data-active="1"] { outline:2px solid var(--color-primary,#ffd24a); border-color:var(--color-primary,#ffd24a); }
+      .theme-dot { width:28px; height:28px; border-radius:8px; flex:0 0 auto; border:1px solid rgba(255,255,255,.2); }
+      .theme-name { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+      .theme-sub  { font-size:.8rem; opacity:.8 }
+    `;
+    document.head.appendChild(st);
+  })();
+
   const panel  = document.getElementById('panel-temas');
-  const sel    = panel.querySelector('#themeSelect');
-  const btnPrev= panel.querySelector('#btnThemePreview');
+  const cardsC = panel.querySelector('#themeCards');
   const btnSave= panel.querySelector('#btnThemeSave');
   const btnNew = panel.querySelector('#btnThemeBuilder');
   const hint   = panel.querySelector('#themeHint');
 
-  // ---------- NUEVO: fallback robusto para opciones ----------
-  const BUILTIN_THEMES = [
-    'Base',
-    'Independencia',
-    'Día de Muertos',
-    'Navidad',
-    'Fiestas',
-    'San Valentín',
-    'Halloween',
-    'Fútbol',
-    'Lucha Libre',
-    'Pixel Art',
-    'Retro Arcade',
-    'Y2K (90s/00s)'
+  const BUILTIN = [
+    'Base','Independencia','Día de Muertos','Navidad',
+    'Fiestas','San Valentín','Halloween','Fútbol',
+    'Lucha Libre','Pixel Art','Retro Arcade','Y2K (90s/00s)'
   ];
 
   function getThemeNamesSafe(){
     try {
       const arr = listThemes?.();
-      if (Array.isArray(arr) && arr.length) return arr;
-      return BUILTIN_THEMES;
-    } catch (e) {
-      console.warn('listThemes() falló, usando BUILTIN_THEMES', e);
-      return BUILTIN_THEMES;
+      return (Array.isArray(arr) && arr.length) ? arr : BUILTIN;
+    } catch { return BUILTIN; }
+  }
+
+  let SELECTED = '';
+
+  function renderCards(){
+    const names = Array.from(new Set(getThemeNamesSafe())).sort((a,b)=>a.localeCompare(b,'es'));
+    cardsC.innerHTML = names.map(n => `
+      <div class="theme-card" data-card="${escAttr(n)}" data-active="${n===SELECTED?'1':'0'}" title="${escAttr(n)}">
+        <div class="theme-dot" style="background:var(--color-primary,#ffc242)"></div>
+        <div style="min-width:0">
+          <div class="theme-name">${esc(n)}</div>
+          <div class="theme-sub muted">Click para previsualizar</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function pick(name){
+    SELECTED = name;
+    try {
+      applyThemeLocal(name);
+      try { sessionStorage.setItem('localTheme', name); } catch {}
+      hint.textContent = `Vista previa aplicada: ${name}`;
+      btnSave.disabled = false;
+      toast(`Tema local: ${name}`);
+    } catch(e){
+      console.error(e);
+      hint.textContent = 'No se pudo aplicar el tema local.';
     }
+    renderCards();
   }
 
-  function renderThemeOptions(names){
-    if (!sel) return;
-    const current = sel.value || '';
-    const safe = Array.isArray(names) && names.length ? names : BUILTIN_THEMES;
-    sel.innerHTML = safe.map(n => `<option value="${n}">${n}</option>`).join('');
-    if (current && [...sel.options].some(o=>o.value===current)) sel.value = current;
-  }
-
-  // Inicial seguro
-  renderThemeOptions(getThemeNamesSafe());
-
-  // Reintento al enfocar el select (por si el módulo carga tarde)
-  sel?.addEventListener('focus', ()=>{
-    if (!sel.options.length) renderThemeOptions(getThemeNamesSafe());
-  });
-
-  // Suscripciones: global + presets personalizados (mezcla core + personalizados)
-  try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch {}
+  // Primera carga (y aplica lo último local si había)
   try {
-    subscribeThemePresets((names)=>{
-      const all = Array.from(new Set([ ...getThemeNamesSafe(), ...(names||[]) ]));
-      renderThemeOptions(all);
-    });
-  } catch (e) {
-    console.warn('subscribeThemePresets() no disponible', e);
-  }
+    const last = sessionStorage.getItem('localTheme');
+    SELECTED = last || '';
+  } catch {}
+  renderCards();
+  if (SELECTED) { try { applyThemeLocal(SELECTED); } catch {} }
 
-  // Vista previa automática al cambiar
-  sel?.addEventListener('change', ()=>{
-    const name = sel?.value || 'Base';
-    try {
-      applyThemeLocal(name);
-      try { sessionStorage.setItem('localTheme', name); } catch {}
-      hint && (hint.textContent = `Vista previa: ${name}`);
-      toast(`Tema local: ${name}`);
-    } catch (e) {
-      console.error(e);
-    }
+  // Click en tarjetas
+  cardsC.addEventListener('click', (e)=>{
+    const c = e.target.closest('[data-card]');
+    if (!c) return;
+    pick(c.dataset.card);
   });
 
-  // Botón "Probar local"
-  btnPrev?.addEventListener('click', ()=>{
-    const name = sel?.value || 'Base';
-    try {
-      applyThemeLocal(name);
-      try { sessionStorage.setItem('localTheme', name); } catch {}
-      if (hint) hint.textContent = `Tema aplicado localmente: ${name}`;
-      toast(`Tema local: ${name}`);
-    } catch (e) {
-      console.error(e);
-      hint && (hint.textContent = 'No se pudo aplicar el tema local.');
-    }
-  });
-
-  // Guardar global
+  // Guarda GLOBAL
   btnSave?.addEventListener('click', async ()=>{
-    const name = sel?.value || 'Base';
+    if (!SELECTED) { beep(); return; }
     try {
-      await setTheme({ name }, { training: isTraining() });
-      hint && (hint.textContent = `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : ''));
-      toast(`Tema global: ${name}`);
-    } catch (e) {
+      await setTheme({ name: SELECTED }, { training: isTraining() });
+      hint.textContent = `Tema GLOBAL guardado: ${SELECTED}` + (isTraining() ? ' (PRUEBA)' : '');
+      toast(`Tema global: ${SELECTED}`);
+    } catch(e){
       console.error(e);
-      hint && (hint.textContent = 'No se pudo guardar GLOBAL.');
+      hint.textContent = 'No se pudo guardar GLOBAL.';
     }
   });
 
-  // Creador / Editor rápido de temas
+  // Builder (igual que tu versión actual)
   btnNew?.addEventListener('click', ()=> openThemeBuilder());
 
   function openThemeBuilder(){
@@ -1575,45 +1570,24 @@ function confirmDeleteArticle(article){
         </div>
         <div class="modal-body" style="max-height:70vh;overflow:auto">
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-            <div class="field">
-              <label>Nombre del tema *</label>
-              <input id="tName" type="text" placeholder="Ej. Grito 16" />
-            </div>
-            <div class="field">
-              <label>Fuente (Google Fonts URL)</label>
-              <input id="tFontUrl" type="text" placeholder="https://fonts.googleapis.com/css2?family=..." />
-              <div class="muted small">Opcional. Si la pones, se importa y se usa como base.</div>
-            </div>
-            <div class="field">
-              <label>Fuente display (CSS font-family)</label>
-              <input id="tFontDisplay" type="text" placeholder='"Bangers", cursive' />
-            </div>
+            <div class="field"><label>Nombre del tema *</label><input id="tName" type="text" placeholder="Ej. Grito 16" /></div>
+            <div class="field"><label>Fuente (Google Fonts URL)</label><input id="tFontUrl" type="text" placeholder="https://fonts.googleapis.com/css2?family=..." /><div class="muted small">Opcional.</div></div>
+            <div class="field"><label>Fuente display (CSS font-family)</label><input id="tFontDisplay" type="text" placeholder='"Bangers", cursive' /></div>
           </div>
-
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:8px">
-            <div class="field"><label>Fondo (color)</label><input id="cBg" type="color" value="#0b0f14" /></div>
+            <div class="field"><label>Fondo</label><input id="cBg"  type="color" value="#0b0f14" /></div>
             <div class="field"><label>Texto</label><input id="cText" type="color" value="#e8f0ff" /></div>
             <div class="field"><label>Primario</label><input id="cPri" type="color" value="#ffc242" /></div>
             <div class="field"><label>Accent</label><input id="cAcc" type="color" value="#27e1ff" /></div>
           </div>
-
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:8px">
-            <div class="field">
-              <label>Imagen de fondo (URL)</label>
-              <input id="tBgUrl" type="text" placeholder="/img/temas/independencia.jpg" />
-              <div class="muted small">Deja vacío si no deseas imagen. Puedes alojarlas en <code>/img/temas/</code> de GitHub Pages.</div>
-            </div>
-            <div class="field">
-              <label>Overlay RGBA</label>
-              <input id="tOverlay" type="text" value="rgba(0,0,0,.25)" />
-            </div>
+            <div class="field"><label>Imagen de fondo (URL)</label><input id="tBgUrl" type="text" placeholder="/img/temas/independencia.jpg" /></div>
+            <div class="field"><label>Overlay RGBA</label><input id="tOverlay" type="text" value="rgba(0,0,0,.25)" /></div>
           </div>
-
           <div class="field" style="margin-top:8px">
             <label>Fotos del tema (URLs, una por línea)</label>
-            <textarea id="tImages" placeholder="/img/temas/burger1.jpg&#10;/img/temas/burger2.jpg" rows="4"></textarea>
+            <textarea id="tImages" rows="3" placeholder="/img/temas/burger1.jpg&#10;/img/temas/burger2.jpg"></textarea>
           </div>
-
           <div class="row" style="gap:10px;margin-top:8px">
             <button class="btn" id="tPreview" type="button">Previsualizar</button>
             <button class="btn primary" id="tSave"   type="button">Guardar preset</button>
@@ -1623,65 +1597,45 @@ function confirmDeleteArticle(article){
       </div>
     `;
     document.body.appendChild(wrap);
-    const q = sel => wrap.querySelector(sel);
+    const q = (s)=> wrap.querySelector(s);
     const close = ()=> wrap.remove();
 
     wrap.addEventListener('click', e=>{ if (e.target.matches('[data-close]')) close(); });
 
+    function readPreset(){
+      const name   = q('#tName')?.value?.trim() || 'Custom';
+      const palette= { bg:q('#cBg')?.value||'#0b0f14', text:q('#cText')?.value||'#e8f0ff', primary:q('#cPri')?.value||'#ffc242', accent:q('#cAcc')?.value||'#27e1ff' };
+      const fonts  = { importUrl:q('#tFontUrl')?.value?.trim()||'', base:'Inter, system-ui, Arial', display:q('#tFontDisplay')?.value?.trim()||'inherit' };
+      const bg     = { image:q('#tBgUrl')?.value?.trim()||'', overlay:q('#tOverlay')?.value?.trim()||'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 };
+      const images = (q('#tImages')?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+      return { name, palette, fonts, bg, images };
+    }
+
     q('#tPreview')?.addEventListener('click', ()=>{
       const preset = readPreset();
-      applyThemeLocal(preset.name, preset); // preview local
-      q('#tMsg').textContent = `Vista previa aplicada localmente: ${preset.name}`;
+      try {
+        applyThemeLocal(preset.name, preset);
+        SELECTED = preset.name; renderCards();
+        q('#tMsg').textContent = `Vista previa aplicada localmente: ${preset.name}`;
+      } catch { q('#tMsg').textContent = 'No se pudo aplicar el preset.'; }
     });
 
     q('#tSave')?.addEventListener('click', async ()=>{
       const preset = readPreset();
-      if (!preset.name.trim()) { beep(); q('#tMsg').textContent = 'El tema necesita un nombre.'; return; }
+      if (!preset.name.trim()){ beep(); q('#tMsg').textContent = 'El tema necesita un nombre.'; return; }
       try{
         await saveThemePreset(preset);
-        q('#tMsg').textContent = 'Tema guardado. Ya aparece en la lista.';
         toast('Tema guardado');
-        renderThemeOptions(getThemeNamesSafe());
-      }catch(e){
-        console.error(e);
-        q('#tMsg').textContent = 'No se pudo guardar.';
-      }
+        SELECTED = preset.name; renderCards();
+        q('#tMsg').textContent = 'Tema guardado. Ya aparece en la lista.';
+      }catch(e){ console.error(e); q('#tMsg').textContent = 'No se pudo guardar.'; }
     });
-
-    function readPreset(){
-      const name = q('#tName')?.value?.trim() || 'Custom';
-      const palette = {
-        bg:      q('#cBg')?.value   || '#0b0f14',
-        text:    q('#cText')?.value || '#e8f0ff',
-        primary: q('#cPri')?.value  || '#ffc242',
-        accent:  q('#cAcc')?.value  || '#27e1ff',
-      };
-      const fonts = {
-        importUrl: q('#tFontUrl')?.value?.trim() || '',
-        base:      'Inter, system-ui, Arial',
-        display:   q('#tFontDisplay')?.value?.trim() || 'inherit',
-      };
-      const bg = {
-        image:   q('#tBgUrl')?.value?.trim() || '',
-        overlay: q('#tOverlay')?.value?.trim() || 'rgba(0,0,0,.25)',
-        size:    'cover',
-        position:'center',
-        blur:    0,
-      };
-      const images = (q('#tImages')?.value || '')
-        .split('\n')
-        .map(s => s.trim())
-        .filter(Boolean);
-      return { name, palette, fonts, bg, images };
-    }
   }
 
-  // Aplica tema local guardado en sessionStorage si existe
-  try {
-    const local = sessionStorage.getItem('localTheme');
-    if (local) applyThemeLocal(local);
-  } catch {}
+  // Aplica el tema desde settings en arranque (si el módulo lo trae)
+  try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch {}
 })();
+
 
 /* ========================= PANEL: Productos (CRUD sobre Artículos) ========================= */
 (function initProductsPanel(){
@@ -2084,6 +2038,246 @@ function confirmDeleteArticle(article){
     try{ unsubArticles?.(); }catch{}
   });
 })();
+
+/* ========================= CLIENTES — Analítica (RFM + hábitos) ========================= */
+(function initCustomersTab(){
+  const TABS = document.getElementById('admTabs');
+  if (!TABS) return;
+
+  // Tab
+  if (!TABS.querySelector('[data-tab="clientes"]')){
+    const tab = document.createElement('button');
+    tab.className = 'tab';
+    tab.dataset.tab = 'clientes';
+    tab.type = 'button';
+    tab.textContent = 'Clientes';
+    tab.setAttribute('role','tab');
+    tab.setAttribute('aria-selected','false');
+    TABS.appendChild(tab);
+  }
+
+  // Panel
+  if (!document.getElementById('panel-clientes')){
+    const panel = document.createElement('section');
+    panel.id = 'panel-clientes';
+    panel.className = 'panel';
+    panel.innerHTML = `
+      <div class="card" style="max-width:1100px;margin:auto">
+        <h3>Clientes (hábitos y valor)</h3>
+
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
+          <div class="field"><label>Desde</label><input id="cusFrom" type="date"></div>
+          <div class="field"><label>Hasta</label><input id="cusTo" type="date"></div>
+          <div class="field"><label>Histórico</label>
+            <select id="cusHist"><option>Incluye archivo</option><option>No</option></select>
+          </div>
+        </div>
+
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn" id="btnCusRun" type="button">Generar</button>
+          <button class="btn ghost" id="btnCusCSV" type="button">CSV</button>
+          <span class="muted small" id="cusHint"></span>
+        </div>
+
+        <div id="cusKpis" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; margin-top:10px"></div>
+
+        <div class="table-wrap" style="margin-top:10px">
+          <table class="tbl" id="tblCus">
+            <thead>
+              <tr>
+                <th style="min-width:180px">Cliente</th>
+                <th>Teléfono</th>
+                <th class="right">Órdenes</th>
+                <th class="right">Ingresos</th>
+                <th class="right">Ticket prom.</th>
+                <th>Última compra</th>
+                <th>Favorito (día)</th>
+                <th>Producto más comprado</th>
+                <th>Segmento</th>
+              </tr>
+            </thead>
+            <tbody><tr><td colspan="9">—</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="table-wrap" style="margin-top:10px">
+          <table class="tbl" id="tblCusDow">
+            <thead><tr><th>Día</th><th class="right">Órdenes</th><th class="right">Ingresos</th></tr></thead>
+            <tbody><tr><td colspan="3">—</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    (TABS.parentElement || document.body).appendChild(panel);
+  }
+
+  // Rangos por defecto (últimos 60 días)
+  (function initCustRange(){
+    const to = new Date(); const from = new Date(); from.setDate(to.getDate()-60);
+    const d0 = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    const d1 = new Date(to.getFullYear(),   to.getMonth(),   to.getDate());
+    const f  = (d)=> d.toISOString().slice(0,10);
+    document.getElementById('cusFrom').value = f(d0);
+    document.getElementById('cusTo').value   = f(d1);
+  })();
+
+  document.getElementById('btnCusRun') ?.addEventListener('click', runCustomerReport);
+  document.getElementById('btnCusCSV') ?.addEventListener('click', exportCustomersCSV);
+
+  // Ejecuta al abrir la pestaña
+  (document.getElementById('admTabs')||document).addEventListener('click',(e)=>{
+    const t=e.target.closest('.tab[data-tab="clientes"]'); if(!t) return;
+    setTimeout(()=> runCustomerReport().catch(()=>{}), 0);
+  });
+})();
+
+const DOW_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+async function runCustomerReport(){
+  try{
+    let from = parseLocalDate((document.getElementById('cusFrom')?.value||'')+'T00:00:00');
+    let to   = parseLocalDate((document.getElementById('cusTo')  ?.value||'')+'T23:59:59');
+    if (from && to && from>to) { const x=from; from=to; to=x; }
+    const includeArchive = (document.getElementById('cusHist')?.value!=='No');
+
+    const orders = await getOrdersRange({ from, to, includeArchive, orderType:null }) || [];
+
+    // --- Agrupar por cliente “registrado” (id o teléfono)
+    const map = new Map();           // key -> agg
+    const dowAgg = Array.from({length:7}, (_,i)=>({ dow:i, orders:0, revenue:0 }));
+
+    for (const o of orders){
+      const t  = o.createdAt?.toDate?.() || o.createdAt || new Date();
+      const d  = new Date(t);
+      const dow= d.getDay();
+      const total = safeNum(o.total ?? o.subtotal, 0);
+
+      // Cliente
+      const key = (o.customerId || o.customer?.id || o.customerPhone || o.customer?.phone || '').toString().trim();
+      if (!key) continue; // “dados de alta”: si no hay id/phone, lo saltamos
+
+      const name  = o.customerName ?? o.customer?.name ?? '';
+      const phone = o.customerPhone ?? o.customer?.phone ?? '';
+
+      const agg = map.get(key) || {
+        key, name, phone,
+        orders:0, revenue:0, lastAt:0,
+        itemsCount: new Map(),     // name -> qty
+        dowCount:   new Array(7).fill(0),
+      };
+
+      agg.orders += 1;
+      agg.revenue+= total;
+      agg.lastAt  = Math.max(agg.lastAt, d.getTime());
+      agg.dowCount[dow]++;
+
+      for (const it of (o.items||[])){
+        const n = (it.name || it.id || '').toString();
+        const prev = agg.itemsCount.get(n) || 0;
+        agg.itemsCount.set(n, prev + safeNum(it.qty||1,0));
+      }
+
+      map.set(key, agg);
+
+      dowAgg[dow].orders  += 1;
+      dowAgg[dow].revenue += total;
+    }
+
+    const arr = [...map.values()].map(c=>{
+      // Favoritos
+      let favItem = '—', maxU = -1;
+      for (const [n,u] of c.itemsCount.entries()){ if (u>maxU){ maxU=u; favItem=n; } }
+      const favDowIdx = c.dowCount.indexOf(Math.max(...c.dowCount));
+      const favDow = favDowIdx>=0 ? DOW_ES[favDowIdx] : '—';
+
+      // RFM básico
+      const days = Math.max(0, Math.floor((Date.now() - c.lastAt)/86400000));
+      const R = days<=7?5:days<=14?4:days<=30?3:days<=60?2:1;
+      const F = c.orders>=10?5:c.orders>=6?4:c.orders>=3?3:c.orders>=2?2:1;
+      const M = c.revenue>=3000?5:c.revenue>=1500?4:c.revenue>=700?3:c.revenue>=300?2:1;
+
+      let segment = 'Prometedor';
+      if (R>=4 && F>=4 && M>=4) segment='Campeón';
+      else if (R>=3 && F>=3 && M>=3) segment='Fiel';
+      else if (R<=2 && F>=3) segment='En riesgo';
+      else if (F===1 && R>=4) segment='Nuevo';
+      else if (R<=2 && F<=2) segment='Durmiente';
+
+      const avg = c.orders ? (c.revenue / c.orders) : 0;
+
+      return {
+        ...c,
+        favItem, favDow, avg,
+        lastAt: new Date(c.lastAt),
+        segment, rfm: (R*100 + F*10 + M)
+      };
+    });
+
+    // KPIs
+    const totCustomers = arr.length;
+    const totOrders = arr.reduce((a,x)=>a+x.orders,0);
+    const totRevenue = arr.reduce((a,x)=>a+x.revenue,0);
+
+    const KPIS = document.getElementById('cusKpis');
+    if (KPIS) KPIS.innerHTML = `
+      <div class="card"><div class="muted">Clientes</div><div style="font-size:1.4rem"><b>${totCustomers}</b></div></div>
+      <div class="card"><div class="muted">Órdenes</div><div style="font-size:1.4rem"><b>${totOrders}</b></div></div>
+      <div class="card"><div class="muted">Ingresos</div><div style="font-size:1.4rem"><b>${money(totRevenue)}</b></div></div>
+      <div class="card"><div class="muted">Ticket prom.</div><div style="font-size:1.4rem"><b>${money(totOrders? totRevenue/totOrders : 0)}</b></div></div>
+    `;
+
+    // Tabla principal (ordenada por RFM desc)
+    arr.sort((a,b)=> b.rfm - a.rfm || b.revenue - a.revenue);
+
+    const TB = document.querySelector('#tblCus tbody');
+    if (TB) TB.innerHTML = arr.map(c=>{
+      const last = c.lastAt ? `${c.lastAt.getFullYear()}-${String(c.lastAt.getMonth()+1).padStart(2,'0')}-${String(c.lastAt.getDate()).padStart(2,'0')}` : '—';
+      return `<tr>
+        <td style="min-width:180px">${esc(c.name || '—')}</td>
+        <td>${esc(c.phone || '—')}</td>
+        <td class="right">${c.orders}</td>
+        <td class="right">${money(c.revenue)}</td>
+        <td class="right">${money(c.avg)}</td>
+        <td>${last}</td>
+        <td>${esc(c.favDow)}</td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.favItem)}</td>
+        <td>${esc(c.segment)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="9">—</td></tr>';
+
+    // Distribución por día (global)
+    const TD = document.querySelector('#tblCusDow tbody');
+    if (TD) TD.innerHTML = dowAgg.map(r =>
+      `<tr><td>${DOW_ES[r.dow]}</td><td class="right">${r.orders}</td><td class="right">${money(r.revenue)}</td></tr>`
+    ).join('') || '<tr><td colspan="3">—</td></tr>';
+
+    const hint = document.getElementById('cusHint');
+    if (hint) hint.textContent = `Período: ${arr.length} clientes con id/teléfono.`;
+    toast('Reporte de clientes listo');
+    window.__CUS_LAST = arr; // para CSV
+  } catch(e){
+    console.error(e);
+    toast('No se pudo generar el reporte de clientes');
+  }
+}
+
+function exportCustomersCSV(){
+  try{
+    const rows = Array.isArray(window.__CUS_LAST) ? window.__CUS_LAST : [];
+    const header = ['Cliente','Telefono','Ordenes','Ingresos','TicketProm','Ultima','DiaFavorito','ProductoFavorito','Segmento','RFM'];
+    const lines = [header.join(',')];
+    for (const c of rows){
+      const last = c.lastAt ? `${c.lastAt.getFullYear()}-${String(c.lastAt.getMonth()+1).padStart(2,'0')}-${String(c.lastAt.getDate()).padStart(2,'0')}` : '';
+      const csv = [c.name||'', c.phone||'', c.orders, (c.revenue||0).toFixed(2), (c.avg||0).toFixed(2), last, c.favDow||'', c.favItem||'', c.segment||'', c.rfm||0]
+        .map(s=> csvEscape(s)).join(',');
+      lines.push(csv);
+    }
+    const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`clientes_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }catch(e){ console.error(e); toast('No se pudo exportar CSV'); }
+}
 
 /* ========================= Arranque / Atajos ========================= */
 runReports(); // primer reporte al abrir
