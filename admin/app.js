@@ -1606,25 +1606,40 @@ function confirmDeleteArticle(article){
       }
     });
 
-    function readPreset(){
+       function readPreset(){
       const name = q('#tName')?.value?.trim() || 'Custom';
       const palette = {
-        bg:   q('#cBg')?.value || '#0b0f14',
-        text: q('#cText')?.value || '#e8f0ff',
-        primary: q('#cPri')?.value || '#ffc242',
-        accent:  q('#cAcc')?.value || '#27e1ff'
+        bg:      q('#cBg')?.value   || '#0b0f14',
+        text:    q('#cText')?.value || '#e8f0ff',
+        primary: q('#cPri')?.value  || '#ffc242',
+        accent:  q('#cAcc')?.value  || '#27e1ff',
       };
       const fonts = {
-        importUrl:   q('#tFontUrl')?.value?.trim() || '',
-        base: 'Inter, system-ui, Arial',
-        display: q('#tFontDisplay')?.value?.trim() || 'inherit'
+        importUrl: q('#tFontUrl')?.value?.trim() || '',
+        base:      'Inter, system-ui, Arial',
+        display:   q('#tFontDisplay')?.value?.trim() || 'inherit',
       };
       const bg = {
         image:   q('#tBgUrl')?.value?.trim() || '',
         overlay: q('#tOverlay')?.value?.trim() || 'rgba(0,0,0,.25)',
-        size:'cover', position:'center', blur:0
+        size:    'cover',
+        position:'center',
+        blur:    0,
       };
-      const images = (q('#tImages')?.value || '').split('\n')};
+      const images = (q('#tImages')?.value || '')
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+      return { name, palette, fonts, bg, images };
+    }
+  }
+
+  // Aplica tema local guardado en sessionStorage si existe
+  try {
+    const local = sessionStorage.getItem('localTheme');
+    if (local) applyThemeLocal(local);
+  } catch {}
+})();
 /* ========================= PANEL: Productos (CRUD sobre Artículos) ========================= */
 (function initProductsPanel(){
   const TABS = document.getElementById('admTabs');
