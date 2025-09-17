@@ -1017,3 +1017,21 @@ body[data-font="cantina"] h1, body[data-font="cantina"] h2, body[data-font="cant
   .header, .side, .toast, .modal{ display:none !important; }
   .card{ box-shadow:none; background:#fff; border-color:#000; }
 }
+
+/* ===== FIX Temas (Admin) ===== */
+#panel-temas,
+#panel-temas .card { overflow: visible; }
+
+/* por si hay decoraciones con ::before/::after */
+#panel-temas::before,
+#panel-temas::after,
+#panel-temas .card::before,
+#panel-temas .card::after { pointer-events: none !important; }
+
+/* asegúrate de que el control quede por encima */
+#panel-temas select,
+#panel-temas button {
+  position: relative;
+  z-index: 5;
+  pointer-events: auto;
+}
