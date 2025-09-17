@@ -1,199 +1,412 @@
 // /shared/theme.js
-// Temas: integrados + personalizados (Firestore).
-// Aplica paletas CSS, fuentes Google y fondo con una sola llamada.
+// Temas para Kiosko/UI: presets integrados + presets guardados.
+// - applyThemeLocal(nameOrPreset[, presetObj])
+// - initThemeFromSettings({ defaultName })
+// - listThemes() -> nombres integrados
+// - subscribeThemePresets(cb) -> nombres personalizados (Firestore/local)
+// - saveThemePreset(preset) -> guarda preset personalizado
 
-import {
-  db, doc, setDoc, getDoc, collection, onSnapshot,
-  serverTimestamp
-} from './firebase.js';
+import { db, doc, getDoc, setDoc, onSnapshot } from './firebase.js';
 
-/* ============ Temas integrados (puedes ajustar colores a gusto) ============ */
-const DEFAULT_THEMES = {
+/* -------------------- Presets integrados -------------------- */
+const THEMES_BUILTIN = {
   Base: {
-    name:'Base',
-    fonts: { importUrl: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap', base:'Inter, system-ui, Arial', display:'inherit' },
-    palette: { bg:'#0b0f14', surface:'#121823', card:'#0f1420', text:'#e8f0ff', muted:'rgba(255,255,255,.6)', primary:'#ffc242', accent:'#27e1ff', success:'#87f59b', warn:'#ffd27f', danger:'#ff8a8a' },
-    bg: { image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 },
-    images:[]
+    name: 'Base',
+    palette: {
+      bg: '#0b0f14',
+      text: '#e8f0ff',
+      panel1: '#0b0e12',
+      panel2: '#0b0d15',
+      ink1: '#e8f0ff',
+      ink2: '#a6b2c7',
+      muted: '#94a3b8',
+      primary: '#ffc242',
+      accent: '#27e1ff',
+      ok: '#00c27a',
+      warn: '#ffd27f',
+      danger: '#ff5d5d',
+    },
+    fonts: { importUrl: '', base: 'Inter, system-ui, Arial', display: 'inherit' },
+    bg: { image: '', overlay: 'rgba(0,0,0,0)', size: 'cover', position: 'center', blur: 0 },
+    images: [],
   },
+
   Independencia: {
-    name:'Independencia',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'"Alfa Slab One", cursive' },
-    palette:{ bg:'#06140b', surface:'#0b2415', card:'#0b1911', text:'#f6fff4', muted:'rgba(255,255,255,.70)', primary:'#2bbb6f', accent:'#e53c3c', success:'#8bf59f', warn:'#ffd27f', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
-    images:[]
+    name: 'Independencia',
+    palette: {
+      bg: '#0b0f1a', text: '#e8ffe6', panel1: '#0b0e12', panel2: '#0b0d15',
+      ink1: '#e8ffe6', ink2: '#bdebc0', muted: '#a7ffc0',
+      primary: '#2ecc71', accent: '#ff3b3b', ok: '#2ecc71', warn: '#ffd27f', danger: '#ff4d4d',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Bangers", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1526318472351-c75fcf070305?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
-  Muertos: {
-    name:'Muertos',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Fugaz+One&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'"Fugaz One", cursive' },
-    palette:{ bg:'#0f0a10', surface:'#1b1320', card:'#140d17', text:'#fff4ff', muted:'rgba(255,255,255,.72)', primary:'#ff9f1a', accent:'#7b5cff', success:'#8fffce', warn:'#ffd27f', danger:'#ff9090' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.30)', size:'cover', position:'center', blur:0 },
-    images:[]
+
+  'Día de Muertos': {
+    name: 'Día de Muertos',
+    palette: {
+      bg: '#0b0a12', text: '#ffeefb', panel1: '#0e0b16', panel2: '#120f1d',
+      ink1: '#ffeefb', ink2: '#f9b9ff', muted: '#ffb4e6',
+      primary: '#ff7ab6', accent: '#ffa800', ok: '#60e0a0', warn: '#ffc266', danger: '#ff6b6b',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Creepster", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1573067485645-b3e98f5a56b3?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
-  Navidad: {
-    name:'Navidad',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Mountains+of+Christmas:wght@700&display=swap', base:'Montserrat, system-ui', display:'"Mountains of Christmas", cursive' },
-    palette:{ bg:'#08110c', surface:'#0f1f17', card:'#0b1712', text:'#f3fff7', muted:'rgba(255,255,255,.7)', primary:'#1ecb7f', accent:'#e85050', success:'#9af5c3', warn:'#ffd27f', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.22)', size:'cover', position:'center', blur:0 },
-    images:[]
+
+  'Navidad MX': {
+    name: 'Navidad MX',
+    palette: {
+      bg: '#0b0f12', text: '#f0fff4', panel1: '#0b0e12', panel2: '#0a0c10',
+      ink1: '#f0fff4', ink2: '#bdecc7', muted: '#a3f3bd',
+      primary: '#d23f3f', accent: '#1db954', ok: '#1db954', warn: '#ffd27f', danger: '#ff5757',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Mountains of Christmas", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
+
+  '5 de Mayo': {
+    name: '5 de Mayo',
+    palette: {
+      bg: '#0b0f12', text: '#eef7ee', panel1: '#0c1117', panel2: '#0c1015',
+      ink1: '#eef7ee', ink2: '#cde9d1', muted: '#b7e3c0',
+      primary: '#1fa64a', accent: '#e53935', ok: '#1fa64a', warn: '#ffcf6d', danger: '#e53935',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Alfa Slab One", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1583795128727-6ec3642408f8?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.30)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
+  },
+
   'San Valentín': {
-    name:'San Valentín',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Pacifico, cursive' },
-    palette:{ bg:'#160a11', surface:'#24131e', card:'#1b0f17', text:'#fff1f6', muted:'rgba(255,255,255,.74)', primary:'#ff6ea8', accent:'#ffa3d2', success:'#9cf0c4', warn:'#ffe38a', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.28)', size:'cover', position:'center', blur:0 },
-    images:[]
+    name: 'San Valentín',
+    palette: {
+      bg: '#120b10', text: '#fff0f6', panel1: '#160d13', panel2: '#190f16',
+      ink1: '#fff0f6', ink2: '#ffc7db', muted: '#ffb0cd',
+      primary: '#ff4b88', accent: '#ffb3c7', ok: '#4cd6a7', warn: '#ffd27f', danger: '#ff5d7a',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Pacifico", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
+
   Halloween: {
-    name:'Halloween',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Creepster, cursive' },
-    palette:{ bg:'#0b0a06', surface:'#141208', card:'#0e0d07', text:'#fffbef', muted:'rgba(255,255,255,.72)', primary:'#ff8c00', accent:'#7b5cff', success:'#8fffce', warn:'#ffd27f', danger:'#ff9090' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
-    images:[]
+    name: 'Halloween',
+    palette: {
+      bg: '#0b0a10', text: '#fff3e0', panel1: '#100c14', panel2: '#140f19',
+      ink1: '#fff3e0', ink2: '#ffd8a6', muted: '#ffcb85',
+      primary: '#ff7a00', accent: '#7f5bff', ok: '#53e0a6', warn: '#ffc266', danger: '#ff6262',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Nosifer&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Nosifer", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1507919909716-c8262e491cde?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
-  Fútbol: {
-    name:'Fútbol',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Bungee, cursive' },
-    palette:{ bg:'#06140b', surface:'#0b2415', card:'#0a1d12', text:'#effff4', muted:'rgba(255,255,255,.70)', primary:'#21c25c', accent:'#2ab3ff', success:'#8bf59f', warn:'#ffd27f', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
-    images:[]
+
+  'Reyes Magos': {
+    name: 'Reyes Magos',
+    palette: {
+      bg: '#0b0d16', text: '#f6f3ff', panel1: '#0c0f19', panel2: '#0d1020',
+      ink1: '#f6f3ff', ink2: '#d7d0ff', muted: '#c9c1ff',
+      primary: '#8e6cff', accent: '#f5c542', ok: '#4bd1a1', warn: '#ffd27f', danger: '#ff6565',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Cinzel Decorative", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
-  'Lucha Libre': {
-    name:'Lucha Libre',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Bangers, cursive' },
-    palette:{ bg:'#0b0d16', surface:'#121638', card:'#0e1230', text:'#eef1ff', muted:'rgba(255,255,255,.70)', primary:'#f7d23e', accent:'#e94141', success:'#9cf5c9', warn:'#ffd27f', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.30)', size:'cover', position:'center', blur:0 },
-    images:[]
+
+  'Año Nuevo': {
+    name: 'Año Nuevo',
+    palette: {
+      bg: '#0a0a0f', text: '#fefefe', panel1: '#0c0c12', panel2: '#101015',
+      ink1: '#fefefe', ink2: '#dedede', muted: '#cfcfcf',
+      primary: '#f2c230', accent: '#2dd4ff', ok: '#6fe3b2', warn: '#ffd27f', danger: '#ff6b6b',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Montserrat", sans-serif'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1514826786317-59744fe2a548?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
-  'Pixel Art': {
-    name:'Pixel Art',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap', base:'system-ui, Arial', display:'"Press Start 2P", monospace' },
-    palette:{ bg:'#0a0a12', surface:'#111126', card:'#0c0c1b', text:'#eaf1ff', muted:'rgba(255,255,255,.7)', primary:'#00ffb3', accent:'#ffe500', success:'#9bf5d6', warn:'#ffef8a', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
-    images:[]
+
+  'Día del Niño': {
+    name: 'Día del Niño',
+    palette: {
+      bg: '#0b0f14', text: '#e8f7ff', panel1: '#0c1118', panel2: '#0c1016',
+      ink1: '#e8f7ff', ink2: '#bfe7ff', muted: '#a6ddff',
+      primary: '#ffb703', accent: '#00c2ff', ok: '#3ee089', warn: '#ffd27f', danger: '#ff6b8b',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Baloo+2:wght@700&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Baloo 2", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.25)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
-  'Retro Arcade': {
-    name:'Retro Arcade',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=VT323&display=swap', base:'system-ui, Arial', display:'VT323, monospace' },
-    palette:{ bg:'#0c0b12', surface:'#171427', card:'#121022', text:'#eaf1ff', muted:'rgba(255,255,255,.7)', primary:'#ff4aa2', accent:'#00e5ff', success:'#9bf5d6', warn:'#ffd27f', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
-    images:[]
+
+  'Día de la Madre': {
+    name: 'Día de la Madre',
+    palette: {
+      bg: '#120d12', text: '#fff4fb', panel1: '#171017', panel2: '#1a121a',
+      ink1: '#fff4fb', ink2: '#ffd1e8', muted: '#ffc0dc',
+      primary: '#ff82b0', accent: '#ffa8d1', ok: '#5cd6a9', warn: '#ffd27f', danger: '#ff6b93',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Dancing Script", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1464965911861-746a04b4bca6?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.30)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
   },
-  Y2K: {
-    name:'Y2K',
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap', base:'system-ui, Arial', display:'Orbitron, sans-serif' },
-    palette:{ bg:'#0b0d11', surface:'#121627', card:'#0f1426', text:'#eaf3ff', muted:'rgba(255,255,255,.72)', primary:'#9d7eff', accent:'#00f0ff', success:'#9bf5d6', warn:'#ffd27f', danger:'#ff8a8a' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.28)', size:'cover', position:'center', blur:0 },
-    images:[]
-  }
+
+  'Día del Padre': {
+    name: 'Día del Padre',
+    palette: {
+      bg: '#0a0f14', text: '#eaf3ff', panel1: '#0b0f15', panel2: '#0a0e12',
+      ink1: '#eaf3ff', ink2: '#bed5f5', muted: '#a8c4ed',
+      primary: '#2a7de1', accent: '#18c1a3', ok: '#41d19a', warn: '#ffd27f', danger: '#ff6b6b',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Rubik:wght@700&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Rubik", sans-serif'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.30)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
+  },
+
+  'Revolución Mexicana': {
+    name: 'Revolución Mexicana',
+    palette: {
+      bg: '#0e0c0a', text: '#fff5e9', panel1: '#130f0c', panel2: '#19130e',
+      ink1: '#fff5e9', ink2: '#f3d9b5', muted: '#e8c89c',
+      primary: '#b04a2e', accent: '#d89b33', ok: '#59d18c', warn: '#e9c36b', danger: '#e45e5e',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@700&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Alegreya SC", serif'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1519681393152-56cd371ee9a7?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.35)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
+  },
+
+  'Día de la Bandera': {
+    name: 'Día de la Bandera',
+    palette: {
+      bg: '#0b1012', text: '#eef7ee', panel1: '#0c1117', panel2: '#0d1116',
+      ink1: '#eef7ee', ink2: '#cfe8d4', muted: '#bfe1c6',
+      primary: '#126e3b', accent: '#bf2b2b', ok: '#2bb56a', warn: '#ffd27f', danger: '#e24a4a',
+    },
+    fonts: {
+      importUrl: 'https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600&display=swap',
+      base: 'Inter, system-ui, Arial', display: '"Bangers", cursive'
+    },
+    bg: {
+      image: 'https://images.unsplash.com/photo-1590502593747-42a5c2f4780d?q=80&w=1600&auto=format&fit=crop',
+      overlay: 'rgba(0,0,0,.30)', size: 'cover', position: 'center', blur: 0
+    },
+    images: [],
+  },
 };
 
-/* =================== cache de personalizados =================== */
-window.__customThemes = window.__customThemes || {};
-const FONT_TAG = 'data-theme-font';
+/* -------------------- Estado en memoria -------------------- */
+const CUSTOM = Object.create(null); // presets personalizados (Firestore/local)
+let _unsubTheme = null;
+let _unsubPresets = null;
 
-/* =================== utilidades =================== */
-function normalizePreset(p){
-  const name = String(p?.name || 'Base').trim();
-  const palette = { ...DEFAULT_THEMES.Base.palette, ...(p?.palette||{}) };
-  const fonts   = { ...DEFAULT_THEMES.Base.fonts,   ...(p?.fonts||{}) };
-  const bg      = { ...DEFAULT_THEMES.Base.bg,      ...(p?.bg||{}) };
-  const images  = Array.isArray(p?.images) ? p.images : [];
-  return { name, palette, fonts, bg, images };
+/* -------------------- Utilidades -------------------- */
+const slug = (s = '') =>
+  String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
+
+function getPresetByName(name) {
+  if (!name) return null;
+  if (THEMES_BUILTIN[name]) return THEMES_BUILTIN[name];
+  for (const t of Object.values(THEMES_BUILTIN)) {
+    if (t.name.toLowerCase() === String(name).toLowerCase()) return t;
+  }
+  for (const p of Object.values(CUSTOM)) {
+    if (p.name.toLowerCase() === String(name).toLowerCase()) return p;
+  }
+  return null;
 }
 
-function ensureFont(url){
-  if (!url) return;
-  if (document.querySelector(`link[${FONT_TAG}="${url}"]`)) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = url;
-  link.setAttribute(FONT_TAG, url);
-  document.head.appendChild(link);
+function ensureFontImport(importUrl) {
+  const id = 'theme-font-link';
+  let link = document.getElementById(id);
+  if (!importUrl) { if (link) link.remove(); return; }
+  if (!link) { link = document.createElement('link'); link.id = id; link.rel = 'stylesheet'; document.head.appendChild(link); }
+  link.href = importUrl;
 }
 
-function setVar(k, v){ document.documentElement.style.setProperty(`--${k}`, String(v)); }
-
-/* =================== API pública =================== */
-
-// Lista sincrónica: integrados + últimos personalizados cacheados
-export function listThemes(){
-  let custom = [];
-  try { custom = JSON.parse(sessionStorage.getItem('customThemeNames') || '[]'); } catch {}
-  return Array.from(new Set([...Object.keys(DEFAULT_THEMES), ...custom]));
+function applyBackground(bg = {}) {
+  const body = document.body;
+  if (!body) return;
+  const img = bg.image ? `url("${bg.image}")` : '';
+  const overlay = bg.overlay ? `linear-gradient(${bg.overlay}, ${bg.overlay})` : '';
+  const parts = [overlay, img].filter(Boolean).join(', ');
+  if (parts) {
+    body.style.backgroundImage = parts;
+    body.style.backgroundSize = bg.size || 'cover';
+    body.style.backgroundPosition = bg.position || 'center';
+    body.style.backgroundRepeat = 'no-repeat';
+  } else {
+    body.style.backgroundImage = 'none';
+  }
 }
 
-// Aplica un tema a la UI (solo local). `overrides` permite retoques al vuelo.
-export function applyThemeLocal(name, overrides = {}){
-  const preset = window.__customThemes?.[name] || DEFAULT_THEMES[name] || DEFAULT_THEMES.Base;
-  const t = normalizePreset({ ...preset, ...overrides, palette:{...preset.palette, ...(overrides.palette||{})} });
+/* -------------------- API pública -------------------- */
+export function applyThemeLocal(nameOrPreset, presetObj = null) {
+  const preset = presetObj || (typeof nameOrPreset === 'string'
+    ? getPresetByName(nameOrPreset)
+    : nameOrPreset) || THEMES_BUILTIN.Base;
 
-  ensureFont(t.fonts?.importUrl);
-  document.documentElement.style.fontFamily = t.fonts?.base || 'system-ui';
-  document.documentElement.style.setProperty('--display-font', t.fonts?.display || 'inherit');
+  const pal = preset.palette || {};
+  const fonts = preset.fonts || {};
+  const root = document.documentElement;
 
-  setVar('bg',      t.palette.bg);
-  setVar('surface', t.palette.surface);
-  setVar('card',    t.palette.card);
-  setVar('text',    t.palette.text);
-  setVar('muted',   t.palette.muted);
-  setVar('primary', t.palette.primary);
-  setVar('accent',  t.palette.accent);
-  setVar('success', t.palette.success);
-  setVar('warn',    t.palette.warn);
-  setVar('danger',  t.palette.danger);
+  const vars = {
+    '--bg': pal.bg, '--text': pal.text,
+    '--panel1': pal.panel1 || '#0b0e12', '--panel2': pal.panel2 || '#0b0d15',
+    '--ink1': pal.ink1 || pal.text || '#fff', '--ink2': pal.ink2 || '#b9c3d1',
+    '--muted': pal.muted || '#94a3b8',
+    '--primary': pal.primary || '#ffc242', '--accent': pal.accent || '#27e1ff',
+    '--ok': pal.ok || '#00c27a', '--warn': pal.warn || '#ffd27f', '--danger': pal.danger || '#ff5d5d',
+    '--font-base': fonts.base || 'Inter, system-ui, Arial',
+    '--font-display': fonts.display || 'inherit',
+  };
+  Object.entries(vars).forEach(([k, v]) => v && root.style.setProperty(k, v));
 
-  // Fondo
-  document.body.style.backgroundColor = t.palette.bg;
-  document.body.style.backgroundImage = t.bg?.image ? `linear-gradient(${t.bg.overlay||'rgba(0,0,0,.25)'}, ${t.bg.overlay||'rgba(0,0,0,.25)'}), url("${t.bg.image}")` : '';
-  document.body.style.backgroundSize = t.bg?.size || 'cover';
-  document.body.style.backgroundPosition = t.bg?.position || 'center';
-  document.body.style.backgroundRepeat = 'no-repeat';
-  document.body.style.backdropFilter = t.bg?.blur ? `blur(${t.bg.blur}px)` : '';
+  ensureFontImport(fonts.importUrl || '');
+  applyBackground(preset.bg || {});
 
-  document.body.setAttribute('data-theme', name);
+  const name = preset.name || (typeof nameOrPreset === 'string' ? nameOrPreset : 'Custom');
+  root.setAttribute('data-theme-name', name);
+  document.body.setAttribute('data-theme-name', name);
 }
 
-// Suscripción a **settings/theme** → aplica global; si hay “localTheme” en sessionStorage lo respeta
-export function initThemeFromSettings({ defaultName = 'Base' } = {}){
-  try { const local = sessionStorage.getItem('localTheme'); if (local) { applyThemeLocal(local); return () => {}; } } catch {}
-  const ref = doc(db,'settings','theme');
-  return onSnapshot(ref, (snap)=>{
-    const d = snap.data() || { name: defaultName, overrides:{} };
-    applyThemeLocal(d.name || defaultName, d.overrides || {});
-  });
+export function initThemeFromSettings({ defaultName = 'Base' } = {}) {
+  try { _unsubTheme?.(); } catch {}
+  const ref = doc(db, 'settings', 'theme');
+  _unsubTheme = onSnapshot(
+    ref,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      const name = data?.name || defaultName;
+      applyThemeLocal(name);
+    },
+    () => applyThemeLocal(defaultName)
+  );
+  return _unsubTheme;
 }
 
-// Suscripción a presets personalizados (colección `themes`)
-export function subscribeThemePresets(cb){
-  const colRef = collection(db,'themes');
-  return onSnapshot(colRef, (snap)=>{
-    const map = {}; const names = [];
-    snap.docs.forEach(d=>{
-      const val = normalizePreset(d.data() || {});
-      const name = val.name || d.id;
-      names.push(name); map[name] = val;
-    });
-    window.__customThemes = map;
-    try { sessionStorage.setItem('customThemeNames', JSON.stringify(names)); } catch {}
-    cb?.(names);
-  });
+export function listThemes() {
+  return Object.keys(THEMES_BUILTIN);
 }
 
-// Guarda/actualiza un preset personalizado y (opcionalmente) lo publica como GLOBAL (setTheme en settings/theme lo haces desde /shared/db.js)
-export async function saveThemePreset(preset){
-  const clean = normalizePreset(preset);
-  const id = (clean.name || 'custom').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
-  await setDoc(doc(db,'themes', id), { ...clean, updatedAt: serverTimestamp() }, { merge:true });
-
-  // Mantener un arreglo de nombres en settings/app.themes (para compat con tu app.js)
+export function subscribeThemePresets(cb) {
   try {
-    const appRef = doc(db,'settings','app');
-    const snap = await getDoc(appRef);
-    const prev = Array.isArray(snap.data()?.themes) ? snap.data().themes : [];
-    const next = Array.from(new Set([...prev, clean.name]));
-    await setDoc(appRef, { themes: next, updatedAt: serverTimestamp() }, { merge:true });
+    const raw = localStorage.getItem('theme_presets');
+    if (raw) {
+      const map = JSON.parse(raw);
+      Object.assign(CUSTOM, map);
+      cb?.(Object.values(CUSTOM).map((p) => p.name));
+    }
   } catch {}
 
-  return { ok:true, name: clean.name };
+  try { _unsubPresets?.(); } catch {}
+  const ref = doc(db, 'settings', 'theme_presets');
+  _unsubPresets = onSnapshot(
+    ref,
+    (snap) => {
+      const data = snap.exists() ? snap.data() : {};
+      const presets = data?.presets || {};
+      Object.keys(CUSTOM).forEach((k) => delete CUSTOM[k]);
+      for (const [k, v] of Object.entries(presets)) {
+        if (v && v.name) CUSTOM[k] = v;
+      }
+      try { localStorage.setItem('theme_presets', JSON.stringify(CUSTOM)); } catch {}
+      cb?.(Object.values(CUSTOM).map((p) => p.name));
+    },
+    () => cb?.(Object.values(CUSTOM).map((p) => p.name))
+  );
+  return _unsubPresets;
+}
+
+const slug = (s = '') =>
+  String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
+
+export async function saveThemePreset(preset) {
+  const p = {
+    name: String(preset?.name || 'Custom'),
+    palette: preset?.palette || {},
+    fonts: preset?.fonts || {},
+    bg: preset?.bg || {},
+    images: Array.isArray(preset?.images) ? preset.images : [],
+  };
+  const key = slug(p.name);
+  CUSTOM[key] = p;
+  try { localStorage.setItem('theme_presets', JSON.stringify(CUSTOM)); } catch {}
+
+  const ref = doc(db, 'settings', 'theme_presets');
+  const cur = (await getDoc(ref).catch(() => null))?.data?.() || {};
+  const next = { ...(cur || {}), presets: { ...(cur?.presets || {}), [key]: p } };
+  await setDoc(ref, next, { merge: true });
+  return { ok: true, key, name: p.name };
 }
