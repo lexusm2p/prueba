@@ -1624,14 +1624,7 @@ function confirmDeleteArticle(article){
         overlay: q('#tOverlay')?.value?.trim() || 'rgba(0,0,0,.25)',
         size:'cover', position:'center', blur:0
       };
-      const images = (q('#tImages')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
-      return { name, palette, fonts, bg, images };
-    }
-  }
-
-  // Aplica tema local de sessionStorage si hubiese
-  try { const local = sessionStorage.getItem('localTheme'); if (local) applyThemeLocal(local); } catch {}
-})();
+      const images = (q('#tImages')?.value || '').split('\n').
 /* ========================= PANEL: Productos (CRUD sobre Artículos) ========================= */
 (function initProductsPanel(){
   const TABS = document.getElementById('admTabs');
