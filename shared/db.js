@@ -11,6 +11,8 @@ import {
   onSnapshot, query, where, orderBy, limit, Timestamp, increment, getDocs
 } from './firebase.js';
 
+export * from './lib/firebase.js';
+
 /* =================== Training / Modo PRUEBA =================== */
 export function isTrainingTrigger(s=''){ return /^\s*prueba\s*$/i.test(String(s)); }
 async function guardWrite(isTraining, realWriteFn, fakeValue=null){
