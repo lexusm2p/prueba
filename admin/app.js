@@ -57,7 +57,6 @@ import {
   subscribeThemePresets,
   saveThemePreset,
 } from '../shared/theme.js';
-import { toast, beep } from '../shared/notify.js';
 
 // 🎨 utilidades de tema (colores/vars CSS, tipografías)
 import {
