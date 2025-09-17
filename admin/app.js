@@ -42,9 +42,14 @@ import {
   deleteArticle,
 
   // TEMAS
-  setTheme,
-  subscribeTheme,
-} from '../shared/db.js';
+  // 🎨 utilidades de tema
+import {
+  initThemeFromSettings,
+  applyThemeLocal,
+  listThemes,
+  subscribeThemePresets,
+  saveThemePreset,
+} from '../shared/theme.js';
 
 import { toast, beep } from '../shared/notify.js';
 
