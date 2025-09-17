@@ -1,10 +1,11 @@
 // /shared/theme.js
 // Temas para Kiosko/UI: presets integrados + presets guardados.
-// - applyThemeLocal(nameOrPreset[, presetObj])
-// - initThemeFromSettings({ defaultName })
-// - listThemes() -> nombres integrados
-// - subscribeThemePresets(cb) -> nombres personalizados (Firestore/local)
-// - saveThemePreset(preset) -> guarda preset personalizado
+// API:
+//   applyThemeLocal(nameOrPreset[, presetObj])
+//   initThemeFromSettings({ defaultName })
+//   listThemes()
+//   subscribeThemePresets(cb)      -> notifica nombres personalizados
+//   saveThemePreset(presetObject)  -> guarda/mergea en Firestore + localStorage
 
 import { db, doc, getDoc, setDoc, onSnapshot } from './firebase.js';
 
@@ -267,13 +268,18 @@ const THEMES_BUILTIN = {
 };
 
 /* -------------------- Estado en memoria -------------------- */
-const CUSTOM = Object.create(null); // presets personalizados (Firestore/local)
+const CUSTOM = Object.create(null); // presets personalizados cargados
 let _unsubTheme = null;
 let _unsubPresets = null;
 
 /* -------------------- Utilidades -------------------- */
 const slug = (s = '') =>
-  String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
+  String(s)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'custom';
 
 function getPresetByName(name) {
   if (!name) return null;
@@ -291,7 +297,12 @@ function ensureFontImport(importUrl) {
   const id = 'theme-font-link';
   let link = document.getElementById(id);
   if (!importUrl) { if (link) link.remove(); return; }
-  if (!link) { link = document.createElement('link'); link.id = id; link.rel = 'stylesheet'; document.head.appendChild(link); }
+  if (!link) {
+    link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }
   link.href = importUrl;
 }
 
@@ -361,6 +372,7 @@ export function listThemes() {
 }
 
 export function subscribeThemePresets(cb) {
+  // 1) LocalStorage inmediato (para no esperar red)
   try {
     const raw = localStorage.getItem('theme_presets');
     if (raw) {
@@ -370,6 +382,7 @@ export function subscribeThemePresets(cb) {
     }
   } catch {}
 
+  // 2) Firestore en vivo
   try { _unsubPresets?.(); } catch {}
   const ref = doc(db, 'settings', 'theme_presets');
   _unsubPresets = onSnapshot(
@@ -389,9 +402,6 @@ export function subscribeThemePresets(cb) {
   return _unsubPresets;
 }
 
-const slug = (s = '') =>
-  String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
-
 export async function saveThemePreset(preset) {
   const p = {
     name: String(preset?.name || 'Custom'),
@@ -404,9 +414,14 @@ export async function saveThemePreset(preset) {
   CUSTOM[key] = p;
   try { localStorage.setItem('theme_presets', JSON.stringify(CUSTOM)); } catch {}
 
+  // merge en Firestore
   const ref = doc(db, 'settings', 'theme_presets');
-  const cur = (await getDoc(ref).catch(() => null))?.data?.() || {};
-  const next = { ...(cur || {}), presets: { ...(cur?.presets || {}), [key]: p } };
+  let existing = {};
+  try {
+    const s = await getDoc(ref);
+    existing = (s.exists() && s.data()?.presets) || {};
+  } catch {}
+  const next = { presets: { ...existing, [key]: p } };
   await setDoc(ref, next, { merge: true });
   return { ok: true, key, name: p.name };
 }
