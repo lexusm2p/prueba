@@ -18,32 +18,29 @@
 import {
   // Reportes
   getOrdersRange,
-
   // Inventario / Compras / Proveedores
   subscribeInventory,
   subscribeSuppliers,
   recordPurchase,
   upsertSupplier,
   upsertInventoryItem,
-
-  // Productos (solo lectura) + refresco de catálogo para kiosko
+  // Productos (solo lectura) + refresco de catálogo
   subscribeProducts,
   fetchCatalogWithFallback,
-
   // Happy Hour
   setHappyHour,
   subscribeHappyHour,
-
   // Recetario / Producción
   subscribeRecipes,
   produceBatch,
   adjustStock,
   subscribeSettings,
-
-  // Artículos (base CRUD)
+  // Artículos
   subscribeArticles,
   upsertArticle,
   deleteArticle,
+  // 👇👇 agrega esto
+  setTheme,
 } from '../shared/db.js';
 
 // Notificaciones
