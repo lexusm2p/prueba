@@ -1412,12 +1412,12 @@ function confirmDeleteArticle(article){
     });
 }
 
-/* ========================= TEMAS — Pestaña fija ========================= */
+/* ========================= TEMAS — Pestaña fija (con creador) ========================= */
 (function initThemesTab(){
   const TABS = document.getElementById('admTabs');
   if (!TABS) return;
 
-  // 1) Agregar botón de tab si no existe
+  // 1) Botón Tab
   if (!TABS.querySelector('[data-tab="temas"]')){
     const tab = document.createElement('button');
     tab.className = 'tab';
@@ -1429,107 +1429,205 @@ function confirmDeleteArticle(article){
     TABS.appendChild(tab);
   }
 
-  // 2) Agregar panel si no existe
+  // 2) Panel
   if (!document.getElementById('panel-temas')){
     const panel = document.createElement('section');
     panel.id = 'panel-temas';
     panel.className = 'panel';
     panel.innerHTML = `
-      <div class="card" style="max-width:680px;margin:auto">
+      <div class="card" style="max-width:780px;margin:auto">
         <h3>Tema (Kiosko/UI)</h3>
         <div class="field">
           <label>Selecciona tema</label>
           <select id="themeSelect" style="width:100%"></select>
         </div>
+
         <div class="row" style="gap:12px;margin-top:12px;flex-wrap:wrap">
           <button id="btnThemePreview" class="btn" type="button">Probar local</button>
           <button id="btnThemeSave" class="btn primary" type="button">Guardar GLOBAL</button>
+          <button id="btnThemeBuilder" class="btn ghost" type="button">Crear/Editar tema</button>
         </div>
+
         <p class="muted small" id="themeHint" style="margin-top:10px">
-          “Probar local” solo cambia tu pantalla (sessionStorage). “Guardar GLOBAL” escribe en <code>settings/theme</code>.
+          “Probar local” solo cambia este navegador (sessionStorage). “Guardar GLOBAL” escribe en <code>settings/theme</code>.
         </p>
       </div>
     `;
-    (document.getElementById('admTabs').parentElement || document.body).appendChild(panel);
+    (TABS.parentElement || document.body).appendChild(panel);
   }
 
-  const sel   = document.getElementById('themeSelect');
-  const btnPrev = document.getElementById('btnThemePreview');
-  const btnSave = document.getElementById('btnThemeSave');
-  const hint    = document.getElementById('themeHint');
+  const panel  = document.getElementById('panel-temas');
+  const sel    = panel.querySelector('#themeSelect');
+  const btnPrev= panel.querySelector('#btnThemePreview');
+  const btnSave= panel.querySelector('#btnThemeSave');
+  const btnNew = panel.querySelector('#btnThemeBuilder');
+  const hint   = panel.querySelector('#themeHint');
 
-  // 3) Llenar lista de temas
+  // Rellena opciones con defensiva (evita el TypeError del .value)
   function renderThemeOptions(names){
-    const current = sel.value;
-    sel.innerHTML = (names||[]).map(n => `<option value="${n}">${n}</option>`).join('') || `<option value="Base">Base</option>`;
+    if (!sel) return;
+    const current = sel.value || '';
+    sel.innerHTML = (names||[]).map(n => `<option value="${n}">${n}</option>`).join('')
+      || `<option value="Base">Base</option>`;
     if (current && [...sel.options].some(o=>o.value===current)) sel.value = current;
   }
-  try {
-    const names = listThemes();
-    renderThemeOptions(names);
-  } catch {
-    renderThemeOptions(['Base','Independencia','Muertos','Navidad','Fiestas','San Valentín','Halloween','Fútbol','Lucha Libre','Pixel Art','Retro Arcade','Y2K']);
-  }
 
-  // 4) Suscripciones
-  let unsubTheme = null;
+  // Inicial
+  try { renderThemeOptions(listThemes()); } catch { renderThemeOptions(['Base']); }
+
+  // Suscripciones: global + presets personalizados
   try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch {}
   try {
-    unsubTheme = subscribeTheme((t)=>{
-      if (t?.name && sel && [...sel.options].some(o=>o.value===t.name)) {
-        sel.value = t.name;
-      }
+    subscribeThemePresets((names)=>{
+      // Combina integrados + personalizados
+      const all = Array.from(new Set([...(listThemes()), ...names]));
+      renderThemeOptions(all);
     });
-    addSub(unsubTheme);
   } catch {}
 
-  addSub(subscribeSettings((s)=>{
-    if (Array.isArray(s?.themes) && s.themes.length) {
-      renderThemeOptions(s.themes);
-      if (s.theme && [...sel.options].some(o=>o.value===s.theme)) sel.value = s.theme;
-    }
-  }));
-
-  // 5) Acciones
+  // Guardar selección y vista previa
   btnPrev?.addEventListener('click', ()=>{
-    const name = sel.value || 'Base';
+    const name = sel?.value || 'Base';
     try {
       applyThemeLocal(name);
       try { sessionStorage.setItem('localTheme', name); } catch {}
-      hint.textContent = `Tema aplicado localmente: ${name}`;
+      if (hint) hint.textContent = `Tema aplicado localmente: ${name}`;
       toast(`Tema local: ${name}`);
     } catch (e) {
       console.error(e);
-      hint.textContent = 'No se pudo aplicar local.';
+      hint && (hint.textContent = 'No se pudo aplicar el tema local.');
     }
   });
 
-  btnSave?.addEventListener('click', async (e)=>{
-    const btn = e.currentTarget;
-    await withBusy(btn, 'Guardando…', async ()=>{
-      const name = sel.value || 'Base';
-      try {
-        await setTheme({ name }, dbOpts());
-        hint.textContent = `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : '');
-        toast(`Tema global: ${name}`);
-      } catch (e) {
-        console.error(e);
-        hint.textContent = 'No se pudo guardar GLOBAL.';
-      }
-    });
+  btnSave?.addEventListener('click', async ()=>{
+    const name = sel?.value || 'Base';
+    try {
+      await setTheme({ name }, { training: isTraining() });
+      hint && (hint.textContent = `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : ''));
+      toast(`Tema global: ${name}`);
+    } catch (e) {
+      console.error(e);
+      hint && (hint.textContent = 'No se pudo guardar GLOBAL.');
+    }
   });
 
-  // 6) Aplicar tema local si existe en sessionStorage
-  try {
-    const local = sessionStorage.getItem('localTheme');
-    if (local) document.documentElement.setAttribute('data-theme', local);
-  } catch {}
+  // Creador / Editor rápido de temas
+  btnNew?.addEventListener('click', ()=> openThemeBuilder());
 
-  // 8) Ocultar panel flotante viejo si existe
-  const oldFloat = document.getElementById('admThemePanel');
-  if (oldFloat) oldFloat.style.display = 'none';
+  function openThemeBuilder(){
+    const wrap = document.createElement('div');
+    wrap.className = 'modal';
+    wrap.setAttribute('role','dialog');
+    wrap.setAttribute('aria-modal','true');
+    wrap.style.display = 'grid';
+    wrap.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>Crear/Editar tema</div>
+          <button class="btn ghost small" data-close>cerrar</button>
+        </div>
+        <div class="modal-body" style="max-height:70vh;overflow:auto">
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+            <div class="field">
+              <label>Nombre del tema *</label>
+              <input id="tName" type="text" placeholder="Ej. Grito 16" />
+            </div>
+            <div class="field">
+              <label>Fuente (Google Fonts URL)</label>
+              <input id="tFontUrl" type="text" placeholder="https://fonts.googleapis.com/css2?family=..." />
+              <div class="muted small">Opcional. Si la pones, se importa y se usa como base.</div>
+            </div>
+            <div class="field">
+              <label>Fuente display (CSS font-family)</label>
+              <input id="tFontDisplay" type="text" placeholder='"Bangers", cursive' />
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:8px">
+            <div class="field"><label>Fondo (color)</label><input id="cBg" type="color" value="#0b0f14" /></div>
+            <div class="field"><label>Texto</label><input id="cText" type="color" value="#e8f0ff" /></div>
+            <div class="field"><label>Primario</label><input id="cPri" type="color" value="#ffc242" /></div>
+            <div class="field"><label>Accent</label><input id="cAcc" type="color" value="#27e1ff" /></div>
+          </div>
+
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:8px">
+            <div class="field">
+              <label>Imagen de fondo (URL)</label>
+              <input id="tBgUrl" type="text" placeholder="/img/temas/independencia.jpg" />
+              <div class="muted small">Deja vacío si no deseas imagen. Puedes alojarlas en <code>/img/temas/</code> de GitHub Pages.</div>
+            </div>
+            <div class="field">
+              <label>Overlay RGBA</label>
+              <input id="tOverlay" type="text" value="rgba(0,0,0,.25)" />
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:8px">
+            <label>Fotos del tema (URLs, una por línea)</label>
+            <textarea id="tImages" placeholder="/img/temas/burger1.jpg&#10;/img/temas/burger2.jpg" rows="4"></textarea>
+          </div>
+
+          <div class="row" style="gap:10px;margin-top:8px">
+            <button class="btn" id="tPreview" type="button">Previsualizar</button>
+            <button class="btn primary" id="tSave"   type="button">Guardar preset</button>
+          </div>
+          <div class="muted small" id="tMsg" style="margin-top:8px"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+    const q = sel => wrap.querySelector(sel);
+    const close = ()=> wrap.remove();
+
+    wrap.addEventListener('click', e=>{ if (e.target.matches('[data-close]')) close(); });
+
+    q('#tPreview')?.addEventListener('click', ()=>{
+      const preset = readPreset();
+      applyThemeLocal(preset.name, preset); // preview local
+      q('#tMsg').textContent = `Vista previa aplicada localmente: ${preset.name}`;
+    });
+
+    q('#tSave')?.addEventListener('click', async ()=>{
+      const preset = readPreset();
+      if (!preset.name.trim()) { beep(); q('#tMsg').textContent = 'El tema necesita un nombre.'; return; }
+      try{
+        await saveThemePreset(preset);
+        q('#tMsg').textContent = 'Tema guardado. Ya aparece en la lista.';
+        toast('Tema guardado');
+        // refresca select
+        renderThemeOptions(listThemes());
+      }catch(e){
+        console.error(e);
+        q('#tMsg').textContent = 'No se pudo guardar.';
+      }
+    });
+
+    function readPreset(){
+      const name = q('#tName')?.value?.trim() || 'Custom';
+      const palette = {
+        bg:   q('#cBg')?.value || '#0b0f14',
+        text: q('#cText')?.value || '#e8f0ff',
+        primary: q('#cPri')?.value || '#ffc242',
+        accent:  q('#cAcc')?.value || '#27e1ff'
+      };
+      const fonts = {
+        importUrl:   q('#tFontUrl')?.value?.trim() || '',
+        base: 'Inter, system-ui, Arial',
+        display: q('#tFontDisplay')?.value?.trim() || 'inherit'
+      };
+      const bg = {
+        image:   q('#tBgUrl')?.value?.trim() || '',
+        overlay: q('#tOverlay')?.value?.trim() || 'rgba(0,0,0,.25)',
+        size:'cover', position:'center', blur:0
+      };
+      const images = (q('#tImages')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
+      return { name, palette, fonts, bg, images };
+    }
+  }
+
+  // Aplica tema local de sessionStorage si hubiese
+  try { const local = sessionStorage.getItem('localTheme'); if (local) applyThemeLocal(local); } catch {}
 })();
-
 /* ========================= PANEL: Productos (CRUD sobre Artículos) ========================= */
 (function initProductsPanel(){
   const TABS = document.getElementById('admTabs');
