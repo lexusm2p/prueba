@@ -1,441 +1,199 @@
 // /shared/theme.js
-// Sistema de temas (paletas + decoraciones opcionales)
-// Requiere: ./db.js (opcional, si quieres sincronizar GLOBAL) y tus imágenes.
-// Sugerido: coloca una imagen para Independencia en /shared/img/mx-collage.png
+// Temas: integrados + personalizados (Firestore).
+// Aplica paletas CSS, fuentes Google y fondo con una sola llamada.
 
-import * as DB from './db.js';
+import {
+  db, doc, setDoc, getDoc, collection, onSnapshot,
+  serverTimestamp
+} from './firebase.js';
 
-/* ===== Imagen usada en Independencia (papel picado / collage) ===== */
-const MX_COLLAGE_URL = '../shared/img/mx-collage.png';
-
-/* ===================== Presets ===================== */
-export const THEMES = {
-  /* ========== BASE (look por defecto) ========== */
-  'Base': {
-    vars: {
-      '--bg':'#0b0f19',
-      '--panel':'#121a2a',
-      '--panel-2':'#0f1726',
-      '--ink':'#eef4ff',
-      '--muted':'#b8c6d8',
-      '--muted-2':'#90a4bd',
-      '--accent':'#ffd24a',
-      '--accent-2':'#7cc9ff',
-      '--danger':'#ff6b6b',
-      '--ok':'#2fd27d',
-      '--stroke':'rgba(255,255,255,.10)',
-      '--decor-glow': '0 0 18px rgba(255,210,74,.25)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+/* ============ Temas integrados (puedes ajustar colores a gusto) ============ */
+const DEFAULT_THEMES = {
+  Base: {
+    name:'Base',
+    fonts: { importUrl: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap', base:'Inter, system-ui, Arial', display:'inherit' },
+    palette: { bg:'#0b0f14', surface:'#121823', card:'#0f1420', text:'#e8f0ff', muted:'rgba(255,255,255,.6)', primary:'#ffc242', accent:'#27e1ff', success:'#87f59b', warn:'#ffd27f', danger:'#ff8a8a' },
+    bg: { image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Septiembre / Grito ========== */
-  'Independencia': {
-    vars: {
-      '--bg':'#08110a',
-      '--panel':'#0e1b12',
-      '--panel-2':'#0b1510',
-      '--ink':'#f6fff4',
-      '--muted':'#c9e7d1',
-      '--muted-2':'#a6d1b0',
-      '--accent':'#ffd24a',     // dorado
-      '--accent-2':'#4be37a',   // verde vivo
-      '--danger':'#ff5656',
-      '--ok':'#3ae08a',
-      '--stroke':'rgba(255,255,255,.12)',
-      '--decor-glow': '0 0 18px rgba(75,227,122,.25), 0 0 28px rgba(255,210,74,.18)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '', // Se usará la fuente base
-    decorations: { vivaBanner: true, papelPicado: true, sombrero: true }
+  Independencia: {
+    name:'Independencia',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'"Alfa Slab One", cursive' },
+    palette:{ bg:'#06140b', surface:'#0b2415', card:'#0b1911', text:'#f6fff4', muted:'rgba(255,255,255,.70)', primary:'#2bbb6f', accent:'#e53c3c', success:'#8bf59f', warn:'#ffd27f', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Día de Muertos ========== */
-  'Día de Muertos': {
-    vars: {
-      '--bg':'#140b11',
-      '--panel':'#1b1020',
-      '--panel-2':'#130a18',
-      '--ink':'#fff7fb',
-      '--muted':'#e7cbe0',
-      '--muted-2':'#d9a6cc',
-      '--accent':'#ffa620',     /* cempasúchil */
-      '--accent-2':'#9b6bff',   /* morado vivo */
-      '--ok':'#39e0a7',
-      '--danger':'#ff6b8a',
-      '--stroke':'rgba(255,255,255,.12)',
-      '--decor-glow': '0 0 18px rgba(155,107,255,.25), 0 0 28px rgba(255,166,32,.18)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  Muertos: {
+    name:'Muertos',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Fugaz+One&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'"Fugaz One", cursive' },
+    palette:{ bg:'#0f0a10', surface:'#1b1320', card:'#140d17', text:'#fff4ff', muted:'rgba(255,255,255,.72)', primary:'#ff9f1a', accent:'#7b5cff', success:'#8fffce', warn:'#ffd27f', danger:'#ff9090' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.30)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-  
-  /* ========== Navidad ========== */
-  'Navidad': {
-    vars: {
-      '--bg':'#0b1210',
-      '--panel':'#12201a',
-      '--panel-2':'#0f1915',
-      '--ink':'#f6fff8',
-      '--muted':'#c8e9d6',
-      '--muted-2':'#a5d7be',
-      '--accent':'#ff6060',     /* rojo */
-      '--accent-2':'#5fe08a',   /* verde */
-      '--ok':'#4fe59f',
-      '--danger':'#ff6b6b',
-      '--stroke':'rgba(255,255,255,.12)',
-      '--decor-glow': '0 0 18px rgba(95,224,138,.25), 0 0 28px rgba(255,96,96,.18)',
-      '--snow-alpha': '.35',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  Navidad: {
+    name:'Navidad',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Mountains+of+Christmas:wght@700&display=swap', base:'Montserrat, system-ui', display:'"Mountains of Christmas", cursive' },
+    palette:{ bg:'#08110c', surface:'#0f1f17', card:'#0b1712', text:'#f3fff7', muted:'rgba(255,255,255,.7)', primary:'#1ecb7f', accent:'#e85050', success:'#9af5c3', warn:'#ffd27f', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.22)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== San Valentín ========== */
   'San Valentín': {
-    vars: {
-      '--bg':'#160b12',
-      '--panel':'#231320',
-      '--panel-2':'#1a0f19',
-      '--ink':'#fff0f5',
-      '--muted':'#ffd1e1',
-      '--muted-2':'#ffb8d0',
-      '--accent':'#ff4d8d',
-      '--accent-2':'#ffd24a',
-      '--danger':'#ff6b6b',
-      '--ok':'#2fd27d',
-      '--stroke':'rgba(255,255,255,.12)',
-      '--decor-glow': '0 0 18px rgba(255,77,141,.18)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+    name:'San Valentín',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Pacifico, cursive' },
+    palette:{ bg:'#160a11', surface:'#24131e', card:'#1b0f17', text:'#fff1f6', muted:'rgba(255,255,255,.74)', primary:'#ff6ea8', accent:'#ffa3d2', success:'#9cf0c4', warn:'#ffe38a', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.28)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Halloween ========== */
-  'Halloween': {
-    vars: {
-      '--bg':'#0b0b12',
-      '--panel':'#121426',
-      '--panel-2':'#0f1020',
-      '--ink':'#fef6ff',
-      '--muted':'#d4c6ff',
-      '--muted-2':'#b9a7ff',
-      '--accent':'#ff7a00', // naranja
-      '--accent-2':'#7c5cff', // morado
-      '--danger':'#ff6b6b',
-      '--ok':'#2fd27d',
-      '--stroke':'rgba(255,255,255,.12)',
-      '--decor-glow': '0 0 18px rgba(124,92,255,.25), 0 0 28px rgba(255,122,0,.18)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  Halloween: {
+    name:'Halloween',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Creepster, cursive' },
+    palette:{ bg:'#0b0a06', surface:'#141208', card:'#0e0d07', text:'#fffbef', muted:'rgba(255,255,255,.72)', primary:'#ff8c00', accent:'#7b5cff', success:'#8fffce', warn:'#ffd27f', danger:'#ff9090' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Fútbol / Mundial ========== */
-  'Fútbol': {
-    vars: {
-      '--bg':'#07131c',
-      '--panel':'#0c1c28',
-      '--panel-2':'#0a1823',
-      '--ink':'#e6f0ff',
-      '--muted':'#b7c7de',
-      '--muted-2':'#9eb5d3',
-      '--accent':'#22c55e', // césped
-      '--accent-2':'#3b82f6', // cielo
-      '--ok':'#34d399',
-      '--danger':'#fb7185',
-      '--stroke':'rgba(255,255,255,.10)',
-      '--decor-glow': '0 0 18px rgba(34,197,94,.22)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  Fútbol: {
+    name:'Fútbol',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Bungee, cursive' },
+    palette:{ bg:'#06140b', surface:'#0b2415', card:'#0a1d12', text:'#effff4', muted:'rgba(255,255,255,.70)', primary:'#21c25c', accent:'#2ab3ff', success:'#8bf59f', warn:'#ffd27f', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Lucha Libre ========== */
   'Lucha Libre': {
-    vars: {
-      '--bg':'#0a0a1a',
-      '--panel':'#10102a',
-      '--panel-2':'#0c0c22',
-      '--ink':'#f3f4f6',
-      '--muted':'#c7d2fe',
-      '--muted-2':'#a5b4fc',
-      '--accent':'#f59e0b',  // dorado
-      '--accent-2':'#06b6d4',// cian
-      '--ok':'#34d399',
-      '--danger':'#f87171',
-      '--stroke':'rgba(255,255,255,.10)',
-      '--decor-glow': '0 0 18px rgba(245,158,11,.22), 0 0 28px rgba(6,182,212,.18)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+    name:'Lucha Libre',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;700&display=swap', base:'Inter, system-ui', display:'Bangers, cursive' },
+    palette:{ bg:'#0b0d16', surface:'#121638', card:'#0e1230', text:'#eef1ff', muted:'rgba(255,255,255,.70)', primary:'#f7d23e', accent:'#e94141', success:'#9cf5c9', warn:'#ffd27f', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.30)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Pixel Art (8‑bit) ========== */
   'Pixel Art': {
-    vars: {
-      '--bg':'#0a0f1a',
-      '--panel':'#101a2c',
-      '--panel-2':'#0d1626',
-      '--ink':'#f0f6ff',
-      '--muted':'#c2d4f5',
-      '--muted-2':'#a8c4f0',
-      '--accent':'#ffd24a',    // dorado pixel
-      '--accent-2':'#55ff7f',  // verde fosfo
-      '--danger':'#ff6b6b',
-      '--ok':'#2fe38b',
-      '--stroke':'rgba(255,255,255,.12)',
-      '--decor-glow': '0 0 18px rgba(255,210,74,.22), 0 0 28px rgba(85,255,127,.16)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+    name:'Pixel Art',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap', base:'system-ui, Arial', display:'"Press Start 2P", monospace' },
+    palette:{ bg:'#0a0a12', surface:'#111126', card:'#0c0c1b', text:'#eaf1ff', muted:'rgba(255,255,255,.7)', primary:'#00ffb3', accent:'#ffe500', success:'#9bf5d6', warn:'#ffef8a', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Retro Arcade (neón 80s/90s) ========== */
   'Retro Arcade': {
-    vars: {
-      '--bg':'#0b0714',
-      '--panel':'#140f2a',
-      '--panel-2':'#0f0b20',
-      '--ink':'#fdf2ff',
-      '--muted':'#d9c6ff',
-      '--muted-2':'#bfa8ff',
-      '--accent':'#00e5ff',   // cian neón
-      '--accent-2':'#ff37a6', // magenta neón
-      '--ok':'#41e3a2',
-      '--danger':'#ff6b8a',
-      '--stroke':'rgba(255,255,255,.14)',
-      '--decor-glow': '0 0 22px rgba(0,229,255,.25), 0 0 28px rgba(255,55,166,.18)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+    name:'Retro Arcade',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=VT323&display=swap', base:'system-ui, Arial', display:'VT323, monospace' },
+    palette:{ bg:'#0c0b12', surface:'#171427', card:'#121022', text:'#eaf1ff', muted:'rgba(255,255,255,.7)', primary:'#ff4aa2', accent:'#00e5ff', success:'#9bf5d6', warn:'#ffd27f', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
+    images:[]
   },
-
-  /* ========== Y2K (90s/00s) ========== */
-  'Y2K (90s/00s)': {
-    vars: {
-      '--bg':'#0b0f14',
-      '--panel':'#0f1a24',
-      '--panel-2':'#0c1520',
-      '--ink':'#e8f7ff',
-      '--muted':'#b7d4e8',
-      '--muted-2':'#a0c6e0',
-      '--accent':'#6ee7ff',   // celeste glossy
-      '--accent-2':'#c0f',    // púrpura Y2K
-      '--ok':'#45e3b3',
-      '--danger':'#ff6bba',
-      '--stroke':'rgba(255,255,255,.10)',
-      '--decor-glow': '0 0 22px rgba(110,231,255,.22), 0 0 26px rgba(204,0,255,.16)',
-      '--snow-alpha': '0',
-    },
-    fontFamily: '"Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Arial',
-    fontUrl: '',
-    decorations: { vivaBanner:false, papelPicado:false, sombrero:false }
+  Y2K: {
+    name:'Y2K',
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap', base:'system-ui, Arial', display:'Orbitron, sans-serif' },
+    palette:{ bg:'#0b0d11', surface:'#121627', card:'#0f1426', text:'#eaf3ff', muted:'rgba(255,255,255,.72)', primary:'#9d7eff', accent:'#00f0ff', success:'#9bf5d6', warn:'#ffd27f', danger:'#ff8a8a' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.28)', size:'cover', position:'center', blur:0 },
+    images:[]
   }
 };
 
-/* ================= utilidades base ================= */
-const FONT_LINK_ID = 'theme-font-link';
-function ensureFontLoaded(url){
+/* =================== cache de personalizados =================== */
+window.__customThemes = window.__customThemes || {};
+const FONT_TAG = 'data-theme-font';
+
+/* =================== utilidades =================== */
+function normalizePreset(p){
+  const name = String(p?.name || 'Base').trim();
+  const palette = { ...DEFAULT_THEMES.Base.palette, ...(p?.palette||{}) };
+  const fonts   = { ...DEFAULT_THEMES.Base.fonts,   ...(p?.fonts||{}) };
+  const bg      = { ...DEFAULT_THEMES.Base.bg,      ...(p?.bg||{}) };
+  const images  = Array.isArray(p?.images) ? p.images : [];
+  return { name, palette, fonts, bg, images };
+}
+
+function ensureFont(url){
   if (!url) return;
-  let link = document.getElementById(FONT_LINK_ID);
-  if (!link){
-    link = document.createElement('link');
-    link.id = FONT_LINK_ID;
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-  }
-  if (link.href !== url) link.href = url;
-}
-function applyVars(vars){
-  const root = document.documentElement;
-  Object.entries(vars||{}).forEach(([k,v])=> root.style.setProperty(k, v));
-}
-function setFontFamily(family){
-  if (!family) return;
-  document.documentElement.style.setProperty('--font', family);
+  if (document.querySelector(`link[${FONT_TAG}="${url}"]`)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = url;
+  link.setAttribute(FONT_TAG, url);
+  document.head.appendChild(link);
 }
 
-/* =============== Decoraciones “Independencia” =============== */
-const DECOR_STYLE_ID = 'theme-decor-css';
-function injectDecorCss(){
-  if (document.getElementById(DECOR_STYLE_ID)) return;
-  const css = `
-  /* Banner Viva México pixel/arcade */
-  #mx-viva {
-    position: fixed; left: 50%; transform: translateX(-50%);
-    top: 8px; z-index: 60;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 12px; line-height: 1.1;
-    letter-spacing: .5px;
-    color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35);
-    background:
-      linear-gradient(#0f1a12,#0a140d) padding-box,
-      linear-gradient(90deg,#18c96b,#ffffff,#ff4d4d) border-box;
-    border: 2px solid transparent; border-radius: 10px;
-    padding: 8px 12px;
-    box-shadow: 0 10px 24px rgba(0,0,0,.35);
-  }
-  #mx-viva .blink{ animation: blink 1s steps(2,end) infinite }
-  @keyframes blink { 50% { opacity:.2 } }
+function setVar(k, v){ document.documentElement.style.setProperty(`--${k}`, String(v)); }
 
-  /* Fondo con la imagen + velo gamer */
-  #mx-papel {
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    opacity: .18;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: cover;
-    image-rendering: pixelated;
-  }
-  #mx-papel::after{
-    content:""; position:absolute; inset:0;
-    background:
-      linear-gradient(transparent 97%, rgba(0,0,0,.25) 100%) 0 0/100% 3px,
-      radial-gradient(120% 90% at 10% 0%, rgba(0,0,0,.35), transparent 60%);
-  }
+/* =================== API pública =================== */
 
-  /* Sombrero sobre el brand */
-  #mx-sombrero {
-    position: absolute; z-index: 61; width: 64px; height: 48px;
-    transform: translate(-6px,-42px) rotate(-8deg);
-    image-rendering: pixelated; pointer-events: none;
-  }
-
-  @media (max-width:520px){
-    #mx-viva{ top:4px; font-size:11px; padding:6px 10px }
-    #mx-papel{ opacity:.12 }
-  }
-  `;
-  const style = document.createElement('style');
-  style.id = DECOR_STYLE_ID; style.textContent = css;
-  document.head.appendChild(style);
+// Lista sincrónica: integrados + últimos personalizados cacheados
+export function listThemes(){
+  let custom = [];
+  try { custom = JSON.parse(sessionStorage.getItem('customThemeNames') || '[]'); } catch {}
+  return Array.from(new Set([...Object.keys(DEFAULT_THEMES), ...custom]));
 }
 
-/* SVG sombrero (data URL) */
-const SVG_SOMBRERO = `data:image/svg+xml;utf8,
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 48' shape-rendering='crispEdges'>
-  <rect width='64' height='48' fill='none'/>
-  <path d='M8 32h48v6H8z' fill='%23b27a2e'/>
-  <path d='M12 28h40v4H12z' fill='%23d6a54b'/>
-  <path d='M26 10h12v10H26z' fill='%23c28a34'/>
-  <path d='M24 20h16v6H24z' fill='%23e3b358'/>
-  <path d='M18 34h28v2H18z' fill='%23ff4d4d'/>
-  <path d='M22 34h4v2h-4z' fill='%2318c96b'/>
-</svg>`;
+// Aplica un tema a la UI (solo local). `overrides` permite retoques al vuelo.
+export function applyThemeLocal(name, overrides = {}){
+  const preset = window.__customThemes?.[name] || DEFAULT_THEMES[name] || DEFAULT_THEMES.Base;
+  const t = normalizePreset({ ...preset, ...overrides, palette:{...preset.palette, ...(overrides.palette||{})} });
 
-/* Helpers nodos */
-function ensureNode(id, tag = 'div'){
-  let el = document.getElementById(id);
-  if (!el){ el = document.createElement(tag); el.id = id; document.body.appendChild(el); }
-  return el;
-}
-function removeNode(id){ const el = document.getElementById(id); if (el) el.remove(); }
+  ensureFont(t.fonts?.importUrl);
+  document.documentElement.style.fontFamily = t.fonts?.base || 'system-ui';
+  document.documentElement.style.setProperty('--display-font', t.fonts?.display || 'inherit');
 
-/* Aplica/limpia decor según tema */
-function applyDecorations(themeName){
-  const conf = THEMES[themeName]?.decorations || {};
-  injectDecorCss();
+  setVar('bg',      t.palette.bg);
+  setVar('surface', t.palette.surface);
+  setVar('card',    t.palette.card);
+  setVar('text',    t.palette.text);
+  setVar('muted',   t.palette.muted);
+  setVar('primary', t.palette.primary);
+  setVar('accent',  t.palette.accent);
+  setVar('success', t.palette.success);
+  setVar('warn',    t.palette.warn);
+  setVar('danger',  t.palette.danger);
 
-  // Fondo con imagen (solo Independencia u otros que activen papelPicado)
-  if (conf.papelPicado){
-    const papel = ensureNode('mx-papel');
-    papel.style.backgroundImage = `url("${MX_COLLAGE_URL}")`;
-    papel.style.display = 'block';
-  } else { removeNode('mx-papel'); }
+  // Fondo
+  document.body.style.backgroundColor = t.palette.bg;
+  document.body.style.backgroundImage = t.bg?.image ? `linear-gradient(${t.bg.overlay||'rgba(0,0,0,.25)'}, ${t.bg.overlay||'rgba(0,0,0,.25)'}), url("${t.bg.image}")` : '';
+  document.body.style.backgroundSize = t.bg?.size || 'cover';
+  document.body.style.backgroundPosition = t.bg?.position || 'center';
+  document.body.style.backgroundRepeat = 'no-repeat';
+  document.body.style.backdropFilter = t.bg?.blur ? `blur(${t.bg.blur}px)` : '';
 
-  // Banner ¡VIVA MÉXICO!
-  if (conf.vivaBanner){
-    const viva = ensureNode('mx-viva');
-    viva.innerHTML = `🎉 <span class="blink">¡VIVA MÉXICO!</span> 🇲🇽`;
-    viva.style.display = 'block';
-  } else { removeNode('mx-viva'); }
-
-  // Sombrero sobre el brand
-  if (conf.sombrero){
-    const sombrero = ensureNode('mx-sombrero','img');
-    sombrero.src = SVG_SOMBRERO;
-    const brand = document.getElementById('brandTap');
-    if (brand){
-      brand.style.position = brand.style.position || 'relative';
-      brand.appendChild(sombrero);
-    } else {
-      sombrero.style.position = 'fixed';
-      sombrero.style.left = '18px';
-      sombrero.style.top  = '22px';
-      document.body.appendChild(sombrero);
-    }
-    sombrero.style.display = 'block';
-  } else { removeNode('mx-sombrero'); }
+  document.body.setAttribute('data-theme', name);
 }
 
-/* ============== API pública ============== */
-export function listThemes(){ return Object.keys(THEMES); }
-
-export function applyThemeLocal(name='Base'){
-  const t = THEMES[name] || THEMES.Base;
-  ensureFontLoaded(t.fontUrl);
-  applyVars(t.vars);
-  setFontFamily(t.fontFamily);
-  document.documentElement.setAttribute('data-theme-name', name);
-  document.documentElement.setAttribute('data-theme', name);
-  applyDecorations(name);
-  try{ localStorage.setItem('kiosk.theme', name); }catch{}
+// Suscripción a **settings/theme** → aplica global; si hay “localTheme” en sessionStorage lo respeta
+export function initThemeFromSettings({ defaultName = 'Base' } = {}){
+  try { const local = sessionStorage.getItem('localTheme'); if (local) { applyThemeLocal(local); return () => {}; } } catch {}
+  const ref = doc(db,'settings','theme');
+  return onSnapshot(ref, (snap)=>{
+    const d = snap.data() || { name: defaultName, overrides:{} };
+    applyThemeLocal(d.name || defaultName, d.overrides || {});
+  });
 }
 
-// Volver al tema base en esta pestaña
-export function resetThemeLocal(){ applyThemeLocal('Base'); }
-
-/**
- * Suscribe a /settings.theme.name si DB lo ofrece.
- * Si no hay backend, usa localStorage y aplica el último tema guardado.
- */
-export function initThemeFromSettings({ defaultName='Base' } = {}){
-  let initial = defaultName;
-  try{
-    const saved = localStorage.getItem('kiosk.theme');
-    if (saved && THEMES[saved]) initial = saved;
-  }catch{}
-  applyThemeLocal(initial);
-
-  if (typeof DB.subscribeSettings === 'function'){
-    const unsub = DB.subscribeSettings((settings)=>{
-      const name = settings?.theme?.name || initial;
-      if (THEMES[name]) applyThemeLocal(name);
+// Suscripción a presets personalizados (colección `themes`)
+export function subscribeThemePresets(cb){
+  const colRef = collection(db,'themes');
+  return onSnapshot(colRef, (snap)=>{
+    const map = {}; const names = [];
+    snap.docs.forEach(d=>{
+      const val = normalizePreset(d.data() || {});
+      const name = val.name || d.id;
+      names.push(name); map[name] = val;
     });
-    return ()=> { try{unsub&&unsub();}catch{} };
-  }
-
-  const onStorage = (e)=>{
-    if (e.key === 'kiosk.theme' && THEMES[e.newValue]) applyThemeLocal(e.newValue);
-  };
-  window.addEventListener('storage', onStorage);
-  return ()=> window.removeEventListener('storage', onStorage);
+    window.__customThemes = map;
+    try { sessionStorage.setItem('customThemeNames', JSON.stringify(names)); } catch {}
+    cb?.(names);
+  });
 }
 
-/* ============== Helper Admin opcional (GLOBAL) ============== */
-export async function setThemeGlobal(name){
-  if (typeof DB.setTheme === 'function'){ return DB.setTheme({ name }); }
-  if (typeof DB.setSettings === 'function'){ return DB.setSettings({ theme:{ name } }); }
-  if (typeof DB.updateSettings === 'function'){ return DB.updateSettings({ theme:{ name } }); }
-  try{ localStorage.setItem('kiosk.theme', name); }catch{}
+// Guarda/actualiza un preset personalizado y (opcionalmente) lo publica como GLOBAL (setTheme en settings/theme lo haces desde /shared/db.js)
+export async function saveThemePreset(preset){
+  const clean = normalizePreset(preset);
+  const id = (clean.name || 'custom').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  await setDoc(doc(db,'themes', id), { ...clean, updatedAt: serverTimestamp() }, { merge:true });
+
+  // Mantener un arreglo de nombres en settings/app.themes (para compat con tu app.js)
+  try {
+    const appRef = doc(db,'settings','app');
+    const snap = await getDoc(appRef);
+    const prev = Array.isArray(snap.data()?.themes) ? snap.data().themes : [];
+    const next = Array.from(new Set([...prev, clean.name]));
+    await setDoc(appRef, { themes: next, updatedAt: serverTimestamp() }, { merge:true });
+  } catch {}
+
+  return { ok:true, name: clean.name };
 }
