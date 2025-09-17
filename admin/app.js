@@ -1464,29 +1464,74 @@ function confirmDeleteArticle(article){
   const btnNew = panel.querySelector('#btnThemeBuilder');
   const hint   = panel.querySelector('#themeHint');
 
-  // Rellena opciones con defensiva (evita el TypeError del .value)
+  // ---------- NUEVO: fallback robusto para opciones ----------
+  const BUILTIN_THEMES = [
+    'Base',
+    'Independencia',
+    'Día de Muertos',
+    'Navidad',
+    'Fiestas',
+    'San Valentín',
+    'Halloween',
+    'Fútbol',
+    'Lucha Libre',
+    'Pixel Art',
+    'Retro Arcade',
+    'Y2K (90s/00s)'
+  ];
+
+  function getThemeNamesSafe(){
+    try {
+      const arr = listThemes?.();
+      if (Array.isArray(arr) && arr.length) return arr;
+      return BUILTIN_THEMES;
+    } catch (e) {
+      console.warn('listThemes() falló, usando BUILTIN_THEMES', e);
+      return BUILTIN_THEMES;
+    }
+  }
+
   function renderThemeOptions(names){
     if (!sel) return;
     const current = sel.value || '';
-    sel.innerHTML = (names||[]).map(n => `<option value="${n}">${n}</option>`).join('')
-      || `<option value="Base">Base</option>`;
+    const safe = Array.isArray(names) && names.length ? names : BUILTIN_THEMES;
+    sel.innerHTML = safe.map(n => `<option value="${n}">${n}</option>`).join('');
     if (current && [...sel.options].some(o=>o.value===current)) sel.value = current;
   }
 
-  // Inicial
-  try { renderThemeOptions(listThemes()); } catch { renderThemeOptions(['Base']); }
+  // Inicial seguro
+  renderThemeOptions(getThemeNamesSafe());
 
-  // Suscripciones: global + presets personalizados
+  // Reintento al enfocar el select (por si el módulo carga tarde)
+  sel?.addEventListener('focus', ()=>{
+    if (!sel.options.length) renderThemeOptions(getThemeNamesSafe());
+  });
+
+  // Suscripciones: global + presets personalizados (mezcla core + personalizados)
   try { initThemeFromSettings({ defaultName: 'Independencia' }); } catch {}
   try {
     subscribeThemePresets((names)=>{
-      // Combina integrados + personalizados
-      const all = Array.from(new Set([...(listThemes()), ...names]));
+      const all = Array.from(new Set([ ...getThemeNamesSafe(), ...(names||[]) ]));
       renderThemeOptions(all);
     });
-  } catch {}
+  } catch (e) {
+    console.warn('subscribeThemePresets() no disponible', e);
+  }
 
-  // Guardar selección y vista previa
+  // Vista previa automática al cambiar
+  sel?.addEventListener('change', ()=>{
+    const name = sel?.value || 'Base';
+    try {
+      applyThemeLocal(name);
+      try { sessionStorage.setItem('localTheme', name); } catch {}
+      hint && (hint.textContent = `Vista previa: ${name}`);
+      toast(`Tema local: ${name}`);
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+  // Botón "Probar local"
   btnPrev?.addEventListener('click', ()=>{
     const name = sel?.value || 'Base';
     try {
@@ -1500,6 +1545,7 @@ function confirmDeleteArticle(article){
     }
   });
 
+  // Guardar global
   btnSave?.addEventListener('click', async ()=>{
     const name = sel?.value || 'Base';
     try {
@@ -1595,15 +1641,14 @@ function confirmDeleteArticle(article){
         await saveThemePreset(preset);
         q('#tMsg').textContent = 'Tema guardado. Ya aparece en la lista.';
         toast('Tema guardado');
-        // refresca select
-        renderThemeOptions(listThemes());
+        renderThemeOptions(getThemeNamesSafe());
       }catch(e){
         console.error(e);
         q('#tMsg').textContent = 'No se pudo guardar.';
       }
     });
 
-       function readPreset(){
+    function readPreset(){
       const name = q('#tName')?.value?.trim() || 'Custom';
       const palette = {
         bg:      q('#cBg')?.value   || '#0b0f14',
@@ -1637,6 +1682,7 @@ function confirmDeleteArticle(article){
     if (local) applyThemeLocal(local);
   } catch {}
 })();
+
 /* ========================= PANEL: Productos (CRUD sobre Artículos) ========================= */
 (function initProductsPanel(){
   const TABS = document.getElementById('admTabs');
@@ -2059,3 +2105,4 @@ window.addEventListener('beforeunload', ()=>{
   try{ if (HH_TIMER) clearInterval(HH_TIMER); }catch{}
   try { for (const u of SUBS) { try { u(); } catch {} } } catch {}
 });
+
