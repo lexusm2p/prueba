@@ -2292,108 +2292,116 @@ document.addEventListener('keydown',(e)=>{
     el?.focus();
   }
 });
+
 /* ========================= Temas — Admin (autónomo, sin deps) ========================= */
 (function wireAdminThemeDropdown(){
-  const sel     = document.getElementById('admThemeSelect');
-  const btnPrev = document.getElementById('admThemePreview');
-  const btnSave = document.getElementById('admThemeSave');
-  const msg     = document.getElementById('admThemeMsg');
-  if (!sel) return;
+  const start = () => {
+    const sel     = document.getElementById('admThemeSelect');
+    const btnPrev = document.getElementById('admThemePreview');
+    const btnSave = document.getElementById('admThemeSave');
+    const msg     = document.getElementById('admThemeMsg');
+    if (!sel) return; // si en esta vista no hay selector, salimos
 
-  /* --- Helpers mínimos / fallbacks --- */
-  const $html = document.documentElement;
+    /* --- Helpers mínimos / fallbacks --- */
+    const $html = document.documentElement;
 
-  // Built‑in visibles en styles.css (deben coincidir con tus data-theme)
-  const BUILTIN = [
-    'Base','Independencia','Día de Muertos','Muertos','Navidad',
-    'Fiestas','San Valentín','Halloween','Fútbol','Lucha Libre',
-    'Pixel Art','Retro Arcade','Y2K (90s/00s)'
-  ];
+    // Built‑in visibles en styles.css (coinciden con tus data-theme)
+    const BUILTIN = [
+      'Base','Independencia','Día de Muertos','Muertos','Navidad',
+      'Fiestas','San Valentín','Halloween','Fútbol','Lucha Libre',
+      'Pixel Art','Retro Arcade','Y2K (90s/00s)'
+    ];
 
-  // Si en otro archivo defines listThemes/subscribeThemePresets, las usamos; si no, fallback
-  const listThemes = (window.listThemes) ? window.listThemes : function(){
-    try {
-      const extras = JSON.parse(localStorage.getItem('__THEME_PRESETS__')||'[]');
-      const clean = Array.isArray(extras) ? extras.filter(x=>typeof x==='string' && x.trim()) : [];
-      return Array.from(new Set([...BUILTIN, ...clean]));
-    } catch { return BUILTIN.slice(); }
-  };
-  const subscribeThemePresets = (window.subscribeThemePresets) || function(cb){ /* no-op */ return ()=>{}; };
-  const toast = (window.toast) || function(t){ if (msg){ msg.textContent = t; } };
+    // Si existen helpers globales, úsalos; si no, fallback local
+    const listThemes = (window.listThemes) ? window.listThemes : function(){
+      try {
+        const extras = JSON.parse(localStorage.getItem('__THEME_PRESETS__')||'[]');
+        const clean = Array.isArray(extras) ? extras.filter(x=>typeof x==='string' && x.trim()) : [];
+        return Array.from(new Set([...BUILTIN, ...clean]));
+      } catch { return BUILTIN.slice(); }
+    };
+    const subscribeThemePresets = (window.subscribeThemePresets) || function(cb){ /* no-op */ return ()=>{}; };
+    const toast = (window.toast) || function(t){ if (msg){ msg.textContent = t; } };
 
-  function isTraining(){ try { return !!(window.__TRAINING || JSON.parse(localStorage.getItem('__PRUEBA__')||'false')); } catch { return false; } }
+    function isTraining(){ try { return !!(window.__TRAINING || JSON.parse(localStorage.getItem('__PRUEBA__')||'false')); } catch { return false; } }
 
-  // Aplica tema local (visual) sin persistir
-  function applyThemeLocal(name){
-    $html.setAttribute('data-theme-name', name);
-    $html.setAttribute('data-theme', name);
-  }
-
-  // Guardar GLOBAL en settings/theme (usa tu db.js si existe)
-  async function saveThemeGlobal(name){
-    if (window.setTheme) {
-      return window.setTheme({ name }, { training: isTraining() });
-    } else {
-      // Fallback: persistimos intención en localStorage para que el kiosko la lea si así lo programas
-      localStorage.setItem('__THEME_GLOBAL_INTENT__', JSON.stringify({ name, at: Date.now() }));
-      return { ok:true, _local:true };
-    }
-  }
-
-  /* --- UI --- */
-  function option(text){
-    const o = document.createElement('option');
-    o.value = text; o.textContent = text;
-    return o;
-  }
-
-  function fillOptions() {
-    const names = (listThemes() || []).filter(Boolean);
-    sel.innerHTML = '';
-    if (!names.length) { sel.appendChild(option('Base')); }
-    else { names.forEach(n => sel.appendChild(option(n))); }
-
-    // Selecciona tema actual o último probado
-    const curr = $html.getAttribute('data-theme-name') || $html.getAttribute('data-theme');
-    let last = null; try { last = sessionStorage.getItem('localTheme'); } catch {}
-    const want = (last && names.includes(last)) ? last : (curr && names.includes(curr)) ? curr : (names[0]||'Base');
-    sel.value = want;
-  }
-
-  fillOptions();
-  subscribeThemePresets(() => fillOptions());
-
-  // Probar local
-  btnPrev?.addEventListener('click', () => {
-    const name = sel.value || 'Base';
-    try {
-      applyThemeLocal(name);
+    // Aplica tema local (visual) sin persistir
+    function applyThemeLocal(name){
+      $html.setAttribute('data-theme-name', name);
+      $html.setAttribute('data-theme', name);
       try { sessionStorage.setItem('localTheme', name); } catch {}
-      if (msg) msg.textContent = `Vista previa aplicada: ${name}`;
-    } catch(e){
-      console.error(e);
-      if (msg) msg.textContent = 'No se pudo aplicar el tema local.';
     }
-  });
 
-  // Guardar GLOBAL
-  btnSave?.addEventListener('click', async () => {
-    const name = sel.value || 'Base';
-    const prev = btnSave.textContent;
-    btnSave.disabled = true; btnSave.textContent = 'Guardando…';
-    try {
-      const r = await saveThemeGlobal(name);
-      toast(`Tema global: ${name}` + (isTraining() ? ' (PRUEBA)' : ''));
-      if (msg) msg.textContent = r?._local
-        ? `Tema “${name}” listo (fallback local).`
-        : `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : '');
-    } catch (e){
-      console.error(e);
-      if (msg) msg.textContent = 'No se pudo guardar el tema global.';
-    } finally {
-      btnSave.disabled = false; btnSave.textContent = prev;
+    // Guardar GLOBAL en settings/theme (usa db.js si está disponible)
+    async function saveThemeGlobal(name){
+      if (window.setTheme) {
+        return window.setTheme({ name }, { training: isTraining() });
+      } else {
+        localStorage.setItem('__THEME_GLOBAL_INTENT__', JSON.stringify({ name, at: Date.now() }));
+        return { ok:true, _local:true };
+      }
     }
-  });
+
+    function option(text){
+      const o = document.createElement('option');
+      o.value = text; o.textContent = text;
+      return o;
+    }
+
+    function fillOptions() {
+      const names = (listThemes() || []).filter(Boolean);
+      sel.innerHTML = '';
+      if (!names.length) { sel.appendChild(option('Base')); }
+      else { names.forEach(n => sel.appendChild(option(n))); }
+
+      const curr = $html.getAttribute('data-theme-name') || $html.getAttribute('data-theme');
+      let last = null; try { last = sessionStorage.getItem('localTheme'); } catch {}
+      const want = (last && names.includes(last)) ? last : (curr && names.includes(curr)) ? curr : (names[0]||'Base');
+      sel.value = want;
+    }
+
+    fillOptions();
+    subscribeThemePresets(() => fillOptions());
+
+    // Probar local
+    btnPrev?.addEventListener('click', () => {
+      const name = sel.value || 'Base';
+      try {
+        applyThemeLocal(name);
+        if (msg) msg.textContent = `Vista previa aplicada: ${name}`;
+        toast(`Tema local: ${name}`);
+      } catch(e){
+        console.error(e);
+        if (msg) msg.textContent = 'No se pudo aplicar el tema local.';
+      }
+    });
+
+    // Guardar GLOBAL
+    btnSave?.addEventListener('click', async () => {
+      const name = sel.value || 'Base';
+      const prev = btnSave.textContent;
+      btnSave.disabled = true; btnSave.textContent = 'Guardando…';
+      try {
+        const r = await saveThemeGlobal(name);
+        toast(`Tema global: ${name}` + (isTraining() ? ' (PRUEBA)' : ''));
+        if (msg) msg.textContent = r?._local
+          ? `Tema “${name}” listo (fallback local).`
+          : `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : '');
+      } catch (e){
+        console.error(e);
+        if (msg) msg.textContent = 'No se pudo guardar el tema global.';
+      } finally {
+        btnSave.disabled = false; btnSave.textContent = prev;
+      }
+    });
+  };
+
+  // Espera al DOM si aún no está listo
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once:true });
+  } else {
+    start();
+  }
 })();
 
 // Limpieza de timers globales y subscripciones
