@@ -259,7 +259,16 @@
     <section class="panel" id="panel-temas">
       <h3>Temas (Kiosko/UI)</h3>
 
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px">
+      <!-- Tarjetas para previsualizar (lo llena app.js) -->
+      <p class="muted small" style="margin-bottom:8px">
+        Selecciona una tarjeta para previsualizar localmente. “Guardar GLOBAL” escribe en
+        <code>settings/theme</code>.
+      </p>
+      <div id="themeCards"
+           class="grid"
+           style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px"></div>
+
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; margin-top:10px">
         <div class="field">
           <label>Selecciona tema</label>
           <select id="admThemeSelect" style="width:100%"></select>
