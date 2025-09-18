@@ -2296,16 +2296,17 @@ document.addEventListener('keydown',(e)=>{
 
 /* ========================= Temas — Admin (autónomo, sin deps) ========================= */
 (function wireAdminThemeDropdown(){
+  // Lista base (si no hay presets)
   const BUILTIN = [
-    'Base','Independencia','Día de Muertos','Muertos','Navidad',
+    'Base','Independencia','Día de Muertos','Navidad',
     'Fiestas','San Valentín','Halloween','Fútbol','Lucha Libre',
     'Pixel Art','Retro Arcade','Y2K (90s/00s)'
   ];
 
   const $html = document.documentElement;
 
-  function applyThemeLocal(name){
-    // aplica en <html> y <body> (tu CSS soporta ambos)
+  // Aplica tema SOLO local (preview)
+  function applyThemeLocalAdmin(name){
     $html.setAttribute('data-theme', name);
     $html.setAttribute('data-theme-name', name);
     try { document.body.setAttribute('data-theme', name); } catch {}
@@ -2313,90 +2314,109 @@ document.addEventListener('keydown',(e)=>{
     try { sessionStorage.setItem('localTheme', name); } catch {}
   }
 
-  function option(text){
-    const o = document.createElement('option');
-    o.value = text; o.textContent = text;
-    return o;
-  }
+  // Helpers
+  const option = (v,t=v)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; return o; };
 
+  // Encuentra los elementos; si faltan IDs intenta por texto
   function findElems(){
-    // intenta con tus IDs; si no están, usa el primer select/botones dentro del panel visible
-    const activePanel = document.querySelector('.panel.active') || document.querySelector('#panel-temas') || document;
-    const sel  = document.getElementById('admThemeSelect')
-             || activePanel.querySelector('#admThemeSelect')
-             || activePanel.querySelector('select');
+    const panel = document.querySelector('#panel-temas') || document.querySelector('.panel.active') || document;
 
-    const btnPrev = document.getElementById('admThemePreview')
-               || activePanel.querySelector('#admThemePreview')
-               || activePanel.querySelector('button.btn, button')?.closest?.('div')?.querySelector?.('button');
+    // select: prioriza #admThemeSelect; si no, el primero dentro del panel
+    const sel = panel.querySelector('#admThemeSelect') || panel.querySelector('select');
 
-    const btnSave = document.getElementById('admThemeSave')
-               || activePanel.querySelector('#admThemeSave')
-               || activePanel.querySelectorAll('button')?.[1];
+    // botones: por ID, o por texto visible
+    let btnPrev = panel.querySelector('#admThemePreview');
+    if (!btnPrev) btnPrev = [...panel.querySelectorAll('button')].find(b => /probar|preview/i.test(b.textContent||''));
 
-    const msg  = document.getElementById('admThemeMsg')
-               || activePanel.querySelector('#admThemeMsg');
+    let btnSave = panel.querySelector('#admThemeSave');
+    if (!btnSave) btnSave = [...panel.querySelectorAll('button')].find(b => /guardar.*global/i.test(b.textContent||''));
+
+    const msg = panel.querySelector('#admThemeMsg') || panel.querySelector('#themeHint');
 
     return { sel, btnPrev, btnSave, msg };
   }
 
+  // Siempre repuebla opciones (aunque exista un placeholder)
   function fillOptions(sel){
     if (!sel) return false;
-    // si ya tiene opciones, no duplicamos
-    if (sel.options.length === 0) {
-      BUILTIN.forEach(n => sel.appendChild(option(n)));
-    }
-    // preselección: último local, actual en DOM o Base
+    // Guarda placeholder si lo hay (primera opción vacía)
+    const first = sel.options[0] && (!sel.options[0].value || /^selecciona/i.test(sel.options[0].textContent||''))
+      ? sel.options[0] : null;
+
+    sel.innerHTML = ''; // limpia
+    if (first) sel.appendChild(option('', first.textContent || 'Selecciona tema'));
+
+    // Intenta obtener nombres desde shared/theme.js
+    let names = [];
+    try {
+      // listThemes puede no existir según tu build
+      names = (typeof window.listThemes === 'function' ? window.listThemes() : null) || [];
+    } catch {}
+    if (!Array.isArray(names) || !names.length) names = BUILTIN;
+
+    // únicos + ordenados
+    names = Array.from(new Set(names)).sort((a,b)=> a.localeCompare(b,'es'));
+
+    names.forEach(n => sel.appendChild(option(n)));
+
+    // Selección por defecto: último local -> actual DOM -> Base
     const curr = $html.getAttribute('data-theme-name') || $html.getAttribute('data-theme');
     let last = null; try { last = sessionStorage.getItem('localTheme'); } catch {}
-    const want = (last && BUILTIN.includes(last)) ? last : (curr && BUILTIN.includes(curr)) ? curr : 'Base';
+    const want = (last && names.includes(last)) ? last
+               : (curr && names.includes(curr)) ? curr
+               : names.includes('Base') ? 'Base' : names[0];
     sel.value = want;
     return true;
   }
 
-  async function bindNow(){
+  function bindNow(){
     const { sel, btnPrev, btnSave, msg } = findElems();
     if (!sel) return;
 
     fillOptions(sel);
 
-    btnPrev && btnPrev.addEventListener('click', ()=>{
-      const name = sel.value || 'Base';
-      applyThemeLocal(name);
-      if (msg) msg.textContent = `Vista previa aplicada: ${name}`;
-    }, { once:false });
+    // Preview local
+    if (btnPrev && !btnPrev.__wired){
+      btnPrev.__wired = true;
+      btnPrev.addEventListener('click', ()=>{
+        const name = sel.value || 'Base';
+        applyThemeLocalAdmin(name);
+        if (msg) msg.textContent = `Vista previa aplicada: ${name}`;
+      });
+    }
 
-    btnSave && btnSave.addEventListener('click', async ()=>{
-      const name = sel.value || 'Base';
-      const prev = btnSave.textContent;
-      btnSave.disabled = true; btnSave.textContent = 'Guardando…';
-      try{
-        // usa la función importada (expuesta en window), escribe en Firestore
-        if (typeof window.setTheme === 'function'){
-          await window.setTheme({ name }, { training: (sessionStorage.getItem('training')==='1') });
-          if (msg) msg.textContent = `Tema GLOBAL guardado: ${name}` + (sessionStorage.getItem('training')==='1' ? ' (PRUEBA)' : '');
-        } else {
-          // fallback local (por si no hay Firestore en modo demo)
-          localStorage.setItem('__THEME_GLOBAL_INTENT__', JSON.stringify({ name, at: Date.now() }));
-          if (msg) msg.textContent = `Tema “${name}” listo (fallback local).`;
+    // Guardar GLOBAL (usa window.setTheme expuesto arriba)
+    if (btnSave && !btnSave.__wired){
+      btnSave.__wired = true;
+      btnSave.addEventListener('click', async ()=>{
+        const name = sel.value || 'Base';
+        const prev = btnSave.textContent;
+        btnSave.disabled = true; btnSave.textContent = 'Guardando…';
+        try{
+          if (typeof window.setTheme === 'function'){
+            await window.setTheme({ name }, { training: (sessionStorage.getItem('training')==='1') });
+            if (msg) msg.textContent = `Tema GLOBAL guardado: ${name}` + (sessionStorage.getItem('training')==='1' ? ' (PRUEBA)' : '');
+          } else {
+            // Fallback sin Firestore
+            localStorage.setItem('__THEME_GLOBAL_INTENT__', JSON.stringify({ name, at: Date.now() }));
+            if (msg) msg.textContent = `Tema “${name}” listo (fallback local).`;
+          }
+        } catch(e){
+          console.error(e);
+          if (msg) msg.textContent = 'No se pudo guardar el tema global.';
+        } finally {
+          btnSave.disabled = false; btnSave.textContent = prev;
         }
-      } catch(e){
-        console.error(e);
-        if (msg) msg.textContent = 'No se pudo guardar el tema global.';
-      } finally {
-        btnSave.disabled = false; btnSave.textContent = prev;
-      }
-    }, { once:false });
+      });
+    }
   }
 
-  // Corre al tener DOM listo…
+  // Arranque y al abrir la pestaña
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bindNow, { once:true });
   } else {
     bindNow();
   }
-
-  // …y también cada vez que se haga click en la pestaña “Temas”
   document.addEventListener('click', (e)=>{
     const t = e.target.closest('.tab');
     if (!t) return;
