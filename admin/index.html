@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Admin — Seven de Burgers</title>
   <style>
+    /* Pequeños estilos locales del admin */
     .tabs-admin{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .tabs-admin .tab{ padding:10px 12px; border-radius:12px; border:2px solid #2a3347; background:#121a2a; color:#eaf2ff; cursor:pointer; }
     .tabs-admin .tab.is-active{ border-color:#ffd24a; box-shadow:0 0 0 2px rgba(255,210,74,.15) inset; }
@@ -16,17 +17,9 @@
     .k-table th{ text-align:left; color:var(--muted) }
     .k-badge.ok{ background:#183a2a }
     .k-badge.warn{ background:#3a2f18 }
-
-    /* Recetario */
-    .rc-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
-    .rc-ingredients{ max-height:340px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; }
-    .muted.sm{ font-size:12px; color:var(--muted); }
-
-    /* Tablas responsivas / iOS */
     .table-wrap { overflow:auto; -webkit-overflow-scrolling: touch; }
     .k-table th, .k-table td { white-space: nowrap; }
     @media (max-width: 480px){
-      /* Ocultar columna “Artículos” en pantallas XS donde aplique */
       #tblHist th:nth-child(4), #tblHist td:nth-child(4) { display:none; }
     }
   </style>
@@ -46,6 +39,7 @@
 <main class="container">
   <div class="card">
     <h2>Panel de administración</h2>
+
     <div class="tabs-admin" id="admTabs" role="tablist" aria-label="Módulos de Admin">
       <button class="tab is-active" data-tab="reportes" role="tab" aria-selected="true">Reportes</button>
       <button class="tab" data-tab="hist" role="tab" aria-selected="false">Historial</button>
@@ -54,9 +48,7 @@
       <button class="tab" data-tab="inventario" role="tab" aria-selected="false">Inventario</button>
       <button class="tab" data-tab="proveedores" role="tab" aria-selected="false">Proveedores</button>
       <button class="tab" data-tab="productos" role="tab" aria-selected="false">Productos / Combos</button>
-      <!-- NUEVO: pestaña Temas -->
       <button class="tab" data-tab="temas" role="tab" aria-selected="false">Temas</button>
-      <!-- /NUEVO -->
       <button class="tab" data-tab="happy" role="tab" aria-selected="false">Happy Hour</button>
       <button class="tab" data-tab="recetas" role="tab" aria-selected="false">Recetario</button>
       <button class="tab" data-tab="articulos" role="tab" aria-selected="false">Artículos</button>
@@ -247,7 +239,7 @@
       <table class="k-table" id="tblVendors"><thead><tr><th>Nombre</th><th>Contacto</th><th>ID</th></tr></thead><tbody></tbody></table>
     </section>
 
-    <!-- PRODUCTOS / COMBOS (solo lectura para kiosko) -->
+    <!-- PRODUCTOS / COMBOS -->
     <section class="panel" id="panel-productos">
       <h3>Productos / Combos</h3>
       <div class="muted">WIP — Aquí podrás crear/editar productos, fijar precios y armar combos. El kiosko lee directo de <b>products</b>.</div>
@@ -255,78 +247,47 @@
       <table class="k-table" id="tblProducts"><thead><tr><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Activo</th><th>ID</th></tr></thead><tbody></tbody></table>
     </section>
 
-    <!-- NUEVO: TEMAS (no flotante) -->
+    <!-- TEMAS (lista compacta, sin desbordes) -->
     <section class="panel" id="panel-temas">
       <h3>Temas (Kiosko/UI)</h3>
+      <p class="muted small">Selecciona un tema para previsualizarlo localmente. “Guardar GLOBAL” escribe en <code>settings/theme</code>.</p>
 
-      <!-- Tarjetas para previsualizar (lo llena app.js) -->
-      <p class="muted small" style="margin-bottom:8px">
-        Selecciona una tarjeta para previsualizar localmente. “Guardar GLOBAL” escribe en
-        <code>settings/theme</code>.
-      </p>
-      <div id="themeCards"
-           class="grid"
-           style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px"></div>
+      <ul class="theme-list" id="themeList">
+        <li class="theme-item" data-theme="Base"><span class="dot"></span><span class="title">Base</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Independencia"><span class="dot"></span><span class="title">Independencia</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Día de Muertos"><span class="dot"></span><span class="title">Día de Muertos</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Navidad"><span class="dot"></span><span class="title">Navidad</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Halloween"><span class="dot"></span><span class="title">Halloween</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Fútbol"><span class="dot"></span><span class="title">Fútbol</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Lucha Libre"><span class="dot"></span><span class="title">Lucha Libre</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Pixel Art"><span class="dot"></span><span class="title">Pixel Art</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Retro Arcade"><span class="dot"></span><span class="title">Retro Arcade</span><button class="btn small ghost">Previsualizar</button></li>
+        <li class="theme-item" data-theme="Y2K (90s/00s)"><span class="dot"></span><span class="title">Y2K (90s/00s)</span><button class="btn small ghost">Previsualizar</button></li>
+      </ul>
 
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; margin-top:10px">
-        <div class="field">
-          <label>Selecciona tema</label>
-          <select id="admThemeSelect" style="width:100%"></select>
-        </div>
-
-        <div class="field" style="align-self:end">
-          <div class="row" style="gap:8px; flex-wrap:wrap">
-            <button class="btn" id="admThemePreview" type="button">Probar local</button>
-            <button class="btn" id="admThemeSave" type="button">Guardar GLOBAL</button>
-          </div>
-        </div>
+      <div class="row" style="margin-top:16px; justify-content:flex-end; gap:8px; flex-wrap:wrap">
+        <button id="btnPreviewLocal" class="btn small">Probar local</button>
+        <button id="btnGuardarGlobal" class="btn small warn">Guardar GLOBAL</button>
       </div>
-
-      <div class="muted small" id="admThemeMsg" style="margin-top:6px;opacity:.9"></div>
 
       <div class="muted small" style="margin-top:10px">
         * “Probar local” aplica el tema solo en este navegador (no guarda).<br>
         * “Guardar GLOBAL” escribe en <b>settings/theme</b>; los kioskos lo aplican en vivo.
       </div>
     </section>
-    <!-- /NUEVO: TEMAS -->
 
     <!-- HAPPY HOUR -->
     <section class="panel" id="panel-happy">
       <h3>Happy Hour</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px">
-        <div class="field">
-          <label>Estado</label>
-          <select id="hhEnabled"><option value="off">Desactivada</option><option value="on">Activada</option></select>
-        </div>
-        <div class="field">
-          <label>Descuento general (%)</label>
-          <input id="hhDisc" type="number" min="0" max="90" value="0">
-        </div>
-        <div class="field">
-          <label>Mensaje en kiosko</label>
-          <input id="hhMsg" type="text" placeholder="Ej. 2x1 en Minis 7–8 pm">
-        </div>
-        <div class="field" style="align-self:end">
-          <button class="btn" id="btnSaveHappy">Guardar HH</button>
-        </div>
-
-        <div class="field">
-          <label>Duración (min)</label>
-          <input id="hhDurMin" type="number" min="0" step="5" placeholder="Ej. 60">
-          <div class="muted small">Si indicas duración y está activada, se calcula el fin automáticamente.</div>
-        </div>
-        <div class="field">
-          <label>Termina el</label>
-          <input id="hhEndsAt" type="datetime-local">
-          <div class="muted small">Si no pones duración, puedes definir fecha/hora de término.</div>
-        </div>
-        <div class="field">
-          <label>Estado / Cuenta regresiva</label>
-          <div id="hhCountdown" class="muted small">Inactivo</div>
-        </div>
+        <div class="field"><label>Estado</label><select id="hhEnabled"><option value="off">Desactivada</option><option value="on">Activada</option></select></div>
+        <div class="field"><label>Descuento general (%)</label><input id="hhDisc" type="number" min="0" max="90" value="0"></div>
+        <div class="field"><label>Mensaje en kiosko</label><input id="hhMsg" type="text" placeholder="Ej. 2x1 en Minis 7–8 pm"></div>
+        <div class="field" style="align-self:end"><button class="btn" id="btnSaveHappy">Guardar HH</button></div>
+        <div class="field"><label>Duración (min)</label><input id="hhDurMin" type="number" min="0" step="5" placeholder="Ej. 60"><div class="muted small">Si indicas duración y está activada, se calcula el fin automáticamente.</div></div>
+        <div class="field"><label>Termina el</label><input id="hhEndsAt" type="datetime-local"><div class="muted small">Si no pones duración, puedes definir fecha/hora de término.</div></div>
+        <div class="field"><label>Estado / Cuenta regresiva</label><div id="hhCountdown" class="muted small">Inactivo</div></div>
       </div>
-
       <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:10px">
         <button class="btn ghost" id="btnHH30">Iniciar 30 min</button>
         <button class="btn ghost" id="btnHH60">Iniciar 60 min</button>
@@ -334,7 +295,6 @@
         <button class="btn ghost" id="btnHHExtend15">Extender +15 min</button>
         <button class="btn danger" id="btnHHStop">Detener</button>
       </div>
-
       <div class="muted small" style="margin-top:8px">* Guarda en <b>settings/happyHour</b>. El kiosko lo muestra y aplica el descuento si corresponde.</div>
       <h4 style="margin-top:16px">Reglas específicas</h4>
       <div class="muted small">WIP — podrás seleccionar productos/combos con descuento exclusivo durante HH.</div>
@@ -343,14 +303,9 @@
     <!-- RECETARIO -->
     <section class="panel" id="panel-recetas">
       <h3>Recetario de aderezos</h3>
-
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:8px">
-        <div class="field">
-          <label>Buscar</label>
-          <input id="rcpSearch" type="text" placeholder="nombre o ingrediente…">
-        </div>
-        <div class="field">
-          <label>Porción rápida</label>
+        <div class="field"><label>Buscar</label><input id="rcpSearch" type="text" placeholder="nombre o ingrediente…"></div>
+        <div class="field"><label>Porción rápida</label>
           <select id="rcpQuickPort">
             <option value="500">500 ml</option>
             <option value="250">250 ml</option>
@@ -359,19 +314,7 @@
           </select>
         </div>
       </div>
-
-      <table class="k-table" id="tblRecipes">
-        <thead>
-          <tr>
-            <th>Receta</th>
-            <th>Rinde base</th>
-            <th>Producto terminado</th>
-            <th>#Ingr.</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <table class="k-table" id="tblRecipes"><thead><tr><th>Receta</th><th>Rinde base</th><th>Producto terminado</th><th>#Ingr.</th><th></th></tr></thead><tbody></tbody></table>
     </section>
 
     <!-- Modal Receta -->
@@ -401,13 +344,8 @@
     <section class="panel" id="panel-articulos">
       <h3>Artículos</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-bottom:8px">
-        <div class="field">
-          <label>Buscar</label>
-          <input id="artSearch" type="text" placeholder="nombre o descripción…">
-        </div>
-        <div class="field" style="align-self:end">
-          <button class="btn" id="btnAddArticulo">Nuevo artículo</button>
-        </div>
+        <div class="field"><label>Buscar</label><input id="artSearch" type="text" placeholder="nombre o descripción…"></div>
+        <div class="field" style="align-self:end"><button class="btn" id="btnAddArticulo">Nuevo artículo</button></div>
       </div>
       <table class="k-table" id="tblArticulos">
         <thead><tr><th>Nombre</th><th>Precio</th><th>Activo</th><th>Acciones</th></tr></thead>
@@ -419,6 +357,44 @@
   </div>
 </main>
 
+<!-- App principal -->
 <script type="module" src="./app.js"></script>
+
+<!-- Lógica mínima del panel Temas -->
+<script>
+  const toast = (msg)=>{ console.log(msg); };
+  let selectedTheme = null;
+
+  const applyThemeLocal = (name) => {
+    document.documentElement.setAttribute('data-theme', name);
+    document.body.setAttribute('data-theme', name);
+    sessionStorage.setItem('theme', name);
+    toast('Vista previa: ' + name);
+  };
+
+  const saveThemeGlobal = async (name) => {
+    if (typeof setTheme === 'function') {
+      await setTheme(name);
+      toast('Tema guardado GLOBAL: ' + name);
+    } else {
+      alert('No se puede guardar globalmente (setTheme no existe)');
+    }
+  };
+
+  document.getElementById('themeList')?.addEventListener('click', (e)=>{
+    const item = e.target.closest('.theme-item');
+    if (!item) return;
+    selectedTheme = item.dataset.theme;
+    document.querySelectorAll('.theme-item').forEach(li=>li.classList.remove('is-active'));
+    item.classList.add('is-active');
+    applyThemeLocal(selectedTheme);
+  });
+  document.getElementById('btnPreviewLocal')?.addEventListener('click', ()=>{
+    if (selectedTheme) applyThemeLocal(selectedTheme);
+  });
+  document.getElementById('btnGuardarGlobal')?.addEventListener('click', async ()=>{
+    if (selectedTheme) await saveThemeGlobal(selectedTheme);
+  });
+</script>
 </body>
 </html>
