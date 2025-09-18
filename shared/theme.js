@@ -272,6 +272,15 @@ const CUSTOM = Object.create(null); // presets personalizados cargados
 let _unsubTheme = null;
 let _unsubPresets = null;
 
+/* Precarga de presets desde localStorage (sin esperar a Firestore) */
+try {
+  const raw = localStorage.getItem('theme_presets');
+  if (raw) {
+    const map = JSON.parse(raw);
+    if (map && typeof map === 'object') Object.assign(CUSTOM, map);
+  }
+} catch {}
+
 /* -------------------- Utilidades -------------------- */
 const slug = (s = '') =>
   String(s)
@@ -288,7 +297,7 @@ function getPresetByName(name) {
     if (t.name.toLowerCase() === String(name).toLowerCase()) return t;
   }
   for (const p of Object.values(CUSTOM)) {
-    if (p.name.toLowerCase() === String(name).toLowerCase()) return p;
+    if (p?.name && p.name.toLowerCase() === String(name).toLowerCase()) return p;
   }
   return null;
 }
@@ -317,6 +326,7 @@ function applyBackground(bg = {}) {
     body.style.backgroundSize = bg.size || 'cover';
     body.style.backgroundPosition = bg.position || 'center';
     body.style.backgroundRepeat = 'no-repeat';
+    body.style.backgroundAttachment = 'scroll'; // cambia a 'fixed' si te gusta el efecto
   } else {
     body.style.backgroundImage = 'none';
   }
@@ -328,11 +338,12 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
     ? getPresetByName(nameOrPreset)
     : nameOrPreset) || THEMES_BUILTIN.Base;
 
-  const pal = preset.palette || {};
-  const fonts = preset.fonts || {};
-  const root = document.documentElement;
+  const pal   = preset.palette || {};
+  const fonts = preset.fonts   || {};
+  const root  = document.documentElement;
 
   const vars = {
+    // originales
     '--bg': pal.bg, '--text': pal.text,
     '--panel1': pal.panel1 || '#0b0e12', '--panel2': pal.panel2 || '#0b0d15',
     '--ink1': pal.ink1 || pal.text || '#fff', '--ink2': pal.ink2 || '#b9c3d1',
@@ -341,11 +352,22 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
     '--ok': pal.ok || '#00c27a', '--warn': pal.warn || '#ffd27f', '--danger': pal.danger || '#ff5d5d',
     '--font-base': fonts.base || 'Inter, system-ui, Arial',
     '--font-display': fonts.display || 'inherit',
+
+    // aliases para compat con UI del admin
+    '--color-bg': pal.bg,
+    '--color-text': pal.text,
+    '--color-primary': pal.primary || '#ffc242',
+    '--color-accent': pal.accent || '#27e1ff',
   };
   Object.entries(vars).forEach(([k, v]) => v && root.style.setProperty(k, v));
 
+  // fondo y fuentes
   ensureFontImport(fonts.importUrl || '');
   applyBackground(preset.bg || {});
+  try {
+    document.body.style.backgroundColor = pal.bg || '#0b0f14';
+    document.body.style.color = pal.text || '#e8f0ff';
+  } catch {}
 
   const name = preset.name || (typeof nameOrPreset === 'string' ? nameOrPreset : 'Custom');
   root.setAttribute('data-theme-name', name);
@@ -368,7 +390,10 @@ export function initThemeFromSettings({ defaultName = 'Base' } = {}) {
 }
 
 export function listThemes() {
-  return Object.keys(THEMES_BUILTIN);
+  const builtins = Object.keys(THEMES_BUILTIN);
+  const customs  = Object.values(CUSTOM).map(p => p?.name).filter(Boolean);
+  const all = Array.from(new Set([...builtins, ...customs]));
+  return all.sort((a,b)=> String(a).localeCompare(String(b), 'es'));
 }
 
 export function subscribeThemePresets(cb) {
