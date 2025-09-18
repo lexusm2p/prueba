@@ -2292,6 +2292,62 @@ document.addEventListener('keydown',(e)=>{
     el?.focus();
   }
 });
+/* ========================= Temas: compat con dropdown del Admin ========================= */
+(function wireAdminThemeDropdown(){
+  const sel     = document.getElementById('admThemeSelect');
+  const btnPrev = document.getElementById('admThemePreview');
+  const btnSave = document.getElementById('admThemeSave');
+  const msg     = document.getElementById('admThemeMsg');
+  if (!sel) return; // si no existe, no hacemos nada
+
+  function fillOptions() {
+    let names = [];
+    try { names = (listThemes?.() || []).filter(Boolean); } catch {}
+    if (!names.length) names = ['Base'];
+    sel.innerHTML = names.map(n => `<option value="${escAttr(n)}">${esc(n)}</option>`).join('');
+
+    // selecciona el tema actual si está aplicado, o el último local probado
+    const curr = document.documentElement.getAttribute('data-theme-name');
+    const last = (()=>{ try { return sessionStorage.getItem('localTheme'); } catch { return null; } })();
+    const want = (last && names.includes(last)) ? last : (curr && names.includes(curr)) ? curr : names[0];
+    sel.value = want;
+  }
+
+  fillOptions();
+
+  // si se guardan presets custom en vivo, refresca opciones
+  try { subscribeThemePresets(() => fillOptions()); } catch {}
+
+  // Probar local
+  btnPrev?.addEventListener('click', () => {
+    const name = sel.value || 'Base';
+    try {
+      applyThemeLocal(name);
+      try { sessionStorage.setItem('localTheme', name); } catch {}
+      if (msg) msg.textContent = `Vista previa aplicada: ${name}`;
+    } catch (e) {
+      console.error(e);
+      if (msg) msg.textContent = 'No se pudo aplicar el tema local.';
+    }
+  });
+
+  // Guardar GLOBAL (settings/theme)
+  btnSave?.addEventListener('click', async () => {
+    const name = sel.value || 'Base';
+    const prev = btnSave.textContent;
+    btnSave.disabled = true; btnSave.textContent = 'Guardando…';
+    try {
+      await setTheme({ name }, { training: isTraining() });
+      if (msg) msg.textContent = `Tema GLOBAL guardado: ${name}` + (isTraining() ? ' (PRUEBA)' : '');
+      toast(`Tema global: ${name}`);
+    } catch (e) {
+      console.error(e);
+      if (msg) msg.textContent = 'No se pudo guardar el tema global.';
+    } finally {
+      btnSave.disabled = false; btnSave.textContent = prev;
+    }
+  });
+})();
 
 // Limpieza de timers globales y subscripciones
 window.addEventListener('beforeunload', ()=>{
