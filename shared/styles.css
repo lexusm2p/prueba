@@ -79,7 +79,7 @@ body{
 /* ===== Utilidades ===== */
 a{ color:var(--accent-2); text-decoration:none }
 a:hover{ text-decoration:underline }
-.row{ display:flex; align-items:center; gap:8px; min-width:0; } /* ← evita desbordes */
+.row{ display:flex; align-items:center; gap:8px; min-width:0; }
 .right{ text-align:right }
 .center{ text-align:center }
 .nowrap{ white-space:nowrap }
@@ -181,7 +181,6 @@ a:hover{ text-decoration:underline }
   max-width:100%;
 }
 .btn.tab .ellipsis{ max-width:100%; }
-
 .btn.tab.is-active{
   border:2px solid #352600;
   background:linear-gradient(#ffc83a,#f2a400);
@@ -242,7 +241,7 @@ a:hover{ text-decoration:underline }
 </svg>') center/cover no-repeat;
 }
 
-/* ===== Pie de tarjeta (dos modos: .card-foot o último .row) ===== */
+/* ===== Pie de tarjeta ===== */
 .card-foot{
   position:absolute; left:16px; right:16px; bottom:16px;
   display:flex; align-items:center; gap:12px;
@@ -254,7 +253,6 @@ a:hover{ text-decoration:underline }
   justify-content:flex-end; max-width:100%;
 }
 .card-foot .actions .btn{ min-width:122px }
-
 .card .row:last-child{
   position:absolute; left:16px; right:16px; bottom:16px;
   display:flex; align-items:center; gap:12px;
@@ -293,7 +291,7 @@ input:-webkit-autofill{
   box-shadow: 0 0 0px 1000px #0c1322 inset;
 }
 
-/* ===== Lista de extras (alineada) ===== */
+/* ===== Lista de extras ===== */
 .ul-clean{
   display:grid; grid-template-columns:28px 1fr auto;
   gap:9px 10px; align-items:center; min-width:0;
@@ -360,7 +358,7 @@ input:-webkit-autofill{
   .card-foot,
   .card .row:last-child{ left:14px; right:14px; bottom:14px; gap:10px }
   .card-foot .actions .btn,
-  .card .row:last-child .btn{ min-width:calc(50% - 5px) } /* 2 por fila */
+  .card .row:last-child .btn{ min-width:calc(50% - 5px) }
   .card h3{ font-size:18px; line-height:1.15 }
 }
 
@@ -502,104 +500,59 @@ input:-webkit-autofill{
 }
 
 /* (Opcional) Modal específico para Artículos */
-#artModal .modal-card{
-  width:min(480px,90vw);
-}
-#artModal .modal-body .field{
-  margin-bottom:12px;
-}
+#artModal .modal-card{ width:min(480px,90vw); }
+#artModal .modal-body .field{ margin-bottom:12px; }
 
 /* =========================================================
-   Happy Hour — Countdown pill (Admin > panel-happy)
+   Happy Hour — Countdown pill
    ========================================================= */
 #panel-happy #hhCountdown{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  padding:8px 12px;
-  min-width:160px;
-  white-space:nowrap;
-  border-radius:999px;
-  background:linear-gradient(180deg,#1a2337,#0f1626);
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; padding:8px 12px; min-width:160px; white-space:nowrap;
+  border-radius:999px; background:linear-gradient(180deg,#1a2337,#0f1626);
   border:1.5px solid #2e3a56;
-  box-shadow:
-    0 2px 0 rgba(0,0,0,.25),
-    inset 0 0 0 1px rgba(255,255,255,.04);
-  color:var(--ink);
-  font-variant-numeric:tabular-nums;
-  letter-spacing:.5px;
+  box-shadow: 0 2px 0 rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.04);
+  color:var(--ink); font-variant-numeric:tabular-nums; letter-spacing:.5px;
 }
 #panel-happy #hhCountdown::before{
-  content:"";
-  width:10px; height:10px;
-  border-radius:50%;
-  background:#49d28d;
-  box-shadow:0 0 0 3px rgba(73,210,141,.15);
+  content:""; width:10px; height:10px; border-radius:50%;
+  background:#49d28d; box-shadow:0 0 0 3px rgba(73,210,141,.15);
 }
 #panel-happy #hhCountdown.is-running{
   border-color:#2f8f4e;
-  box-shadow:
-    0 0 0 1px rgba(47,143,78,.25) inset,
-    0 0 16px rgba(47,143,78,.18);
+  box-shadow:0 0 0 1px rgba(47,143,78,.25) inset, 0 0 16px rgba(47,143,78,.18);
   animation:hhPulse 1.6s ease-in-out infinite;
 }
 #panel-happy #hhCountdown.is-warning{ border-color:#9a7b2c; }
 #panel-happy #hhCountdown.is-warning::before{
-  background:#ffd24a;
-  box-shadow:0 0 0 3px rgba(255,210,74,.20);
+  background:#ffd24a; box-shadow:0 0 0 3px rgba(255,210,74,.20);
 }
 #panel-happy #hhCountdown.is-stopped,
 #panel-happy #hhCountdown.is-idle{ opacity:.75; }
 #panel-happy #hhCountdown.is-stopped::before{
-  background:#9aa3b2;
-  box-shadow:0 0 0 3px rgba(255,255,255,.08);
+  background:#9aa3b2; box-shadow:0 0 0 3px rgba(255,255,255,.08);
 }
-@keyframes hhPulse{
-  0%{ transform:scale(1); }
-  50%{ transform:scale(1.06); }
-  100%{ transform:scale(1); }
-}
+@keyframes hhPulse{ 0%{transform:scale(1)} 50%{transform:scale(1.06)} 100%{transform:scale(1)} }
 #panel-happy .row [id^="btnHH"]{ border-radius:999px; padding:.45rem .7rem; }
 #panel-happy #btnHHStop{ border-color:#6b2a2a; }
 
 /* =========================================================
    HISTORIAL DE PEDIDOS (Admin)
    ========================================================= */
-#tblHist.k-table th, #tblHist.k-table td{
-  white-space:nowrap;
-  vertical-align:middle;
-}
-#tblHist .btn.small.ghost{
-  padding:6px 8px;
-  line-height:1;
-  font-size:11px;
-}
+#tblHist.k-table th, #tblHist.k-table td{ white-space:nowrap; vertical-align:middle; }
+#tblHist .btn.small.ghost{ padding:6px 8px; line-height:1; font-size:11px; }
 @media (max-width: 480px){
-  /* Oculta “Artículos” en XS */
   #tblHist th:nth-child(4), #tblHist td:nth-child(4){ display:none; }
 }
-.modal .modal-card{
-  width:min(760px,94vw);
-  max-height:86vh;
-}
-@media (max-width: 520px){
-  .modal .modal-card{ width:94vw; }
-}
-.k-table tbody tr:focus-within{
-  outline:2px solid rgba(124,201,255,.35);
-  outline-offset:-2px;
-}
-@supports (-webkit-touch-callout: none) {
-  #tblHist .btn.small.ghost{ font-size:14px; }
-}
+.modal .modal-card{ width:min(760px,94vw); max-height:86vh; }
+@media (max-width: 520px){ .modal .modal-card{ width:94vw; } }
+.k-table tbody tr:focus-within{ outline:2px solid rgba(124,201,255,.35); outline-offset:-2px; }
+@supports (-webkit-touch-callout: none) { #tblHist .btn.small.ghost{ font-size:14px; } }
 
 /* =========================================================
-   FIX: Panel de COCINA en celulares (mejor grid/espaciado)
+   FIX: Panel de COCINA en celulares
    ========================================================= */
-@media (max-width: 1100px){
-  .k-columns{ grid-template-columns:repeat(2,1fr); }
-}
+@media (max-width: 1100px){ .k-columns{ grid-template-columns:repeat(2,1fr); } }
 @media (max-width: 720px){
   .k-columns{ grid-template-columns:1fr; }
   .k-card{ padding:12px; }
@@ -611,11 +564,7 @@ input:-webkit-autofill{
 .k-card, .k-head .title, .k-card .row, .k-badges{ min-width:0; }
 .k-card *{ word-break:break-word; }
 @media (max-width: 720px){
-  .k-columns{
-    max-height: calc(100vh - 180px);
-    overflow:auto;
-    -webkit-overflow-scrolling: touch;
-  }
+  .k-columns{ max-height: calc(100vh - 180px); overflow:auto; -webkit-overflow-scrolling: touch; }
 }
 @media (max-width: 400px){
   .k-actions{ flex-direction:row; flex-wrap:wrap; }
@@ -628,6 +577,44 @@ input:-webkit-autofill{
 @media (max-width: 720px){
   .header{ position:sticky; top:0; }
   body{ overscroll-behavior-y:none; }
+}
+
+/* =========================================================
+   PANEL TEMAS (Kiosko/UI) — Anti-desborde
+   ========================================================= */
+#panel-temas{ min-width:0; }
+#panel-temas .panel{ min-width:0; }
+#panel-temas .tabs{
+  display:grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap:12px;
+  align-items:stretch;
+}
+#panel-temas .btn.tab{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+  max-width:100%;
+  height:auto;
+  line-height:1.15;
+  padding:12px;
+  overflow:hidden;
+  font-size: clamp(12px, 2.8vw, 14px);
+}
+#panel-temas .btn.tab .dot{ flex:0 0 auto; }
+#panel-temas .btn.tab > *,
+#panel-temas .btn.tab span,
+#panel-temas .btn.tab small,
+#panel-temas .btn.tab .txt{
+  min-width:0;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  text-overflow:ellipsis;
+  word-break:break-word;
+  overflow-wrap:anywhere;
 }
 
 /* =========================================================
@@ -817,10 +804,7 @@ body[data-theme-name="Navidad"]::before{
   background-position: 0 0, 1px 1px;
   animation: snowFloat 18s linear infinite;
 }
-@keyframes snowFloat{
-  from{ background-position: 0 0, 1px 200px; }
-  to  { background-position: 0 200px, 1px 401px; }
-}
+@keyframes snowFloat{ from{background-position:0 0,1px 200px} to{background-position:0 200px,1px 401px} }
 
 /* “Papel picado” decorativo */
 .papel-picado{ position:relative; z-index:0; }
@@ -869,11 +853,9 @@ body[data-font="cantina"] h1, body[data-font="cantina"] h2, body[data-font="cant
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
 }
-/* Scrollbar sutil (webkit/Chromium) */
 *::-webkit-scrollbar{ width:10px; height:10px }
 *::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:8px; border:2px solid transparent; background-clip:padding-box }
 *::-webkit-scrollbar-track{ background:transparent }
-/* Tap highlight (mobile) */
 *{ -webkit-tap-highlight-color: rgba(255,255,255,.08); }
 
 /* Impresión básica */
