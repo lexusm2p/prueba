@@ -1,3 +1,8 @@
+// Cocina — tablero de preparación
+// Suscribe pedidos (preferente: DB.subscribeKitchenOrders).
+// Acciones optimistas: tomar, listo, entregar, cobrar, editar, cancelar.
+// Modo PRUEBA: no escribe en Firestore.
+
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 
@@ -30,20 +35,21 @@ function paintTrainingBadge(){
 document.addEventListener('DOMContentLoaded', paintTrainingBadge);
 
 /* ================== Shims DB (compat) ================== */
-function subscribeOrdersShim(cb){
-  if (typeof DB.subscribeOrders === 'function') return DB.subscribeOrders(cb);
-  if (typeof DB.onOrdersSnapshot === 'function') return DB.onOrdersSnapshot(cb);
-  if (typeof DB.subscribeActiveOrders === 'function') return DB.subscribeActiveOrders(cb);
+function subscribeKitchenShim(cb){
+  if (typeof DB.subscribeKitchenOrders === 'function') return DB.subscribeKitchenOrders(cb);
+  if (typeof DB.subscribeOrders === 'function')        return DB.subscribeOrders(cb);
+  if (typeof DB.onOrdersSnapshot === 'function')       return DB.onOrdersSnapshot(cb);
+  if (typeof DB.subscribeActiveOrders === 'function')  return DB.subscribeActiveOrders(cb);
   console.warn('[cocina] No hay método de suscripción a órdenes en DB'); return ()=>{};
 }
 async function setStatusShim(id, status, opts){
-  if (typeof DB.setOrderStatus === 'function') return DB.setOrderStatus(id, status, opts);
-  if (typeof DB.setStatus === 'function') return DB.setStatus(id, status, opts);
+  if (typeof DB.setOrderStatus === 'function') return DB.setOrderStatus(id, status, {}, opts);
+  if (typeof DB.setStatus === 'function')      return DB.setStatus(id, status, opts);
   throw new Error('No hay setOrderStatus/setStatus en DB');
 }
 async function updateOrderShim(id, patch, opts){
-  if (typeof DB.updateOrder === 'function') return DB.updateOrder(id, patch, opts);
-  if (typeof DB.upsertOrder === 'function') return DB.upsertOrder({ id, ...patch }, opts);
+  if (typeof DB.updateOrder === 'function')  return DB.updateOrder(id, patch, opts);
+  if (typeof DB.upsertOrder === 'function')  return DB.upsertOrder({ id, ...patch }, opts);
   console.warn('[cocina] updateOrder no disponible; patch ignorado:', patch);
 }
 async function archiveDeliveredShim(id, finalStatus='DONE', opts){
@@ -63,13 +69,14 @@ const Status = {
   READY: 'READY',
   DELIVERED: 'DELIVERED',
   CANCELLED: 'CANCELLED',
-  DONE: 'DONE'
+  DONE: 'DONE',
+  PAID: 'PAID'
 };
 
 let CURRENT_LIST = [];
 const LOCALLY_TAKEN = new Set();
 
-/* ================== Time helpers ================== */
+/* ================== Time & utils ================== */
 const now = ()=> new Date();
 const toMs = (t)=> {
   if (!t) return 0;
@@ -91,9 +98,9 @@ function escapeHtml(s=''){
   }[m]));
 }
 
-/* ================== Dedupe & merge helpers ================== */
+/* ================== Dedupe & merge ================== */
 function updatedAtMs(o){
-  return toMs(o.updatedAt || o.timestamps?.updatedAt || o.readyAt || o.startedAt || o.createdAt || o.timestamps?.createdAt);
+  return toMs(o.updatedAt || o.timestamps?.updatedAt || o.readyAt || o.timestamps?.readyAt || o.startedAt || o.timestamps?.startedAt || o.createdAt || o.timestamps?.createdAt);
 }
 function mergeByNewest(list){
   const byId = new Map();
@@ -114,7 +121,6 @@ function patchLocal(id, patch){
     return { ...o, ...patch, timestamps: { ...(o.timestamps||{}), ...extractTimestamps(patch) } };
   });
   if (!changed) {
-    // si no estaba (raro), al menos créalo para que no duplique
     CURRENT_LIST.push({ id, ...patch, timestamps: extractTimestamps(patch) });
   }
 }
@@ -130,9 +136,8 @@ function extractTimestamps(patch){
 }
 
 /* ================== Data stream ================== */
-// Guard contra múltiples suscripciones accidentales
 let __streamLocked = false;
-const unsub = subscribeOrdersShim((orders = [])=>{
+const unsub = subscribeKitchenShim((orders = [])=>{
   if (__streamLocked) return;
   __streamLocked = true;
   try {
@@ -162,7 +167,7 @@ function calcTotal(o={}){
 /* ================== Render ================== */
 function render(list){
   const by = (list||[]).reduce((acc,o)=>{
-    const s = o?.status || Status.PENDING;
+    const s = (o?.status || Status.PENDING).toUpperCase();
     (acc[s] ||= []).push(o);
     return acc;
   },{});
@@ -276,11 +281,14 @@ document.addEventListener('click', async (e)=>{
     if (a==='take'){
       LOCALLY_TAKEN.add(id);
       btn.textContent = 'Tomando…';
+
       const order = CURRENT_LIST.find(x=>x.id===id);
       if(order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
-      // ⬇️ Optimista: mover a IN_PROGRESS en el cliente para evitar duplicado
-      patchLocal(id, { status: Status.IN_PROGRESS, startedAt: now(), 'timestamps.startedAt': now() });
+
+      // Optimista
+      patchLocal(id, { status: Status.IN_PROGRESS, startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
+
       await setStatusShim(id, Status.IN_PROGRESS, OPTS);
       await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
       beep(); toast('En preparación');
@@ -288,7 +296,7 @@ document.addEventListener('click', async (e)=>{
     }
 
     if (a==='ready'){
-      patchLocal(id, { status: Status.READY, readyAt: now(), 'timestamps.readyAt': now() });
+      patchLocal(id, { status: Status.READY, readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
       await setStatusShim(id, Status.READY, OPTS);
       await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
@@ -297,7 +305,7 @@ document.addEventListener('click', async (e)=>{
     }
 
     if (a==='deliver'){
-      patchLocal(id, { status: Status.DELIVERED, deliveredAt: now(), 'timestamps.deliveredAt': now() });
+      patchLocal(id, { status: Status.DELIVERED, deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
       await setStatusShim(id, Status.DELIVERED, OPTS);
       await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
@@ -312,7 +320,7 @@ document.addEventListener('click', async (e)=>{
       if (method === null) { btn.disabled=false; return; }
       const payMethod = String(method||'efectivo').toLowerCase();
 
-      patchLocal(id, { paid: true, paidAt: now(), payMethod, totalCharged: Number(total) });
+      patchLocal(id, { paid: true, paidAt: now(), payMethod, totalCharged: Number(total), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
 
       await updateOrderShim(id, {
@@ -350,7 +358,7 @@ document.addEventListener('click', async (e)=>{
       const trimmed = String(reason).trim();
       if (!trimmed) { alert('Por favor escribe un motivo.'); return; }
 
-      patchLocal(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now() });
+      patchLocal(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
 
       await updateOrderShim(id, {
