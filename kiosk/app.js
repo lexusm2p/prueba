@@ -608,6 +608,60 @@ function checkComboAchievement(){
     toast('🎉 ¡Combo de 3 minis logrado!');
   }
 }
+/* ======================= Desbloqueo de regalo por ticket ======================= */
+function hasGiftInCart(){
+  return state.cart.some(l => l.isGift && l.id === state.gift.productId);
+}
+function cartTotal(){
+  return state.cart.reduce((a,l)=> a + Number(l.lineTotal||0), 0);
+}
+function addGiftLine(){
+  // Busca plantilla desde el catálogo si existe (GIFT_TEMPLATES) o crea una línea simple
+  const tpl = (state.menu?.giftTemplates && state.menu.giftTemplates[state.gift.productId]) || null;
+  const line = tpl ? {
+    ...tpl,
+    qty: 1,
+    unitPrice: 0,
+    lineTotal: 0,
+    hhDisc: 0
+  } : {
+    id: state.gift.productId,
+    name: 'PowerDog Mini (Regalo)',
+    mini: true,
+    isGift: true,
+    qty: 1,
+    unitPrice: 0,
+    lineTotal: 0,
+    baseIngredients: ['Pan mini','Salchicha','Queso blanco','Aderezo cheddar','Cebolla blanca','Salsa chimichurri'],
+    extras: { sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+    notes: '',
+    hhDisc: 0
+  };
+  state.cart.push(line);
+  updateCartBar();
+}
+
+function checkGiftUnlock(autoOpen=true){
+  const total = cartTotal();
+  const already = hasGiftInCart();
+  if (total >= Number(state.gift.threshold) && !already){
+    // Modal solo una vez por sesión de carrito, hasta que el usuario cambie el total
+    if (state.gift.autoPrompt && autoOpen){
+      playGiftSfx();
+      openGiftModal();
+      state.gift.shownThisSession = true;
+    }
+  } else {
+    // Si bajó del umbral, resetea el flag para volver a mostrar cuando suba otra vez
+    if (total < Number(state.gift.threshold)) state.gift.shownThisSession = false;
+    // Si el total bajó y había regalo, lo retiramos automáticamente
+    if (total < Number(state.gift.threshold) && already){
+      state.cart = state.cart.filter(l => !(l.isGift && l.id===state.gift.productId));
+      updateCartBar();
+      toast('Regalo removido (bajaste de $' + Number(state.gift.threshold).toFixed(0) + ')');
+    }
+  }
+}
 
 /* ======================= Tarjetas ======================= */
 function renderCards(){
