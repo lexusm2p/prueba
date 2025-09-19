@@ -1,5 +1,5 @@
 // /shared/db-compat.js
-// Adaptador que expone la API esperada por app.js: DB.createOrder, DB.trackOrder, etc.
+// Adaptador unificado: expone API nueva y alias legacy usados en app.js
 
 import {
   db,
@@ -7,24 +7,20 @@ import {
   onSnapshot, query, orderBy, limit, serverTimestamp
 } from './firebase.js';
 
-/** Normaliza un doc snapshot a objeto con id */
 const toObj = (d) => ({ id: d.id, ...d.data() });
 
-/** Lee últimos N pedidos y deja que la UI los separe por estado */
+/* ------------ Core API (nueva) ------------ */
 function listenKitchen(cb, opts = {}) {
   const { max = 200 } = opts;
   const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(max));
-  return onSnapshot(q, (snap) => {
-    const rows = snap.docs.map(toObj);
-    cb(rows);
-  });
+  return onSnapshot(q, (snap) => cb(snap.docs.map(toObj)));
 }
 
 async function createOrder(payload) {
-  // Asegura campos base que la UI suele usar
   const row = {
     ...payload,
-    state: payload?.state || 'PENDING',
+    status: payload?.status || payload?.state || 'PENDING', // status preferido
+    state:  payload?.state  || payload?.status || 'PENDING', // compat
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -32,16 +28,26 @@ async function createOrder(payload) {
   return { id: ref.id };
 }
 
-async function updateOrderState(id, state, extra = {}) {
-  await setDoc(
-    doc(db, 'orders', id),
-    { state, updatedAt: serverTimestamp(), ...extra },
-    { merge: true }
-  );
+async function updateOrderState(id, next, extra = {}) {
+  // Mantén ambos campos por compatibilidad (status/state)
+  const patch = {
+    status: next,
+    state: next,
+    updatedAt: serverTimestamp(),
+    ...extra
+  };
+  await setDoc(doc(db, 'orders', id), patch, { merge: true });
 }
 
 async function setOrder(id, data) {
-  await setDoc(doc(db, 'orders', id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+  const patch = {
+    ...data,
+    // si viene solo status/state, rellena el otro
+    ...(data?.status && !data?.state ? { state: data.status } : {}),
+    ...(data?.state  && !data?.status ? { status: data.state } : {}),
+    updatedAt: serverTimestamp(),
+  };
+  await setDoc(doc(db, 'orders', id), patch, { merge: true });
 }
 
 async function getOrder(id) {
@@ -54,17 +60,39 @@ function trackOrder(id, cb) {
   return onSnapshot(ref, (s) => cb(s.exists() ? toObj(s) : null));
 }
 
-// Expone la API esperada por app.js
+/* ------------ Aliases legacy (los que usa cocina/mesero/kiosko) ------------ */
+// Suscripción de órdenes
+const subscribeOrders       = (cb, opts) => listenKitchen(cb, opts);
+const onOrdersSnapshot      = subscribeOrders;
+const subscribeActiveOrders = subscribeOrders;
+
+// Set de estado
+const setOrderStatus = (id, status, extra) => updateOrderState(id, status, extra);
+const setStatus      = setOrderStatus;
+
+// Actualizar/“upsert”
+const updateOrder = (id, patch, _opts) => setOrder(id, patch);
+const upsertOrder = ({ id, ...rest }, _opts) => setOrder(id, rest);
+
+// Archivar entregados (tu app lo usa después de cobrar/cancelar)
+const archiveDelivered = (id, _opts) => updateOrderState(id, 'DONE');
+
+// Inventario (opcional; si no existe, no falla)
+async function applyInventoryForOrder(/*order, opts*/) {
+  // no-op por ahora; deja el hook para el futuro
+}
+
+/* ------------ Objeto público ------------ */
 export const DB = {
-  createOrder,
-  updateOrderState,
-  setOrder,
-  getOrder,
-  listenKitchen,
-  trackOrder,
+  // Core
+  createOrder, updateOrderState, setOrder, getOrder, listenKitchen, trackOrder,
+  // Aliases legacy
+  subscribeOrders, onOrdersSnapshot, subscribeActiveOrders,
+  setOrderStatus, setStatus, updateOrder, upsertOrder,
+  archiveDelivered, applyInventoryForOrder,
 };
 
-// Para código legado que lo usa como global
+// Globals para código suelto
 if (typeof window !== 'undefined') window.DB = DB;
 
 export default DB;
