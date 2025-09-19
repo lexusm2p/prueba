@@ -57,6 +57,14 @@ const state = {
   loyaltyOptIn: false,
   lastCollectible: null,   // {rarity, name, title, palette, meta}
   lastVoucher: null        // {code, pct, expiresAt}
+  // ===== Regalo: PowerDog Mini por ticket >= $117 =====
+  gift: {
+    threshold: 117,
+    productId: 'powerdog-mini',
+    sound: '../shared/sfx/combo-unlocked.mp3', // coloca tu mp3 aquí
+    autoPrompt: true,
+    shownThisSession: false
+  },
 };
 
 /* ====== ETA tuning ====== */
