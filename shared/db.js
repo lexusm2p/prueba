@@ -83,7 +83,7 @@ export async function fetchCatalogWithFallback() {
   } catch {}
   try {
     const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
-    if (r2.ok) return normalizeCatalog(await r2.json());
+    if (r2.ok) return normalizeCatalog(await r.json());
   } catch {}
   return normalizeCatalog({});
 }
@@ -209,6 +209,9 @@ export async function setOrderStatus(id, status, extra = {}, opts = {}) {
     return { ok: true };
   }, { ok: true, _training: true });
 }
+
+// Alias de compatibilidad
+export const setStatus = setOrderStatus;
 
 // Archiva pedidos entregados / cancelados (copia a orders_archive y borra original)
 export async function archiveDelivered(id, opts = {}) {
@@ -441,6 +444,26 @@ export async function upsertArticle(article, opts = {}) {
     return ref.id;
   }, article?.id ?? `TRAIN-ART-${Date.now()}`);
 }
+
+// Borrado de artículos (hard delete con fallback a soft delete)
+export async function deleteArticle(id, opts = {}) {
+  const { training = false } = opts;
+  if (!id) throw new Error('deleteArticle: falta id');
+  return guardWrite(training, async () => {
+    await ensureAuth();
+    const ref = doc(db, 'articles', id);
+    try {
+      await deleteDoc(ref);
+      return { ok: true, hardDelete: true };
+    } catch {
+      await setDoc(ref, { deleted: true, updatedAt: serverTimestamp() }, { merge: true });
+      return { ok: true, hardDelete: false, softDelete: true };
+    }
+  }, { ok: true, _training: true });
+}
+
+// Alias legacy
+export const removeArticle = deleteArticle;
 
 /* =================== Clientes / WhatsApp / Lealtad =================== */
 export async function fetchCustomer(phone) {
