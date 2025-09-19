@@ -14,9 +14,6 @@ import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
 import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
 import { setTheme } from '../shared/db.js';
-// /shared/db.js
-export * from './db-compat.js';
-export { DB as default } from './db-compat.js';
 /* ======================= Estado global ======================= */
 const state = {
   menu: null,
