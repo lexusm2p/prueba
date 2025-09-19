@@ -5,22 +5,54 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Admin — Seven de Burgers</title>
+
+  <!-- Estilos locales del admin (incluye la lista de temas) -->
   <style>
-    /* Pequeños estilos locales del admin */
+    /* Tabs / paneles */
     .tabs-admin{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .tabs-admin .tab{ padding:10px 12px; border-radius:12px; border:2px solid #2a3347; background:#121a2a; color:#eaf2ff; cursor:pointer; }
     .tabs-admin .tab.is-active{ border-color:#ffd24a; box-shadow:0 0 0 2px rgba(255,210,74,.15) inset; }
     .panel{ display:none; }
     .panel.active{ display:block; }
+
+    /* Tablas */
     .k-table{ width:100%; border-collapse:collapse; font-size:14px }
     .k-table th,.k-table td{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08) }
     .k-table th{ text-align:left; color:var(--muted) }
-    .k-badge.ok{ background:#183a2a }
-    .k-badge.warn{ background:#3a2f18 }
+    .k-badge.ok{ background:#183a2a } .k-badge.warn{ background:#3a2f18 }
     .table-wrap { overflow:auto; -webkit-overflow-scrolling: touch; }
     .k-table th, .k-table td { white-space: nowrap; }
-    @media (max-width: 480px){
-      #tblHist th:nth-child(4), #tblHist td:nth-child(4) { display:none; }
+    @media (max-width:480px){ #tblHist th:nth-child(4), #tblHist td:nth-child(4){ display:none; } }
+
+    /* ---------- Lista de Temas (antidesborde) ---------- */
+    .theme-list{
+      list-style:none; padding:0; margin:0;
+      display:grid; gap:10px;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    .theme-item{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px;
+      border:2px solid rgba(255,255,255,.18);
+      background:#121a2a; border-radius:12px;
+      min-width:0;
+    }
+    .theme-item .dot{
+      width:14px; height:14px; border-radius:4px;
+      background:var(--accent); box-shadow:0 0 10px var(--accent);
+      flex:0 0 auto;
+    }
+    .theme-item .title{
+      font-size:14px; line-height:1.2; color:#eaf2ff;
+      min-width:0; flex:1 1 auto;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+      overflow:hidden; text-overflow:ellipsis; word-break:break-word;
+    }
+    .theme-item .btn{ flex:0 0 auto; white-space:nowrap; }
+    .theme-item.is-active{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(255,210,74,.12) inset; }
+    @media (max-width:520px){
+      .theme-list{ grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
+      .theme-item .btn.small{ padding:8px 10px; }
     }
   </style>
 </head>
@@ -91,20 +123,11 @@
       <h3>Historial de pedidos</h3>
 
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
-        <div class="field">
-          <label>Búsqueda (nombre / teléfono / ID)</label>
-          <input id="histSearch" type="search" placeholder="Buscar…">
+        <div class="field"><label>Búsqueda (nombre / teléfono / ID)</label><input id="histSearch" type="search" placeholder="Buscar…"></div>
+        <div class="field"><label>Tipo</label>
+          <select id="histType"><option value="all">Todos</option><option value="pickup">Pickup</option><option value="dinein">Mesa</option></select>
         </div>
-        <div class="field">
-          <label>Tipo</label>
-          <select id="histType">
-            <option value="all">Todos</option>
-            <option value="pickup">Pickup</option>
-            <option value="dinein">Mesa</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Estado</label>
+        <div class="field"><label>Estado</label>
           <select id="histState">
             <option value="all">Todos</option>
             <option value="PENDING">PENDING</option>
@@ -114,33 +137,20 @@
             <option value="CANCELLED">CANCELLED</option>
           </select>
         </div>
-        <div class="field">
-          <label>Límite</label>
-          <input id="histLimit" type="number" min="10" step="10" value="50">
-        </div>
+        <div class="field"><label>Límite</label><input id="histLimit" type="number" min="10" step="10" value="50"></div>
         <div class="field" style="align-self:end">
           <div class="row" style="gap:8px">
             <button id="btnHistLoad" class="btn">Cargar</button>
             <button id="btnHistCSV" class="btn ghost">Exportar CSV</button>
           </div>
-          <div class="muted small" style="margin-top:6px">
-            * Usa “Desde/Hasta” y “Incluir archivo histórico” del panel Reportes.
-          </div>
+          <div class="muted small" style="margin-top:6px">* Usa “Desde/Hasta” y “Incluir archivo histórico” del panel Reportes.</div>
         </div>
       </div>
 
       <div class="table-wrap" style="margin-top:8px;">
         <table id="tblHist" class="k-table">
           <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Cliente</th>
-              <th>Tipo</th>
-              <th>Artículos</th>
-              <th>Total</th>
-              <th>Estado</th>
-              <th></th>
-            </tr>
+            <tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Artículos</th><th>Total</th><th>Estado</th><th></th></tr>
           </thead>
           <tbody><tr><td colspan="7">—</td></tr></tbody>
         </table>
@@ -150,16 +160,11 @@
     <!-- COBROS -->
     <section class="panel" id="panel-cobros">
       <h3>Cobros</h3>
-
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label>Desde</label><input id="cobFrom" type="date"/></div>
         <div class="field"><label>Hasta</label><input id="cobTo" type="date"/></div>
         <div class="field"><label>Tipo de pedido</label>
-          <select id="cobType">
-            <option value="all">Todos</option>
-            <option value="pickup">Pickup</option>
-            <option value="dinein">Mesa</option>
-          </select>
+          <select id="cobType"><option value="all">Todos</option><option value="pickup">Pickup</option><option value="dinein">Mesa</option></select>
         </div>
         <div class="field" style="align-self:end"><button class="btn" id="btnCobrosRefresh">Actualizar</button></div>
       </div>
@@ -167,14 +172,7 @@
       <h4 style="margin-top:16px">Por cobrar (en vivo)</h4>
       <table class="k-table" id="tblPorCobrar">
         <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Cliente</th>
-            <th>Tipo</th>
-            <th class="right">Total</th>
-            <th>Pref. pago</th>
-            <th class="right">Acciones</th>
-          </tr>
+          <tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th class="right">Total</th><th>Pref. pago</th><th class="right">Acciones</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -190,13 +188,7 @@
       <h4 style="margin-top:16px">Historial de cobros</h4>
       <table class="k-table" id="tblCobrosHist">
         <thead>
-          <tr>
-            <th>Fecha cobro</th>
-            <th>Cliente</th>
-            <th>Tipo</th>
-            <th class="right">Total cobrado</th>
-            <th>Método</th>
-          </tr>
+          <tr><th>Fecha cobro</th><th>Cliente</th><th>Tipo</th><th class="right">Total cobrado</th><th>Método</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -247,7 +239,7 @@
       <table class="k-table" id="tblProducts"><thead><tr><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Activo</th><th>ID</th></tr></thead><tbody></tbody></table>
     </section>
 
-    <!-- TEMAS (lista compacta, sin desbordes) -->
+    <!-- TEMAS -->
     <section class="panel" id="panel-temas">
       <h3>Temas (Kiosko/UI)</h3>
       <p class="muted small">Selecciona un tema para previsualizarlo localmente. “Guardar GLOBAL” escribe en <code>settings/theme</code>.</p>
@@ -363,32 +355,50 @@
 <!-- Lógica mínima del panel Temas -->
 <script>
   const toast = (msg)=>{ console.log(msg); };
-  let selectedTheme = null;
 
-  const applyThemeLocal = (name) => {
+  // Tema persistido localmente (solo vista)
+  const initialTheme = sessionStorage.getItem('theme');
+  if (initialTheme) {
+    document.documentElement.setAttribute('data-theme', initialTheme);
+    document.body.setAttribute('data-theme', initialTheme);
+  }
+
+  let selectedTheme = initialTheme || 'Base';
+
+  function applyThemeLocal(name){
     document.documentElement.setAttribute('data-theme', name);
     document.body.setAttribute('data-theme', name);
     sessionStorage.setItem('theme', name);
     toast('Vista previa: ' + name);
-  };
+  }
 
-  const saveThemeGlobal = async (name) => {
+  async function saveThemeGlobal(name){
+    // app.js debe exportar/definir setTheme(name) que guarde en Firestore: {theme: name}
     if (typeof setTheme === 'function') {
       await setTheme(name);
       toast('Tema guardado GLOBAL: ' + name);
     } else {
       alert('No se puede guardar globalmente (setTheme no existe)');
     }
-  };
+  }
 
-  document.getElementById('themeList')?.addEventListener('click', (e)=>{
-    const item = e.target.closest('.theme-item');
-    if (!item) return;
-    selectedTheme = item.dataset.theme;
-    document.querySelectorAll('.theme-item').forEach(li=>li.classList.remove('is-active'));
-    item.classList.add('is-active');
+  // Interacciones de la lista
+  const list = document.getElementById('themeList');
+  list?.addEventListener('click', (e)=>{
+    const li = e.target.closest('.theme-item');
+    if (!li) return;
+
+    // Marcar item activo
+    document.querySelectorAll('.theme-item').forEach(x=>x.classList.remove('is-active'));
+    li.classList.add('is-active');
+
+    selectedTheme = li.dataset.theme;
+
+    // Si hacen click en el botón "Previsualizar" o en todo el item, aplicamos local
     applyThemeLocal(selectedTheme);
   });
+
+  // Botones de acción
   document.getElementById('btnPreviewLocal')?.addEventListener('click', ()=>{
     if (selectedTheme) applyThemeLocal(selectedTheme);
   });
