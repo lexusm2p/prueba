@@ -1518,21 +1518,32 @@ function confirmDeleteArticle(article){
   }
 
   function pick(name){
-    SELECTED = name;
-    try {
+  SELECTED = name;
+  try {
+    // 1) Tu forma “oficial” (si existe)
+    if (typeof applyThemeLocal === 'function') {
       applyThemeLocal(name);
-      try { sessionStorage.setItem('localTheme', name); } catch {}
-      hint.textContent = `Vista previa aplicada: ${name}`;
-      btnSave.disabled = false;
-      toast(`Tema local: ${name}`);
-    } catch(e){
-      console.error(e);
-      hint.textContent = 'No se pudo aplicar el tema local.';
     }
-    renderCards();
-  }
 
-  // Primera carga (y aplica lo último local si había)
+    // 2) Fallback: marca el DOM con atributos que el CSS pueda leer
+    const $html = document.documentElement;
+    $html.setAttribute('data-theme', name);
+    $html.setAttribute('data-theme-name', name);
+    try { document.body.setAttribute('data-theme', name); } catch {}
+    try { document.body.setAttribute('data-theme-name', name); } catch {}
+
+    // 3) (opcional) persistimos la selección local
+    try { sessionStorage.setItem('localTheme', name); } catch {}
+
+    hint.textContent = `Vista previa aplicada: ${name}`;
+    btnSave.disabled = false;
+    toast(`Tema local: ${name}`);
+  } catch(e){
+    console.error(e);
+    hint.textContent = 'No se pudo aplicar el tema local.';
+  }
+  renderCards();
+}// Primera carga (y aplica lo último local si había)
   try {
     const last = sessionStorage.getItem('localTheme');
     SELECTED = last || '';
