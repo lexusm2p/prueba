@@ -182,9 +182,11 @@
   <!-- Sonido READY -->
   <audio id="ding" src="../shared/sfx/achievement.mp3" preload="auto"></audio>
 
-  <script type="module" src="./track.js"></script>
-  <script type="module" src="../shared/firebase.js"></script>
+<!-- Firebase y adaptador de DB -->
+<script type="module" src="../shared/firebase.js"></script>
 <script type="module" src="../shared/db-compat.js"></script>
 
+<!-- Tu app de tracking (usa la API compat ya cargada) -->
+<script type="module" src="./track.js"></script>
 </body>
 </html>
