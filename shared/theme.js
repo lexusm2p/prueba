@@ -54,8 +54,10 @@ const THEMES_BUILTIN = {
       primary:'#ff7ab6', accent:'#ffa800', ok:'#60e0a0', warn:'#ffc266', danger:'#ff6b6b',
     },
     fonts:{
-      importUrl:'https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;600&display=swap',
-      base:'Inter, system-ui, Arial', display:'"Creepster", cursive'
+      // Tipografía decorativa estilo cartel Día de Muertos
+      importUrl:'https://fonts.googleapis.com/css2?family=Emilys+Candy&family=Ribeye&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Emilys Candy","Ribeye",cursive'
     },
     bg:{
       image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
