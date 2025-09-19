@@ -137,6 +137,13 @@ try { achievementAudio = new Audio('../shared/sfx/achievement.mp3'); } catch {}
 async function playAchievement(){
   try { if (achievementAudio) { await achievementAudio.play(); return; } beep(); }
   catch { beep(); }
+  /* ======================= SFX regalo (Combo Unlocked) ======================= */
+let giftAudio = null;
+try { giftAudio = new Audio(state.gift.sound); } catch {}
+async function playGiftSfx(){
+  try { if (giftAudio) { await giftAudio.play(); return; } beep(); }
+  catch { beep(); }
+}
 }
 
 /* ======================= Login oculto (PIN) ======================= */
