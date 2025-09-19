@@ -14,6 +14,7 @@ import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
 import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
 import { setTheme } from '../shared/db.js';
+
 /* ======================= Estado global ======================= */
 const state = {
   menu: null,
@@ -48,7 +49,7 @@ const state = {
   // Tema activo
   themeName: '',
 
-  // Última orden creada (para seguimiento sin teléfono)
+  // Última orden creada (para seguimiento sin teléfono / CTA mesa)
   lastOrderId: null,
 
   // ===== Lealtad / coleccionables =====
@@ -56,7 +57,8 @@ const state = {
   loyaltyAskShown: false,
   loyaltyOptIn: false,
   lastCollectible: null,   // {rarity, name, title, palette, meta}
-  lastVoucher: null        // {code, pct, expiresAt}
+  lastVoucher: null,       // {code, pct, expiresAt}
+
   // ===== Regalo: PowerDog Mini por ticket >= $117 =====
   gift: {
     threshold: 117,
@@ -137,13 +139,14 @@ try { achievementAudio = new Audio('../shared/sfx/achievement.mp3'); } catch {}
 async function playAchievement(){
   try { if (achievementAudio) { await achievementAudio.play(); return; } beep(); }
   catch { beep(); }
-  /* ======================= SFX regalo (Combo Unlocked) ======================= */
+}
+
+/* ======================= SFX regalo (Combo Unlocked) ======================= */
 let giftAudio = null;
 try { giftAudio = new Audio(state.gift.sound); } catch {}
 async function playGiftSfx(){
   try { if (giftAudio) { await giftAudio.play(); return; } beep(); }
   catch { beep(); }
-}
 }
 
 /* ======================= Login oculto (PIN) ======================= */
@@ -201,32 +204,35 @@ function setActiveTab(mode=state.mode){
 init();
 async function init(){
   // Intenta Firestore/DB; si falla, usa el JSON local de /data
-try {
-  state.menu = await DB.fetchCatalogWithFallback();
-  if (!state.menu || (!state.menu.minis && !state.menu.burgers)) {
-    throw new Error('fetchCatalogWithFallback devolvió vacío');
-  }
-} catch (e) {
-  console.warn('[kiosk] Catálogo via DB falló o vino vacío:', e);
   try {
-    const res = await fetch('../data/menu.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    state.menu = await res.json();
-    console.log('[kiosk] Cargado menú desde /data/menu.json');
-  } catch (e2) {
-    console.error('[kiosk] También falló el menú local:', e2);
-    alert('No pude cargar el menú. Revisa /data/menu.json y la consola.');
-    state.menu = { minis: [], burgers: [], drinks: [], sides: [], extras:{} };
+    state.menu = await DB.fetchCatalogWithFallback();
+    if (!state.menu || (!state.menu.minis && !state.menu.burgers)) {
+      throw new Error('fetchCatalogWithFallback devolvió vacío');
+    }
+  } catch (e) {
+    console.warn('[kiosk] Catálogo via DB falló o vino vacío:', e);
+    try {
+      const res = await fetch('../data/menu.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      state.menu = await res.json();
+      console.log('[kiosk] Cargado menú desde /data/menu.json');
+    } catch (e2) {
+      console.error('[kiosk] También falló el menú local:', e2);
+      alert('No pude cargar el menú. Revisa /data/menu.json y la consola.');
+      state.menu = { minis: [], burgers: [], drinks: [], sides: [], extras:{} };
+    }
   }
-}
+
   startThemeWatcher();
   renderCards();
   setActiveTab('mini');
   updateCartBar();
   setupSidebars();
   renderMobileInfo();
+
   ensureFollowModal();
   ensureFollowCta();
+  ensureGiftModal(); // pre-carga modal de regalo para evitar primer “lag”
   bindHappyHour();
   bindETA();
   setupReadyFeed();
@@ -423,6 +429,7 @@ function openFollowModal({ phone, orderId } = {}){
   m.style.display = 'grid';
   setTimeout(()=> openNow?.focus(), 0);
 }
+
 /* ======================= Modal regalo PowerDog ======================= */
 function ensureGiftModal(){
   if (document.getElementById('giftModal')) return;
@@ -456,6 +463,7 @@ function ensureGiftModal(){
   });
 }
 function openGiftModal(){ ensureGiftModal(); const m=document.getElementById('giftModal'); if(m) m.style.display='grid'; }
+
 /* ======================= CTA flotante ======================= */
 function ensureFollowCta(){
   if (document.getElementById('followCta')) return;
@@ -608,6 +616,7 @@ function checkComboAchievement(){
     toast('🎉 ¡Combo de 3 minis logrado!');
   }
 }
+
 /* ======================= Desbloqueo de regalo por ticket ======================= */
 function hasGiftInCart(){
   return state.cart.some(l => l.isGift && l.id === state.gift.productId);
@@ -854,6 +863,9 @@ function updateCartBar(){
   if (countEl) countEl.textContent = `${count} producto${count!==1?'s':''}`;
   if (totalEl) totalEl.textContent = money(total);
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
+
+  // Revisa si toca desbloquear o retirar el regalo al cambiar el carrito
+  checkGiftUnlock(!state.gift.shownThisSession);
 }
 
 function openCartModal(){
@@ -1080,15 +1092,18 @@ function openCartModal(){
         // timestamps para métricas
         createdAt: Date.now()
       };
-let orderId = null;
-try {
-  const created = await DB.createOrder(orderBase);
-  // Acepta string o {id}
-  orderId = (typeof created === 'string') ? created : created?.id;
-} catch (e) {
-  console.warn('createOrder error, usando provisional:', e);
-}
-if (!orderId) orderId = provisionalId;
+      let orderId = null;
+      try {
+        const created = await DB.createOrder(orderBase);
+        // Acepta string o {id}
+        orderId = (typeof created === 'string') ? created : created?.id;
+      } catch (e) {
+        console.warn('createOrder error, usando provisional:', e);
+      }
+      if (!orderId) orderId = provisionalId;
+
+      // Guarda la última orden para CTA/seguimiento posterior
+      state.lastOrderId = orderId;
 
       // Guardar métrica local (para que track.js calcule duración si quiere)
       try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
@@ -1412,7 +1427,7 @@ function mountThemePanel() {
   head.style.gap = '8px';
   const title = document.createElement('strong');
   title.textContent = 'Tema (MX)';
-  title.style.fontSize = '12px';
+  title.style.FontSize = '12px';
   const toggle = document.createElement('button');
   toggle.textContent = '—';
   Object.assign(toggle.style, {
