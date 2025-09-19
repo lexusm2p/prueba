@@ -962,15 +962,15 @@ function openCartModal(){
         // timestamps para métricas
         createdAt: Date.now()
       };
-
-      let orderId = null;
-      try {
-        orderId = await DB.createOrder(orderBase);
-      } catch (e) {
-        console.warn('createOrder error, usando provisional:', e);
-      }
-      if (!orderId) orderId = provisionalId;
-      state.lastOrderId = orderId;
+let orderId = null;
+try {
+  const created = await DB.createOrder(orderBase);
+  // Acepta string o {id}
+  orderId = (typeof created === 'string') ? created : created?.id;
+} catch (e) {
+  console.warn('createOrder error, usando provisional:', e);
+}
+if (!orderId) orderId = provisionalId;
 
       // Guardar métrica local (para que track.js calcule duración si quiere)
       try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
