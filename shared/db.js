@@ -156,11 +156,21 @@ export function subscribeSettings(cb){
 export function subscribeTheme(cb){
   return onSnapshot(doc(db,'settings','theme'), (d)=> cb(d.data() ?? null));
 }
-export async function setTheme({ name, overrides = {} }, opts={}){
-  const { training=false } = opts;
+
+// ⚠️ Compat: acepta string ("Base") o objeto ({ name, overrides })
+export async function setTheme(payload, opts = {}){
+  const { training = false } = opts;
+  const name = (typeof payload === 'string') ? payload : payload?.name;
+  const overrides = (typeof payload === 'object' && payload && payload.overrides) ? payload.overrides : {};
+  if (!name) throw new Error('Theme name is required');
+
   return guardWrite(training, async ()=>{
     await ensureAuth();
-    await setDoc(doc(db,'settings','theme'), { name, overrides, updatedAt:serverTimestamp() }, { merge:true });
+    await setDoc(
+      doc(db,'settings','theme'),
+      { name, overrides, updatedAt:serverTimestamp() },
+      { merge:true }
+    );
     return { ok:true };
   }, { ok:true, _training:true });
 }
