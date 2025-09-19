@@ -423,7 +423,39 @@ function openFollowModal({ phone, orderId } = {}){
   m.style.display = 'grid';
   setTimeout(()=> openNow?.focus(), 0);
 }
-
+/* ======================= Modal regalo PowerDog ======================= */
+function ensureGiftModal(){
+  if (document.getElementById('giftModal')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'giftModal';
+  wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:10001;place-items:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)';
+  wrap.innerHTML = `
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="giftTtl"
+         style="max-width:520px;width:calc(100% - 24px);background:#0f182a;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px">
+      <div class="modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h3 id="giftTtl" style="margin:0">🎉 ¡Logro desbloqueado!</h3>
+        <button id="giftClose" class="btn ghost" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="muted" style="margin:6px 0 12px">
+        Superaste <b>$${Number(state.gift.threshold).toFixed(0)}</b>. ¿Quieres reclamar tu <b>PowerDog Mini</b> gratis?
+      </p>
+      <div class="row" style="gap:8px;justify-content:flex-end">
+        <button class="btn" id="giftAccept">✅ Sí, agregar</button>
+        <button class="btn ghost" id="giftReject">❌ No, gracias</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = ()=> wrap.style.display='none';
+  wrap.addEventListener('click', (e)=>{ if(e.target===wrap) close(); });
+  wrap.querySelector('#giftClose')?.addEventListener('click', close);
+  wrap.querySelector('#giftReject')?.addEventListener('click', close);
+  wrap.querySelector('#giftAccept')?.addEventListener('click', ()=>{
+    addGiftLine();
+    close();
+    toast('🎁 PowerDog Mini agregado (Regalo)');
+  });
+}
+function openGiftModal(){ ensureGiftModal(); const m=document.getElementById('giftModal'); if(m) m.style.display='grid'; }
 /* ======================= CTA flotante ======================= */
 function ensureFollowCta(){
   if (document.getElementById('followCta')) return;
