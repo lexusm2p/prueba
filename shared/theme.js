@@ -17,10 +17,15 @@ const THEMES_BUILTIN = {
       bg:'#0b0f14', text:'#e8f0ff',
       panel1:'#0b0e12', panel2:'#0b0d15',
       ink1:'#e8f0ff', ink2:'#a6b2c7', muted:'#94a3b8',
-      primary:'#ffc242', accent:'#27e1ff',
+      primary:'#ff2ebc', accent:'#ffc242',
       ok:'#00c27a', warn:'#ffd27f', danger:'#ff5d5d',
     },
-    fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'inherit' },
+    // Gamer 3D vibes
+    fonts:{
+      importUrl:'https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Bungee", cursive'
+    },
     bg:{ image:'', overlay:'rgba(0,0,0,0)', size:'cover', position:'center', blur:0 },
     images:{}, icons:{}, packBaseUrl:''
   },
@@ -30,17 +35,19 @@ const THEMES_BUILTIN = {
   Independencia: {
     name: 'Independencia',
     palette: {
-      bg:'#0b0f1a', text:'#e8ffe6', panel1:'#0b0e12', panel2:'#0b0d15',
-      ink1:'#e8ffe6', ink2:'#bdebc0', muted:'#a7ffc0',
-      primary:'#2ecc71', accent:'#ff3b3b', ok:'#2ecc71', warn:'#ffd27f', danger:'#ff4d4d',
+      bg:'#0c1f10', text:'#fffdea',
+      panel1:'#0c1610', panel2:'#0b140e',
+      ink1:'#fffdea', ink2:'#e9e1b8', muted:'#cdd4a8',
+      primary:'#2fb863', accent:'#d92121',
+      ok:'#2ecc71', warn:'#e9c87a', danger:'#ff4d4d',
     },
     fonts:{
-      importUrl:'https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600&display=swap',
-      base:'Inter, system-ui, Arial', display:'"Bangers", cursive'
+      // Folklore mexicano
+      importUrl:'https://fonts.googleapis.com/css2?family=Frijole&family=Rye&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Frijole","Rye",cursive'
     },
-    bg:{
-      image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
-    },
+    bg:{ image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
     packBaseUrl:'/themes/independencia/'
@@ -49,19 +56,19 @@ const THEMES_BUILTIN = {
   'Día de Muertos': {
     name: 'Día de Muertos',
     palette:{
-      bg:'#0b0a12', text:'#ffeefb', panel1:'#0e0b16', panel2:'#120f1d',
+      bg:'#0b0a12', text:'#ffeefb',
+      panel1:'#0e0b16', panel2:'#120f1d',
       ink1:'#ffeefb', ink2:'#f9b9ff', muted:'#ffb4e6',
-      primary:'#ff7ab6', accent:'#ffa800', ok:'#60e0a0', warn:'#ffc266', danger:'#ff6b6b',
+      primary:'#ff7ab6', accent:'#ffa800',
+      ok:'#60e0a0', warn:'#ffc266', danger:'#ff6b6b',
     },
     fonts:{
-      // Tipografía decorativa estilo cartel Día de Muertos
+      // Decorativa estilo cartel DDM
       importUrl:'https://fonts.googleapis.com/css2?family=Emilys+Candy&family=Ribeye&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
       display:'"Emilys Candy","Ribeye",cursive'
     },
-    bg:{
-      image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
-    },
+    bg:{ image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
     packBaseUrl:'/themes/dia-de-muertos/'
@@ -70,17 +77,17 @@ const THEMES_BUILTIN = {
   'Navidad MX': {
     name:'Navidad MX',
     palette:{
-      bg:'#0b0f12', text:'#f0fff4', panel1:'#0b0e12', panel2:'#0a0c10',
+      bg:'#0b0f12', text:'#f0fff4',
+      panel1:'#0b0e12', panel2:'#0a0c10',
       ink1:'#f0fff4', ink2:'#bdecc7', muted:'#a3f3bd',
-      primary:'#d23f3f', accent:'#1db954', ok:'#1db954', warn:'#ffd27f', danger:'#ff5757',
+      primary:'#d23f3f', accent:'#1db954',
+      ok:'#1db954', warn:'#ffd27f', danger:'#ff5757',
     },
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial', display:'"Mountains of Christmas", cursive'
     },
-    bg:{
-      image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
-    },
+    bg:{ image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
     packBaseUrl:'/themes/navidad/'
@@ -113,12 +120,18 @@ const THEMES_BUILTIN = {
 
   Halloween: { name:'Halloween',
     palette:{
-      bg:'#0b0a10', text:'#fff3e0', panel1:'#100c14', panel2:'#140f19',
-      ink1:'#fff3e0', ink2:'#ffd8a6', muted:'#ffcb85',
-      primary:'#ff7a00', accent:'#7f5bff', ok:'#53e0a6', warn:'#ffc266', danger:'#ff6262',
+      bg:'#09070c', text:'#ffe9cf',
+      panel1:'#100c14', panel2:'#140f19',
+      ink1:'#ffe9cf', ink2:'#ffd8a6', muted:'#ffcb85',
+      primary:'#ff7a00', accent:'#7f5bff',
+      ok:'#53e0a6', warn:'#ffc266', danger:'#ff6262',
     },
-    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Nosifer&family=Inter:wght@400;600&display=swap',
-      base:'Inter, system-ui, Arial', display:'"Nosifer", cursive' },
+    // Spooky afilada (más similar a tu ref que Nosifer)
+    fonts:{
+      importUrl:'https://fonts.googleapis.com/css2?family=Butcherman&family=Nosifer&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Butcherman","Nosifer",cursive'
+    },
     bg:{ image:'', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
     images:{}, icons:{}, packBaseUrl:''
   },
@@ -208,42 +221,100 @@ const THEMES_BUILTIN = {
   },
 
   // Extras (sin packs por defecto)
-  'Fútbol': { name:'Fútbol', palette:{
-      bg:'#0a120b', text:'#eaffea', panel1:'#0b0f0c', panel2:'#0c110d',
-      ink1:'#eaffea', ink2:'#c6ebc6', muted:'#a9d9b0',
+  'Fútbol': { name:'Fútbol',
+    palette:{
+      bg:'#0a120b', text:'#f5fff5',
+      panel1:'#0b0f0c', panel2:'#0c110d',
+      ink1:'#f5fff5', ink2:'#cbeed0', muted:'#a9d9b0',
       primary:'#2ecc71', accent:'#1e90ff', ok:'#2ecc71', warn:'#ffd27f', danger:'#ff5d5d',
-    }, fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'inherit' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 }, images:{}, icons:{}, packBaseUrl:'' },
-  'Lucha Libre': { name:'Lucha Libre', palette:{
+    },
+    // Varsity/collegiate
+    fonts:{
+      importUrl:'https://fonts.googleapis.com/css2?family=Jersey+25&family=Jersey+25+Charted&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Jersey 25","Jersey 25 Charted",sans-serif'
+    },
+    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
+    images:{}, icons:{}, packBaseUrl:''
+  },
+
+  'Lucha Libre': { name:'Lucha Libre',
+    palette:{
       bg:'#0d0a12', text:'#fff5f5', panel1:'#120e18', panel2:'#16111d',
       ink1:'#fff5f5', ink2:'#ffd0d0', muted:'#ffb3b3',
       primary:'#ff3b3b', accent:'#ffd24a', ok:'#4bd1a1', warn:'#ffd27f', danger:'#ff6262',
-    }, fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'inherit' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 }, images:{}, icons:{}, packBaseUrl:'' },
-  'Pixel Art': { name:'Pixel Art', palette:{
-      bg:'#0b0f14', text:'#e8f0ff', panel1:'#0b0e12', panel2:'#0b0d15',
+    },
+    // Cartel de arena / monstruos
+    fonts:{
+      importUrl:'https://fonts.googleapis.com/css2?family=Sigmar+One&family=Bangers&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Sigmar One","Bangers",cursive'
+    },
+    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
+    images:{}, icons:{}, packBaseUrl:''
+  },
+
+  'Pixel Art': { name:'Pixel Art',
+    palette:{
+      bg:'#000000', text:'#e8f0ff',
+      panel1:'#0b0e12', panel2:'#0b0d15',
       ink1:'#e8f0ff', ink2:'#a6b2c7', muted:'#94a3b8',
       primary:'#00e0ff', accent:'#ff4bd8', ok:'#00c27a', warn:'#ffd27f', danger:'#ff5d5d',
-    }, fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'"Press Start 2P", monospace' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 }, images:{}, icons:{}, packBaseUrl:'' },
-  'Retro Arcade': { name:'Retro Arcade', palette:{
-      bg:'#0a0a12', text:'#f4f1ff', panel1:'#0e0c18', panel2:'#120f1f',
+    },
+    fonts:{
+      importUrl:'https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Press Start 2P", monospace'
+    },
+    bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 },
+    images:{}, icons:{}, packBaseUrl:''
+  },
+
+  'Retro Arcade': { name:'Retro Arcade',
+    palette:{
+      bg:'#0a0a12', text:'#f4f1ff',
+      panel1:'#0e0c18', panel2:'#120f1f',
       ink1:'#f4f1ff', ink2:'#d5ccff', muted:'#c1b7ff',
       primary:'#7f5bff', accent:'#ffda3a', ok:'#53e0a6', warn:'#ffd27f', danger:'#ff6b6b',
-    }, fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'"Montserrat", sans-serif' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 }, images:{}, icons:{}, packBaseUrl:'' },
-  'Y2K (90s/00s)': { name:'Y2K (90s/00s)', palette:{
-      bg:'#0b0a10', text:'#f2f8ff', panel1:'#0f0d15', panel2:'#120f1a',
+    },
+    // Glow CRT
+    fonts:{
+      importUrl:'https://fonts.googleapis.com/css2?family=Monoton&family=Bungee+Shade&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Monoton","Bungee Shade",cursive'
+    },
+    bg:{ image:'', overlay:'rgba(0,0,0,.25)', size:'cover', position:'center', blur:0 },
+    images:{}, icons:{}, packBaseUrl:''
+  },
+
+  'Y2K (90s/00s)': { name:'Y2K (90s/00s)',
+    palette:{
+      bg:'#0b0a10', text:'#f2f8ff',
+      panel1:'#0f0d15', panel2:'#120f1a',
       ink1:'#f2f8ff', ink2:'#cde3ff', muted:'#b7d6ff',
       primary:'#ff66ff', accent:'#66ffff', ok:'#4bd1a1', warn:'#ffd27f', danger:'#ff6b9b',
-    }, fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'inherit' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 }, images:{}, icons:{}, packBaseUrl:'' },
-  'Fiestas': { name:'Fiestas', palette:{
+    },
+    // Glitch pop
+    fonts:{
+      importUrl:'https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Rubik+Glitch+Pop&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial',
+      display:'"Rubik Glitch","Rubik Glitch Pop",sans-serif'
+    },
+    bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 },
+    images:{}, icons:{}, packBaseUrl:''
+  },
+
+  'Fiestas': { name:'Fiestas',
+    palette:{
       bg:'#0b0f14', text:'#fff7ff', panel1:'#0b0e12', panel2:'#0b0d15',
       ink1:'#fff7ff', ink2:'#ffd6ff', muted:'#f0c8ff',
       primary:'#ff66ff', accent:'#27e1ff', ok:'#53e0a6', warn:'#ffd27f', danger:'#ff5d7a',
-    }, fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'inherit' },
-    bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 }, images:{}, icons:{}, packBaseUrl:'' },
+    },
+    fonts:{ importUrl:'https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600&display=swap',
+      base:'Inter, system-ui, Arial', display:'"Bungee", cursive' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 },
+    images:{}, icons:{}, packBaseUrl:''
+  },
 };
 
 /* -------------------- Estado en memoria -------------------- */
@@ -576,3 +647,5 @@ if (typeof window !== 'undefined') {
     try { window.applyThemeLocal(__initial); } catch (e) { console.warn('[theme] auto-init falló', e); }
   }
 }
+
+export default THEMES_BUILTIN;
