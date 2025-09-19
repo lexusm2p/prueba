@@ -188,7 +188,25 @@ function setActiveTab(mode=state.mode){
 /* ======================= Init ======================= */
 init();
 async function init(){
+  // Intenta Firestore/DB; si falla, usa el JSON local de /data
+try {
   state.menu = await DB.fetchCatalogWithFallback();
+  if (!state.menu || (!state.menu.minis && !state.menu.burgers)) {
+    throw new Error('fetchCatalogWithFallback devolvió vacío');
+  }
+} catch (e) {
+  console.warn('[kiosk] Catálogo via DB falló o vino vacío:', e);
+  try {
+    const res = await fetch('../data/menu.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    state.menu = await res.json();
+    console.log('[kiosk] Cargado menú desde /data/menu.json');
+  } catch (e2) {
+    console.error('[kiosk] También falló el menú local:', e2);
+    alert('No pude cargar el menú. Revisa /data/menu.json y la consola.');
+    state.menu = { minis: [], burgers: [], drinks: [], sides: [], extras:{} };
+  }
+}
   startThemeWatcher();
   renderCards();
   setActiveTab('mini');
