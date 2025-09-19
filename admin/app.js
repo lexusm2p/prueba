@@ -41,9 +41,13 @@ import {
   deleteArticle,
   // 👇👇 agrega esto
   setTheme,
-} from '../shared/db.js';
-// HACK: el panel de Temas (legacy) espera window.setTheme
-try { window.setTheme = setTheme; } catch {}
+} // HACK: compat — acepta string ("Base") o objeto ({ name:"Base" })
+try {
+  window.setTheme = (arg, opts) => {
+    const payload = (typeof arg === 'string') ? { name: arg } : (arg || {});
+    return setTheme(payload, opts);
+  };
+} catch {}
 // Notificaciones
 import { toast, beep } from '../shared/notify.js';
 
