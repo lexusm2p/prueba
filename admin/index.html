@@ -8,10 +8,23 @@
 
   <!-- Estilos locales del admin (incluye la lista de temas) -->
   <style>
+    /* === ENLACE CON EL SISTEMA DE TEMAS ===
+       Forzamos a usar las variables que setea /shared/theme.js
+       para que cambien tipografías y colores al aplicar un tema. */
+    html, body{
+      background-color: var(--bg, #0b0f14);
+      color: var(--text, #e8f0ff);
+      font-family: var(--font-base, Inter, system-ui, Arial);
+    }
+    /* Usa la display del tema en títulos / marcas */
+    h1, h2, h3, .brand div:first-child, .title-sub, .display-font{
+      font-family: var(--font-display, inherit);
+    }
+
     /* Tabs / paneles */
     .tabs-admin{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .tabs-admin .tab{ padding:10px 12px; border-radius:12px; border:2px solid #2a3347; background:#121a2a; color:#eaf2ff; cursor:pointer; }
-    .tabs-admin .tab.is-active{ border-color:#ffd24a; box-shadow:0 0 0 2px rgba(255,210,74,.15) inset; }
+    .tabs-admin .tab.is-active{ border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent) inset; }
     .panel{ display:none; }
     .panel.active{ display:block; }
 
@@ -47,9 +60,11 @@
       min-width:0; flex:1 1 auto;
       display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
       overflow:hidden; text-overflow:ellipsis; word-break:break-word;
+      /* Se ve la display font del tema en los títulos de la lista */
+      font-family: var(--font-display, inherit);
     }
     .theme-item .btn{ flex:0 0 auto; white-space:nowrap; }
-    .theme-item.is-active{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(255,210,74,.12) inset; }
+    .theme-item.is-active{ border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent) inset; }
     @media (max-width:520px){
       .theme-list{ grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
       .theme-item .btn.small{ padding:8px 10px; }
@@ -59,7 +74,7 @@
 <body>
 <header class="header">
   <div class="brand"><span class="dot"></span>
-    <div><div>Seven de Burgers</div><div class="title-sub">Admin</div></div>
+    <div><div class="display-font">Seven de Burgers</div><div class="title-sub">Admin</div></div>
   </div>
   <nav class="row" style="gap:8px">
     <a class="btn ghost small" href="../kiosk/">Kiosko</a>
@@ -70,7 +85,7 @@
 
 <main class="container">
   <div class="card">
-    <h2>Panel de administración</h2>
+    <h2 class="display-font">Panel de administración</h2>
 
     <div class="tabs-admin" id="admTabs" role="tablist" aria-label="Módulos de Admin">
       <button class="tab is-active" data-tab="reportes" role="tab" aria-selected="true">Reportes</button>
@@ -88,7 +103,7 @@
 
     <!-- REPORTES -->
     <section class="panel active" id="panel-reportes">
-      <h3>Reportes de ventas</h3>
+      <h3 class="display-font">Reportes de ventas</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label>Desde</label><input id="repFrom" type="date"/></div>
         <div class="field"><label>Hasta</label><input id="repTo" type="date"/></div>
@@ -120,7 +135,7 @@
 
     <!-- HISTORIAL -->
     <section class="panel" id="panel-hist">
-      <h3>Historial de pedidos</h3>
+      <h3 class="display-font">Historial de pedidos</h3>
 
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
         <div class="field"><label>Búsqueda (nombre / teléfono / ID)</label><input id="histSearch" type="search" placeholder="Buscar…"></div>
@@ -159,7 +174,7 @@
 
     <!-- COBROS -->
     <section class="panel" id="panel-cobros">
-      <h3>Cobros</h3>
+      <h3 class="display-font">Cobros</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label>Desde</label><input id="cobFrom" type="date"/></div>
         <div class="field"><label>Hasta</label><input id="cobTo" type="date"/></div>
@@ -196,7 +211,7 @@
 
     <!-- COMPRAS -->
     <section class="panel" id="panel-compras">
-      <h3>Compras</h3>
+      <h3 class="display-font">Compras</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label>Ingrediente</label><input id="pName" type="text"></div>
         <div class="field"><label>Cantidad comprada (unid/kg/l)</label><input id="pQty" type="number" min="0" step="0.01"></div>
@@ -212,7 +227,7 @@
 
     <!-- INVENTARIO -->
     <section class="panel" id="panel-inventario">
-      <h3>Inventario</h3>
+      <h3 class="display-font">Inventario</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); margin-bottom:6px">
         <div class="field"><label>Buscar</label><input id="invSearch" type="text" placeholder="nombre…"></div>
         <div class="field" style="align-self:end"><button class="btn ghost" id="btnInvRefresh">Actualizar</button></div>
@@ -222,7 +237,7 @@
 
     <!-- PROVEEDORES -->
     <section class="panel" id="panel-proveedores">
-      <h3>Proveedores</h3>
+      <h3 class="display-font">Proveedores</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label>Nombre</label><input id="vName" type="text"></div>
         <div class="field"><label>Contacto</label><input id="vContact" type="text" placeholder="tel / mail / nota"></div>
@@ -233,7 +248,7 @@
 
     <!-- PRODUCTOS / COMBOS -->
     <section class="panel" id="panel-productos">
-      <h3>Productos / Combos</h3>
+      <h3 class="display-font">Productos / Combos</h3>
       <div class="muted">WIP — Aquí podrás crear/editar productos, fijar precios y armar combos. El kiosko lee directo de <b>products</b>.</div>
       <div class="field" style="margin-top:10px"><button class="btn ghost" id="btnReloadCatalog">Refrescar catálogo del kiosko</button></div>
       <table class="k-table" id="tblProducts"><thead><tr><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Activo</th><th>ID</th></tr></thead><tbody></tbody></table>
@@ -241,7 +256,7 @@
 
     <!-- TEMAS -->
     <section class="panel" id="panel-temas">
-      <h3>Temas (Kiosko/UI)</h3>
+      <h3 class="display-font">Temas (Kiosko/UI)</h3>
       <p class="muted small">Selecciona un tema para previsualizarlo localmente. “Guardar GLOBAL” escribe en <code>settings/theme</code>.</p>
 
       <ul class="theme-list" id="themeList">
@@ -271,12 +286,12 @@
 
     <!-- HAPPY HOUR -->
     <section class="panel" id="panel-happy">
-      <h3>Happy Hour</h3>
+      <h3 class="display-font">Happy Hour</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px">
         <div class="field"><label>Estado</label><select id="hhEnabled"><option value="off">Desactivada</option><option value="on">Activada</option></select></div>
         <div class="field"><label>Descuento general (%)</label><input id="hhDisc" type="number" min="0" max="90" value="0"></div>
         <div class="field"><label>Mensaje en kiosko</label><input id="hhMsg" type="text" placeholder="Ej. 2x1 en Minis 7–8 pm"></div>
-        <div class="field" style="align-self:end"><button class="btn" id="btnSaveHappy">Guardar HH</button></div>
+        <div class="field" style="align-self:end"><button class="btn" id="btnSaveHappy">Guardar</button></div>
         <div class="field"><label>Duración (min)</label><input id="hhDurMin" type="number" min="0" step="5" placeholder="Ej. 60"><div class="muted small">Si indicas duración y está activada, se calcula el fin automáticamente.</div></div>
         <div class="field"><label>Termina el</label><input id="hhEndsAt" type="datetime-local"><div class="muted small">Si no pones duración, puedes definir fecha/hora de término.</div></div>
         <div class="field"><label>Estado / Cuenta regresiva</label><div id="hhCountdown" class="muted small">Inactivo</div></div>
@@ -295,7 +310,7 @@
 
     <!-- RECETARIO -->
     <section class="panel" id="panel-recetas">
-      <h3>Recetario de aderezos</h3>
+      <h3 class="display-font">Recetario de aderezos</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:8px">
         <div class="field"><label>Buscar</label><input id="rcpSearch" type="text" placeholder="nombre o ingrediente…"></div>
         <div class="field"><label>Porción rápida</label>
@@ -314,7 +329,7 @@
     <div class="modal small" id="rcpModal" role="dialog" aria-modal="true" aria-labelledby="rcpTitle" style="display:none">
       <div class="modal-card">
         <div class="modal-head">
-          <div id="rcpTitle">Receta</div>
+          <div id="rcpTitle" class="display-font">Receta</div>
           <button class="btn ghost small" id="rcpClose" aria-label="Cerrar">Cerrar</button>
         </div>
         <div class="modal-body" id="rcpBody"></div>
@@ -335,7 +350,7 @@
 
     <!-- ARTÍCULOS CRUD -->
     <section class="panel" id="panel-articulos">
-      <h3>Artículos</h3>
+      <h3 class="display-font">Artículos</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-bottom:8px">
         <div class="field"><label>Buscar</label><input id="artSearch" type="text" placeholder="nombre o descripción…"></div>
         <div class="field" style="align-self:end"><button class="btn" id="btnAddArticulo">Nuevo artículo</button></div>
@@ -395,7 +410,7 @@
     alert('Tema guardado GLOBAL: ' + fixed);
   }
 
-  // Interacciones de la lista
+  // Interacciones de la lista: click en LI o en el botón "Previsualizar"
   const list = document.getElementById('themeList');
   list?.addEventListener('click', (e)=>{
     const li = e.target.closest('.theme-item');
