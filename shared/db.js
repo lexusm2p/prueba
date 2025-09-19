@@ -7,7 +7,7 @@ import {
   db,
   ensureAuth,
   serverTimestamp,
-  doc, getDoc, setDoc, updateDoc, addDoc, collection,
+  doc, getDoc, setDoc, updateDoc, addDoc, collection, deleteDoc,
   onSnapshot, query, where, orderBy, limit, Timestamp, increment, getDocs
 } from './firebase.js';
 
@@ -103,7 +103,8 @@ export function subscribeProducts(cb) {
 }
 
 /* =================== Órdenes =================== */
-// Crea una orden; acepta payload “base” del kiosko.
+
+// Crea una orden; acepta payload del kiosko.
 export async function createOrder(order, opts = {}) {
   const { training = false } = opts;
   const payload = { ...order };
@@ -112,7 +113,8 @@ export async function createOrder(order, opts = {}) {
   const createdAtClient = Number(payload.createdAt || Date.now());
   payload.createdAt = serverTimestamp();
   payload.createdAtClient = createdAtClient;
-  payload.status = (payload.status || 'PENDING').toUpperCase();
+  payload.updatedAt = serverTimestamp();
+  payload.status = String(payload.status || 'PENDING').toUpperCase();
   payload.orderMeta = {
     type: payload.orderType || payload?.orderMeta?.type || 'pickup',
     table: payload.table || payload?.orderMeta?.table || '',
@@ -127,8 +129,8 @@ export async function createOrder(order, opts = {}) {
   }, `TRAIN-ORDER-${Date.now()}`);
 }
 
-// Suscripción a lista “activa” del día (para feed/ETA).
-export function subscribeActiveOrders(cb, { limitN = 80 } = {}) {
+// Suscribe pedidos del día (para feeds/ETA)
+export function subscribeActiveOrders(cb, { limitN = 120 } = {}) {
   const qy = query(
     collection(db, 'orders'),
     where('createdAt', '>=', toTs(startOfToday())),
@@ -141,7 +143,16 @@ export function subscribeActiveOrders(cb, { limitN = 80 } = {}) {
   });
 }
 
-// Compat: alias que usa el kiosko
+// 🔪 Cocina: prioriza sólo estados activos, pero mantiene orden y tiempos
+export function subscribeKitchenOrders(cb, { limitN = 200 } = {}) {
+  return subscribeActiveOrders(list => {
+    const set = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
+    const filtered = (list||[]).filter(o => set.has(String(o.status||'').toUpperCase()));
+    cb(filtered);
+  }, { limitN });
+}
+
+// Aliases legacy
 export const subscribeOrders = subscribeActiveOrders;
 export const onOrdersSnapshot = subscribeActiveOrders;
 
@@ -150,6 +161,68 @@ export function subscribeOrder(orderId, cb) {
   if (!orderId) return () => {};
   const ref = doc(db, 'orders', String(orderId));
   return onSnapshot(ref, (d) => cb(d.exists() ? ({ id: d.id, ...d.data() }) : null));
+}
+
+// Update parcial con soporte a dot-notation (updateDoc ya lo soporta)
+export async function updateOrder(id, patch, opts = {}) {
+  const { training = false } = opts;
+  if (!id || typeof patch !== 'object') throw new Error('updateOrder: datos inválidos');
+  return guardWrite(training, async () => {
+    await ensureAuth();
+    await updateDoc(doc(db, 'orders', id), { ...patch, updatedAt: serverTimestamp() });
+    return { ok: true };
+  }, { ok: true, _training: true });
+}
+
+// Upsert (merge) — útil para shims
+export async function upsertOrder(data, opts = {}) {
+  const { training = false } = opts;
+  const id = data?.id;
+  if (!id) throw new Error('upsertOrder: falta ID');
+  return guardWrite(training, async () => {
+    await ensureAuth();
+    await setDoc(doc(db, 'orders', id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+      createdAt: data?.createdAt ?? serverTimestamp()
+    }, { merge: true });
+    return { ok: true };
+  }, { ok: true, _training: true });
+}
+
+// Cambia status y sella timestamps típicos
+export async function setOrderStatus(id, status, extra = {}, opts = {}) {
+  const { training = false } = opts;
+  const s = String(status || '').toUpperCase();
+  const stampPatch = {
+    status: s,
+    updatedAt: serverTimestamp(),
+  };
+  if (s === 'IN_PROGRESS') stampPatch.startedAt = serverTimestamp(), stampPatch['timestamps.startedAt'] = serverTimestamp();
+  if (s === 'READY')       stampPatch.readyAt   = serverTimestamp(), stampPatch['timestamps.readyAt']   = serverTimestamp();
+  if (s === 'DELIVERED')   stampPatch.deliveredAt = serverTimestamp(), stampPatch['timestamps.deliveredAt'] = serverTimestamp();
+  if (s === 'DONE' || s === 'PAID') stampPatch.doneAt = serverTimestamp(), stampPatch['timestamps.doneAt'] = serverTimestamp();
+
+  return guardWrite(training, async () => {
+    await ensureAuth();
+    await updateDoc(doc(db, 'orders', id), { ...stampPatch, ...(extra||{}) });
+    return { ok: true };
+  }, { ok: true, _training: true });
+}
+
+// Archiva pedidos entregados / cancelados (copia a orders_archive y borra original)
+export async function archiveDelivered(id, opts = {}) {
+  const { training = false } = opts;
+  return guardWrite(training, async () => {
+    await ensureAuth();
+    const ref = doc(db, 'orders', id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { ok: false, reason: 'not_found' };
+    const data = snap.data();
+    await setDoc(doc(db, 'orders_archive', id), { ...data, archivedAt: serverTimestamp() }, { merge: true });
+    await deleteDoc(ref); // si tus reglas no lo permiten, comenta esta línea
+    return { ok: true };
+  }, { ok: true, _training: true });
 }
 
 // Registro de métrica de preparación (local → opcional en DB)
@@ -236,8 +309,8 @@ export async function setHappyHour(payload, opts = {}) {
   }, { ok: true, _training: true });
 }
 
+// ETA en settings/eta { text: "7–10 min" }
 export function subscribeETA(cb) {
-  // Doc con { text: "7–10 min" }
   return onSnapshot(doc(db, 'settings', 'eta'), (d) => {
     const txt = d?.data()?.text;
     cb(txt != null ? String(txt) : null);
@@ -477,7 +550,7 @@ export async function sendWhatsAppMessage({ to, text, meta = {} }, opts = {}) {
   }, { ok: true, _training: true });
 }
 
-/* =================== Exports auxiliares (si los necesitas en Admin) =================== */
+/* =================== Exports auxiliares =================== */
 export function subscribeSettings(cb) {
   return onSnapshot(doc(db, 'settings', 'app'), (d) => cb(d.data() ?? {}));
 }
