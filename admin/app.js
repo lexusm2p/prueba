@@ -1541,7 +1541,7 @@ function confirmDeleteArticle(article){
   if (SELECTED) { try { applyThemeLocal(SELECTED); } catch {} }
 
   // Click en tarjetas
-  cardsC.addEventListener('click', (e)=>{
+  cardsC && cardsC.addEventListener('click', (e)=>{
     const c = e.target.closest('[data-card]');
     if (!c) return;
     pick(c.dataset.card);
