@@ -5,7 +5,11 @@
 // + CORRECCIÓN: soporte OID para pedidos de mesa (sin teléfono) + métricas.
 // + UX: Enter en teléfono, “Buscando…” amable, copy de desbloqueo incluye DELIVERED.
 
-import * as DB from '../shared/db.js';
+// opción A: import explícito del adaptador
+import DB from '../shared/db-compat.js';
+
+// opción B: si prefieres usar la global inyectada por <script>
+/* const DB = window.DB; */
 
 const $ = (s, r = document) => r.querySelector(s);
 
