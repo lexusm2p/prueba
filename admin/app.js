@@ -1483,7 +1483,7 @@ function confirmDeleteArticle(article){
   })();
 
   const panel  = document.getElementById('panel-temas');
-  const cardsC = panel.querySelector('#themeCards');
+  const cardsC = panel?.querySelector('#themeCards') || null;
   const btnSave= panel.querySelector('#btnThemeSave');
   const btnNew = panel.querySelector('#btnThemeBuilder');
   const hint   = panel.querySelector('#themeHint');
@@ -1504,6 +1504,7 @@ function confirmDeleteArticle(article){
   let SELECTED = '';
 
   function renderCards(){
+    if (!cardsC) return;
     const names = Array.from(new Set(getThemeNamesSafe())).sort((a,b)=>a.localeCompare(b,'es'));
     cardsC.innerHTML = names.map(n => `
       <div class="theme-card" data-card="${escAttr(n)}" data-active="${n===SELECTED?'1':'0'}" title="${escAttr(n)}">
