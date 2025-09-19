@@ -345,10 +345,10 @@
     </div>
   </div>
 </div>
-
-<script type="module" src="./app.js"></script>
-  <script type="module" src="../shared/firebase.js"></script>
+<!-- Primero Firebase, luego el adaptador, al final tu app -->
+<script type="module" src="../shared/firebase.js"></script>
 <script type="module" src="../shared/db-compat.js"></script>
+<script type="module" src="./app.js"></script>   <!-- o ./track.js -->
 
 </body>
 </html>
