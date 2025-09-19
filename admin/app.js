@@ -1489,10 +1489,10 @@ function confirmDeleteArticle(article){
   const hint   = panel.querySelector('#themeHint');
 
   const BUILTIN = [
-    'Base','Independencia','Día de Muertos','Navidad',
-    'Fiestas','San Valentín','Halloween','Fútbol',
-    'Lucha Libre','Pixel Art','Retro Arcade','Y2K (90s/00s)'
-  ];
+  'Base','Independencia','Día de Muertos','Navidad MX','5 de Mayo','San Valentín',
+  'Halloween','Reyes Magos','Año Nuevo','Día del Niño','Día de la Madre',
+  'Día del Padre','Revolución Mexicana','Día de la Bandera'
+];
 
   function getThemeNamesSafe(){
     try {
