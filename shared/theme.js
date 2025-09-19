@@ -20,7 +20,7 @@ const THEMES_BUILTIN = {
       primary:'#ff2ebc', accent:'#ffc242',
       ok:'#00c27a', warn:'#ffd27f', danger:'#ff5d5d',
     },
-    // Gamer 3D vibes
+    // Gamer / 3D vibes (tu ref final)
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
@@ -42,12 +42,19 @@ const THEMES_BUILTIN = {
       ok:'#2ecc71', warn:'#e9c87a', danger:'#ff4d4d',
     },
     fonts:{
-      // Folklore mexicano
+      // Tipografía basada en tu primera imagen (folklore/feria)
       importUrl:'https://fonts.googleapis.com/css2?family=Frijole&family=Rye&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
       display:'"Frijole","Rye",cursive'
     },
-    bg:{ image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
+    bg:{
+      image:{
+        mobile:'images/bg-m.webp',
+        tablet:'images/bg-t.webp',
+        desktop:'images/bg-d.webp'
+      },
+      overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
+    },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
     packBaseUrl:'/themes/independencia/'
@@ -63,12 +70,19 @@ const THEMES_BUILTIN = {
       ok:'#60e0a0', warn:'#ffc266', danger:'#ff6b6b',
     },
     fonts:{
-      // Decorativa estilo cartel DDM
+      // Decorativa estilo cartel Día de Muertos (según tu ref)
       importUrl:'https://fonts.googleapis.com/css2?family=Emilys+Candy&family=Ribeye&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
       display:'"Emilys Candy","Ribeye",cursive'
     },
-    bg:{ image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
+    bg:{
+      image:{
+        mobile:'images/bg-m.webp',
+        tablet:'images/bg-t.webp',
+        desktop:'images/bg-d.webp'
+      },
+      overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
+    },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
     packBaseUrl:'/themes/dia-de-muertos/'
@@ -87,13 +101,19 @@ const THEMES_BUILTIN = {
       importUrl:'https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial', display:'"Mountains of Christmas", cursive'
     },
-    bg:{ image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
+    bg:{
+      image:{
+        mobile:'images/bg-m.webp', tablet:'images/bg-t.webp', desktop:'images/bg-d.webp'
+      },
+      overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
+    },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
     packBaseUrl:'/themes/navidad/'
   },
 
-  /* ---- Resto de presets (sin packs por ahora, puedes añadirlos igual que arriba) ---- */
+  /* ---- Resto de presets ---- */
+
   '5 de Mayo': { name:'5 de Mayo',
     palette:{
       bg:'#0b0f12', text:'#eef7ee', panel1:'#0c1117', panel2:'#0c1015',
@@ -126,7 +146,7 @@ const THEMES_BUILTIN = {
       primary:'#ff7a00', accent:'#7f5bff',
       ok:'#53e0a6', warn:'#ffc266', danger:'#ff6262',
     },
-    // Spooky afilada (más similar a tu ref que Nosifer)
+    // Fuente más cercana a tu referencia
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Butcherman&family=Nosifer&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
@@ -220,7 +240,7 @@ const THEMES_BUILTIN = {
     images:{}, icons:{}, packBaseUrl:''
   },
 
-  // Extras (sin packs por defecto)
+  // Extras
   'Fútbol': { name:'Fútbol',
     palette:{
       bg:'#0a120b', text:'#f5fff5',
@@ -228,7 +248,7 @@ const THEMES_BUILTIN = {
       ink1:'#f5fff5', ink2:'#cbeed0', muted:'#a9d9b0',
       primary:'#2ecc71', accent:'#1e90ff', ok:'#2ecc71', warn:'#ffd27f', danger:'#ff5d5d',
     },
-    // Varsity/collegiate
+    // Varsity/collegiate (tu 3ra imagen)
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Jersey+25&family=Jersey+25+Charted&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
@@ -244,7 +264,7 @@ const THEMES_BUILTIN = {
       ink1:'#fff5f5', ink2:'#ffd0d0', muted:'#ffb3b3',
       primary:'#ff3b3b', accent:'#ffd24a', ok:'#4bd1a1', warn:'#ffd27f', danger:'#ff6262',
     },
-    // Cartel de arena / monstruos
+    // Cartel arena (tu 2da imagen)
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Sigmar+One&family=Bangers&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
@@ -261,6 +281,7 @@ const THEMES_BUILTIN = {
       ink1:'#e8f0ff', ink2:'#a6b2c7', muted:'#94a3b8',
       primary:'#00e0ff', accent:'#ff4bd8', ok:'#00c27a', warn:'#ffd27f', danger:'#ff5d5d',
     },
+    // Arcade 8‑bit (tu 4ta imagen)
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
@@ -277,7 +298,7 @@ const THEMES_BUILTIN = {
       ink1:'#f4f1ff', ink2:'#d5ccff', muted:'#c1b7ff',
       primary:'#7f5bff', accent:'#ffda3a', ok:'#53e0a6', warn:'#ffd27f', danger:'#ff6b6b',
     },
-    // Glow CRT
+    // Glow CRT / neón (tu 5ta imagen)
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Monoton&family=Bungee+Shade&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
@@ -294,7 +315,7 @@ const THEMES_BUILTIN = {
       ink1:'#f2f8ff', ink2:'#cde3ff', muted:'#b7d6ff',
       primary:'#ff66ff', accent:'#66ffff', ok:'#4bd1a1', warn:'#ffd27f', danger:'#ff6b9b',
     },
-    // Glitch pop
+    // Glitch pop (tu 6ta imagen)
     fonts:{
       importUrl:'https://fonts.googleapis.com/css2?family=Rubik+Glitch&family=Rubik+Glitch+Pop&family=Inter:wght@400;600&display=swap',
       base:'Inter, system-ui, Arial',
@@ -348,7 +369,7 @@ const NAME_ALIASES = {
   'fiestas': 'Fiestas',
 };
 
-const slug = (s = '') =>
+export const slug = (s = '') =>
   String(s).toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
@@ -385,23 +406,6 @@ function ensureFontImport(importUrl) {
   if (link.href !== importUrl) link.href = importUrl;
 }
 
-function applyBackground(bg = {}) {
-  const body = document.body;
-  if (!body) return;
-  const img = bg.image ? `url("${bg.image}")` : '';
-  const overlay = bg.overlay ? `linear-gradient(${bg.overlay}, ${bg.overlay})` : '';
-  const parts = [overlay, img].filter(Boolean).join(', ');
-  if (parts) {
-    body.style.backgroundImage = parts;
-    body.style.backgroundSize = bg.size || 'cover';
-    body.style.backgroundPosition = bg.position || 'center';
-    body.style.backgroundRepeat = 'no-repeat';
-    body.style.backgroundAttachment = 'scroll';
-  } else {
-    body.style.backgroundImage = 'none';
-  }
-}
-
 /* --------- Utilidades de assets por tema --------- */
 function resolveAssetUrl(url = '', base = '') {
   if (!url) return '';
@@ -420,6 +424,58 @@ function preloadImages(urls = []) {
     img.referrerPolicy = 'no-referrer';
     img.src = u;
   });
+}
+
+/* --------- Background responsive --------- */
+let _bgResizeT = null;
+function onResizeDebounced(fn, ms=200){
+  clearTimeout(_bgResizeT);
+  _bgResizeT = setTimeout(fn, ms);
+}
+
+function pickBgUrl(image, base=''){
+  // Acepta string o {mobile, tablet, desktop, default}
+  const w = Math.max(320, Math.min(4096, (window.innerWidth || 1280)));
+  let src = '';
+  if (!image) return '';
+  if (typeof image === 'string') {
+    src = image;
+  } else if (image && typeof image === 'object') {
+    if (w <= 640)      src = image.mobile  || image.tablet || image.desktop || image.default || '';
+    else if (w <= 1200)src = image.tablet  || image.desktop|| image.mobile  || image.default || '';
+    else               src = image.desktop || image.tablet || image.mobile  || image.default || '';
+  }
+  return resolveAssetUrl(src, base);
+}
+
+function applyBackground(bg = {}) {
+  const body = document.body;
+  if (!body) return;
+
+  const base = (window.__lastThemePreset?.packBaseUrl) || bg.packBaseUrl || '';
+  const chosen = pickBgUrl(bg.image, base);
+  const overlay = bg.overlay ? `linear-gradient(${bg.overlay}, ${bg.overlay})` : '';
+  const parts = [overlay, chosen ? `url("${chosen}")` : ''].filter(Boolean).join(', ');
+
+  if (parts) {
+    body.style.backgroundImage = parts;
+    body.style.backgroundSize = bg.size || 'cover';
+    body.style.backgroundPosition = bg.position || 'center';
+    body.style.backgroundRepeat = 'no-repeat';
+    body.style.backgroundAttachment = 'scroll';
+  } else {
+    body.style.backgroundImage = 'none';
+  }
+
+  // Preload elegido
+  if (chosen) preloadImages([ chosen ]);
+
+  // Reaplicar al cambiar tamaño/orientación
+  if (!window.__bgResizeBound){
+    window.__bgResizeBound = true;
+    window.addEventListener('resize', ()=> onResizeDebounced(()=>applyBackground(bg), 160), { passive:true });
+    window.addEventListener('orientationchange', ()=> onResizeDebounced(()=>applyBackground(bg), 160), { passive:true });
+  }
 }
 
 function applyThemeAssets(preset = {}) {
@@ -479,6 +535,9 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
   const preset = presetObj || (typeof nameOrPreset === 'string'
     ? getPresetByName(nameOrPreset)
     : nameOrPreset) || THEMES_BUILTIN.Base;
+
+  // Guardamos preset activo para resolver packBaseUrl en background responsive
+  window.__lastThemePreset = preset;
 
   const pal   = preset.palette || {};
   const fonts = preset.fonts   || {};
