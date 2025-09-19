@@ -639,6 +639,8 @@ function addGiftLine(){
   };
   state.cart.push(line);
   updateCartBar();
+  // Checar desbloqueo de regalo cada vez que cambia el carrito
+  checkGiftUnlock(!state.gift.shownThisSession);
 }
 
 function checkGiftUnlock(autoOpen=true){
