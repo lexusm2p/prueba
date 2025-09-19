@@ -4,57 +4,60 @@
    =========================== */
 
 /* -----------------------------------------------------------
-   0) BRIDGE DE VARIABLES (mapea a /shared/theme.js con fallback)
+   0) VARIABLES BASE + ALIAS (compatibles con /shared/theme.js)
    ----------------------------------------------------------- */
 :root{
   color-scheme: dark;
 
-  /* >>> Variables que vienen de theme.js (fallbacks a tu look actual) */
-  --bg:            var(--bg, #0b0f19);
-  --text:          var(--text, #eef4ff);
-  --panel1:        var(--panel1, #121a2a);
-  --panel2:        var(--panel2, #0f1726);
-  --ink1:          var(--ink1, var(--text, #eef4ff));
-  --ink2:          var(--ink2, #d7deee);
-  --muted:         var(--muted, #b8c6d8);
-  --primary:       var(--primary, #ffc242);   /* color “fuerte” del tema */
-  --accent:        var(--accent, #7cc9ff);    /* color secundario del tema */
-  --ok:            var(--ok, #2fd27d);
-  --warn:          var(--warn, #ffd27f);
-  --danger:        var(--danger, #ff6b6b);
+  /* Defaults (si theme.js no setea, usamos estos) */
+  --bg:#0b0f19;
+  --text:#eef4ff;
 
-  /* >>> Compatibilidad con variables previas del proyecto */
-  --panel:         var(--panel1);
-  --panel-2:       var(--panel2);
-  --ink:           var(--ink1);
-  --muted-2:       color-mix(in srgb, var(--muted) 80%, var(--ink1) 20%); /* suavizado */
-  --accent-2:      var(--accent);
+  --panel1:#121a2a;
+  --panel2:#0f1726;
 
-  /* >>> Fuentes desde theme.js (con retro por defecto) */
-  --font-base:     var(--font-base, 'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial);
-  --font-display:  var(--font-display, var(--font-base));
-  --font:          var(--font-base);
+  --ink1: var(--text);
+  --ink2:#d7deee;
+  --muted:#b8c6d8;
+
+  --primary:#ffc242; /* color “fuerte” del tema */
+  --accent:#7cc9ff;  /* color secundario del tema */
+  --ok:#2fd27d;
+  --warn:#ffd27f;
+  --danger:#ff6b6b;
+
+  /* Alias de compatibilidad con estilos ya existentes */
+  --panel: var(--panel1);
+  --panel-2: var(--panel2);
+  --ink: var(--ink1);
+  --muted-2: color-mix(in srgb, var(--muted) 80%, var(--ink1) 20%);
+  --accent-2: var(--accent);
+
+  /* Fuentes (theme.js puede sobreescribir) */
+  --font-base: 'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --font-display: var(--font-base);
+  --font: var(--font-base);
 
   /* Derivados visuales */
-  --stroke:        rgba(255,255,255,.10);
-  --shadow:        0 12px 28px rgba(0,0,0,.35);
-  --r:             16px;
-  --gap:           16px;
-  --pad:           16px;
+  --stroke: rgba(255,255,255,.10);
+  --shadow: 0 12px 28px rgba(0,0,0,.35);
+  --r: 16px;
+  --gap: 16px;
+  --pad: 16px;
 
-  --safe-top:      env(safe-area-inset-top, 0px);
-  --safe-right:    env(safe-area-inset-right, 0px);
-  --safe-bottom:   env(safe-area-inset-bottom, 0px);
-  --safe-left:     env(safe-area-inset-left, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 
-  --decor-glow:    0 0 18px color-mix(in srgb, var(--primary) 25%, transparent);
-  --snow-alpha:    0;
+  --decor-glow: 0 0 18px color-mix(in srgb, var(--primary) 25%, transparent);
+  --snow-alpha: 0;
 
-  /* Gradientes automáticos de botones según --primary */
-  --btn1:          color-mix(in srgb, var(--primary) 92%, white 8%);
-  --btn2:          color-mix(in srgb, var(--primary) 75%, black 25%);
-  --btnBorder:     color-mix(in srgb, var(--primary) 30%, black 70%);
-  --btnShadow:     color-mix(in srgb, var(--primary) 55%, black 45%);
+  /* Gradientes automáticos de botones según --primary/ok/warn/danger */
+  --btn1: color-mix(in srgb, var(--primary) 92%, white 8%);
+  --btn2: color-mix(in srgb, var(--primary) 75%, black 25%);
+  --btnBorder: color-mix(in srgb, var(--primary) 30%, black 70%);
+  --btnShadow: color-mix(in srgb, var(--primary) 55%, black 45%);
 
   --btnOk1:        color-mix(in srgb, var(--ok) 90%, white 10%);
   --btnOk2:        color-mix(in srgb, var(--ok) 78%, black 22%);
@@ -82,9 +85,9 @@
   font-display:swap;
   src:url("https://fonts.gstatic.com/s/pressstart2p/v15/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2") format("woff2");
 }
-/* Extras (se mantienen por compatibilidad) */
+/* Extras (compatibilidad) */
 @font-face{ font-family:'Alfa Slab One'; font-style:normal; font-weight:400; font-display:swap; src:url("https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8F2fN5-TSy3aZC-qLw.woff2") format("woff2"); }
-@font-face{ font-family:'Carter One'; font-style:normal; font-weight:400; font-display:swap; src:url("https://fonts.gstatic.com/s/carterone/v20/q5uFpOE3QqiFRDO6R9Q.woff2") format("woff2"); }
+@font-face{ font-family:'Carter One';    font-style:normal; font-weight:400; font-display:swap; src:url("https://fonts.gstatic.com/s/carterone/v20/q5uFpOE3QqiFRDO6R9Q.woff2") format("woff2"); }
 
 /* ---- Reset / Base ---- */
 *{ box-sizing:border-box }
@@ -363,7 +366,7 @@ input:-webkit-autofill{
 /* ---- CRUD Artículos ---- */
 .k-table .btn.small.ghost{ padding:6px 8px; font-size:11px; line-height:1; }
 .k-table .btn.small.ghost[data-a="del"]{ color:var(--danger); }
-.badge-active{ background:#183a2a; color:var(--ok); padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
+.badge-active{ background:#183a2a; color:var(--ok);   padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
 .badge-inactive{ background:#3a2f18; color:var(--warn); padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
 #artModal .modal-card{ width:min(480px,90vw); }
 #artModal .modal-body .field{ margin-bottom:12px; }
