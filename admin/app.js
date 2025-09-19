@@ -41,7 +41,7 @@ import {
   deleteArticle,
   // 👇👇 agrega esto
   setTheme,
-} '../shared/db.js';
+} from '../shared/db.js';
   // HACK: compat — acepta string ("Base") o objeto ({ name:"Base" })
 try {
   window.setTheme = (arg, opts) => {
