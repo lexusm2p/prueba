@@ -41,15 +41,8 @@ const THEMES_BUILTIN = {
     bg:{
       image:'images/hero.jpg', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
     },
-    images:{
-      hero:'images/hero.jpg',
-      logo:'images/logo.svg'
-    },
-    icons:{
-      burger:'icons/burger.svg',
-      fries:'icons/fries.svg',
-      drink:'icons/drink.svg'
-    },
+    images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
+    icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
     packBaseUrl:'/themes/independencia/'
   },
 
@@ -453,7 +446,6 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
   // Aplica packs (images/icons)
   applyThemeAssets(preset);
 
-  // Log de ayuda
   try { console.info('[theme] aplicado:', name, preset); } catch {}
   return preset;
 }
@@ -562,7 +554,6 @@ function validateThemeAssets(preset) {
   if (missing.length) {
     console.warn('[theme] faltan rutas en preset', preset.name, missing);
   }
-  // Log de rutas resueltas (útil si hay 404/CORS)
   const resolved = {
     images: Object.fromEntries(Object.entries(images).map(([k,v])=>[k, resolveAssetUrl(v, base)])),
     icons : Object.fromEntries(Object.entries(icons ).map(([k,v])=>[k, resolveAssetUrl(v, base)])),
