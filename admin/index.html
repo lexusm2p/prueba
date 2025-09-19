@@ -248,7 +248,8 @@
         <li class="theme-item" data-theme="Base"><span class="dot"></span><span class="title">Base</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Independencia"><span class="dot"></span><span class="title">Independencia</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Día de Muertos"><span class="dot"></span><span class="title">Día de Muertos</span><button class="btn small ghost">Previsualizar</button></li>
-        <li class="theme-item" data-theme="Navidad"><span class="dot"></span><span class="title">Navidad</span><button class="btn small ghost">Previsualizar</button></li>
+        <!-- IMPORTANTE: usar el nombre exacto del preset -->
+        <li class="theme-item" data-theme="Navidad MX"><span class="dot"></span><span class="title">Navidad MX</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Halloween"><span class="dot"></span><span class="title">Halloween</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Fútbol"><span class="dot"></span><span class="title">Fútbol</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Lucha Libre"><span class="dot"></span><span class="title">Lucha Libre</span><button class="btn small ghost">Previsualizar</button></li>
@@ -352,34 +353,46 @@
 <!-- App principal -->
 <script type="module" src="./app.js"></script>
 
-<!-- Lógica mínima del panel Temas -->
-<script>
-  const toast = (msg)=>{ console.log(msg); };
+<!-- Temas: integra con /shared/theme.js -->
+<script type="module">
+  import { applyThemeLocal as applyThemeCore, initThemeFromSettings } from '../shared/theme.js';
+  import { db, doc, setDoc } from '../shared/firebase.js';
 
-  // Tema persistido localmente (solo vista)
-  const initialTheme = sessionStorage.getItem('theme');
-  if (initialTheme) {
-    document.documentElement.setAttribute('data-theme', initialTheme);
-    document.body.setAttribute('data-theme', initialTheme);
+  // Alias por si alguien usa otra grafía en DB/URL
+  const NAME_ALIASES = {
+    'navidad': 'Navidad MX',
+    'navidad mx': 'Navidad MX',
+    'dia de muertos': 'Día de Muertos',
+    'día de muertos': 'Día de Muertos',
+    'independencia': 'Independencia',
+  };
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const resolveThemeName = (name)=> NAME_ALIASES[norm(name)] || name;
+
+  // Si hay vista previa local previa, úsala; si no, escucha settings/theme
+  const stored = sessionStorage.getItem('theme_local');
+  if (stored) {
+    try { applyThemeCore(resolveThemeName(stored)); } catch {}
+  } else {
+    try { initThemeFromSettings({ defaultName: 'Base' }); } catch {}
   }
 
-  let selectedTheme = initialTheme || 'Base';
+  let selectedTheme = stored || 'Base';
 
   function applyThemeLocal(name){
-    document.documentElement.setAttribute('data-theme', name);
-    document.body.setAttribute('data-theme', name);
-    sessionStorage.setItem('theme', name);
-    toast('Vista previa: ' + name);
+    const fixed = resolveThemeName(name);
+    applyThemeCore(fixed);
+    selectedTheme = fixed;
+    sessionStorage.setItem('theme_local', fixed);
+    document.querySelectorAll('.theme-item').forEach(x=>{
+      x.classList.toggle('is-active', x.dataset.theme === fixed);
+    });
   }
 
   async function saveThemeGlobal(name){
-    // app.js debe exportar/definir setTheme(name) que guarde en Firestore: {theme: name}
-    if (typeof setTheme === 'function') {
-      await setTheme(name);
-      toast('Tema guardado GLOBAL: ' + name);
-    } else {
-      alert('No se puede guardar globalmente (setTheme no existe)');
-    }
+    const fixed = resolveThemeName(name);
+    await setDoc(doc(db,'settings','theme'), { name: fixed }, { merge:true });
+    alert('Tema guardado GLOBAL: ' + fixed);
   }
 
   // Interacciones de la lista
@@ -387,15 +400,7 @@
   list?.addEventListener('click', (e)=>{
     const li = e.target.closest('.theme-item');
     if (!li) return;
-
-    // Marcar item activo
-    document.querySelectorAll('.theme-item').forEach(x=>x.classList.remove('is-active'));
-    li.classList.add('is-active');
-
-    selectedTheme = li.dataset.theme;
-
-    // Si hacen click en el botón "Previsualizar" o en todo el item, aplicamos local
-    applyThemeLocal(selectedTheme);
+    applyThemeLocal(li.dataset.theme);
   });
 
   // Botones de acción
@@ -406,5 +411,6 @@
     if (selectedTheme) await saveThemeGlobal(selectedTheme);
   });
 </script>
+
 </body>
 </html>
