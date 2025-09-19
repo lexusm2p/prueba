@@ -259,7 +259,7 @@ const THEMES_BUILTIN = {
     images:[],
   },
 
-  /* ---- NUEVOS presets para coincidir con tus tarjetas ---- */
+  /* ---- Presets extra para tus tarjetas ---- */
   'Fútbol': {
     name:'Fútbol',
     palette:{
@@ -319,6 +319,18 @@ const THEMES_BUILTIN = {
     bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 },
     images:[]
   },
+
+  'Fiestas': {
+    name: 'Fiestas',
+    palette: {
+      bg:'#0b0f14', text:'#fff7ff', panel1:'#0b0e12', panel2:'#0b0d15',
+      ink1:'#fff7ff', ink2:'#ffd6ff', muted:'#f0c8ff',
+      primary:'#ff66ff', accent:'#27e1ff', ok:'#53e0a6', warn:'#ffd27f', danger:'#ff5d7a',
+    },
+    fonts:{ importUrl:'', base:'Inter, system-ui, Arial', display:'inherit' },
+    bg:{ image:'', overlay:'rgba(0,0,0,.20)', size:'cover', position:'center', blur:0 },
+    images:[]
+  },
 };
 
 /* -------------------- Estado en memoria -------------------- */
@@ -326,7 +338,7 @@ const CUSTOM = Object.create(null);
 let _unsubTheme = null;
 let _unsubPresets = null;
 
-/* Precarga de presets desde localStorage (sin esperar a Firestore) */
+/* Precarga de presets desde localStorage */
 try {
   const raw = localStorage.getItem('theme_presets');
   if (raw) {
@@ -335,23 +347,49 @@ try {
   }
 } catch {}
 
-/* -------------------- Utilidades -------------------- */
+/* -------------------- Alias + utilidades -------------------- */
+// Acepta nombres “humanos” que usan las tarjetas
+const NAME_ALIASES = {
+  'navidad': 'Navidad MX',
+  'navidad mx': 'Navidad MX',
+  'y2k': 'Y2K (90s/00s)',
+  'y2k (90s/00s)': 'Y2K (90s/00s)',
+  'dia de muertos': 'Día de Muertos',
+  'dia del nino': 'Día del Niño',
+  'dia de la bandera': 'Día de la Bandera',
+  'reyes': 'Reyes Magos',
+  'fiestas': 'Fiestas',
+};
+
 const slug = (s = '') =>
   String(s).toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'custom';
 
+function normNoAccent(s='') {
+  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+
 function getPresetByName(name) {
   if (!name) return null;
+
+  // alias + normalización
+  const norm = normNoAccent(name);
+  const alias = NAME_ALIASES[norm];
+  if (alias && THEMES_BUILTIN[alias]) return THEMES_BUILTIN[alias];
+
+  // clave directa
   if (THEMES_BUILTIN[name]) return THEMES_BUILTIN[name];
-  for (const t of Object.values(THEMES_BUILTIN)) {
-    if (t.name.toLowerCase() === String(name).toLowerCase()) return t;
-  }
-  for (const p of Object.values(CUSTOM)) {
-    if (p?.name && p.name.toLowerCase() === String(name).toLowerCase()) return p;
-  }
-  return null;
+
+  // match por display name (sin acentos)
+  const fromBuiltins = Object.values(THEMES_BUILTIN)
+    .find(t => t?.name && normNoAccent(t.name) === norm);
+  if (fromBuiltins) return fromBuiltins;
+
+  const fromCustom = Object.values(CUSTOM)
+    .find(p => p?.name && normNoAccent(p.name) === norm);
+  return fromCustom || null;
 }
 
 function ensureFontImport(importUrl) {
@@ -394,7 +432,7 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
   const fonts = preset.fonts   || {};
   const root  = document.documentElement;
 
-  // CSS variables (alias incl.)
+  // Variables CSS (con alias de compat)
   const vars = {
     '--bg': pal.bg, '--text': pal.text,
     '--panel1': pal.panel1 || '#0b0e12', '--panel2': pal.panel2 || '#0b0d15',
@@ -404,7 +442,6 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
     '--ok': pal.ok || '#00c27a', '--warn': pal.warn || '#ffd27f', '--danger': pal.danger || '#ff5d5d',
     '--font-base': fonts.base || 'Inter, system-ui, Arial',
     '--font-display': fonts.display || 'inherit',
-    // aliases para compat
     '--color-bg': pal.bg,
     '--color-text': pal.text,
     '--color-primary': pal.primary || '#ffc242',
@@ -422,7 +459,7 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
     document.body.style.color = pal.text || '#e8f0ff';
   } catch {}
 
-  // Marca de tema en el DOM (para CSS/JS)
+  // Marca de tema en el DOM
   const name = preset.name || (typeof nameOrPreset === 'string' ? nameOrPreset : 'Custom');
   root.setAttribute('data-theme', slug(name));
   root.setAttribute('data-theme-name', name);
