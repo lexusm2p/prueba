@@ -22,7 +22,8 @@ const state = {
   cart: [],
   customerName: '',
   orderMeta: { type: 'pickup', table: '', phone: '', payMethodPref: 'efectivo' },
-
+// Evita dobles envíos
+isSubmittingOrder: false,
   // Suscripciones
   unsubReady: null,
   unsubAnalytics: null,
