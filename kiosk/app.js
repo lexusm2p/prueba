@@ -2102,7 +2102,7 @@ function mountThemePanel() {
   head.style.gap = '8px';
   const title = document.createElement('strong');
   title.textContent = 'Tema (MX)';
-  title.style.FontSize = '12px';
+  title.style.fontSize = '12px';
   const toggle = document.createElement('button');
   toggle.textContent = '—';
   Object.assign(toggle.style, {
