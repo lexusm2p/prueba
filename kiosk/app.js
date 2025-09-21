@@ -1072,42 +1072,70 @@ function openCartModal(){
       state.orderMeta.table = '';
     }
 
-    const generalNotes = (document.getElementById('cartNotes')?.value||'').trim();
+   // === Notas generales ingresadas en el carrito
+const generalNotes = (document.getElementById('cartNotes')?.value || '').trim();
 
-    const subtotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
-    const hhTotalDiscount = state.cart.reduce((a,l)=> a + (Number(l.hhDisc||0)), 0);
-    const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
-    const hhSummary = {
-      enabled: !!hh.enabled,
-      discountPercent: Number(hh.discountPercent||0),
-      applyEligibleOnly: hh.applyEligibleOnly!==false,
-      totalDiscount: Number(hhTotalDiscount||0)
-    };
+// === Filtrar líneas: no mandar regalos al backend y sumar una nota para cocina
+const giftNotes = [];
+const itemsForDB = state.cart.map(l => ({
+  id: l.id,
+  name: l.name,
+  mini: l.mini,
+  qty: l.qty,
+  unitPrice: l.unitPrice,
+  baseIngredients: l.baseIngredients,
+  salsaDefault: l.salsaDefault,
+  salsaCambiada: l.salsaCambiada,
+  extras: l.extras,
+  notes: l.notes || null,
+  lineTotal: l.lineTotal,
+  hhDisc: Number(l.hhDisc || 0),
+  isGift: !!l.isGift
+})).filter(l => {
+  if (l.isGift) {
+    giftNotes.push(`• ${l.name} x${l.qty}`);
+    return false;            // ⬅️ regalos no se envían al backend
+  }
+  return true;
+});
 
-    // ID idempotente desde cliente (ayuda contra duplicados en backend)
-    const clientId = `c_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+// === Nota compuesta para cocina (incluye los regalos)
+const notesForKitchen = [
+  generalNotes,
+  giftNotes.length ? `REGALO: agregar sin costo:\n${giftNotes.join('\n')}` : ''
+].filter(Boolean).join('\n');
 
-    const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-    const orderBase = {
-      clientId,                            // 👈 nuevo
-      customer: state.customerName,
-      orderType: state.orderMeta.type,
-      table: state.orderMeta.type==='dinein' ? state.orderMeta.table : null,
-      phone: state.orderMeta.type==='pickup' ? state.orderMeta.phone : null,
-      payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
-      items: state.cart.map(l=>({
-        id:l.id, name:l.name, mini:l.mini, qty:l.qty, unitPrice:l.unitPrice,
-        baseIngredients:l.baseIngredients, salsaDefault:l.salsaDefault,
-        salsaCambiada:l.salsaCambiada, extras:l.extras, notes:l.notes||null,
-        lineTotal:l.lineTotal, hhDisc: Number(l.hhDisc||0),
-        isGift: !!l.isGift                      // 👈 útil para cocina/reportes
-      })),
-      subtotal,
-      notes: generalNotes,
-      hh: hhSummary,
-      createdAt: Date.now()
-    };
+// === Totales SOLO con líneas no-regalo
+const subtotal = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
+const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
 
+// === Resumen HH
+const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
+const hhSummary = {
+  enabled: !!hh.enabled,
+  discountPercent: Number(hh.discountPercent || 0),
+  applyEligibleOnly: hh.applyEligibleOnly !== false,
+  totalDiscount: Number(hhTotalDiscount || 0)
+};
+
+// ID idempotente desde cliente
+const clientId = `c_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
+// === Pedido a persistir (sin regalos)
+const orderBase = {
+  clientId,
+  customer: state.customerName,
+  orderType: state.orderMeta.type,
+  table: state.orderMeta.type === 'dinein' ? state.orderMeta.table : null,
+  phone: state.orderMeta.type === 'pickup' ? state.orderMeta.phone : null,
+  payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
+  items: itemsForDB,
+  subtotal,
+  notes: notesForKitchen,           // ⬅️ cocina verá aquí el/los regalos
+  hh: hhSummary,
+  createdAt: Date.now()
+};
     let orderId = null;
     try {
       const created = await DB.createOrder(orderBase);
