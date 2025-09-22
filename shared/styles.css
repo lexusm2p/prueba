@@ -306,14 +306,31 @@ input:-webkit-autofill{
 .k-badge.ok{ background:#183a2a } .k-badge.warn{ background:#3a2f18 }
 
 /* ---- Tablas ---- */
-.table-wrap{ overflow:auto; -webkit-overflow-scrolling: touch; border:1px solid var(--stroke); border-radius:12px;
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel1) 92%, black 8%), color-mix(in srgb, var(--panel2) 86%, black 14%)); }
+/* Contenedores con scroll horizontal */
+.table-wrap,
+.table-scroll{
+  overflow:auto;
+  -webkit-overflow-scrolling: touch;
+  border:1px solid var(--stroke);
+  border-radius:12px;
+  background:linear-gradient(180deg, color-mix(in srgb, var(--panel1) 92%, black 8%), color-mix(in srgb, var(--panel2) 86%, black 14%));
+}
+.table-wrap table,
+.table-scroll table{ min-width:720px; border-collapse:collapse; }
+
+/* Tabla base (SIN elipsis por defecto) */
 .k-table{ width:100%; border-collapse:collapse; font-size:14px; }
 .k-table th,.k-table td{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08); vertical-align:middle; }
 .k-table th{ text-align:left; color:var(--muted); white-space:nowrap; }
-.k-table td.right, .k-table th.right{ text-align:right }
-.k-table td{ min-width:0; max-width:0; overflow:hidden; text-overflow:ellipsis; }
-.k-table td .break{ overflow:visible; text-overflow:initial; }
+.k-table td{ white-space:nowrap; }
+
+/* Modo compacto: solo si el contenedor tiene .compact */
+.compact .k-table th,
+.compact .k-table td{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:0;
+}
 
 /* ---- Responsive cards ---- */
 @media (max-width:640px){
@@ -393,6 +410,13 @@ input:-webkit-autofill{
 /* ---- Historial ---- */
 #tblHist.k-table th, #tblHist.k-table td{ white-space:nowrap; vertical-align:middle; }
 #tblHist .btn.small.ghost{ padding:6px 8px; line-height:1; font-size:11px; }
+
+/* Sugerencias de anchuras cuando el contenedor está en modo compacto */
+.compact #tblHist th:nth-child(1), .compact #tblHist td:nth-child(1){ max-width:12ch; }
+.compact #tblHist th:nth-child(2), .compact #tblHist td:nth-child(2){ max-width:14ch; }
+.compact #tblHist th:nth-child(3), .compact #tblHist td:nth-child(3){ max-width:8ch; }
+.compact #tblHist th:nth-child(5), .compact #tblHist td:nth-child(5){ max-width:8ch; }
+
 @media (max-width: 480px){ #tblHist th:nth-child(4), #tblHist td:nth-child(4){ display:none; } }
 .modal .modal-card{ width:min(760px,94vw); max-height:86vh; }
 @media (max-width: 520px){ .modal .modal-card{ width:94vw; } }
