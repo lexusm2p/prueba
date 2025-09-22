@@ -6,17 +6,14 @@
   <link rel="stylesheet" href="../shared/styles.css"/>
   <title>Admin — Seven de Burgers</title>
 
-  <!-- Estilos locales del admin (incluye la lista de temas) -->
+  <!-- Estilos locales del admin (incluye la lista de temas y fix de tablas) -->
   <style>
-    /* === ENLACE CON EL SISTEMA DE TEMAS ===
-       Forzamos a usar las variables que setea /shared/theme.js
-       para que cambien tipografías y colores al aplicar un tema. */
+    /* === ENLACE CON EL SISTEMA DE TEMAS === */
     html, body{
       background-color: var(--bg, #0b0f14);
       color: var(--text, #e8f0ff);
       font-family: var(--font-base, Inter, system-ui, Arial);
     }
-    /* Usa la display del tema en títulos / marcas */
     h1, h2, h3, .brand div:first-child, .title-sub, .display-font{
       font-family: var(--font-display, inherit);
     }
@@ -28,14 +25,30 @@
     .panel{ display:none; }
     .panel.active{ display:block; }
 
-    /* Tablas */
+    /* ---------- Tablas: FIX móvil (sin recortes) ---------- */
+    .table-wrap, .table-scroll { width:100%; overflow:auto; -webkit-overflow-scrolling:touch; }
+    .table-wrap table, .table-scroll table { min-width: 720px; border-collapse:collapse; }
     .k-table{ width:100%; border-collapse:collapse; font-size:14px }
     .k-table th,.k-table td{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08) }
     .k-table th{ text-align:left; color:var(--muted) }
     .k-badge.ok{ background:#183a2a } .k-badge.warn{ background:#3a2f18 }
-    .table-wrap { overflow:auto; -webkit-overflow-scrolling: touch; }
-    .k-table th, .k-table td { white-space: nowrap; }
-    @media (max-width:480px){ #tblHist th:nth-child(4), #tblHist td:nth-child(4){ display:none; } }
+
+    /* Por defecto: mostrar COMPLETO (sin elipsis) */
+    .k-table th, .k-table td { white-space: nowrap; overflow: visible; text-overflow: clip; max-width: none; }
+
+    /* Modo COMPACTO (aplica elipsis) */
+    .compact .k-table th, .compact .k-table td { overflow: hidden; text-overflow: ellipsis; }
+    /* Anchos sugeridos para compacto (ajustables) */
+    .compact #tblHist th:nth-child(1), .compact #tblHist td:nth-child(1){ max-width: 12ch; }
+    .compact #tblHist th:nth-child(2), .compact #tblHist td:nth-child(2){ max-width: 14ch; }
+    .compact #tblHist th:nth-child(3), .compact #tblHist td:nth-child(3){ max-width: 8ch; }
+    .compact #tblHist th:nth-child(5), .compact #tblHist td:nth-child(5){ max-width: 8ch; }
+    .btn.tiny{ padding:6px 10px; font-size:12px; }
+
+    /* En pantallas pequeñas la tabla puede ser más angosta */
+    @media (max-width:768px){
+      .table-wrap table, .table-scroll table { min-width: 640px; }
+    }
 
     /* ---------- Lista de Temas (antidesborde) ---------- */
     .theme-list{
@@ -60,7 +73,6 @@
       min-width:0; flex:1 1 auto;
       display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
       overflow:hidden; text-overflow:ellipsis; word-break:break-word;
-      /* Se ve la display font del tema en los títulos de la lista */
       font-family: var(--font-display, inherit);
     }
     .theme-item .btn{ flex:0 0 auto; white-space:nowrap; }
@@ -124,13 +136,13 @@
       </div>
 
       <h4 style="margin-top:16px">Top productos</h4>
-      <table class="k-table" id="tblTop"><thead><tr><th>Producto</th><th>Unidades</th><th>Ingresos</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblTop"><thead><tr><th>Producto</th><th>Unidades</th><th>Ingresos</th></tr></thead><tbody></tbody></table></div>
 
       <h4 style="margin-top:16px">Productos de baja rotación</h4>
-      <table class="k-table" id="tblLow"><thead><tr><th>Producto</th><th>Unidades</th><th>Ingresos</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblLow"><thead><tr><th>Producto</th><th>Unidades</th><th>Ingresos</th></tr></thead><tbody></tbody></table></div>
 
       <h4 style="margin-top:16px">Ventas por hora</h4>
-      <table class="k-table" id="tblHours"><thead><tr><th>Hora</th><th>Órdenes</th><th>Ingresos</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblHours"><thead><tr><th>Hora</th><th>Órdenes</th><th>Ingresos</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <!-- HISTORIAL -->
@@ -157,12 +169,13 @@
           <div class="row" style="gap:8px">
             <button id="btnHistLoad" class="btn">Cargar</button>
             <button id="btnHistCSV" class="btn ghost">Exportar CSV</button>
+            <button id="btnHistToggleView" class="btn tiny ghost">Vista: Completo</button>
           </div>
           <div class="muted small" style="margin-top:6px">* Usa “Desde/Hasta” y “Incluir archivo histórico” del panel Reportes.</div>
         </div>
       </div>
 
-      <div class="table-wrap" style="margin-top:8px;">
+      <div class="table-scroll" id="histTableWrap" style="margin-top:8px;">
         <table id="tblHist" class="k-table">
           <thead>
             <tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Artículos</th><th>Total</th><th>Estado</th><th></th></tr>
@@ -185,12 +198,12 @@
       </div>
 
       <h4 style="margin-top:16px">Por cobrar (en vivo)</h4>
-      <table class="k-table" id="tblPorCobrar">
+      <div class="table-scroll"><table class="k-table" id="tblPorCobrar">
         <thead>
           <tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th class="right">Total</th><th>Pref. pago</th><th class="right">Acciones</th></tr>
         </thead>
         <tbody></tbody>
-      </table>
+      </table></div>
 
       <div class="grid" style="margin-top:16px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
         <div class="k-card"><div class="muted small">Cobros (registros)</div><div id="kpiCobrosCount" class="price">$0</div></div>
@@ -201,12 +214,12 @@
       </div>
 
       <h4 style="margin-top:16px">Historial de cobros</h4>
-      <table class="k-table" id="tblCobrosHist">
+      <div class="table-scroll"><table class="k-table" id="tblCobrosHist">
         <thead>
           <tr><th>Fecha cobro</th><th>Cliente</th><th>Tipo</th><th class="right">Total cobrado</th><th>Método</th></tr>
         </thead>
         <tbody></tbody>
-      </table>
+      </table></div>
     </section>
 
     <!-- COMPRAS -->
@@ -222,7 +235,7 @@
       <div class="muted small">* Guarda en <b>purchases</b> y actualiza <b>inventory</b> con costo promedio.</div>
 
       <h4 style="margin-top:16px">Últimas compras</h4>
-      <table class="k-table" id="tblPurch"><thead><tr><th>Fecha</th><th>Ingrediente</th><th>Cant.</th><th>Costo</th><th>Proveedor</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblPurch"><thead><tr><th>Fecha</th><th>Ingrediente</th><th>Cant.</th><th>Costo</th><th>Proveedor</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <!-- INVENTARIO -->
@@ -232,7 +245,7 @@
         <div class="field"><label>Buscar</label><input id="invSearch" type="text" placeholder="nombre…"></div>
         <div class="field" style="align-self:end"><button class="btn ghost" id="btnInvRefresh">Actualizar</button></div>
       </div>
-      <table class="k-table" id="tblInv"><thead><tr><th>Ingrediente</th><th>Existencia</th><th>Um</th><th>Costo prom.</th><th>Valorizado</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblInv"><thead><tr><th>Ingrediente</th><th>Existencia</th><th>Um</th><th>Costo prom.</th><th>Valorizado</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <!-- PROVEEDORES -->
@@ -243,7 +256,7 @@
         <div class="field"><label>Contacto</label><input id="vContact" type="text" placeholder="tel / mail / nota"></div>
         <div class="field" style="align-self:end"><button class="btn" id="btnSaveVendor">Guardar</button></div>
       </div>
-      <table class="k-table" id="tblVendors"><thead><tr><th>Nombre</th><th>Contacto</th><th>ID</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblVendors"><thead><tr><th>Nombre</th><th>Contacto</th><th>ID</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <!-- PRODUCTOS / COMBOS -->
@@ -251,7 +264,7 @@
       <h3 class="display-font">Productos / Combos</h3>
       <div class="muted">WIP — Aquí podrás crear/editar productos, fijar precios y armar combos. El kiosko lee directo de <b>products</b>.</div>
       <div class="field" style="margin-top:10px"><button class="btn ghost" id="btnReloadCatalog">Refrescar catálogo del kiosko</button></div>
-      <table class="k-table" id="tblProducts"><thead><tr><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Activo</th><th>ID</th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblProducts"><thead><tr><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Activo</th><th>ID</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <!-- TEMAS -->
@@ -284,30 +297,6 @@
       </div>
     </section>
 
-    <!-- HAPPY HOUR -->
-    <section class="panel" id="panel-happy">
-      <h3 class="display-font">Happy Hour</h3>
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px">
-        <div class="field"><label>Estado</label><select id="hhEnabled"><option value="off">Desactivada</option><option value="on">Activada</option></select></div>
-        <div class="field"><label>Descuento general (%)</label><input id="hhDisc" type="number" min="0" max="90" value="0"></div>
-        <div class="field"><label>Mensaje en kiosko</label><input id="hhMsg" type="text" placeholder="Ej. 2x1 en Minis 7–8 pm"></div>
-        <div class="field" style="align-self:end"><button class="btn" id="btnSaveHappy">Guardar</button></div>
-        <div class="field"><label>Duración (min)</label><input id="hhDurMin" type="number" min="0" step="5" placeholder="Ej. 60"><div class="muted small">Si indicas duración y está activada, se calcula el fin automáticamente.</div></div>
-        <div class="field"><label>Termina el</label><input id="hhEndsAt" type="datetime-local"><div class="muted small">Si no pones duración, puedes definir fecha/hora de término.</div></div>
-        <div class="field"><label>Estado / Cuenta regresiva</label><div id="hhCountdown" class="muted small">Inactivo</div></div>
-      </div>
-      <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:10px">
-        <button class="btn ghost" id="btnHH30">Iniciar 30 min</button>
-        <button class="btn ghost" id="btnHH60">Iniciar 60 min</button>
-        <button class="btn ghost" id="btnHH90">Iniciar 90 min</button>
-        <button class="btn ghost" id="btnHHExtend15">Extender +15 min</button>
-        <button class="btn danger" id="btnHHStop">Detener</button>
-      </div>
-      <div class="muted small" style="margin-top:8px">* Guarda en <b>settings/happyHour</b>. El kiosko lo muestra y aplica el descuento si corresponde.</div>
-      <h4 style="margin-top:16px">Reglas específicas</h4>
-      <div class="muted small">WIP — podrás seleccionar productos/combos con descuento exclusivo durante HH.</div>
-    </section>
-
     <!-- RECETARIO -->
     <section class="panel" id="panel-recetas">
       <h3 class="display-font">Recetario de aderezos</h3>
@@ -322,7 +311,7 @@
           </select>
         </div>
       </div>
-      <table class="k-table" id="tblRecipes"><thead><tr><th>Receta</th><th>Rinde base</th><th>Producto terminado</th><th>#Ingr.</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="table-scroll"><table class="k-table" id="tblRecipes"><thead><tr><th>Receta</th><th>Rinde base</th><th>Producto terminado</th><th>#Ingr.</th><th></th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <!-- Modal Receta -->
@@ -355,10 +344,10 @@
         <div class="field"><label>Buscar</label><input id="artSearch" type="text" placeholder="nombre o descripción…"></div>
         <div class="field" style="align-self:end"><button class="btn" id="btnAddArticulo">Nuevo artículo</button></div>
       </div>
-      <table class="k-table" id="tblArticulos">
+      <div class="table-scroll"><table class="k-table" id="tblArticulos">
         <thead><tr><th>Nombre</th><th>Precio</th><th>Activo</th><th>Acciones</th></tr></thead>
         <tbody></tbody>
-      </table>
+      </table></div>
       <div class="muted small" style="margin-top:6px">* Haz clic en los encabezados para ordenar.</div>
     </section>
 
@@ -368,12 +357,12 @@
 <!-- App principal -->
 <script type="module" src="./app.js"></script>
 
-<!-- Temas: integra con /shared/theme.js -->
+<!-- Temas: integra con /shared/theme.js + helper de tablas -->
 <script type="module">
   import { applyThemeLocal as applyThemeCore, initThemeFromSettings } from '../shared/theme.js';
   import { db, doc, setDoc } from '../shared/firebase.js';
 
-  // Alias por si alguien usa otra grafía en DB/URL
+  /* ====== THEMES ====== */
   const NAME_ALIASES = {
     'navidad': 'Navidad MX',
     'navidad mx': 'Navidad MX',
@@ -384,7 +373,6 @@
   const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const resolveThemeName = (name)=> NAME_ALIASES[norm(name)] || name;
 
-  // Si hay vista previa local previa, úsala; si no, escucha settings/theme
   const stored = sessionStorage.getItem('theme_local');
   if (stored) {
     try { applyThemeCore(resolveThemeName(stored)); } catch {}
@@ -410,21 +398,30 @@
     alert('Tema guardado GLOBAL: ' + fixed);
   }
 
-  // Interacciones de la lista: click en LI o en el botón "Previsualizar"
   const list = document.getElementById('themeList');
   list?.addEventListener('click', (e)=>{
     const li = e.target.closest('.theme-item');
     if (!li) return;
     applyThemeLocal(li.dataset.theme);
   });
-
-  // Botones de acción
   document.getElementById('btnPreviewLocal')?.addEventListener('click', ()=>{
     if (selectedTheme) applyThemeLocal(selectedTheme);
   });
   document.getElementById('btnGuardarGlobal')?.addEventListener('click', async ()=>{
     if (selectedTheme) await saveThemeGlobal(selectedTheme);
   });
+
+  /* ====== TABLAS: alternar Completo/Compacto (opcional) ====== */
+  const histWrap = document.getElementById('histTableWrap');
+  const toggleBtn = document.getElementById('btnHistToggleView');
+
+  function setHistMode(compact){
+    histWrap?.classList.toggle('compact', compact);
+    toggleBtn && (toggleBtn.textContent = 'Vista: ' + (compact ? 'Compacto' : 'Completo'));
+    sessionStorage.setItem('hist.compact', compact ? '1' : '0');
+  }
+  setHistMode(sessionStorage.getItem('hist.compact') === '1');
+  toggleBtn?.addEventListener('click', ()=> setHistMode(!histWrap.classList.contains('compact')));
 </script>
 
 </body>
