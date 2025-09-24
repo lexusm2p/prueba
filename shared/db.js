@@ -83,7 +83,7 @@ export async function fetchCatalogWithFallback() {
   } catch {}
   try {
     const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
-    if (r2.ok) return normalizeCatalog(await r.json());
+    if (r2.ok) return normalizeCatalog(await r2.json());
   } catch {}
   return normalizeCatalog({});
 }
@@ -329,7 +329,7 @@ export async function setTheme(payload, opts = {}) {
   const { training = false } = opts;
   const name = (typeof payload === 'string') ? payload : payload?.name;
   const overrides = (typeof payload === 'object' && payload && payload.overrides) ? payload.overrides : {};
-  if (!name) throw new Error('Theme name is required');
+  if (!n ame) throw new Error('Theme name is required');
 
   return guardWrite(training, async () => {
     await ensureAuth();
