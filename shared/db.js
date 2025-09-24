@@ -329,7 +329,7 @@ export async function setTheme(payload, opts = {}) {
   const { training = false } = opts;
   const name = (typeof payload === 'string') ? payload : payload?.name;
   const overrides = (typeof payload === 'object' && payload && payload.overrides) ? payload.overrides : {};
-  if (!n ame) throw new Error('Theme name is required');
+  if (!name) throw new Error('Theme name is required');
 
   return guardWrite(training, async () => {
     await ensureAuth();
