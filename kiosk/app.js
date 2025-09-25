@@ -206,6 +206,8 @@ function setActiveTab(mode=state.mode){
 /* ======================= Init ======================= */
 init();
 async function init(){
+  // ✅ Garantiza sesión anónima desde el arranque del kiosko
+  try { await ensureAuth(); } catch (e) { console.warn('anon auth fail', e); }
   // Intenta Firestore/DB; si falla, usa el JSON local de /data
   try {
     state.menu = await DB.fetchCatalogWithFallback();
