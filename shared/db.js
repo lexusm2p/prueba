@@ -83,7 +83,7 @@ export async function fetchCatalogWithFallback() {
   } catch {}
   try {
     const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
-    if (r2.ok) return normalizeCatalog(await r2.json());
+    if (r2.ok) return normalizeCatalog(await r.json());
   } catch {}
   return normalizeCatalog({});
 }
@@ -223,7 +223,7 @@ export async function archiveDelivered(id, opts = {}) {
     if (!snap.exists()) return { ok: false, reason: 'not_found' };
     const data = snap.data();
     await setDoc(doc(db, 'orders_archive', id), { ...data, archivedAt: serverTimestamp() }, { merge: true });
-    await deleteDoc(ref); // si tus reglas no lo permiten, comenta esta línea
+    try { await deleteDoc(ref); } catch {} // Puede fallar según reglas; dejamos copia en archive siempre
     return { ok: true };
   }, { ok: true, _training: true });
 }
@@ -406,6 +406,48 @@ export async function adjustStock(itemId, delta, reason = 'use', meta = {}, opts
       itemId, delta: Number(delta), reason, meta, createdAt: serverTimestamp()
     });
     return { ok: true };
+  }, { ok: true, _training: true });
+}
+
+/**
+ * Aplica consumo de inventario para una orden.
+ * Compatibilidad con cocina/app.js (applyInventoryForOrderShim):
+ * - Si los items incluyen un arreglo `consumes` con { itemId, qty }, descuenta.
+ * - Si no hay `consumes`, no hace nada (no falla).
+ * - Respeta opts.training para no escribir en PRUEBA.
+ */
+export async function applyInventoryForOrder(order, opts = {}) {
+  const { training = false } = opts;
+  if (!order || !Array.isArray(order.items)) return { ok: true, noops: true };
+
+  // Junta consumos explícitos por item
+  const acc = new Map(); // itemId -> totalDelta
+  for (const it of order.items) {
+    const qty = Number(it?.qty || 1);
+    const consumes = Array.isArray(it?.consumes) ? it.consumes : [];
+    for (const c of consumes) {
+      const id = c?.itemId;
+      const per = Number(c?.qty || 0);
+      if (!id || !(per > 0)) continue;
+      const delta = -(per * qty); // consumir => negativo
+      acc.set(id, (acc.get(id) || 0) + delta);
+    }
+  }
+
+  if (!acc.size) return { ok: true, noops: true };
+
+  return guardWrite(training, async () => {
+    await ensureAuth();
+    const batch = [];
+    for (const [itemId, delta] of acc.entries()) {
+      const ref = doc(db, 'inventory', itemId);
+      batch.push(setDoc(ref, { currentStock: increment(delta), updatedAt: serverTimestamp() }, { merge: true }));
+      batch.push(addDoc(collection(db, 'inventory_moves'), {
+        itemId, delta, reason: 'order_use', meta: { orderId: order.id || null }, createdAt: serverTimestamp()
+      }));
+    }
+    await Promise.all(batch);
+    return { ok: true, moved: acc.size };
   }, { ok: true, _training: true });
 }
 
