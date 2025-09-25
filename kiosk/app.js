@@ -22,10 +22,8 @@ const state = {
   cart: [],
   customerName: '',
   orderMeta: { type: 'pickup', table: '', phone: '', payMethodPref: 'efectivo' },
-
-  // Evita dobles envíos
-  isSubmittingOrder: false,
-
+// Evita dobles envíos
+isSubmittingOrder: false,
   // Suscripciones
   unsubReady: null,
   unsubAnalytics: null,
@@ -835,4 +833,926 @@ function openItemModal(item, base, existingIndex=null){
       const newLine = {
         id: item.id, name: item.name, mini: !!item.mini, qty,
         unitPrice: Number(item.price||0),
-        baseIngredients: formatIngredientsFor(item,
+        baseIngredients: formatIngredientsFor(item, base),
+        salsaDefault: base?.salsaDefault || base?.suggested || null,
+        salsaCambiada: salsaSwap,
+        extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk, surpriseSauce: surpriseSauce || null },
+        notes,
+        lineTotal: subtotal,
+        hhDisc: hhDiscTotal
+      };
+
+      if (existingIndex!==null){ state.cart[existingIndex] = newLine; toast('Línea actualizada'); }
+      else { state.cart.push(newLine); toast('Agregado al pedido'); }
+
+      checkComboAchievement();
+      document.getElementById('modal')?.classList.remove('open');
+      updateCartBar(); beep();
+    };
+  }
+}
+
+/* ======================= Carrito ======================= */
+const cartBar = document.getElementById('cartBar');
+document.getElementById('openCart')?.addEventListener('click', openCartModal);
+
+function updateCartBar(){
+  const count = state.cart.reduce((a,l)=>a + (l.qty||1), 0);
+  const total = state.cart.reduce((a,l)=>a + (l.lineTotal||0), 0);
+  const countEl = document.getElementById('cartCount');
+  const totalEl = document.getElementById('cartBarTotal');
+  if (countEl) countEl.textContent = `${count} producto${count!==1?'s':''}`;
+  if (totalEl) totalEl.textContent = money(total);
+  if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
+
+  // Revisa si toca desbloquear o retirar el regalo al cambiar el carrito
+  checkGiftUnlock(!state.gift.shownThisSession);
+}
+
+function openCartModal(){
+  const m = document.getElementById('cartModal');
+  const body = document.getElementById('cartBody');
+  const close = ()=> { if(m) m.style.display='none'; if(!state.followCtaShown){ showFollowCta(); state.followCtaShown = true; } };
+  document.getElementById('cartClose')?.addEventListener('click', close, { once:true });
+  if(m) m.style.display='grid';
+
+  const confirmBtn = document.getElementById('cartConfirm');
+  const totalEl    = document.getElementById('cartTotal');
+
+  if(state.cart.length===0){
+    if(body) body.innerHTML = '<div class="muted">Tu carrito está vacío, elige un personaje de sabor.</div>';
+    if (confirmBtn) confirmBtn.style.display = 'none';
+    if (totalEl) totalEl.style.display = 'none';
+    return;
+  }
+
+  if (confirmBtn) confirmBtn.style.display = '';
+  if (totalEl) totalEl.style.display = '';
+
+  if(body) body.innerHTML = `
+    <div class="field"><label>Nombre del cliente</label>
+      <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
+      <div class="field">
+        <label>Tipo de pedido</label>
+        <select id="orderType">
+          <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
+          <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
+        </select>
+      </div>
+
+      <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
+        <label>Teléfono de contacto (Pickup)</label>
+        <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
+               placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
+        <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
+        <div class="muted small" style="margin-top:6px">
+          <label style="display:flex;gap:8px;align-items:center">
+            <input id="loyaltyOpt" type="checkbox" ${state.loyaltyOptIn?'checked':''}/>
+            <span>Quiero guardar mi tarjeta y participar por premios</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
+        <label>Número de mesa</label>
+        <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
+      </div>
+
+      <div class="field">
+        <label>Método de pago</label>
+        <select id="payMethod">
+          <option value="efectivo" ${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
+          <option value="tarjeta" ${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
+          <option value="transferencia" ${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      ${state.cart.map((l,idx)=>{
+        const extrasTxt = [
+          (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
+          ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
+          ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
+          (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
+        ].filter(Boolean).join(', ');
+        return `
+        <div class="k-card" style="margin:8px 0" data-i="${idx}">
+          <h4>${l.name} · x${l.qty}</h4>
+          ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
+          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
+          ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
+          <div class="k-actions" style="gap:6px">
+            <button class="btn small ghost" data-a="less">-</button>
+            <button class="btn small ghost" data-a="more">+</button>
+            <button class="btn small" data-a="edit">Editar</button>
+            <button class="btn small danger" data-a="remove">Eliminar</button>
+            <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
+          </div>
+        </div>`;}).join('')}
+    </div>
+
+    <div class="field"><label>Comentarios generales</label>
+      <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea></div>`;
+
+  const typeSel    = document.getElementById('orderType');
+  const mesaField  = document.getElementById('mesaField');
+  const phoneField = document.getElementById('phoneField');
+  const phoneInput = document.getElementById('phoneNum');
+  const paySel     = document.getElementById('payMethod');
+  const loyaltyOpt = document.getElementById('loyaltyOpt');
+
+  if (loyaltyOpt){
+    loyaltyOpt.addEventListener('change', ()=>{
+      state.loyaltyOptIn = !!loyaltyOpt.checked;
+    });
+  }
+
+  if (phoneInput){
+    phoneInput.addEventListener('input', ()=>{
+      const pos = phoneInput.selectionStart ?? phoneInput.value.length;
+      phoneInput.value = normalizePhone(phoneInput.value);
+      try { phoneInput.setSelectionRange(pos, pos); } catch {}
+    });
+    phoneInput.addEventListener('change', async ()=>{
+      const p = normalizePhone(phoneInput.value);
+      if (p.length >= 10){
+        const c = await DB.fetchCustomer?.(p);
+        if (c?.name){
+          const nameEl = document.getElementById('cartName');
+          if (nameEl && !nameEl.value) nameEl.value = c.name;
+        }
+      }
+    });
+  }
+
+  typeSel?.addEventListener('change', ()=>{
+    state.orderMeta.type = (typeSel?.value||'pickup');
+    if(mesaField)  mesaField.style.display  = (state.orderMeta.type==='dinein') ? '' : 'none';
+    if(phoneField) phoneField.style.display = (state.orderMeta.type==='pickup') ? '' : 'none';
+  });
+  paySel?.addEventListener('change', ()=>{
+    state.orderMeta.payMethodPref = (paySel?.value || 'efectivo');
+  });
+
+  refreshCartTotals();
+
+  if (body){
+    body.onclick = (e)=>{
+      const btn = e.target.closest('button[data-a]'); if (!btn) return;
+      const card = btn.closest('[data-i]'); if (!card) return;
+      const i = parseInt(card.dataset.i, 10);
+      const line = state.cart[i]; if (!line) return;
+      const act = btn.dataset.a;
+
+      if (act === 'remove') {
+        state.cart.splice(i, 1);
+        updateCartBar(); openCartModal();
+        return;
+      }
+      if (act === 'more') {
+        line.qty = Math.min(99, (line.qty || 1) + 1);
+        recomputeLine(line);
+        updateCartBar(); openCartModal();
+        checkComboAchievement();
+        return;
+      }
+      if (act === 'less') {
+        line.qty = Math.max(1, (line.qty || 1) - 1);
+        recomputeLine(line);
+        updateCartBar(); openCartModal();
+        return;
+      }
+      if (act === 'edit') {
+        const item = findItemById(line.id);
+        const base = baseOfItem(item);
+        const m2 = document.getElementById('cartModal'); if(m2) m2.style.display='none';
+        openItemModal(item, base, i);
+        return;
+      }
+    };
+  }
+
+  // ⚠️ Importante: evitar listeners acumulados en "Confirmar pedido"
+  if (confirmBtn) {
+    confirmBtn.onclick = null; // limpia cualquier handler anterior
+    confirmBtn.onclick = async ()=>{
+  // 👉 anti‑doble‑tap
+  if (state.isSubmittingOrder) return;
+  state.isSubmittingOrder = true;
+
+  // feedback UI
+  const prevLabel = confirmBtn.textContent;
+  confirmBtn.disabled = true;
+  confirmBtn.setAttribute('aria-busy','true');
+  confirmBtn.textContent = 'Enviando…';
+
+  try {
+    const name = (document.getElementById('cartName')?.value||'').trim();
+    if(!name){ alert('Escribe tu nombre'); return; }
+    state.customerName = name;
+
+    state.orderMeta.type  = (document.getElementById('orderType')?.value||'pickup');
+    state.orderMeta.payMethodPref = (document.getElementById('payMethod')?.value || 'efectivo');
+
+    if(state.orderMeta.type==='dinein'){
+      state.orderMeta.table = (document.getElementById('tableNum')?.value||'').trim();
+      if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
+      state.orderMeta.phone = '';
+    } else {
+      const raw = (document.getElementById('phoneNum')?.value || '');
+      const norm = normalizePhone(raw);
+      if(norm.length < 10){
+        alert('Para Pickup, ingresa un teléfono de 10 dígitos.');
+        return;
+      }
+      state.orderMeta.phone = norm;
+      state.orderMeta.table = '';
+    }
+
+   // === Notas generales ingresadas en el carrito
+const generalNotes = (document.getElementById('cartNotes')?.value || '').trim();
+
+// === Filtrar líneas: no mandar regalos al backend y sumar una nota para cocina
+const giftNotes = [];
+const itemsForDB = state.cart.map(l => ({
+  id: l.id,
+  name: l.name,
+  mini: l.mini,
+  qty: l.qty,
+  unitPrice: l.unitPrice,
+  baseIngredients: l.baseIngredients,
+  salsaDefault: l.salsaDefault,
+  salsaCambiada: l.salsaCambiada,
+  extras: l.extras,
+  notes: l.notes || null,
+  lineTotal: l.lineTotal,
+  hhDisc: Number(l.hhDisc || 0),
+  isGift: !!l.isGift
+})).filter(l => {
+  if (l.isGift) {
+    giftNotes.push(`• ${l.name} x${l.qty}`);
+    return false;            // ⬅️ regalos no se envían al backend
+  }
+  return true;
+});
+
+// === Nota compuesta para cocina (incluye los regalos)
+const notesForKitchen = [
+  generalNotes,
+  giftNotes.length ? `REGALO: agregar sin costo:\n${giftNotes.join('\n')}` : ''
+].filter(Boolean).join('\n');
+
+// === Totales SOLO con líneas no-regalo
+const subtotal = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
+const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
+
+// === Resumen HH
+const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
+const hhSummary = {
+  enabled: !!hh.enabled,
+  discountPercent: Number(hh.discountPercent || 0),
+  applyEligibleOnly: hh.applyEligibleOnly !== false,
+  totalDiscount: Number(hhTotalDiscount || 0)
+};
+
+// ID idempotente desde cliente
+const clientId = `c_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
+// === Pedido a persistir (sin regalos)
+const orderBase = {
+  clientId,
+  customer: state.customerName,
+  orderType: state.orderMeta.type,
+  table: state.orderMeta.type === 'dinein' ? state.orderMeta.table : null,
+  phone: state.orderMeta.type === 'pickup' ? state.orderMeta.phone : null,
+  payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
+  items: itemsForDB,
+  subtotal,
+  notes: notesForKitchen,           // ⬅️ cocina verá aquí el/los regalos
+  hh: hhSummary,
+  createdAt: Date.now()
+};
+    let orderId = null;
+    try {
+      const created = await DB.createOrder(orderBase);
+      orderId = (typeof created === 'string') ? created : created?.id;
+    } catch (e) {
+      console.warn('createOrder error, usando provisional:', e);
+    }
+    if (!orderId) orderId = provisionalId;
+
+    state.lastOrderId = orderId;
+
+    try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
+
+    if (orderBase.phone) {
+      await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId }).catch(()=>{});
+      await DB.attachLastOrderRef?.(orderBase.phone, orderId).catch(()=>{});
+      sendWaOrderCreated({
+        phone: orderBase.phone,
+        name: orderBase.customer,
+        orderId,
+        subtotal: orderBase.subtotal,
+        etaText: state.etaText || '7–10 min',
+        hhTotalDiscount: orderBase?.hh?.totalDiscount || 0
+      });
+    }
+
+    beep();
+    toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
+    state.cart = []; updateCartBar();
+    const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
+
+    setTimeout(()=>{
+      openFollowModal({
+        phone: orderBase.phone || state.orderMeta.phone || '',
+        orderId
+      });
+    }, 200);
+
+    if (state.loyaltyEnabled && !state.loyaltyAskShown) {
+      state.loyaltyAskShown = true;
+      setTimeout(()=>{
+        openLoyaltyModal({
+          name: orderBase.customer || '',
+          phone: orderBase.phone || '',
+          orderId
+        });
+      }, 500);
+    }
+  } finally {
+    // 🧹 reactivar UI solo si aún está abierto (si cerraste, da igual)
+    state.isSubmittingOrder = false;
+    confirmBtn.disabled = false;
+    confirmBtn.removeAttribute('aria-busy');
+    confirmBtn.textContent = prevLabel;
+  }
+};
+  }
+}
+
+function recomputeLine(line){
+  const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
+  const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
+  const extrasIngr = normalizeExtraIngredients();
+  const priceByName = new Map(extrasIngr.map(x=>[x.name, x.price]));
+  const costI = (line.extras?.ingredients||[]).reduce((sum, name)=>{
+    return sum + Number(priceByName.get(name) ?? state.menu?.extras?.ingredientPrice ?? 0);
+  }, 0);
+  const costS = (line.extras?.sauces?.length || 0) * SP;
+  const dlcOn = !!(line.extras?.dlcCarne);
+  const extraDlc = dlcOn ? DLC : 0;
+  const item = findItemById(line.id);
+  const hhDiscPerUnit = hhDiscountPerUnit(item);
+  const unitBaseAfterHH = Math.max(0, Number(line.unitPrice||0) - hhDiscPerUnit);
+  const unitTotal = (unitBaseAfterHH + extraDlc) + costS + costI;
+  line.lineTotal = unitTotal * (line.qty||1);
+  line.hhDisc = hhDiscPerUnit * (line.qty||1);
+}
+function refreshCartTotals(){
+  const total = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
+  const totalEl = document.getElementById('cartTotal');
+  if (totalEl){
+    totalEl.textContent = money(total);
+    totalEl.style.display = state.cart.length ? '' : 'none';
+  }
+}
+
+/* ======================= Laterales ======================= */
+function setupSidebars(){
+  const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
+  const pill = document.getElementById('hhPill');
+  const txt  = document.getElementById('hhText');
+  const msg  = document.getElementById('hhMsg');
+  if (pill && txt){
+    pill.classList.toggle('on', !!hh.enabled);
+    txt.textContent = hh.enabled
+      ? `Happy Hour – ${hh.discountPercent}%${state.hhLeftText ? ' · ' + state.hhLeftText : ''}`
+      : 'HH OFF';
+    if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
+  }
+  const eta = document.getElementById('etaTime');
+  if (eta) eta.textContent = state.etaText || '7–10 min';
+  renderMobileInfo();
+
+  const upsell = document.getElementById('upsellList');
+  if (upsell){
+    const picks = [];
+    if (state.menu?.drinks?.length) picks.push(...state.menu.drinks.slice(0,2));
+    if (state.menu?.sides?.length)  picks.push(...state.menu.sides.slice(0,2));
+    if (!picks.length) picks.push(...(state.menu?.minis||[]).slice(0,3));
+    upsell.innerHTML = picks.map(p => `
+      <li>
+        <div style="flex:1 1 auto;min-width:0">
+          <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+          <div class="muted small">${(p.type||'').toUpperCase()}</div>
+        </div>
+        <div class="price">${money(p.price||0)}</div>
+        <button class="btn tiny" data-add="${p.id}">Agregar</button>
+      </li>`).join('');
+  }
+
+  const promo = document.getElementById('promoList');
+  if (promo){
+    promo.innerHTML = hh.enabled
+      ? `<li><div style="flex:1">Combos con descuento</div><div class="price">-${hh.discountPercent}%</div></li>`
+      : `<li><div style="flex:1">Prueba nuestras minis ⭐</div><div class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</div></li>`;
+  }
+
+  const rank = document.getElementById('rankToday');
+  if (rank){
+    const rows = (state.topToday.length
+        ? state.topToday.map(t=>`<li><div style="flex:1">${t.name}</div><div class="muted small">🔥 ${t.count}</div></li>`)
+        : (state.menu?.minis||[]).slice(0,3).concat((state.menu?.burgers||[]).slice(0,2))
+            .map(p=>`<li><div style="flex:1">${p.name}</div><div class="muted small">🔥</div></li>`))
+      .join('');
+    rank.innerHTML = rows;
+  }
+}
+
+/* ======================= Dashboard móvil ======================= */
+function renderMobileInfo(){
+  const box = document.getElementById('mobileInfo'); if(!box) return;
+
+  const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
+  const pill = document.getElementById('miHHPill');
+  const txt  = document.getElementById('miHHText');
+  const msg  = document.getElementById('miHHMsg');
+  pill?.classList.toggle('on', !!hh.enabled);
+  if (txt) txt.textContent = hh.enabled
+    ? `${hh.discountPercent}% OFF${state.hhLeftText ? ' · ' + state.hhLeftText : ''}`
+    : 'OFF';
+  if (msg) msg.textContent = hh.bannerText || (hh.enabled ? 'Promos activas por tiempo limitado' : '');
+
+  const etaL = document.getElementById('etaTime'); if (etaL) etaL.textContent = state.etaText || '7–10 min';
+  const etaM = document.getElementById('miEta');   if (etaM) etaM.textContent = state.etaText || '7–10 min';
+
+  const promo = document.getElementById('miPromos');
+  if (promo){
+    promo.innerHTML = hh.enabled
+      ? `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Combos con descuento</span><span class="price">-${hh.discountPercent}%</span></li>`
+      : `<li style="display:flex;justify-content:space-between;gap:8px;"><span>Prueba nuestras minis ⭐</span><span class="price">Desde ${money((state.menu?.minis?.[0]?.price)||0)}</span></li>`;
+  }
+
+  const top = document.getElementById('miTop');
+  if (top){
+    const chips = (state.topToday?.length ? state.topToday : [])
+      .map(t=> `<span class="mi-chip">${t.name} (${t.count})</span>`).join('');
+    top.innerHTML = chips || `<span class="muted small">Aún sin datos hoy</span>`;
+  }
+}
+
+/* ======================= “Más vendidos hoy” + ETA ======================= */
+function tsToMs(t){
+  if (!t) return 0;
+  if (typeof t.toMillis === 'function') return t.toMillis();
+  if (t.seconds) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
+  const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
+}
+function isToday(ms){
+  if(!ms) return false;
+  const d = new Date(ms);
+  const now = new Date();
+  return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+}
+function computeTopToday(orders){
+  const acc = new Map();
+  for (const o of (orders||[])){
+    const created = tsToMs(o.createdAt);
+    if (!isToday(created)) continue;
+    const s = (o.status||'').toUpperCase();
+    if (s==='CANCELLED' || s==='CANCELED') continue;
+    for (const it of (o.items||[])){
+      const k = it.name || it.id || '—';
+      const add = Number(it.qty||1);
+      acc.set(k, (acc.get(k)||0) + add);
+    }
+  }
+  state.topToday = [...acc.entries()]
+    .map(([name,count])=>({name, count}))
+    .sort((a,b)=> b.count - a.count)
+    .slice(0,5);
+}
+function computeETA(orders){
+  if (state.etaSource === 'settings') return;
+  const base = {min:7, max:10};
+  const samples = [];
+  for (const o of (orders||[])){
+    const created = tsToMs(o.createdAt);
+    const ready   = tsToMs(o.readyAt || o.doneAt || (o.timestamps?.readyAt) || (o.timestamps?.doneAt));
+    if (!created || !ready) continue;
+    if (!isToday(ready)) continue;
+    const st = (o.status||'').toUpperCase();
+    if (st!=='READY' && st!=='DONE') continue;
+    const mins = (ready - created)/60000;
+    if (mins>0 && mins<120) samples.push(mins);
+  }
+  if (samples.length >= 3){
+    const recent = samples.slice(-ETA_MAX_SAMPLES).sort((a,b)=>a-b);
+    const cut = Math.max(1, Math.floor(recent.length*0.1));
+    const trimmed = recent.slice(cut, recent.length - cut);
+    const avg = trimmed.reduce((a,n)=>a+n,0)/trimmed.length;
+    etaSmoothed = (etaSmoothed==null) ? avg : (ETA_ALPHA*avg + (1-ETA_ALPHA)*etaSmoothed);
+    const lo = Math.max(ETA_MIN, Math.round(etaSmoothed - 2));
+    const hi = Math.min(ETA_MAX, Math.round(etaSmoothed + 2));
+    state.etaText = `${lo}–${hi} min`;
+  } else {
+    // Ajuste por carga actual
+    const q = (orders||[]).filter(o=>{
+      const s = (o.status||'').toUpperCase();
+      return s==='PENDING' || s==='IN_PROGRESS';
+    }).length;
+    if (q>0){
+      const bump = Math.min(12, Math.ceil(q*1.5));
+      const lo = base.min + Math.floor(bump/2);
+      const hi = base.max + bump;
+      state.etaText = `${lo}–${hi} min`;
+    } else {
+      state.etaText = `${base.min}–${base.max} min`;
+    }
+  }
+  document.querySelectorAll('[data-eta-text]').forEach(el=> el.textContent = state.etaText);
+}
+function subscribeOrdersShim(cb){
+  if (typeof DB.subscribeOrders === 'function') return DB.subscribeOrders(cb);
+  if (typeof DB.onOrdersSnapshot === 'function') return DB.onOrdersSnapshot(cb);
+  if (typeof DB.subscribeActiveOrders === 'function') return DB.subscribeActiveOrders(cb);
+  console.warn('No hay método de suscripción a órdenes en DB'); return ()=>{};
+}
+function startOrdersAnalytics(){
+  if (state.unsubAnalytics){ state.unsubAnalytics(); state.unsubAnalytics=null; }
+  state.unsubAnalytics = subscribeOrdersShim((orders)=>{
+    computeTopToday(orders);
+    computeETA(orders);
+    renderMobileInfo();
+  });
+}
+
+/* ======================= Feed READY ======================= */
+function setupReadyFeed(){
+  const container = document.getElementById('readyFeed'); if (!container) return;
+  if (state.unsubReady) { state.unsubReady(); state.unsubReady = null; }
+  state.unsubReady = subscribeOrdersShim(list=>{
+    const ready = (list||[]).filter(o=> (o.status||'')==='READY')
+      .sort((a,b)=> oTime(b) - oTime(a))
+      .slice(0,6);
+    const rows = ready.map(o=>{
+      const items = (o.items||[]);
+      const count = items.reduce((n,i)=> n + (i.qty||1), 0);
+      const names = items.map(i=>i.name).slice(0,2).join(', ');
+      return `<li>
+        <div style="flex:1;min-width:0">
+          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${escapeHtml(o.customer||'—')}</b> · ${count} it.</div>
+          <div class="muted small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(names)}</div>
+        </div>
+        <div class="price">🛎️</div>
+      </li>`;
+    }).join('');
+    container.innerHTML = rows || '<li><div class="muted small">—</div></li>';
+  });
+}
+function oTime(o){ return o.createdAt?.toMillis?.() ?? new Date(o.createdAt||0).getTime(); }
+
+/* ======================= Upsell rápido ======================= */
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-add]'); if(!btn) return;
+  const id = btn.getAttribute('data-add');
+  const all = [
+    ...(state.menu?.drinks||[]), ...(state.menu?.sides||[]),
+    ...(state.menu?.minis||[]),  ...(state.menu?.burgers||[])
+  ];
+  const item = all.find(x=>x.id===id); if(!item) return;
+
+  if (item.type==='drink' || item.type==='side'){
+    const hhDiscPerUnit = hhDiscountPerUnit(item);
+    const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
+    state.cart.push({
+      id:item.id, name:item.name, mini:false, qty:1,
+      unitPrice:Number(item.price||0),
+      baseIngredients:[], salsaDefault:null, salsaCambiada:null,
+      extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+      notes:'',
+      lineTotal: unitBaseAfterHH,
+      hhDisc: hhDiscPerUnit
+    });
+    updateCartBar(); beep(); toast(`${item.name} agregado`);
+  } else {
+    openItemModal(item, item.baseOf ? state.menu?.burgers?.find(b=>b.id===item.baseOf) : item);
+  }
+}, false);
+
+/* ======================= THEME panel ======================= */
+function mountThemePanel() {
+  if (document.getElementById('theme-floating-panel')) return;
+  const box = document.createElement('div');
+  box.id = 'theme-floating-panel';
+  Object.assign(box.style, {
+    position: 'fixed',
+    right: '12px',
+    bottom: 'calc(var(--safe-bottom) + 12px)',
+    background: 'rgba(0,0,0,.75)',
+    backdropFilter: 'blur(4px)',
+    padding: '10px',
+    border: '1px solid rgba(255,255,255,.2)',
+    borderRadius: '14px',
+    zIndex: 9999,
+    color: 'var(--text)',
+    fontSize: '12px',
+    maxWidth: '260px',
+    boxShadow: '0 10px 30px rgba(0,0,0,.35)'
+  });
+
+  const head = document.createElement('div');
+  head.style.display = 'flex';
+  head.style.alignItems = 'center';
+  head.style.justifyContent = 'space-between';
+  head.style.gap = '8px';
+  const title = document.createElement('strong');
+  title.textContent = 'Tema (MX)';
+  title.style.fontSize = '12px';
+  const toggle = document.createElement('button');
+  toggle.textContent = '—';
+  Object.assign(toggle.style, {
+    background: 'transparent', border: '1px solid rgba(255,255,255,.2)',
+    borderRadius: '8px', color: 'var(--text)', padding: '2px 6px', cursor: 'pointer'
+  });
+
+  const body = document.createElement('div'); body.style.marginTop = '8px';
+  toggle.addEventListener('click', ()=>{ body.style.display = (body.style.display==='none') ? 'block':'none'; });
+
+  const row1 = document.createElement('div');
+  row1.style.display = 'grid'; row1.style.gridTemplateColumns = '1fr'; row1.style.gap = '6px';
+  const labelSel = document.createElement('label'); labelSel.textContent = 'Selecciona tema:';
+  const select = document.createElement('select');
+  Object.assign(select.style, { width:'100%', padding:'6px', borderRadius:'8px', border:'1px solid rgba(255,255,255,.2)' });
+  for (const name of listThemes()) {
+    const opt = document.createElement('option'); opt.value = name; opt.textContent = name; select.appendChild(opt);
+  }
+
+  const row2 = document.createElement('div');
+  row2.style.display = 'grid'; row2.style.gridTemplateColumns = '1fr 1fr'; row2.style.gap = '6px';
+
+  const btnLocal = document.createElement('button');
+  btnLocal.textContent = 'Probar local';
+  Object.assign(btnLocal.style, {
+    padding:'8px', borderRadius:'10px', border:'1px solid rgba(255,255,255,.2)', background:'var(--accent)', cursor:'pointer'
+  });
+
+  const btnGlobal = document.createElement('button');
+  btnGlobal.id = 'btnThemeGlobal';
+  btnGlobal.textContent = 'Aplicar GLOBAL';
+  btnGlobal.title = 'Requiere modo admin (PIN 7777)';
+  Object.assign(btnGlobal.style, {
+    padding:'8px',
+    borderRadius:'10px',
+    border:'1px solid rgba(255,255,255,.2)',
+    background:'var(--accent-2)',
+    cursor:'pointer',
+    display: state.adminMode ? '' : 'none'
+  });
+
+  const msg = document.createElement('div'); msg.style.marginTop = '6px'; msg.style.opacity = '.9';
+
+  btnLocal.addEventListener('click', ()=>{
+    const name = select.value;
+    applyThemeLocal(name);
+    state.themeName = name;
+    renderCards();
+    try { window.dispatchEvent(new CustomEvent('theme:changed',{ detail:{ name } })); } catch {}
+    setMsg('Tema aplicado localmente.', 'ok');
+  });
+
+  btnGlobal.addEventListener('click', async ()=>{
+    const name = select.value;
+    try {
+      await setTheme({ name });
+      applyThemeLocal(name);
+      state.themeName = name;
+      renderCards();
+      try { window.dispatchEvent(new CustomEvent('theme:changed',{ detail:{ name } })); } catch {}
+      setMsg('Tema GLOBAL actualizado. Kioskos lo aplicarán en vivo.', 'ok');
+    } catch (e) {
+      console.error(e); setMsg('Error al guardar tema global.', 'err');
+    }
+  });
+
+  function setMsg(text, kind='ok'){
+    msg.textContent = text;
+    msg.style.color = (kind==='ok'?'#A7F3D0': kind==='warn'?'#FFE082':'#FFABAB');
+  }
+
+  head.appendChild(title); head.appendChild(toggle);
+  row1.appendChild(labelSel); row1.appendChild(select);
+  row2.appendChild(btnLocal); row2.appendChild(btnGlobal);
+  body.appendChild(row1); body.appendChild(row2); body.appendChild(msg);
+  box.appendChild(head); box.appendChild(body);
+  document.body.appendChild(box);
+
+  if (state.adminMode) {
+    const g = document.getElementById('btnThemeGlobal');
+    if (g) g.style.display = '';
+  }
+}
+
+/* ======================= Lealtad / Coleccionables ======================= */
+function ensureLoyaltyModal(){
+  if (document.getElementById('loyaltyModal')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'loyaltyModal';
+  wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:10000;place-items:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)';
+  wrap.innerHTML = `
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loyTtl"
+         style="max-width:760px;width:calc(100% - 24px);background:#0f182a;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px">
+      <div class="modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h3 id="loyTtl" style="margin:0">¡Guarda tu tarjeta y destapa tu recompensa!</h3>
+        <button id="loyClose" class="btn ghost" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="muted" style="margin:6px 0 10px">Regístrate para conservar tus coleccionables y desbloquear sorpresas. Si te sale Dorado obtienes <b>30% de descuento</b> en tu siguiente visita.</p>
+
+      <div id="loyStepForm">
+        <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+          <div class="field"><label>Nombre</label><input id="loyName" type="text" placeholder="Tu nombre"/></div>
+          <div class="field"><label>Teléfono</label><input id="loyPhone" type="tel" inputmode="numeric" placeholder="10 dígitos"/></div>
+          <div class="field"><label>Cumpleaños</label><input id="loyBirth" type="date"/></div>
+          <div class="field"><label>Picor favorito</label>
+            <select id="loyHeat">
+              <option value="">Elige…</option>
+              <option>Suave</option><option>Medio</option><option>Picante</option><option>🔥 Brutal</option>
+            </select>
+          </div>
+          <div class="field"><label>Salsa favorita</label>
+            <select id="loySauce">
+              <option value="">Elige…</option>
+              ${(state.menu?.extras?.sauces||['BBQ','Chipotle','Ajo','Habanero']).map(s=>`<option>${s}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="row" style="gap:8px;margin-top:10px">
+          <button id="loyOpen" class="btn">Destapar tarjeta</button>
+          <button id="loySkip" class="btn ghost">Luego</button>
+        </div>
+      </div>
+
+      <div id="loyStepResult" style="display:none">
+        <div id="loyCard" class="k-card" style="margin:8px 0;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.08)"></div>
+        <div id="loyVoucher" class="muted" style="margin-top:8px"></div>
+        <div class="row" style="gap:8px;margin-top:12px">
+          <button id="loyDone" class="btn">Listo</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', (e)=>{ if(e.target===wrap) closeLoyaltyModal(); });
+  wrap.querySelector('#loyClose')?.addEventListener('click', closeLoyaltyModal);
+  wrap.querySelector('#loySkip')?.addEventListener('click', closeLoyaltyModal);
+  wrap.querySelector('#loyDone')?.addEventListener('click', closeLoyaltyModal);
+
+  // acciones
+  wrap.querySelector('#loyOpen')?.addEventListener('click', async ()=>{
+    const name  = (document.getElementById('loyName')?.value||'').trim() || state.customerName || '';
+    const phone = normalizePhone((document.getElementById('loyPhone')?.value||state.orderMeta.phone||'').trim());
+    const birth = (document.getElementById('loyBirth')?.value||'').trim();
+    const heat  = (document.getElementById('loyHeat')?.value||'').trim();
+    const sauce = (document.getElementById('loySauce')?.value||'').trim();
+
+    if (phone.length < 10){
+      alert('Para guardar tu tarjeta, ingresa un teléfono de 10 dígitos.'); return;
+    }
+
+    // Persistir perfil (best-effort)
+    try{
+      await DB.upsertCustomerProfile?.({ phone, name, birthday: birth || null, prefs: { heat, sauce } });
+    }catch(e){ console.warn('upsertCustomerProfile fail', e); }
+
+    // Roll coleccionable
+    const roll = rollCollectible(); // {rarity, title, meta}
+    state.lastCollectible = roll;
+
+    // Guardar coleccionable (best-effort)
+    try{
+      await DB.saveCollectibleCard?.({
+        phone, // dueño
+        orderId: state.lastOrderId || null,
+        rarity: roll.rarity,
+        title: roll.title,
+        name: roll.meta?.name,
+        theme: roll.meta?.theme || 'default',
+        palette: roll.meta?.palette,
+        createdAt: Date.now()
+      });
+    }catch(e){ console.warn('saveCollectibleCard fail', e); }
+
+    // Si Dorado => crear cupón 30%
+    let voucher = null;
+    if (roll.rarity === 'Dorado'){
+      try{
+        const expiresAt = Date.now() + 1000*60*60*24*14; // 14 días
+        voucher = await DB.createVoucher?.({
+          phone, pct: 30, kind: 'golden_card', expiresAt
+        });
+      }catch(e){ console.warn('createVoucher fail', e); }
+    }
+    state.lastVoucher = voucher || null;
+
+    // Render resultado
+    renderLoyaltyResult(roll, voucher);
+  });
+}
+function openLoyaltyModal({ name='', phone='', orderId=null } = {}){
+  ensureLoyaltyModal();
+  const wrap = document.getElementById('loyaltyModal'); if(!wrap) return;
+  // Prefill
+  const nameEl = wrap.querySelector('#loyName');
+  const phoneEl= wrap.querySelector('#loyPhone');
+  if (nameEl && !nameEl.value) nameEl.value = name || state.customerName || '';
+  if (phoneEl && !phoneEl.value) phoneEl.value = normalizePhone(phone || state.orderMeta.phone || '');
+  const sf = wrap.querySelector('#loyStepForm');
+  const sr = wrap.querySelector('#loyStepResult');
+  if (sf) sf.style.display = 'block';
+  if (sr) sr.style.display = 'none';
+  wrap.style.display = 'grid';
+}
+function closeLoyaltyModal(){
+  const m = document.getElementById('loyaltyModal');
+  if (m) m.style.display = 'none';
+}
+function rollCollectible(){
+  // Probabilidades (suman 100)
+  const rarity = randomPick([
+    { value: 'Dorado', w: 3 },
+    { value: 'Épico',  w: 12 },
+    { value: 'Raro',   w: 35 },
+    { value: 'Común',  w: 50 }
+  ]);
+  // Elegimos familia temática simple (ej. Mexi Bun o Pixel Pal)
+  const families = [
+    { name:'Mexi Bun', theme:'mex', palette:['#FBBF24','#DC2626','#22C55E','#FCD34D'] },
+    { name:'Pixel Pal', theme:'pixel', palette:['#F59E0B','#6B7280','#EF4444','#0EA5E9'] },
+    { name:'Glitch Burger', theme:'glitch', palette:['#8B5CF6','#EC4899','#2DD4BF','#1F2937'] },
+    { name:'Golden Patty', theme:'gold', palette:['#FBBF24','#FCD34D','#9CA3AF','#1F2937'] },
+    { name:'Party Burger', theme:'party', palette:['#EC4899','#6EE7B7','#FBBF24','#EF4444'] }
+  ];
+  const fam = families[Math.floor(Math.random()*families.length)];
+  const byR = {
+    'Común':  `Common collectible of "${fam.name}"`,
+    'Raro':   `Rare collectible of "${fam.name}"`,
+    'Épico':  `Epic collectible of "${fam.name}"`,
+    'Dorado': `Gold collectible of "${fam.name}"`
+  }[rarity];
+  const title = `${byR}`;
+  return {
+    rarity,
+    title,
+    meta: { name: fam.name, theme: fam.theme, palette: fam.palette }
+  };
+}
+function renderLoyaltyResult(roll, voucher){
+  const wrap = document.getElementById('loyaltyModal'); if(!wrap) return;
+  const stepForm = wrap.querySelector('#loyStepForm');
+  const stepRes  = wrap.querySelector('#loyStepResult');
+  const cardBox  = wrap.querySelector('#loyCard');
+  const vBox     = wrap.querySelector('#loyVoucher');
+  if (stepForm) stepForm.style.display = 'none';
+  if (stepRes)  stepRes.style.display  = 'block';
+  if (!cardBox || !vBox) return;
+
+  const pal = (roll.meta?.palette||[]).join(', ');
+  cardBox.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:72px;height:72px;border-radius:12px;background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
+                  display:grid;place-items:center;font-size:28px">🍔</div>
+      <div>
+        <div style="font-weight:800">${roll.title}</div>
+        <div class="muted small">Palette (${pal}) · rareza: <b>${roll.rarity}</b></div>
+      </div>
+    </div>
+  `;
+
+  if (roll.rarity === 'Dorado'){
+    const code = voucher?.code || '(cupón generado)';
+    const until = voucher?.expiresAt ? new Date(voucher.expiresAt).toLocaleDateString() : '';
+    vBox.innerHTML = `
+      <div class="k-card" style="margin-top:8px;padding:10px;border-radius:12px;border:1px dashed rgba(255,255,255,.25)">
+        <div style="font-weight:700">🎉 ¡Tarjeta Dorada! Cupón -30%</div>
+        <div class="muted small">Código: <b>${code}</b> ${until?`· vence ${until}`:''}</div>
+        <div class="muted small">Canjeable 1 vez. No acumulable con otras promos.</div>
+      </div>`;
+  } else {
+    vBox.textContent = 'Sigue coleccionando — cada visita te da otra oportunidad de ganar premios. 🙌';
+  }
+}
+
+/* ======================= Miscelánea ======================= */
+window.addEventListener('beforeunload', ()=>{
+  try{ state.unsubReady && state.unsubReady(); }catch{}
+  try{ state.unsubAnalytics && state.unsubAnalytics(); }catch{}
+  try{ state.unsubHH && state.unsubHH(); }catch{}
+  try{ state.unsubETA && state.unsubETA(); }catch{}
+  try{ state.unsubTheme && state.unsubTheme(); }catch{}
+  try{ if(hhTimer) clearInterval(hhTimer); }catch{}
+});
