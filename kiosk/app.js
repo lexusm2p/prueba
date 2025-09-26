@@ -71,7 +71,97 @@ isSubmittingOrder: false,
     shownThisSession: false
   },
 };
+/* ======================= Bebidas: precios + maridajes ======================= */
+/** Precio sugerido para lata 355 ml */
+const DRINK_PRICE = { solo: 17, combo: 10 };
 
+/** Detección flexible por id o por nombre (por si cambian ids en catálogo) */
+function findDrinkFlexible(key=''){
+  const list = state.menu?.drinks || [];
+  const k = String(key).toLowerCase();
+  // 1) por id exacto
+  let d = list.find(x => String(x.id||'').toLowerCase() === k);
+  if (d) return d;
+  // 2) por nombre contiene
+  d = list.find(x => String(x.name||'').toLowerCase().includes(k));
+  return d || null;
+}
+
+/** Sugerencias de maridaje por producto base (id base o nombre) */
+const PAIRING_BY_BURGER = {
+  // pon los ids base que ya usas (starter, koopa, fatality, mega…)
+  starter: [
+    { key: '7up',         line: '✨ Resalta frescura y notas verdes' },
+    { key: 'agua',        line: 'Ligero y limpia paladar' }
+  ],
+  koopa: [
+    { key: 'pepsi',       line: 'Equilibra el umami especiado' },
+    { key: 'canada',      line: 'Ginger + picor: maridaje top' }
+  ],
+  fatality: [
+    { key: 'canada',      line: 'Jengibre + sabores intensos = ❤️' },
+    { key: '7up',         line: 'Cítrico para refrescar el picor' }
+  ],
+  mega: [
+    { key: 'pepsi',       line: 'Cuerpo y caramelo con carne 85g' },
+    { key: 'agua',        line: 'Para quien busca ligereza' }
+  ]
+};
+/** Texto por defecto si no hay un mapeo explícito */
+const PAIRING_FALLBACK = [
+  { key: '7up',   line: 'Cítrico y crujiente: realza los verdes' },
+  { key: 'pepsi', line: 'Clásico con carnes + queso' }
+];
+
+/** ¿El carrito tiene algún alimento (no-bebida)? */
+function cartHasFood(cart = state.cart){
+  return cart.some(l => l && l.type !== 'drink');
+}
+
+/** Recalcula precios de las bebidas según contexto combo/solo */
+function ensureDrinkPrices(cart = state.cart){
+  const comboOn = cartHasFood(cart);
+  for (const l of cart){
+    if (l?.type === 'drink'){
+      const target = comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo;
+      // unitPrice se conserva como “precio base del catálogo”; usamos pricingMode para claridad.
+      l.meta = l.meta || {};
+      l.meta.pricingMode = comboOn ? 'combo' : 'solo';
+      l.lineTotal = target * (l.qty||1);
+      l.hhDisc = 0; // HH no aplica a bebida (si deseas aplicarlo, quita esta línea)
+    }
+  }
+}
+
+/** Agrega una bebida al carrito aplicando el precio correcto en ese momento */
+function addDrinkToCart(drink){
+  if (!drink) return;
+  const comboOn = cartHasFood();
+  const price = comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo;
+  state.cart.push({
+    id: drink.id,
+    type: 'drink',
+    name: drink.name,
+    qty: 1,
+    unitPrice: Number(drink.price||0), // del catálogo, por si luego lo usas en reportes
+    baseIngredients: [],
+    salsaDefault: null,
+    salsaCambiada: null,
+    extras: { sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+    notes: '',
+    lineTotal: price,
+    hhDisc: 0,
+    meta: { pricingMode: comboOn ? 'combo' : 'solo' }
+  });
+  updateCartBar(); beep(); toast(`${drink.name} agregado`);
+}
+
+/** Helper: invocar por clave flexible (id o nombre) */
+function addDrinkByKey(key){
+  const d = findDrinkFlexible(key);
+  if (!d) { toast('Bebida no disponible'); return; }
+  addDrinkToCart(d);
+}
 /* ====== ETA tuning ====== */
 let etaSmoothed = null;
 const ETA_MAX_SAMPLES = 30;
