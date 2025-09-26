@@ -876,7 +876,42 @@ function openItemModal(item, base, existingIndex=null){
     <div class="field"><label>Comentarios a cocina</label>
       <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea>
     </div>`;
+/* ======== Bloque de maridaje (bebidas) ======== */
+try {
+  const holder = document.createElement('div');
+  holder.className = 'field';
+  holder.innerHTML = `<label>Maridaje sugerido</label><div id="pairBox" class="ul-clean" style="gap:6px"></div>`;
+  body.appendChild(holder);
 
+  const baseId = (base?.id || item?.baseOf || item?.id || '').toString().toLowerCase();
+  const pairDefs = PAIRING_BY_BURGER[baseId] || PAIRING_FALLBACK;
+
+  const box = holder.querySelector('#pairBox');
+  const comboOn = cartHasFood();
+  pairDefs.forEach(p => {
+    const d = findDrinkFlexible(p.key);
+    if (!d) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn tiny';
+    btn.type = 'button';
+    btn.setAttribute('data-add-drink', String(p.key));
+    btn.textContent = `${d.name} · $${comboOn?DRINK_PRICE.combo:DRINK_PRICE.solo}`;
+    btn.title = p.line || '';
+    box.appendChild(btn);
+  });
+
+  holder.addEventListener('click', (e)=>{
+    const b = e.target.closest('button[data-add-drink]');
+    if(!b) return;
+    addDrinkByKey(b.getAttribute('data-add-drink'));
+    const comboNow = cartHasFood();
+    holder.querySelectorAll('button[data-add-drink]').forEach(btn=>{
+      const key = btn.getAttribute('data-add-drink');
+      const d = findDrinkFlexible(key);
+      if (d) btn.textContent = `${d.name} · $${comboNow?DRINK_PRICE.combo:DRINK_PRICE.solo}`;
+    });
+  });
+} catch {}
   const addBtn = document.getElementById('mAdd');
   if (addBtn) addBtn.textContent = editing ? 'Guardar cambios' : 'Agregar al pedido';
 
