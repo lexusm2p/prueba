@@ -28,8 +28,9 @@ const firebaseConfig = {
   messagingSenderId: "34089845279",
   appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
   measurementId: "G-Q8YQJGL2XY",
+  // 👇 añade esto (URL exacta de tu RTDB)
+  databaseURL: "https://seven-de-burgers-default-rtdb.firebaseio.com"
 };
-
 // App única
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
