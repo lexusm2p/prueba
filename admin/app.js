@@ -103,15 +103,12 @@ const dbShim = {
 
   // inventario: consumo por pedido (usa recetas/BOM del backend)
   async consumeForOrder(order, opts={}){
-    // Preferencia 1: método dedicado con idempotencia por orderId
     if (typeof DB.consumeInventoryForOrder === 'function') {
       return DB.consumeInventoryForOrder(order, opts);
     }
-    // Compat con cocina
     if (typeof DB.applyInventoryForOrder === 'function') {
       return DB.applyInventoryForOrder(order, opts);
     }
-    // Último recurso: si exponen consumir ítem a ítem
     if (Array.isArray(order?.items) && typeof DB.consumeInventoryItem === 'function'){
       for (const it of order.items){
         try {
@@ -412,7 +409,6 @@ $('#btnInvRecalcRange')?.addEventListener('click', async ()=>{
 async function replayConsumption({ from, to }){
   try{
     const rows = await dbShim.getOrdersRange({ from, to, includeArchive:true, orderType:'all' });
-    // Filtra estados “preparados” — tu backend idealmente maneja idempotencia por orderId
     const okStatuses = new Set(['IN_PROGRESS','READY','DELIVERED','DONE','PAID']);
     const batch = rows.filter(o=> okStatuses.has(String(o.status||'').toUpperCase()));
     let n=0;
@@ -582,7 +578,6 @@ function populateHappyForm(hh){
 $('#btnSaveHappy')?.addEventListener('click', async ()=>{
   try{
     const enabled = ($('#hhEnabled')?.value==='on');
-    the:
     const discountPercent = Number($('#hhDisc')?.value||0);
     const bannerText = $('#hhMsg')?.value||'';
     const durationMin = Number($('#hhDurMin')?.value||0) || null;
