@@ -5,7 +5,7 @@
 // Modo PRUEBA: evita escrituras cuando opts.training === true.
 
 import {
-  app,                 // necesario para RTDB
+  app,
   db,
   ensureAuth,
   serverTimestamp,
@@ -36,7 +36,6 @@ function toMillisFlexible(raw) {
 const normPhone = (s = '') => String(s).replace(/\D+/g, '').slice(0, 15);
 
 /* =================== RTDB mirror (lazy) =================== */
-// Carga on‑demand la SDK de RTDB (v10) y hace espejo en /kitchen/orders
 let __rtdbMod = null;
 async function _rtdb() {
   if (__rtdbMod) return __rtdbMod;
@@ -50,7 +49,6 @@ async function _rtdb() {
   };
   return __rtdbMod;
 }
-/** Espeja un patch hacia RTDB. Si `data.__create__` está presente, hace set completo. */
 async function mirrorToRTDB(orderId, data) {
   try {
     const { getDatabase, ref, set, update } = await _rtdb();
@@ -85,7 +83,7 @@ function _toStrArr(x) {
 }
 function _legacyItem(it = {}) {
   const base = it.baseIngredients ?? it.base ?? it.ingredients ?? it.baseIng ?? [];
-  const adds = it.extras?.adds ?? it.adds ?? [];
+  const adds = it.extras?.adds ?? it.adds ?? it.extras?.ingredients ?? [];
   const rems = it.extras?.removes ?? it.removes ?? [];
   const sauces = it.extras?.sauces ?? it.sauces ?? [];
 
@@ -101,9 +99,8 @@ function _legacyItem(it = {}) {
     name: it.name || it.title || 'Item',
     qty: Number(it.qty || 1),
     unitPrice,
-    // imprescindibles para la tablet
     baseIngredients: _toStrArr(base),
-    ingredients: _toStrArr(base), // duplicado por compat
+    ingredients: _toStrArr(base), // compat
     adds: _toStrArr(adds),
     removes: _toStrArr(rems),
     salsaDefault: salsaDefault || null,
@@ -125,7 +122,7 @@ function _legacyItems(order = {}) {
   return [];
 }
 
-// ---- Alias de raíz para la tablet legacy (usa el primer item) ----
+/* ---- Alias para raíz legacy (usa el primer item) ---- */
 function _flattenFirstItemForLegacy(items = []) {
   const it = Array.isArray(items) && items.length ? items[0] : null;
   if (!it) return {};
@@ -139,6 +136,21 @@ function _flattenFirstItemForLegacy(items = []) {
     salsaCambiada:   it.salsaCambiada || null,
     extras: { sauces: ex.sauces || [] }
   };
+}
+
+/* ---- Reconstruye alias siempre que se espeje ---- */
+async function _buildLegacyAliasesFromFS(orderId, fallbackItems=null) {
+  let itemsLegacy = null;
+  try {
+    if (fallbackItems && Array.isArray(fallbackItems)) {
+      itemsLegacy = _legacyItems({ items: fallbackItems });
+    } else {
+      const snap = await getDoc(doc(db, 'orders', String(orderId)));
+      if (snap.exists()) itemsLegacy = _legacyItems(snap.data());
+    }
+  } catch {}
+  const aliases = itemsLegacy ? _flattenFirstItemForLegacy(itemsLegacy) : {};
+  return { itemsLegacy, aliases };
 }
 
 /* =================== Catálogo: fetch con fallback =================== */
@@ -218,12 +230,10 @@ export function subscribeProducts(cb) {
 
 /* =================== Órdenes =================== */
 
-// Crea una orden; acepta payload del kiosko.
 export async function createOrder(order, opts = {}) {
   const { training = false } = opts;
   const payload = { ...order };
 
-  // Normaliza marcas de tiempo y meta
   const createdAtClient = Number(payload.createdAt || Date.now());
   payload.createdAt = serverTimestamp();
   payload.createdAtClient = createdAtClient;
@@ -240,7 +250,6 @@ export async function createOrder(order, opts = {}) {
     await ensureAuth();
     const ref = await addDoc(collection(db, 'orders'), payload);
 
-    // → Espejo a RTDB para la tablet (incluye ingredientes/base normalizados)
     try {
       const itemsLegacy = _legacyItems(order);
       await mirrorToRTDB(ref.id, {
@@ -258,7 +267,6 @@ export async function createOrder(order, opts = {}) {
         createdAt: Date.now(),
         paid: false,
         items: itemsLegacy,
-        // alias de raíz para tablet legacy (primer item)
         ..._flattenFirstItemForLegacy(itemsLegacy)
       });
     } catch {}
@@ -267,7 +275,6 @@ export async function createOrder(order, opts = {}) {
   }, `TRAIN-ORDER-${Date.now()}`);
 }
 
-// Suscribe pedidos del día (para feeds/ETA)
 export function subscribeActiveOrders(cb, { limitN = 120 } = {}) {
   let unsub = () => {};
   ensureAuth()
@@ -291,7 +298,6 @@ export function subscribeActiveOrders(cb, { limitN = 120 } = {}) {
   return () => { try { unsub(); } catch {} };
 }
 
-// 🔪 Cocina: prioriza sólo estados activos
 export function subscribeKitchenOrders(cb, { limitN = 200 } = {}) {
   return subscribeActiveOrders(list => {
     const set = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
@@ -300,18 +306,15 @@ export function subscribeKitchenOrders(cb, { limitN = 200 } = {}) {
   }, { limitN });
 }
 
-// Aliases legacy
 export const subscribeOrders = subscribeActiveOrders;
 export const onOrdersSnapshot = subscribeActiveOrders;
 
-// Suscripción puntual por OID (tracking por mesa/pickup)
 export function subscribeOrder(orderId, cb) {
   if (!orderId) return () => {};
   const ref = doc(db, 'orders', String(orderId));
   return onSnapshot(ref, (d) => cb(d.exists() ? ({ id: d.id, ...d.data() }) : null));
 }
 
-// Update parcial con soporte a dot-notation
 export async function updateOrder(id, patch, opts = {}) {
   const { training = false } = opts;
   if (!id || typeof patch !== 'object') throw new Error('updateOrder: datos inválidos');
@@ -319,7 +322,6 @@ export async function updateOrder(id, patch, opts = {}) {
     await ensureAuth();
     await updateDoc(doc(db, 'orders', id), { ...patch, updatedAt: serverTimestamp() });
 
-    // → espejo de campos relevantes a RTDB
     try {
       const m = {};
       if (patch.status) m.status = String(patch.status).toUpperCase();
@@ -329,9 +331,18 @@ export async function updateOrder(id, patch, opts = {}) {
       if (patch.startedAt)   m.startedAt = Date.now();
       if (patch.readyAt)     m.readyAt = Date.now();
       if (patch.deliveredAt) m.deliveredAt = Date.now();
-      if (Array.isArray(patch.items) || patch.item) m.items = _legacyItems(patch);
-      // alias de raíz si mandamos items
-      if (m.items) Object.assign(m, _flattenFirstItemForLegacy(m.items));
+
+      let itemsLegacy = null;
+      if (Array.isArray(patch.items) || patch.item) {
+        itemsLegacy = _legacyItems(patch);
+        m.items = itemsLegacy;
+      } else {
+        const built = await _buildLegacyAliasesFromFS(id, null);
+        itemsLegacy = built.itemsLegacy;
+        // si no hay itemsLegacy, no tocamos m.items
+      }
+      if (itemsLegacy) Object.assign(m, _flattenFirstItemForLegacy(itemsLegacy));
+
       if (Object.keys(m).length) await mirrorToRTDB(id, m);
     } catch {}
 
@@ -339,7 +350,6 @@ export async function updateOrder(id, patch, opts = {}) {
   }, { ok: true, _training: true });
 }
 
-// Upsert (merge) — útil para shims
 export async function upsertOrder(data, opts = {}) {
   const { training = false } = opts;
   const id = data?.id;
@@ -352,16 +362,23 @@ export async function upsertOrder(data, opts = {}) {
       createdAt: data?.createdAt ?? serverTimestamp()
     }, { merge: true });
 
-    // espejo si trae status/paid/items
     try {
       const m = {};
       if (data.status) m.status = String(data.status).toUpperCase();
       if (data.paid) m.paid = true;
       if (data.payMethod != null) m.payMethod = String(data.payMethod);
       if (typeof data.totalCharged === 'number') m.totalCharged = Number(data.totalCharged);
-      if (Array.isArray(data.items) || data.item) m.items = _legacyItems(data);
-      // alias de raíz si mandamos items
-      if (m.items) Object.assign(m, _flattenFirstItemForLegacy(m.items));
+
+      let itemsLegacy = null;
+      if (Array.isArray(data.items) || data.item) {
+        itemsLegacy = _legacyItems(data);
+        m.items = itemsLegacy;
+      } else {
+        const built = await _buildLegacyAliasesFromFS(id, null);
+        itemsLegacy = built.itemsLegacy;
+      }
+      if (itemsLegacy) Object.assign(m, _flattenFirstItemForLegacy(itemsLegacy));
+
       if (Object.keys(m).length) await mirrorToRTDB(id, m);
     } catch {}
 
@@ -369,14 +386,10 @@ export async function upsertOrder(data, opts = {}) {
   }, { ok: true, _training: true });
 }
 
-// Cambia status y sella timestamps típicos
 export async function setOrderStatus(id, status, extra = {}, opts = {}) {
   const { training = false } = opts;
   const s = String(status || '').toUpperCase();
-  const stampPatch = {
-    status: s,
-    updatedAt: serverTimestamp(),
-  };
+  const stampPatch = { status: s, updatedAt: serverTimestamp() };
   if (s === 'IN_PROGRESS') { stampPatch.startedAt = serverTimestamp(); stampPatch['timestamps.startedAt'] = serverTimestamp(); }
   if (s === 'READY')       { stampPatch.readyAt   = serverTimestamp(); stampPatch['timestamps.readyAt']   = serverTimestamp(); }
   if (s === 'DELIVERED')   { stampPatch.deliveredAt = serverTimestamp(); stampPatch['timestamps.deliveredAt'] = serverTimestamp(); }
@@ -386,13 +399,18 @@ export async function setOrderStatus(id, status, extra = {}, opts = {}) {
     await ensureAuth();
     await updateDoc(doc(db, 'orders', id), { ...stampPatch, ...(extra||{}) });
 
-    // → espejo de estado a RTDB
     try {
       const m = { status: s };
       if (s === 'IN_PROGRESS') m.startedAt = Date.now();
       if (s === 'READY')       m.readyAt   = Date.now();
       if (s === 'DELIVERED')   m.deliveredAt = Date.now();
       if (s === 'DONE' || s === 'PAID') m.paid = true;
+
+      // 🔁 Reinyectar alias legacy aunque nadie haya tocado los items
+      const { itemsLegacy, aliases } = await _buildLegacyAliasesFromFS(id, null);
+      if (itemsLegacy) m.items = itemsLegacy;
+      Object.assign(m, aliases);
+
       await mirrorToRTDB(id, m);
     } catch {}
 
@@ -400,10 +418,8 @@ export async function setOrderStatus(id, status, extra = {}, opts = {}) {
   }, { ok: true, _training: true });
 }
 
-// Alias de compatibilidad
 export const setStatus = setOrderStatus;
 
-// Archiva pedidos entregados / cancelados
 export async function archiveDelivered(id, opts = {}) {
   const { training = false } = opts;
   return guardWrite(training, async () => {
@@ -414,13 +430,11 @@ export async function archiveDelivered(id, opts = {}) {
     const data = snap.data();
     await setDoc(doc(db, 'orders_archive', id), { ...data, archivedAt: serverTimestamp() }, { merge: true });
     try { await deleteDoc(ref); } catch {}
-    // limpia de RTDB
     try { await removeFromRTDB(id); } catch {}
     return { ok: true };
   }, { ok: true, _training: true });
 }
 
-// Registro de métrica de preparación (local → opcional en DB)
 export async function logPrepMetric(metric, opts = {}) {
   const { training = false } = opts;
   const data = {
@@ -506,7 +520,6 @@ export async function setHappyHour(payload, opts = {}) {
   }, { ok: true, _training: true });
 }
 
-// ETA en settings/eta { text: "7–10 min" }
 export function subscribeETA(cb) {
   return onSnapshot(doc(db, 'settings', 'eta'), (d) => {
     const txt = d?.data()?.text;
@@ -567,7 +580,6 @@ export async function upsertSupplier(supp, opts = {}) {
   }, supp?.id ?? `TRAIN-SUP-${Date.now()}`);
 }
 
-// compra: registra purchase + recalcula stock y costo promedio
 export async function recordPurchase(purchase, opts = {}) {
   const { training = false } = opts;
   return guardWrite(training, async () => {
@@ -611,7 +623,7 @@ export async function applyInventoryForOrder(order, opts = {}) {
   const { training = false } = opts;
   if (!order || !Array.isArray(order.items)) return { ok: true, noops: true };
 
-  const acc = new Map(); // itemId -> totalDelta
+  const acc = new Map();
   for (const it of order.items) {
     const qty = Number(it?.qty || 1);
     const consumes = Array.isArray(it?.consumes) ? it.consumes : [];
@@ -677,7 +689,6 @@ export async function upsertArticle(article, opts = {}) {
   }, article?.id ?? `TRAIN-ART-${Date.now()}`);
 }
 
-// Borrado de artículos (hard delete con fallback a soft delete)
 export async function deleteArticle(id, opts = {}) {
   const { training = false } = opts;
   if (!id) throw new Error('deleteArticle: falta id');
@@ -694,7 +705,6 @@ export async function deleteArticle(id, opts = {}) {
   }, { ok: true, _training: true });
 }
 
-// Alias legacy
 export const removeArticle = deleteArticle;
 
 /* =================== Clientes / WhatsApp / Lealtad =================== */
@@ -735,7 +745,6 @@ export async function attachLastOrderRef(phone, orderId, opts = {}) {
   }, { ok: true, _training: true });
 }
 
-// Perfil extendido para lealtad
 export async function upsertCustomerProfile({ phone, name, birthday = null, prefs = {} }, opts = {}) {
   const { training = false } = opts;
   const clean = normPhone(phone);
@@ -753,7 +762,6 @@ export async function upsertCustomerProfile({ phone, name, birthday = null, pref
   }, { ok: true, _training: true });
 }
 
-// Guarda tarjeta coleccionable
 export async function saveCollectibleCard(card, opts = {}) {
   const { training = false } = opts;
   const clean = normPhone(card?.phone || '');
@@ -775,7 +783,6 @@ export async function saveCollectibleCard(card, opts = {}) {
   }, `TRAIN-COLL-${Date.now()}`);
 }
 
-// Crea cupón de descuento
 export async function createVoucher({ phone, pct = 30, kind = 'golden_card', expiresAt }, opts = {}) {
   const { training = false } = opts;
   const clean = normPhone(phone);
@@ -793,7 +800,6 @@ export async function createVoucher({ phone, pct = 30, kind = 'golden_card', exp
   }, { code, id: `TRAIN-VCH-${Date.now()}` });
 }
 
-// Bandeja de salida (WA) — el worker externo lo enviará
 export async function sendWhatsAppMessage({ to, text, meta = {} }, opts = {}) {
   const { training = false } = opts;
   if (!to || !text) return { ok: false, reason: 'missing_fields' };
