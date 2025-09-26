@@ -23,7 +23,7 @@
     a.track{ color:#8bb4ff; text-decoration:underline; font-size:12px; }
     .empty{ color:var(--muted); padding:10px; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    h3{ margin: 0 0 8px; }
+    h3{ margin:0 0 8px; }
   </style>
 </head>
 <body>
@@ -36,14 +36,14 @@
   </div>
 </div>
 
-<!-- Firebase v8 para máxima compatibilidad -->
+<!-- Firebase v8 (máxima compatibilidad) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 <script>
 (function(){
-  // ================ Config ================
-  const firebaseConfig = {
+  // ========= Config =========
+  var firebaseConfig = {
     apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
     authDomain: "seven-de-burgers.firebaseapp.com",
     databaseURL: "https://seven-de-burgers-default-rtdb.firebaseio.com",
@@ -53,89 +53,81 @@
     appId: "1:34089845279:web:d13440c34e6bb7fa910b2a"
   };
   firebase.initializeApp(firebaseConfig);
-  const rtdb = firebase.database();
+  var rtdb = firebase.database();
+  var RTDB_PATH = "kitchen/orders";
+  var ENDPOINT_STATUS = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenSetStatus";
+  var ENDPOINT_CHARGE = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenCharge";
+  var SECRET = "pon_el_mismo_secret_de_functions";
 
-  // Cloud Functions (ajusta SECRET)
-  const ENDPOINT_STATUS = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenSetStatus";
-  const ENDPOINT_CHARGE = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenCharge";
-  const SECRET = "pon_el_mismo_secret_de_functions";
-
-  // ============== Helpers UI ==============
-  const COLS = {
+  // ========= Helpers =========
+  var COLS = {
     PENDING:     document.getElementById('col-pending'),
     IN_PROGRESS: document.getElementById('col-progress'),
     READY:       document.getElementById('col-ready'),
-    BILL:        document.getElementById('col-bill'),
+    BILL:        document.getElementById('col-bill')
   };
-  const money = (n)=> '$'+Number(n||0).toFixed(0);
-  const esc = (s)=> String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  function money(n){ return '$'+Number(n||0).toFixed(0); }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,function(m){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];}); }
+  function buzz(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms||50); }catch(e){} }
   function calcTotal(o){
     if (typeof o.subtotal === 'number') return Number(o.subtotal||0) + Number(o.tip||0);
-    const items = Array.isArray(o.items) ? o.items : [];
-    let s = 0; for (let i=0;i<items.length;i++){
-      const it = items[i];
-      const line = (typeof it.lineTotal==='number')
-        ? Number(it.lineTotal||0)
-        : (Number(it.unitPrice||0) * Number(it.qty||1));
+    var s=0, items = Array.isArray(o.items)?o.items:[];
+    for (var i=0;i<items.length;i++){
+      var it = items[i];
+      var line = (typeof it.lineTotal==='number') ? Number(it.lineTotal||0) : (Number(it.unitPrice||0) * Number(it.qty||1));
       s += line;
     }
     return s + Number(o.tip||0);
   }
-  const chip = (txt)=> '<span class="chip">'+esc(txt)+'</span>';
-  const buzz = (ms=50)=> { try{ if(navigator.vibrate) navigator.vibrate(ms); }catch{} };
+  function chip(txt){ return '<span class="chip">'+esc(txt)+'</span>'; }
 
-  // ============== Render ==============
+  // ========= Render =========
   function buildCard(o){
-    const total = money(calcTotal(o));
-    const meta  = (String(o.orderType||'').toLowerCase()==='dinein')
-      ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
-    const track = o.id
-      ? `<a class="track" href="../track/?id=${encodeURIComponent(o.id)}" target="_blank" rel="noopener">Ver en Track</a>`
-      : '';
+    var total = money(calcTotal(o));
+    var isDine = String(o.orderType||'').toLowerCase()==='dinein';
+    var meta  = isDine ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
+    var track = o.id ? '<a class="track" href="../track/?id='+encodeURIComponent(o.id)+'" target="_blank" rel="noopener">Ver en Track</a>' : '';
 
-    const items = Array.isArray(o.items) ? o.items : [];
-    let lines = '';
-    for (let i=0;i<items.length;i++){
-      const it = items[i];
-      const bi = Array.isArray(it.baseIngredients) ? it.baseIngredients : (Array.isArray(it.ingredients)?it.ingredients:[]);
-      const sauces = (it.extras && Array.isArray(it.extras.sauces)) ? it.extras.sauces : [];
-      const ingr   = (it.extras && Array.isArray(it.extras.ingredients)) ? it.extras.ingredients : [];
-      const dlc    = (it.extras && it.extras.dlcCarne) ? ['DLC carne 85g'] : [];
-      const salsa  = it.salsaCambiada ? ('Salsa: '+it.salsaCambiada+' (cambio)') :
-                    (it.salsaDefault ? ('Salsa: '+it.salsaDefault) : '');
-      const chips  = [].concat(bi).concat(sauces.map(s=>'Aderezo: '+s)).concat(ingr.map(x=>'Extra: '+x)).concat(dlc);
-      lines += `
-        <div class="muted">${esc(it.qty||1)}× ${esc(it.name||'Producto')}</div>
-        ${salsa ? `<div class="muted">${esc(salsa)}</div>` : ``}
-        <div class="chips">${chips.map(chip).join('')}</div>
-        ${it.notes ? `<div class="muted">Notas: ${esc(it.notes)}</div>` : ``}
-      `;
+    var items = Array.isArray(o.items)?o.items:[];
+    var lines = '';
+    for (var i=0;i<items.length;i++){
+      var it = items[i];
+      var bi = Array.isArray(it.baseIngredients) ? it.baseIngredients : (Array.isArray(it.ingredients)?it.ingredients:[]);
+      var sauces = (it.extras && Array.isArray(it.extras.sauces)) ? it.extras.sauces : [];
+      var ingr   = (it.extras && Array.isArray(it.extras.ingredients)) ? it.extras.ingredients : [];
+      var dlc    = (it.extras && it.extras.dlcCarne) ? ['DLC carne 85g'] : [];
+      var salsa  = it.salsaCambiada ? ('Salsa: '+it.salsaCambiada+' (cambio)') : (it.salsaDefault ? ('Salsa: '+it.salsaDefault) : '');
+      var chips  = [].concat(bi).concat(sauces.map(function(s){return 'Aderezo: '+s;})).concat(ingr.map(function(x){return 'Extra: '+x;})).concat(dlc);
+      lines += ''
+        + '<div class="muted">'+esc(it.qty||1)+'× '+esc(it.name||'Producto')+'</div>'
+        + (salsa ? '<div class="muted">'+esc(salsa)+'</div>' : '')
+        + '<div class="chips">'+chips.map(chip).join('')+'</div>'
+        + (it.notes ? '<div class="muted">Notas: '+esc(it.notes)+'</div>' : '');
     }
 
-    const s = String(o.status||'PENDING').toUpperCase();
-    const btns =
-      (s==='PENDING')      ? `<button class="btn" data-a="IN_PROGRESS" data-id="${esc(o.id)}">Tomar</button>` :
-      (s==='IN_PROGRESS')  ? `<button class="btn ok" data-a="READY" data-id="${esc(o.id)}">Listo</button>` :
-      (s==='READY')        ? `<button class="btn" data-a="DELIVERED" data-id="${esc(o.id)}">Entregar</button>` :
-      (s==='DELIVERED' && !o.paid) ? `<button class="btn ok" data-charge data-id="${esc(o.id)}">Cobrar</button>` : ``;
+    var s = String(o.status||'PENDING').toUpperCase();
+    var btns =
+      (s==='PENDING')      ? '<button class="btn" data-a="IN_PROGRESS" data-id="'+esc(o.id)+'">Tomar</button>' :
+      (s==='IN_PROGRESS')  ? '<button class="btn ok" data-a="READY" data-id="'+esc(o.id)+'">Listo</button>' :
+      (s==='READY')        ? '<button class="btn" data-a="DELIVERED" data-id="'+esc(o.id)+'">Entregar</button>' :
+      ((s==='DELIVERED' && !o.paid) ? '<button class="btn ok" data-charge data-id="'+esc(o.id)+'">Cobrar</button>' : '');
 
-    return `
-      <div class="ord">
-        <div><b>${esc(o.customer||'-')}</b> · <span class="muted">${esc(meta)}</span> ${track}</div>
-        <div class="muted">Total: <b>${total}</b> ${o.paid ? '· <span class="chip">Pagado</span>' : ''}</div>
-        ${o.notes ? `<div class="muted"><b>Notas generales:</b> ${esc(o.notes)}</div>` : ``}
-        ${lines}
-        <div class="row" style="margin-top:6px">${btns}</div>
-      </div>`;
+    return ''
+      + '<div class="ord">'
+      +   '<div><b>'+esc(o.customer||'-')+'</b> · <span class="muted">'+esc(meta)+'</span> '+track+'</div>'
+      +   '<div class="muted">Total: <b>'+total+'</b> '+(o.paid ? '· <span class="chip">Pagado</span>' : '')+'</div>'
+      +   (o.notes ? '<div class="muted"><b>Notas generales:</b> '+esc(o.notes)+'</div>' : '')
+      +   lines
+      +   '<div class="row" style="margin-top:6px">'+btns+'</div>'
+      + '</div>';
   }
 
   function render(list){
-    const by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
-    (list||[]).forEach(o=>{
-      const s = String(o.status||'PENDING').toUpperCase();
+    var by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
+    (list||[]).forEach(function(o){
+      var s = String(o.status||'PENDING').toUpperCase();
       if (s==='DELIVERED' && !o.paid) by.BILL.push(o);
-      else if (by[s]) by[s].push(o);
-      else by.PENDING.push(o);
+      else if (by[s]) by[s].push(o); else by.PENDING.push(o);
     });
 
     function setCol(el, arr){
@@ -147,111 +139,143 @@
     setCol(COLS.READY, by.READY);
     setCol(COLS.BILL, by.BILL);
 
-    // enlazar acciones (una sola vez por render)
-    document.querySelectorAll('[data-id][data-a]').forEach(btn=>{
-      btn.onclick = () => doAction(btn.getAttribute('data-id'), btn.getAttribute('data-a'), btn);
-    });
-    document.querySelectorAll('[data-id][data-charge]').forEach(btn=>{
-      btn.onclick = () => doCharge(btn.getAttribute('data-id'), btn);
-    });
-  }
-
-  // ============== Estado / fuentes de datos ==============
-  let prevIds = new Set();
-  let rtdbFirstLoad = false;
-  let pollingHandle = null;
-
-  function onNewSnapshot(val){
-    const list = Object.keys(val||{}).map(id => Object.assign({ id }, val[id]));
-    list.sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
-    render(list);
-
-    // detectar pedidos nuevos (vibrar)
-    const ids = new Set(list.map(o=> String(o.id||'')));
-    let newC = 0;
-    ids.forEach(id => { if (!prevIds.has(id)) newC++; });
-    if (newC > 0) buzz(60);
-    prevIds = ids;
-  }
-
-  // RTDB en vivo
-  try{
-    rtdb.ref('kitchen/orders').on('value', snap=>{
-      rtdbFirstLoad = true;
-      if (pollingHandle) { clearInterval(pollingHandle); pollingHandle = null; } // evita doble render
-      onNewSnapshot(snap.val());
-    });
-  }catch(e){ /* fallback abajo */ }
-
-  // Fallback a polling si en 5s no obtuvimos RTDB
-  setTimeout(()=>{
-    if (!rtdbFirstLoad && !pollingHandle){
-      const ENDPOINT = firebaseConfig.databaseURL.replace(/\/$/,'') + "/kitchen/orders.json";
-      const tick = ()=>{
-        try{
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', ENDPOINT + '?t=' + Date.now(), true);
-          xhr.onreadystatechange = function(){
-            if (xhr.readyState === 4 && xhr.status === 200){
-              const data = JSON.parse(xhr.responseText||'{}') || {};
-              onNewSnapshot(data);
-            }
-          };
-          xhr.send(null);
-        }catch{}
-      };
-      tick();
-      pollingHandle = setInterval(tick, 2500);
+    // bind acciones (por render)
+    var btns = document.querySelectorAll('[data-id][data-a]');
+    for (var i=0;i<btns.length;i++){
+      (function(b){
+        b.onclick = function(){ doAction(b.getAttribute('data-id'), b.getAttribute('data-a'), b); };
+      })(btns[i]);
     }
-  }, 5000);
+    var chs = document.querySelectorAll('[data-id][data-charge]');
+    for (var j=0;j<chs.length;j++){
+      (function(b){
+        b.onclick = function(){ doCharge(b.getAttribute('data-id'), b); };
+      })(chs[j]);
+    }
+  }
 
-  // ============== Acciones (Functions) ==============
-  const busyByOrder = new Map(); // anti doble tap por id
+  // ========= Estado / fuentes =========
+  var prevIds = {};
+  var lastRenderAt = 0;
+  var lastNonEmptyAt = 0;
+
+  function toList(val){
+    var obj = val || {};
+    var keys = Object.keys(obj);
+    var arr = [];
+    for (var i=0;i<keys.length;i++){
+      var id = keys[i];
+      var o  = obj[id] || {};
+      if (!o.id) o.id = id;
+      arr.push(o);
+    }
+    // ordenar por createdAt (number u objeto {seconds})
+    arr.sort(function(a,b){
+      var ta = (a.createdAt && a.createdAt.seconds) ? a.createdAt.seconds*1000 : Number(a.createdAt||0);
+      var tb = (b.createdAt && b.createdAt.seconds) ? b.createdAt.seconds*1000 : Number(b.createdAt||0);
+      return ta - tb;
+    });
+    return arr;
+  }
+
+  function onSnapshot(val){
+    var list = toList(val);
+    render(list);
+    lastRenderAt = Date.now();
+    if (list.length>0) lastNonEmptyAt = lastRenderAt;
+
+    // vibrar si aparecieron nuevos
+    var idsNow = {};
+    for (var i=0;i<list.length;i++) idsNow[String(list[i].id||'')] = 1;
+    var newCount = 0;
+    for (var k in idsNow){ if (!prevIds[k]) newCount++; }
+    if (newCount>0) buzz(60);
+    prevIds = idsNow;
+  }
+
+  // RTDB live
+  try{
+    rtdb.ref(RTDB_PATH).on('value', function(snap){
+      var data = snap.val();
+      // No marcamos “ok” si viene null; dejamos que el watchdog suba el polling.
+      onSnapshot(data || {});
+    });
+  }catch(e){/* sigue con polling */ }
+
+  // Polling siempre activo (lento) + watchdog (acelera si RTDB no entrega)
+  var ENDPOINT = firebaseConfig.databaseURL.replace(/\/$/,'') + '/' + RTDB_PATH + '.json';
+  var pollFast = false;
+  function tick(){
+    try{
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', ENDPOINT + '?t=' + Date.now(), true);
+      xhr.onreadystatechange = function(){
+        if (xhr.readyState === 4 && xhr.status === 200){
+          try{
+            var data = JSON.parse(xhr.responseText||'{}') || {};
+            // Sólo usamos el polling para “rellenar” si RTDB no está rindiendo.
+            // Si RTDB ya pintó algo en < 2s, evitamos sobreescribir demasiado.
+            if ((Date.now()-lastRenderAt) > 1200) onSnapshot(data);
+          }catch(e){}
+        }
+      };
+      xhr.send(null);
+    }catch(e){}
+  }
+  // ritmo de polling: normal 5s; rápido 2s si watchdog detecta vacío.
+  setInterval(function(){ tick(); }, function(){ return pollFast ? 2000 : 5000; }());
+
+  // Watchdog: si 6s sin datos o 10s sin lista no vacía, acelera polling.
+  setInterval(function(){
+    var now = Date.now();
+    if ((now - lastRenderAt) > 6000 || (now - lastNonEmptyAt) > 10000){
+      pollFast = true;
+    } else {
+      pollFast = false;
+    }
+  }, 1500);
+
+  // ========= Acciones (Functions) =========
+  var busyByOrder = {}; // id -> ts
 
   function lock(btn, id){
     if (btn){ btn.disabled = true; btn.setAttribute('aria-busy','true'); }
-    busyByOrder.set(id, Date.now());
+    busyByOrder[id] = Date.now();
   }
   function unlock(btn, id){
     if (btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); }
-    busyByOrder.delete(id);
+    delete busyByOrder[id];
   }
 
   function doAction(id, action, btn){
     if (!id || !action) return;
-    if (busyByOrder.has(id)) return; // anti spam
+    if (busyByOrder[id]) return;
     lock(btn, id);
     fetch(ENDPOINT_STATUS, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ id, action, secret: SECRET })
-    })
-    .then(r=>r.json()).then(j=>{
-      if (!j.ok) alert('Error: ' + (j.error||''));
-      else buzz(30);
-    })
-    .catch(()=> alert('Error de red'))
-    .finally(()=> unlock(btn, id));
+      body: JSON.stringify({ id:id, action:action, secret:SECRET })
+    }).then(function(r){ return r.json(); })
+      .then(function(j){ if (!j.ok) alert('Error: '+(j.error||'')); else buzz(30); })
+      .catch(function(){ alert('Error de red'); })
+      .finally(function(){ unlock(btn, id); });
   }
 
   function doCharge(id, btn){
     if (!id) return;
-    if (busyByOrder.has(id)) return;
-    const method = prompt('Método (efectivo / tarjeta / transferencia):','efectivo');
+    if (busyByOrder[id]) return;
+    var method = prompt('Método (efectivo / tarjeta / transferencia):','efectivo');
     if (method===null) return;
     lock(btn, id);
     fetch(ENDPOINT_CHARGE, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ id, method, secret: SECRET })
-    })
-    .then(r=>r.json()).then(j=>{
-      if (!j.ok) alert('Error: ' + (j.error||'')); else buzz(40);
-    })
-    .catch(()=> alert('Error de red'))
-    .finally(()=> unlock(btn, id));
+      body: JSON.stringify({ id:id, method:method, secret:SECRET })
+    }).then(function(r){ return r.json(); })
+      .then(function(j){ if (!j.ok) alert('Error: '+(j.error||'')); else buzz(40); })
+      .catch(function(){ alert('Error de red'); })
+      .finally(function(){ unlock(btn, id); });
   }
-
 })();
 </script>
 </body>
