@@ -1,11 +1,37 @@
 /* cocina/app.legacy.js — ES5 */
-<script>
+
 (function(){
+  // ==== Polyfills mínimos para legacy ====
+  (function(){
+    var EP = window.Element && Element.prototype;
+    if (!EP) return;
+    if (!EP.matches) {
+      EP.matches = EP.msMatchesSelector || EP.webkitMatchesSelector || function(s){
+        var m = (this.document || this.ownerDocument).querySelectorAll(s);
+        var i = 0; while (m[i] && m[i] !== this) i++; return !!m[i];
+      };
+    }
+    if (!EP.closest) {
+      EP.closest = function(s){
+        var el = this;
+        while (el && el.nodeType === 1) { if (el.matches(s)) return el; el = el.parentElement || el.parentNode; }
+        return null;
+      };
+    }
+  })();
+
+  // extend = reemplazo de Object.assign
+  function extend(target){
+    target = target || {};
+    for (var i=1;i<arguments.length;i++){
+      var src = arguments[i]; if (!src) continue;
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src,k)) target[k]=src[k];
+    }
+    return target;
+  }
+
   if (!window.DB) { console.warn('[cocina.legacy] DB no listo'); return; }
-  // Similar: si tu cocina moderna usa ESM, este archivo sólo asegura no romper en legacy.
-})();
-</script>
-(function(){
+
   var DB = window.DB || {};
   var toast = window.toast || function(s){ try{console.log('toast:',s);}catch(_){ } };
   var beep  = window.beep  || function(){};
@@ -46,7 +72,7 @@
   }
   function updateOrder(id, patch, opts){
     if (typeof DB.updateOrder==='function') return DB.updateOrder(id, patch, opts);
-    if (typeof DB.upsertOrder==='function') return DB.upsertOrder(Object.assign({id:id}, patch), opts);
+    if (typeof DB.upsertOrder==='function') return DB.upsertOrder(extend({id:id}, patch), opts); // <- extend
     return Promise.resolve();
   }
   function archiveDelivered(id, finalStatus, opts){
@@ -80,6 +106,9 @@
     var html=''; for (var i=0;i<arr.length;i++) html += renderCard(arr[i]);
     el.innerHTML = html;
   }
+  function orderTypeOf(o){
+    return (o && o.orderType) || (o && o.orderMeta && o.orderMeta.type) || '-';
+  }
   function render(list){
     var by = {};
     list = list||[];
@@ -104,12 +133,13 @@
     }] : []);
 
     var meta='—';
-    if (o.orderType==='dinein') meta='Mesa: <b>'+escapeHtml(o.table||'?')+'</b>';
-    else if (o.orderType==='pickup') meta='Pickup';
-    else if (o.orderType) meta = escapeHtml(o.orderType);
+    var ot = orderTypeOf(o);
+    if (ot==='dinein') meta='Mesa: <b>'+escapeHtml(o.table|| (o.orderMeta&&o.orderMeta.table) || '?')+'</b>';
+    else if (ot==='pickup') meta='Pickup';
+    else if (ot) meta = escapeHtml(ot);
 
     var total = calcTotal(o);
-    var phone = String((o&&o.phone) || (o&&o.meta&&o.meta.phone) || (o&&o.customer&&o.customer.phone) || '').trim();
+    var phone = String((o&&o.phone) || (o&&o.orderMeta&&o.orderMeta.phone) || (o&&o.customer&&o.customer.phone) || '').trim();
     var phoneTxt = phone ? ' · Tel: <b>'+escapeHtml(String(phone))+'</b>' : '';
 
     var tCreated = toMs(o.createdAt || (o.timestamps&&o.timestamps.createdAt));
@@ -130,7 +160,7 @@
       var sx = (it.extras&&it.extras.sauces)||[];
       for (j=0;j<sx.length;j++){ extrasBadges += '<div class="k-badge">Aderezo: '+escapeHtml(sx[j])+'</div>'; }
       var ix = (it.extras&&it.extras.ingredients)||[];
-      for (j=0;j<ix.length;j()){ extrasBadges += '<div class="k-badge">Extra: '+escapeHtml(ix[j])+'</div>'; }
+      for (j=0;j<ix.length;j++){ extrasBadges += '<div class="k-badge">Extra: '+escapeHtml(ix[j])+'</div>'; }
       if (it.extras && it.extras.dlcCarne) extrasBadges += '<div class="k-badge">DLC carne 85g</div>';
       var salsaInfo = it.salsaCambiada ? ('Salsa: <b>'+escapeHtml(it.salsaCambiada)+'</b> (cambio)') : (it.salsaDefault ? ('Salsa: '+escapeHtml(it.salsaDefault)) : '');
       itemsHtml += '<div class="order-item">'+
@@ -145,14 +175,14 @@
     var hhSummary = (hh.enabled && Number(hh.totalDiscount||0)>0)
       ? '<span class="k-badge">HH -'+Number(hh.discountPercent||0)+'% · ahorro '+money(hh.totalDiscount)+'</span>' : '';
 
-    var canShowTake = (o.status===Status.PENDING) && !LOCALLY_TAKEN[o.id];
+    var canShowTake = (String(o.status).toUpperCase()===Status.PENDING) && !LOCALLY_TAKEN[o.id];
     var actions = ''
       + (canShowTake ? '<button class="btn" data-a="take">Tomar</button>' : '')
-      + (o.status===Status.IN_PROGRESS ? '<button class="btn ok" data-a="ready">Listo</button>' : '')
-      + (o.status===Status.READY ? '<button class="btn ok" data-a="deliver">Entregar</button>' : '')
-      + ((o.status===Status.DELIVERED && !o.paid) ? '<button class="btn" data-a="charge">Cobrar</button>' : '')
-      + ((o.status===Status.PENDING || o.status===Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid)) ? '<button class="btn ghost" data-a="edit">Editar</button>' : '')
-      + ((o.status===Status.PENDING || o.status===Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid)) ? '<button class="btn warn" data-a="cancel">Eliminar</button>' : '');
+      + (String(o.status).toUpperCase()===Status.IN_PROGRESS ? '<button class="btn ok" data-a="ready">Listo</button>' : '')
+      + (String(o.status).toUpperCase()===Status.READY ? '<button class="btn ok" data-a="deliver">Entregar</button>' : '')
+      + ((String(o.status).toUpperCase()===Status.DELIVERED && !o.paid) ? '<button class="btn" data-a="charge">Cobrar</button>' : '')
+      + ((String(o.status).toUpperCase()===Status.PENDING || String(o.status).toUpperCase()===Status.IN_PROGRESS || (String(o.status).toUpperCase()===Status.DELIVERED && !o.paid)) ? '<button class="btn ghost" data-a="edit">Editar</button>' : '')
+      + ((String(o.status).toUpperCase()===Status.PENDING || String(o.status).toUpperCase()===Status.IN_PROGRESS || (String(o.status).toUpperCase()===Status.DELIVERED && !o.paid)) ? '<button class="btn warn" data-a="cancel">Eliminar</button>' : '');
 
     return ''+
       '<article class="k-card" data-id="'+o.id+'">'+
@@ -189,18 +219,16 @@
       for (var i=0;i<CURRENT_LIST.length;i++){
         if (CURRENT_LIST[i].id===id){ for (var k in patch){ CURRENT_LIST[i][k]=patch[k]; } found=true; break; }
       }
-      if (!found) CURRENT_LIST.push(Object.assign({id:id}, patch));
+      if (!found) CURRENT_LIST.push(extend({id:id}, patch)); // <- extend
     }
 
-    function re(){
-      render(CURRENT_LIST);
-    }
+    function re(){ render(CURRENT_LIST); }
 
     try{
       if (a==='take'){
         LOCALLY_TAKEN[id]=1; btn.textContent='Tomando…';
         var order = null; for (var i=0;i<CURRENT_LIST.length;i++){ if(CURRENT_LIST[i].id===id){ order=CURRENT_LIST[i]; break; } }
-        if(order){ applyInventoryForOrder(Object.assign({id:id}, order), OPTS); }
+        if(order){ applyInventoryForOrder(extend({id:id}, order), OPTS); } // <- extend
         patchLocal(id, { status:Status.IN_PROGRESS, startedAt:now(), updatedAt:now() }); re();
         setStatus(id, Status.IN_PROGRESS, OPTS).then(function(){
           return updateOrder(id, { startedAt:now(), updatedAt:now() }, OPTS);
@@ -234,7 +262,7 @@
         patchLocal(id, { paid:true, paidAt:now(), payMethod:payMethod, totalCharged:Number(total), updatedAt:now() }); re();
         updateOrder(id, { paid:true, paidAt:now(), payMethod:payMethod, totalCharged:Number(total), updatedAt:now() }, OPTS)
           .then(function(){ return archiveDelivered(id, Status.DONE, OPTS); })
-          .then(function(){ beep(); toast('Cobro registrado'); card.parentNode && card.parentNode.removeChild(card); })
+          .then(function(){ beep(); toast('Cobro registrado'); if(card.parentNode){ card.parentNode.removeChild(card); } })
           .catch(function(){ toast('Error'); })
           .then(function(){ btn.disabled=false; });
         return;
@@ -259,12 +287,12 @@
         patchLocal(id, { status:Status.CANCELLED, cancelReason:reason, cancelledAt:now(), updatedAt:now() }); re();
         updateOrder(id, { status:Status.CANCELLED, cancelReason:reason, cancelledAt:now(), cancelledBy:'kitchen', updatedAt:now() }, OPTS)
           .then(function(){ return archiveDelivered(id, Status.DONE, OPTS); })
-          .then(function(){ beep(); toast('Pedido eliminado'); card.parentNode && card.parentNode.removeChild(card); })
+          .then(function(){ beep(); toast('Pedido eliminado'); if(card.parentNode){ card.parentNode.removeChild(card); } })
           .catch(function(){ toast('Error'); })
           .then(function(){ btn.disabled=false; });
         return;
       }
-    } catch(err){ console.error(err); toast('Error'); btn.disabled=false; }
+    } catch(err){ try{console.error(err);}catch(_){ } toast('Error'); btn.disabled=false; }
   });
 
   // ===== Timers suaves =====
