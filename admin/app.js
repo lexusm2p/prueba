@@ -574,14 +574,14 @@ function populateHappyForm(hh){
     const dt = new Date(Number(hh.endsAt||0));
     $('#hhEndsAt').value = new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
   }
-}
-$('#btnSaveHappy')?.addEventListener('click', async ()=>{
+}$('#btnSaveHappy')?.addEventListener('click', async ()=>{
   try{
     const enabled = ($('#hhEnabled')?.value==='on');
     const discountPercent = Number($('#hhDisc')?.value||0);
     const bannerText = $('#hhMsg')?.value||'';
     const durationMin = Number($('#hhDurMin')?.value||0) || null;
     const endsAt = $('#hhEndsAt')?.value ? new Date($('#hhEndsAt').value).getTime() : null;
+
     const payload = { enabled, discountPercent, bannerText, durationMin, endsAt };
     if (typeof DB.setHappyHour === 'function') {
       await DB.setHappyHour(payload);
