@@ -87,6 +87,7 @@ function _legacyItem(it = {}) {
   const base = it.baseIngredients ?? it.base ?? it.ingredients ?? it.baseIng ?? [];
   const adds = it.extras?.adds ?? it.adds ?? [];
   const rems = it.extras?.removes ?? it.removes ?? [];
+  const sauces = it.extras?.sauces ?? it.sauces ?? [];
 
   const salsaDefault =
     it.salsaDefault ?? it.salsa?.name ?? (typeof it.salsa === 'string' ? it.salsa : null);
@@ -100,14 +101,18 @@ function _legacyItem(it = {}) {
     name: it.name || it.title || 'Item',
     qty: Number(it.qty || 1),
     unitPrice,
-    // 👇 imprescindibles para la tablet
+    // imprescindibles para la tablet
     baseIngredients: _toStrArr(base),
     ingredients: _toStrArr(base), // duplicado por compat
-    adds: _toStrArr(adds),        // compat tablet vieja
-    removes: _toStrArr(rems),     // compat tablet vieja
+    adds: _toStrArr(adds),
+    removes: _toStrArr(rems),
     salsaDefault: salsaDefault || null,
     salsaCambiada: salsaCambiada || null,
-    extras: { adds: _toStrArr(adds), removes: _toStrArr(rems) }
+    extras: {
+      adds: _toStrArr(adds),
+      removes: _toStrArr(rems),
+      sauces: _toStrArr(sauces)
+    }
   };
   if (typeof it.lineTotal === 'number') out.lineTotal = Number(it.lineTotal);
   return out;
@@ -118,6 +123,22 @@ function _legacyItems(order = {}) {
     return [_legacyItem({ ...order.item, qty: order.qty ?? 1, price: order.item?.price })];
   }
   return [];
+}
+
+// ---- Alias de raíz para la tablet legacy (usa el primer item) ----
+function _flattenFirstItemForLegacy(items = []) {
+  const it = Array.isArray(items) && items.length ? items[0] : null;
+  if (!it) return {};
+  const ex = it.extras || {};
+  return {
+    baseIngredients: it.baseIngredients || it.ingredients || [],
+    ingredients:     it.ingredients || it.baseIngredients || [],
+    adds:            it.adds || ex.adds || ex.ingredients || [],
+    removes:         it.removes || ex.removes || [],
+    salsaDefault:    it.salsaDefault || null,
+    salsaCambiada:   it.salsaCambiada || null,
+    extras: { sauces: ex.sauces || [] }
+  };
 }
 
 /* =================== Catálogo: fetch con fallback =================== */
@@ -175,7 +196,7 @@ export async function fetchCatalogWithFallback() {
 
   try {
     const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
-    if (r2.ok) return normalizeCatalog(await r.json());
+    if (r2.ok) return normalizeCatalog(await r2.json());
   } catch (e) { console.warn('[catalog] shared/catalog.json fallo', e); }
 
   return normalizeCatalog({});
@@ -221,6 +242,7 @@ export async function createOrder(order, opts = {}) {
 
     // → Espejo a RTDB para la tablet (incluye ingredientes/base normalizados)
     try {
+      const itemsLegacy = _legacyItems(order);
       await mirrorToRTDB(ref.id, {
         __create__: true,
         id: ref.id,
@@ -235,7 +257,9 @@ export async function createOrder(order, opts = {}) {
         hh: payload.hh || null,
         createdAt: Date.now(),
         paid: false,
-        items: _legacyItems(order)
+        items: itemsLegacy,
+        // alias de raíz para tablet legacy (primer item)
+        ..._flattenFirstItemForLegacy(itemsLegacy)
       });
     } catch {}
 
@@ -306,6 +330,8 @@ export async function updateOrder(id, patch, opts = {}) {
       if (patch.readyAt)     m.readyAt = Date.now();
       if (patch.deliveredAt) m.deliveredAt = Date.now();
       if (Array.isArray(patch.items) || patch.item) m.items = _legacyItems(patch);
+      // alias de raíz si mandamos items
+      if (m.items) Object.assign(m, _flattenFirstItemForLegacy(m.items));
       if (Object.keys(m).length) await mirrorToRTDB(id, m);
     } catch {}
 
@@ -334,6 +360,8 @@ export async function upsertOrder(data, opts = {}) {
       if (data.payMethod != null) m.payMethod = String(data.payMethod);
       if (typeof data.totalCharged === 'number') m.totalCharged = Number(data.totalCharged);
       if (Array.isArray(data.items) || data.item) m.items = _legacyItems(data);
+      // alias de raíz si mandamos items
+      if (m.items) Object.assign(m, _flattenFirstItemForLegacy(m.items));
       if (Object.keys(m).length) await mirrorToRTDB(id, m);
     } catch {}
 
