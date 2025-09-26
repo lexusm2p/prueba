@@ -1,9 +1,11 @@
+
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="stylesheet" href="../shared/styles.css"/>
+  <link rel="icon" href="../favicon.ico"/><!-- evita 404 del favicon -->
   <title>Admin — Seven de Burgers</title>
 
   <!-- Estilos locales del admin (incluye la lista de temas y fix de tablas) -->
@@ -38,19 +40,17 @@
 
     /* Modo COMPACTO (aplica elipsis) */
     .compact .k-table th, .compact .k-table td { overflow: hidden; text-overflow: ellipsis; }
-    /* Anchos sugeridos para compacto (ajustables) */
     .compact #tblHist th:nth-child(1), .compact #tblHist td:nth-child(1){ max-width: 12ch; }
     .compact #tblHist th:nth-child(2), .compact #tblHist td:nth-child(2){ max-width: 14ch; }
     .compact #tblHist th:nth-child(3), .compact #tblHist td:nth-child(3){ max-width: 8ch; }
     .compact #tblHist th:nth-child(5), .compact #tblHist td:nth-child(5){ max-width: 8ch; }
     .btn.tiny{ padding:6px 10px; font-size:12px; }
 
-    /* En pantallas pequeñas la tabla puede ser más angosta */
     @media (max-width:768px){
       .table-wrap table, .table-scroll table { min-width: 640px; }
     }
 
-    /* ---------- Lista de Temas (antidesborde) ---------- */
+    /* ---------- Lista de Temas ---------- */
     .theme-list{
       list-style:none; padding:0; margin:0;
       display:grid; gap:10px;
@@ -228,6 +228,7 @@
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label>Ingrediente</label><input id="pName" type="text"></div>
         <div class="field"><label>Cantidad comprada (unid/kg/l)</label><input id="pQty" type="number" min="0" step="0.01"></div>
+        <div class="field"><label>Unidad</label><input id="pUnit" type="text" placeholder="u / kg / l"></div>
         <div class="field"><label>Costo total</label><input id="pCost" type="number" min="0" step="0.01"></div>
         <div class="field"><label>Proveedor (opcional)</label><input id="pVendor" type="text" placeholder="id proveedor o nombre"></div>
         <div class="field" style="align-self:end"><button class="btn" id="btnAddPurchase">Registrar compra</button></div>
@@ -246,6 +247,20 @@
         <div class="field" style="align-self:end"><button class="btn ghost" id="btnInvRefresh">Actualizar</button></div>
       </div>
       <div class="table-scroll"><table class="k-table" id="tblInv"><thead><tr><th>Ingrediente</th><th>Existencia</th><th>Um</th><th>Costo prom.</th><th>Valorizado</th></tr></thead><tbody></tbody></table></div>
+
+      <h4 style="margin-top:16px">Stock inicial</h4>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+        <div class="field"><label>Ingrediente</label><input id="invInitName" type="text" placeholder="nombre exacto"></div>
+        <div class="field"><label>Cantidad</label><input id="invInitQty" type="number" min="0" step="0.01"></div>
+        <div class="field"><label>Unidad</label><input id="invInitUnit" type="text" placeholder="u / kg / l"></div>
+        <div class="field" style="align-self:end"><button class="btn" id="btnInvInitSet">Fijar stock inicial</button></div>
+      </div>
+
+      <div class="row" style="gap:8px; margin-top:10px; flex-wrap:wrap">
+        <button class="btn ghost" id="btnInvRecalcToday">Recalcular consumo (hoy)</button>
+        <button class="btn ghost" id="btnInvRecalcRange">Recalcular consumo (por rango)</button>
+      </div>
+      <div class="muted small" style="margin-top:6px">* El recálculo usa las recetas/BOM del backend y aplica idempotencia por pedido si tu DB lo soporta.</div>
     </section>
 
     <!-- PROVEEDORES -->
@@ -276,7 +291,6 @@
         <li class="theme-item" data-theme="Base"><span class="dot"></span><span class="title">Base</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Independencia"><span class="dot"></span><span class="title">Independencia</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Día de Muertos"><span class="dot"></span><span class="title">Día de Muertos</span><button class="btn small ghost">Previsualizar</button></li>
-        <!-- IMPORTANTE: usar el nombre exacto del preset -->
         <li class="theme-item" data-theme="Navidad MX"><span class="dot"></span><span class="title">Navidad MX</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Halloween"><span class="dot"></span><span class="title">Halloween</span><button class="btn small ghost">Previsualizar</button></li>
         <li class="theme-item" data-theme="Fútbol"><span class="dot"></span><span class="title">Fútbol</span><button class="btn small ghost">Previsualizar</button></li>
@@ -295,6 +309,41 @@
         * “Probar local” aplica el tema solo en este navegador (no guarda).<br>
         * “Guardar GLOBAL” escribe en <b>settings/theme</b>; los kioskos lo aplican en vivo.
       </div>
+    </section>
+
+    <!-- HAPPY HOUR -->
+    <section class="panel" id="panel-happy">
+      <h3 class="display-font">Happy Hour</h3>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px">
+        <div class="field">
+          <label>Estado</label>
+          <select id="hhEnabled">
+            <option value="off">OFF</option>
+            <option value="on">ON</option>
+          </select>
+          <div id="hhCountdown" class="muted small">Inactivo</div>
+        </div>
+        <div class="field">
+          <label>Descuento (%)</label>
+          <input id="hhDisc" type="number" min="0" max="100" step="1" value="0">
+        </div>
+        <div class="field">
+          <label>Mensaje (banner)</label>
+          <input id="hhMsg" type="text" placeholder="Texto opcional">
+        </div>
+        <div class="field">
+          <label>Duración (min)</label>
+          <input id="hhDurMin" type="number" min="0" step="1" placeholder="ej. 30">
+        </div>
+        <div class="field">
+          <label>Termina a las</label>
+          <input id="hhEndsAt" type="datetime-local">
+        </div>
+        <div class="field" style="align-self:end">
+          <button id="btnSaveHappy" class="btn">Guardar</button>
+        </div>
+      </div>
+      <div class="muted small" style="margin-top:6px">* El kiosko usa este estado en vivo.</div>
     </section>
 
     <!-- RECETARIO -->
