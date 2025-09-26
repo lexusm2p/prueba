@@ -742,6 +742,8 @@ function addGiftLine(){
     hhDisc: 0
   };
   state.cart.push(line);
+  // Asegura precios actualizados antes de renderizar el contenido del carrito
+  ensureDrinkPrices();
   updateCartBar();
   // Checar desbloqueo de regalo cada vez que cambia el carrito
   checkGiftUnlock(!state.gift.shownThisSession);
