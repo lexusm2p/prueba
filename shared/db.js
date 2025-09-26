@@ -5,7 +5,7 @@
 // Modo PRUEBA: evita escrituras cuando opts.training === true.
 
 import {
-  app,                 // 👈 necesario para RTDB
+  app,                 // necesario para RTDB
   db,
   ensureAuth,
   serverTimestamp,
@@ -57,8 +57,7 @@ async function mirrorToRTDB(orderId, data) {
     const r = getDatabase(app);
     const path = 'kitchen/orders/' + String(orderId);
     if (data && data.__create__) {
-      const payload = { ...data };
-      delete payload.__create__;
+      const payload = { ...data }; delete payload.__create__;
       await set(ref(r, path), payload);
     } else {
       await update(ref(r, path), data || {});
@@ -70,6 +69,52 @@ async function removeFromRTDB(orderId) {
     const { getDatabase, ref, remove } = await _rtdb();
     await remove(ref(getDatabase(app), 'kitchen/orders/' + String(orderId)));
   } catch { /* silencioso */ }
+}
+
+/* -------- Normalización de items para la tablet (legacy) -------- */
+function _toStrArr(x) {
+  if (!x) return [];
+  if (Array.isArray(x)) {
+    return x.map(v => {
+      if (typeof v === 'string') return v;
+      if (typeof v === 'object' && v) return (v.name || v.label || v.id || String(v));
+      return String(v);
+    });
+  }
+  return [];
+}
+function _legacyItem(it = {}) {
+  const base = it.baseIngredients ?? it.base ?? it.ingredients ?? it.baseIng ?? [];
+  const adds = it.extras?.adds ?? it.adds ?? [];
+  const rems = it.extras?.removes ?? it.removes ?? [];
+
+  const salsaDefault =
+    it.salsaDefault ?? it.salsa?.name ?? (typeof it.salsa === 'string' ? it.salsa : null);
+  const salsaCambiada =
+    it.salsaCambiada ?? it.salsaAlt ?? it.salsaChangedTo ?? it.salsaNueva ?? null;
+
+  const unitPrice = Number(it.unitPrice ?? it.price ?? it.unit_price ?? 0);
+
+  const out = {
+    id: it.id || it.sku || '',
+    name: it.name || it.title || 'Item',
+    qty: Number(it.qty || 1),
+    unitPrice,
+    baseIngredients: _toStrArr(base),
+    ingredients: _toStrArr(base), // duplicado por compat
+    salsaDefault: salsaDefault || null,
+    salsaCambiada: salsaCambiada || null,
+    extras: it.extras ?? { adds: _toStrArr(adds), removes: _toStrArr(rems) }
+  };
+  if (typeof it.lineTotal === 'number') out.lineTotal = Number(it.lineTotal);
+  return out;
+}
+function _legacyItems(order = {}) {
+  if (Array.isArray(order.items)) return order.items.map(_legacyItem);
+  if (order.item) {
+    return [_legacyItem({ ...order.item, qty: order.qty ?? 1, price: order.item?.price })];
+  }
+  return [];
 }
 
 /* =================== Catálogo: fetch con fallback =================== */
@@ -171,21 +216,23 @@ export async function createOrder(order, opts = {}) {
     await ensureAuth();
     const ref = await addDoc(collection(db, 'orders'), payload);
 
-    // → Espejo a RTDB para la tablet (incluye ingredientes/base)
+    // → Espejo a RTDB para la tablet (incluye ingredientes/base normalizados)
     try {
       await mirrorToRTDB(ref.id, {
         __create__: true,
         id: ref.id,
-        ...order,
         status: String(payload.status),
         customer: payload.customer || '',
         orderType: payload.orderMeta?.type || payload.orderType || '',
         table: payload.orderMeta?.table || '',
         phone: payload.orderMeta?.phone || '',
         tip: Number(payload.tip || 0),
-        subtotal: typeof payload.subtotal === 'number' ? Number(payload.subtotal) : null,
+        subtotal: (typeof payload.subtotal === 'number') ? Number(payload.subtotal) : null,
+        notes: payload.notes || '',
+        hh: payload.hh || null,
         createdAt: Date.now(),
-        paid: false
+        paid: false,
+        items: _legacyItems(order)
       });
     } catch {}
 
@@ -255,6 +302,7 @@ export async function updateOrder(id, patch, opts = {}) {
       if (patch.startedAt)   m.startedAt = Date.now();
       if (patch.readyAt)     m.readyAt = Date.now();
       if (patch.deliveredAt) m.deliveredAt = Date.now();
+      if (Array.isArray(patch.items) || patch.item) m.items = _legacyItems(patch);
       if (Object.keys(m).length) await mirrorToRTDB(id, m);
     } catch {}
 
@@ -275,13 +323,14 @@ export async function upsertOrder(data, opts = {}) {
       createdAt: data?.createdAt ?? serverTimestamp()
     }, { merge: true });
 
-    // espejo si trae status/paid
+    // espejo si trae status/paid/items
     try {
       const m = {};
       if (data.status) m.status = String(data.status).toUpperCase();
       if (data.paid) m.paid = true;
       if (data.payMethod != null) m.payMethod = String(data.payMethod);
       if (typeof data.totalCharged === 'number') m.totalCharged = Number(data.totalCharged);
+      if (Array.isArray(data.items) || data.item) m.items = _legacyItems(data);
       if (Object.keys(m).length) await mirrorToRTDB(id, m);
     } catch {}
 
@@ -361,6 +410,7 @@ export async function logPrepMetric(metric, opts = {}) {
 export async function getOrdersRange({ from, to, includeArchive = false, orderType = null }) {
   try {
     try { await ensureAuth(); } catch {}
+
     const _from = toTs(from);
     const _to = toTs(to);
 
