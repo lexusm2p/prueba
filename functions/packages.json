@@ -1,0 +1,10 @@
+{
+  "name": "seven-kitchen-bridge",
+  "private": true,
+  "engines": { "node": "18" },
+  "type": "module",
+  "dependencies": {
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^4.5.0"
+  }
+}
