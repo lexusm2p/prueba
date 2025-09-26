@@ -1,5 +1,10 @@
 /* cocina/app.legacy.js — ES5 */
-
+<script>
+(function(){
+  if (!window.DB) { console.warn('[cocina.legacy] DB no listo'); return; }
+  // Similar: si tu cocina moderna usa ESM, este archivo sólo asegura no romper en legacy.
+})();
+</script>
 (function(){
   var DB = window.DB || {};
   var toast = window.toast || function(s){ try{console.log('toast:',s);}catch(_){ } };
