@@ -472,6 +472,13 @@
   setHistMode(sessionStorage.getItem('hist.compact') === '1');
   toggleBtn?.addEventListener('click', ()=> setHistMode(!histWrap.classList.contains('compact')));
 </script>
+<!-- 1) Polyfills/compat para navegadores viejos -->
+<script nomodule src="../shared/compat.js"></script>
 
+<!-- 2) Versión legacy del Admin (sin sintaxis moderna) -->
+<script nomodule src="./app.legacy.js"></script>
+
+<!-- 3) Versión moderna (ESM) para navegadores actuales -->
+<script type="module" src="./app.js"></script>
 </body>
 </html>
