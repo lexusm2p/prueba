@@ -835,16 +835,35 @@ function openItemModal(item, base, existingIndex=null){
       }
 
       const newLine = {
-        id: item.id, name: item.name, mini: !!item.mini, qty,
-        unitPrice: Number(item.price||0),
-        baseIngredients: formatIngredientsFor(item, base),
-        salsaDefault: base?.salsaDefault || base?.suggested || null,
-        salsaCambiada: salsaSwap,
-        extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk, surpriseSauce: surpriseSauce || null },
-        notes,
-        lineTotal: subtotal,
-        hhDisc: hhDiscTotal
-      };
+  id: item.id, name: item.name, mini: !!item.mini, qty,
+  unitPrice: Number(item.price||0),
+
+  // Base para cocina y tablet
+  baseIngredients: formatIngredientsFor(item, base),
+
+  // 👇 Alias que la tablet también entiende
+  ingredients: formatIngredientsFor(item, base), // duplicado por compat
+  adds: ingrSel,                                 // agregados visibles
+  removes: [],                                   // si luego das opción de quitar, pon aquí
+
+  // Salsas
+  salsaDefault: base?.salsaDefault || base?.suggested || null,
+  salsaCambiada: salsaSwap,
+
+  // Extras (mantenemos los campos actuales, pero añadimos adds/removes como alias)
+  extras: {
+    sauces: saucesSel,
+    ingredients: ingrSel,
+    adds: ingrSel,       // 👈 alias para legacy
+    removes: [],         // 👈 alias para legacy
+    dlcCarne: !!dlcChk,
+    surpriseSauce: surpriseSauce || null
+  },
+
+  notes,
+  lineTotal: subtotal,
+  hhDisc: hhDiscTotal
+};
 
       if (existingIndex!==null){ state.cart[existingIndex] = newLine; toast('Línea actualizada'); }
       else { state.cart.push(newLine); toast('Agregado al pedido'); }
