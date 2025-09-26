@@ -1100,16 +1100,26 @@ const generalNotes = (document.getElementById('cartNotes')?.value || '').trim();
 
 // === Filtrar líneas: no mandar regalos al backend y sumar una nota para cocina
 const giftNotes = [];
-const itemsForDB = state.cart.map(l => ({
+    const itemsForDB = state.cart.map(l => ({
   id: l.id,
   name: l.name,
   mini: l.mini,
   qty: l.qty,
   unitPrice: l.unitPrice,
+
+  // Base + alias
   baseIngredients: l.baseIngredients,
+  ingredients: l.ingredients || l.baseIngredients || [], // 👈 alias para tablet
+
+  // Salsas
   salsaDefault: l.salsaDefault,
   salsaCambiada: l.salsaCambiada,
+
+  // Extras + alias agregados/removidos
   extras: l.extras,
+  adds: l.adds || l.extras?.adds || l.extras?.ingredients || [],   // 👈 alias
+  removes: l.removes || l.extras?.removes || [],                    // 👈 alias
+
   notes: l.notes || null,
   lineTotal: l.lineTotal,
   hhDisc: Number(l.hhDisc || 0),
@@ -1117,7 +1127,7 @@ const itemsForDB = state.cart.map(l => ({
 })).filter(l => {
   if (l.isGift) {
     giftNotes.push(`• ${l.name} x${l.qty}`);
-    return false;            // ⬅️ regalos no se envían al backend
+    return false;
   }
   return true;
 });
