@@ -1,621 +1,189 @@
-// /shared/db.js
-// Firestore + catálogo con fallback. Reportes, settings (ETA/HH/Theme),
-// inventario, recetas/producción, artículos, clientes y órdenes.
-// Modo PRUEBA: evita escrituras cuando opts.training === true.
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Cocina — Seven (Legacy)</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+  <style>
+    body{ background:#0b1220; color:#e8f0ff; font-family: system-ui, Arial; }
+    .wrap{ max-width:1200px; margin:12px auto; padding:0 12px; }
+    .cols{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+    @media (max-width:900px){ .cols{ grid-template-columns:1fr; } }
+    .card{ background:#0f182a; border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; }
+    .ord{ background:#131f33; border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:10px; margin-bottom:8px; }
+    .muted{ color:#a6b2c7; font-size:12px; }
+    .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .chip{ background:#192840; border:1px solid rgba(255,255,255,.10); border-radius:999px; padding:4px 8px; font-size:12px; }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
+    .btn{ background:#1a2740; border:1px solid rgba(255,255,255,.12); color:#e8f0ff; border-radius:10px; padding:8px 10px; }
+    .btn.ok{ background:#2fe38b; color:#00150a; font-weight:800; }
+    a.track{ color:#8bb4ff; text-decoration:underline; font-size:12px; }
+    .empty{ color:#8aa0c4; opacity:.7; padding:8px 0; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cols">
+    <div class="card"><h3>Pendientes</h3><div id="col-pending"></div></div>
+    <div class="card"><h3>En preparación</h3><div id="col-progress"></div></div>
+    <div class="card"><h3>Listos</h3><div id="col-ready"></div></div>
+    <div class="card"><h3>Por cobrar</h3><div id="col-bill"></div></div>
+  </div>
+</div>
 
-import {
-  db,
-  ensureAuth,
-  serverTimestamp,
-  doc, getDoc, setDoc, updateDoc, addDoc, collection, deleteDoc,
-  onSnapshot, query, where, orderBy, limit, Timestamp, increment, getDocs
-} from './firebase.js';
+<!-- Firebase v8 para máxima compatibilidad -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-/* =================== Utils =================== */
-const sleep = (ms = 60) => new Promise(r => setTimeout(r, ms));
-const toTs = (d) => Timestamp.fromDate(new Date(d));
-const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
-
-async function guardWrite(training, realWriteFn, fakeValue = null) {
-  if (!training) return realWriteFn();
-  await sleep(60);
-  return fakeValue ?? { ok: true, _training: true };
-}
-
-function toMillisFlexible(raw) {
-  if (raw == null) return null;
-  if (typeof raw === 'number') return raw;
-  if (typeof raw?.toMillis === 'function') return raw.toMillis();
-  if (raw?.seconds != null) return raw.seconds * 1000 + Math.floor((raw.nanoseconds || 0) / 1e6);
-  const ms = new Date(raw).getTime();
-  return Number.isFinite(ms) ? ms : null;
-}
-
-const normPhone = (s = '') => String(s).replace(/\D+/g, '').slice(0, 15);
-
-/* =================== Catálogo: fetch con fallback =================== */
-function normalizeCatalog(cat = {}) {
-  const safeArr = (x) => Array.isArray(x) ? x : (x ? [x] : []);
-  const appSettings = {
-    miniMeatGrams: Number(cat?.appSettings?.miniMeatGrams ?? 45),
-    meatGrams: Number(cat?.appSettings?.meatGrams ?? 85),
-    defaultSuggestMlPerOrder: Number(cat?.appSettings?.defaultSuggestMlPerOrder ?? 20),
-    lowStockThreshold: Number(cat?.appSettings?.lowStockThreshold ?? 5),
+<script>
+  // === Config del proyecto (verifica databaseURL) ===
+  const firebaseConfig = {
+    apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+    authDomain: "seven-de-burgers.firebaseapp.com",
+    databaseURL: "https://seven-de-burgers-default-rtdb.firebaseio.com",
+    projectId: "seven-de-burgers",
+    storageBucket: "seven-de-burgers.appspot.com",
+    messagingSenderId: "34089845279",
+    appId: "1:34089845279:web:d13440c34e6bb7fa910b2a"
   };
-  const happyHour = {
-    enabled: !!cat?.happyHour?.enabled,
-    discountPercent: Number(cat?.happyHour?.discountPercent ?? 0),
-    bannerText: String(cat?.happyHour?.bannerText ?? ''),
-    applyEligibleOnly: cat?.happyHour?.applyEligibleOnly !== false,
-    endsAt: toMillisFlexible(cat?.happyHour?.endsAt ?? null),
-  };
-  return {
-    burgers: safeArr(cat.burgers),
-    minis:   safeArr(cat.minis),
-    drinks:  safeArr(cat.drinks),
-    sides:   safeArr(cat.sides),
-    extras: {
-      sauces: safeArr(cat?.extras?.sauces ?? []),
-      ingredients: safeArr(cat?.extras?.ingredients ?? []),
-      ingredientPrice: Number(cat?.extras?.ingredientPrice ?? 0),
-      saucePrice: Number(cat?.extras?.saucePrice ?? 0),
-      dlcCarneMini: Number(cat?.extras?.dlcCarneMini ?? 0),
-    },
-    appSettings,
-    happyHour,
-  };
-}
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-const guessDataPath = () => '../data/menu.json';
+  // Endpoints opcionales para acciones (Cloud Functions)
+  const ENDPOINT_STATUS = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenSetStatus";
+  const ENDPOINT_CHARGE = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenCharge";
+  const SECRET = "PON_AQUI_TU_SECRET_REAL"; // <-- reemplaza
 
-export async function fetchCatalogWithFallback() {
-  try {
-    const d1 = await getDoc(doc(db, 'settings', 'catalog'));
-    if (d1.exists()) return normalizeCatalog(d1.data());
-  } catch {}
-  try {
-    const d2 = await getDoc(doc(db, 'catalog', 'public'));
-    if (d2.exists()) return normalizeCatalog(d2.data());
-  } catch {}
-  try {
-    const r = await fetch(guessDataPath(), { cache: 'no-store' });
-    if (r.ok) return normalizeCatalog(await r.json());
-  } catch {}
-  try {
-    const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
-    if (r2.ok) return normalizeCatalog(await r.json());
-  } catch {}
-  return normalizeCatalog({});
-}
-
-// Solo lectura (tabla de productos en Admin)
-export function subscribeProducts(cb) {
-  (async () => {
-    const cat = await fetchCatalogWithFallback();
-    const items = [
-      ...(cat.burgers || []).map(p => ({ ...p, type: 'burger' })),
-      ...(cat.minis || []).map(p => ({ ...p, type: 'mini' })),
-      ...(cat.drinks || []).map(p => ({ ...p, type: 'drink' })),
-      ...(cat.sides || []).map(p => ({ ...p, type: 'side' })),
-    ];
-    cb(items);
-  })();
-}
-
-/* =================== Órdenes =================== */
-
-// Crea una orden; acepta payload del kiosko.
-export async function createOrder(order, opts = {}) {
-  const { training = false } = opts;
-  const payload = { ...order };
-
-  // Normaliza marcas de tiempo y meta
-  const createdAtClient = Number(payload.createdAt || Date.now());
-  payload.createdAt = serverTimestamp();
-  payload.createdAtClient = createdAtClient;
-  payload.updatedAt = serverTimestamp();
-  payload.status = String(payload.status || 'PENDING').toUpperCase();
-  payload.orderMeta = {
-    type: payload.orderType || payload?.orderMeta?.type || 'pickup',
-    table: payload.table || payload?.orderMeta?.table || '',
-    phone: payload.phone || payload?.orderMeta?.phone || '',
-    payMethodPref: payload.payMethodPref || payload?.orderMeta?.payMethodPref || 'efectivo'
+  const COLS = {
+    PENDING:     document.getElementById('col-pending'),
+    IN_PROGRESS: document.getElementById('col-progress'),
+    READY:       document.getElementById('col-ready'),
+    BILL:        document.getElementById('col-bill'),
   };
 
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = await addDoc(collection(db, 'orders'), payload);
-    return ref.id;
-  }, `TRAIN-ORDER-${Date.now()}`);
-}
-
-// Suscribe pedidos del día (para feeds/ETA)
-export function subscribeActiveOrders(cb, { limitN = 120 } = {}) {
-  const qy = query(
-    collection(db, 'orders'),
-    where('createdAt', '>=', toTs(startOfToday())),
-    orderBy('createdAt', 'desc'),
-    limit(limitN)
-  );
-  return onSnapshot(qy, snap => {
-    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    cb(rows);
-  });
-}
-
-// 🔪 Cocina: prioriza sólo estados activos, pero mantiene orden y tiempos
-export function subscribeKitchenOrders(cb, { limitN = 200 } = {}) {
-  return subscribeActiveOrders(list => {
-    const set = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
-    const filtered = (list||[]).filter(o => set.has(String(o.status||'').toUpperCase()));
-    cb(filtered);
-  }, { limitN });
-}
-
-// Aliases legacy
-export const subscribeOrders = subscribeActiveOrders;
-export const onOrdersSnapshot = subscribeActiveOrders;
-
-// Suscripción puntual por OID (tracking por mesa/pickup)
-export function subscribeOrder(orderId, cb) {
-  if (!orderId) return () => {};
-  const ref = doc(db, 'orders', String(orderId));
-  return onSnapshot(ref, (d) => cb(d.exists() ? ({ id: d.id, ...d.data() }) : null));
-}
-
-// Update parcial con soporte a dot-notation (updateDoc ya lo soporta)
-export async function updateOrder(id, patch, opts = {}) {
-  const { training = false } = opts;
-  if (!id || typeof patch !== 'object') throw new Error('updateOrder: datos inválidos');
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await updateDoc(doc(db, 'orders', id), { ...patch, updatedAt: serverTimestamp() });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-// Upsert (merge) — útil para shims
-export async function upsertOrder(data, opts = {}) {
-  const { training = false } = opts;
-  const id = data?.id;
-  if (!id) throw new Error('upsertOrder: falta ID');
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await setDoc(doc(db, 'orders', id), {
-      ...data,
-      updatedAt: serverTimestamp(),
-      createdAt: data?.createdAt ?? serverTimestamp()
-    }, { merge: true });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-// Cambia status y sella timestamps típicos
-export async function setOrderStatus(id, status, extra = {}, opts = {}) {
-  const { training = false } = opts;
-  const s = String(status || '').toUpperCase();
-  const stampPatch = {
-    status: s,
-    updatedAt: serverTimestamp(),
-  };
-  if (s === 'IN_PROGRESS') stampPatch.startedAt = serverTimestamp(), stampPatch['timestamps.startedAt'] = serverTimestamp();
-  if (s === 'READY')       stampPatch.readyAt   = serverTimestamp(), stampPatch['timestamps.readyAt']   = serverTimestamp();
-  if (s === 'DELIVERED')   stampPatch.deliveredAt = serverTimestamp(), stampPatch['timestamps.deliveredAt'] = serverTimestamp();
-  if (s === 'DONE' || s === 'PAID') stampPatch.doneAt = serverTimestamp(), stampPatch['timestamps.doneAt'] = serverTimestamp();
-
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await updateDoc(doc(db, 'orders', id), { ...stampPatch, ...(extra||{}) });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-// Alias de compatibilidad
-export const setStatus = setOrderStatus;
-
-// Archiva pedidos entregados / cancelados (copia a orders_archive y borra original)
-export async function archiveDelivered(id, opts = {}) {
-  const { training = false } = opts;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = doc(db, 'orders', id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { ok: false, reason: 'not_found' };
-    const data = snap.data();
-    await setDoc(doc(db, 'orders_archive', id), { ...data, archivedAt: serverTimestamp() }, { merge: true });
-    try { await deleteDoc(ref); } catch {} // Puede fallar según reglas; dejamos copia en archive siempre
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-// Registro de métrica de preparación (local → opcional en DB)
-export async function logPrepMetric(metric, opts = {}) {
-  const { training = false } = opts;
-  const data = {
-    orderId: metric?.orderId || '',
-    createdAtLocal: Number(metric?.createdAtLocal || 0) || null,
-    readyAtLocal: Number(metric?.readyAtLocal || 0) || null,
-    source: String(metric?.source || 'track'),
-    loggedAt: serverTimestamp()
-  };
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await addDoc(collection(db, 'metrics_prep'), data);
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-/* =================== Reportes por rango =================== */
-export async function getOrdersRange({ from, to, includeArchive = false, orderType = null }) {
-  try {
-    const _from = toTs(from);
-    const _to = toTs(to);
-
-    const qMain = query(
-      collection(db, 'orders'),
-      where('createdAt', '>=', _from),
-      where('createdAt', '<=', _to),
-      orderBy('createdAt', 'asc')
-    );
-
-    const reads = [getDocs(qMain)];
-    if (includeArchive) {
-      const qArch = query(
-        collection(db, 'orders_archive'),
-        where('createdAt', '>=', _from),
-        where('createdAt', '<=', _to),
-        orderBy('createdAt', 'asc')
-      );
-      reads.push(getDocs(qArch));
+  function money(n){ return '$'+Number(n||0).toFixed(0); }
+  function calcTotal(o){
+    const items = Array.isArray(o.items) ? o.items : [];
+    let s=0; for (let i=0;i<items.length;i++){
+      const it=items[i];
+      const line = (typeof it.lineTotal==='number') ? Number(it.lineTotal||0) : (Number(it.unitPrice||0) * Number(it.qty||1));
+      s += line;
     }
-
-    const snaps = await Promise.all(reads);
-    let rows = snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })));
-
-    if (orderType && orderType !== 'all') {
-      rows = rows.filter(o =>
-        (o.orderType && o.orderType === orderType) ||
-        (o.orderMeta?.type && o.orderMeta.type === orderType)
-      );
-    }
-    return rows;
-  } catch (e) {
-    console.error('[getOrdersRange]', e);
-    return [];
+    return s + Number(o.tip||0);
   }
-}
-
-/* =================== Settings: Happy Hour / ETA / Theme =================== */
-export function subscribeHappyHour(cb) {
-  return onSnapshot(doc(db, 'settings', 'happyHour'), (d) => cb(d.data() ?? null));
-}
-
-export async function setHappyHour(payload, opts = {}) {
-  const { training = false } = opts;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const durationMin = Number(payload?.durationMin || 0);
-    const endsAtMs = payload?.enabled
-      ? (durationMin > 0 ? Date.now() + durationMin * 60000 : toMillisFlexible(payload?.endsAt))
-      : null;
-
-    const normalized = {
-      enabled: !!payload?.enabled,
-      discountPercent: Number(payload?.discountPercent || 0),
-      bannerText: String(payload?.bannerText || ''),
-      endsAt: endsAtMs,
-      durationMin: durationMin > 0 ? durationMin : null,
-      updatedAt: serverTimestamp(),
-    };
-    await setDoc(doc(db, 'settings', 'happyHour'), normalized, { merge: true });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-// ETA en settings/eta { text: "7–10 min" }
-export function subscribeETA(cb) {
-  return onSnapshot(doc(db, 'settings', 'eta'), (d) => {
-    const txt = d?.data()?.text;
-    cb(txt != null ? String(txt) : null);
-  });
-}
-
-export function subscribeTheme(cb) {
-  return onSnapshot(doc(db, 'settings', 'theme'), (d) => cb(d.data() ?? null));
-}
-
-// ⚠️ Compat: acepta string ("Base") o objeto ({ name, overrides })
-export async function setTheme(payload, opts = {}) {
-  const { training = false } = opts;
-  const name = (typeof payload === 'string') ? payload : payload?.name;
-  const overrides = (typeof payload === 'object' && payload && payload.overrides) ? payload.overrides : {};
-  if (!name) throw new Error('Theme name is required');
-
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await setDoc(
-      doc(db, 'settings', 'theme'),
-      { name, overrides, updatedAt: serverTimestamp() },
-      { merge: true }
-    );
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-/* =================== Inventario / Proveedores / Compras =================== */
-export function subscribeInventory(cb) {
-  const qy = query(collection(db, 'inventory'), orderBy('name', 'asc'));
-  return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-}
-
-export async function upsertInventoryItem(item, opts = {}) {
-  const { training = false } = opts;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = item?.id ? doc(db, 'inventory', item.id) : doc(collection(db, 'inventory'));
-    await setDoc(ref, { ...item, updatedAt: serverTimestamp() }, { merge: true });
-    return ref.id;
-  }, item?.id ?? `TRAIN-INV-${Date.now()}`);
-}
-
-export function subscribeSuppliers(cb) {
-  const qy = query(collection(db, 'suppliers'), orderBy('name', 'asc'));
-  return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-}
-
-export async function upsertSupplier(supp, opts = {}) {
-  const { training = false } = opts;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = supp?.id ? doc(db, 'suppliers', supp.id) : doc(collection(db, 'suppliers'));
-    await setDoc(ref, { ...supp, updatedAt: serverTimestamp() }, { merge: true });
-    return ref.id;
-  }, supp?.id ?? `TRAIN-SUP-${Date.now()}`);
-}
-
-// compra: registra purchase + recalcula stock y costo promedio
-export async function recordPurchase(purchase, opts = {}) {
-  const { training = false } = opts;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const { itemId, qty = 0, unitCost = 0 } = purchase || {};
-    await addDoc(collection(db, 'purchases'), { ...purchase, createdAt: serverTimestamp() });
-
-    if (itemId && qty > 0) {
-      const ref = doc(db, 'inventory', itemId);
-      const snap = await getDoc(ref);
-      const cur = snap.exists() ? Number(snap.data().currentStock || 0) : 0;
-      const prevCost = snap.exists() ? Number(snap.data().costAvg || 0) : 0;
-      const newStock = cur + Number(qty);
-      const newCost =
-        (prevCost > 0 && cur > 0) ? ((prevCost * cur + unitCost * qty) / newStock) : unitCost;
-      await setDoc(ref, { currentStock: newStock, costAvg: newCost, updatedAt: serverTimestamp() }, { merge: true });
-    }
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-export async function adjustStock(itemId, delta, reason = 'use', meta = {}, opts = {}) {
-  const { training = false } = opts;
-  if (!itemId || !Number.isFinite(delta)) return;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = doc(db, 'inventory', itemId);
-    await setDoc(ref, { currentStock: increment(Number(delta)), updatedAt: serverTimestamp() }, { merge: true });
-    await addDoc(collection(db, 'inventory_moves'), {
-      itemId, delta: Number(delta), reason, meta, createdAt: serverTimestamp()
-    });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-/**
- * Aplica consumo de inventario para una orden.
- * Compatibilidad con cocina/app.js (applyInventoryForOrderShim):
- * - Si los items incluyen un arreglo `consumes` con { itemId, qty }, descuenta.
- * - Si no hay `consumes`, no hace nada (no falla).
- * - Respeta opts.training para no escribir en PRUEBA.
- */
-export async function applyInventoryForOrder(order, opts = {}) {
-  const { training = false } = opts;
-  if (!order || !Array.isArray(order.items)) return { ok: true, noops: true };
-
-  // Junta consumos explícitos por item
-  const acc = new Map(); // itemId -> totalDelta
-  for (const it of order.items) {
-    const qty = Number(it?.qty || 1);
-    const consumes = Array.isArray(it?.consumes) ? it.consumes : [];
-    for (const c of consumes) {
-      const id = c?.itemId;
-      const per = Number(c?.qty || 0);
-      if (!id || !(per > 0)) continue;
-      const delta = -(per * qty); // consumir => negativo
-      acc.set(id, (acc.get(id) || 0) + delta);
-    }
+  function chip(txt){ return '<span class="chip">'+String(txt)+'</span>'; }
+  function toMs(t){
+    if (t==null) return 0;
+    if (typeof t==='number') return t;
+    if (t && typeof t.toMillis==='function') return t.toMillis();
+    if (t && typeof t.seconds==='number') return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
+    const ms = new Date(t).getTime(); return isFinite(ms)?ms:0;
   }
 
-  if (!acc.size) return { ok: true, noops: true };
-
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const batch = [];
-    for (const [itemId, delta] of acc.entries()) {
-      const ref = doc(db, 'inventory', itemId);
-      batch.push(setDoc(ref, { currentStock: increment(delta), updatedAt: serverTimestamp() }, { merge: true }));
-      batch.push(addDoc(collection(db, 'inventory_moves'), {
-        itemId, delta, reason: 'order_use', meta: { orderId: order.id || null }, createdAt: serverTimestamp()
-      }));
-    }
-    await Promise.all(batch);
-    return { ok: true, moved: acc.size };
-  }, { ok: true, _training: true });
-}
-
-/* =================== Recetas / Producción =================== */
-export function subscribeRecipes(cb) {
-  const qy = query(collection(db, 'recipes'), orderBy('name', 'asc'));
-  return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-}
-
-export async function produceBatch({ recipeId, outputQty }, opts = {}) {
-  const { training = false } = opts;
-  if (!recipeId || !(outputQty > 0)) throw new Error('Datos de producción inválidos');
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await addDoc(collection(db, 'productions'), { recipeId, outputQty, createdAt: serverTimestamp() });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-/* =================== Artículos (CRUD) =================== */
-export function subscribeArticles(cb) {
-  const qy = query(collection(db, 'articles'), orderBy('updatedAt', 'desc'), limit(100));
-  return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-}
-
-export async function upsertArticle(article, opts = {}) {
-  const { training = false } = opts;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = article?.id ? doc(db, 'articles', article.id) : doc(collection(db, 'articles'));
-    await setDoc(ref, {
-      ...article,
-      updatedAt: serverTimestamp(),
-      createdAt: article?.createdAt ?? serverTimestamp()
-    }, { merge: true });
-    return ref.id;
-  }, article?.id ?? `TRAIN-ART-${Date.now()}`);
-}
-
-// Borrado de artículos (hard delete con fallback a soft delete)
-export async function deleteArticle(id, opts = {}) {
-  const { training = false } = opts;
-  if (!id) throw new Error('deleteArticle: falta id');
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = doc(db, 'articles', id);
-    try {
-      await deleteDoc(ref);
-      return { ok: true, hardDelete: true };
-    } catch {
-      await setDoc(ref, { deleted: true, updatedAt: serverTimestamp() }, { merge: true });
-      return { ok: true, hardDelete: false, softDelete: true };
-    }
-  }, { ok: true, _training: true });
-}
-
-// Alias legacy
-export const removeArticle = deleteArticle;
-
-/* =================== Clientes / WhatsApp / Lealtad =================== */
-export async function fetchCustomer(phone) {
-  const clean = normPhone(phone);
-  if (!clean) return null;
-  try {
-    const snap = await getDoc(doc(db, 'customers', clean));
-    return snap.exists() ? { id: clean, ...snap.data() } : null;
-  } catch { return null; }
-}
-
-export async function upsertCustomerFromOrder(order, opts = {}) {
-  const { training = false } = opts;
-  const phone = normPhone(order?.phone || order?.orderMeta?.phone || '');
-  if (!phone) return null;
-  const data = {
-    name: order?.customer || '',
-    lastOrderId: order?.id || null,
-    updatedAt: serverTimestamp()
-  };
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await setDoc(doc(db, 'customers', phone), data, { merge: true });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-export async function attachLastOrderRef(phone, orderId, opts = {}) {
-  const { training = false } = opts;
-  const clean = normPhone(phone);
-  if (!clean || !orderId) return;
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await setDoc(doc(db, 'customers', clean), { lastOrderId: orderId, updatedAt: serverTimestamp() }, { merge: true });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-// Perfil extendido para lealtad
-export async function upsertCustomerProfile({ phone, name, birthday = null, prefs = {} }, opts = {}) {
-  const { training = false } = opts;
-  const clean = normPhone(phone);
-  if (!clean) throw new Error('phone requerido');
-  const payload = {
-    name: name || '',
-    birthday: birthday || null,
-    prefs: prefs || {},
-    updatedAt: serverTimestamp()
-  };
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await setDoc(doc(db, 'customers', clean), payload, { merge: true });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
-
-// Guarda tarjeta coleccionable
-export async function saveCollectibleCard(card, opts = {}) {
-  const { training = false } = opts;
-  const clean = normPhone(card?.phone || '');
-  if (!clean) throw new Error('phone requerido');
-  const payload = {
-    owner: clean,
-    orderId: card?.orderId || null,
-    rarity: card?.rarity || 'Común',
-    title: card?.title || '',
-    name: card?.name || card?.meta?.name || '',
-    theme: card?.theme || card?.meta?.theme || 'default',
-    palette: card?.palette || card?.meta?.palette || [],
-    createdAt: serverTimestamp()
-  };
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = await addDoc(collection(db, 'collectibles'), payload);
-    return ref.id;
-  }, `TRAIN-COLL-${Date.now()}`);
-}
-
-// Crea cupón de descuento
-export async function createVoucher({ phone, pct = 30, kind = 'golden_card', expiresAt }, opts = {}) {
-  const { training = false } = opts;
-  const clean = normPhone(phone);
-  if (!clean) throw new Error('phone requerido');
-  const code = `SV${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const payload = {
-    phone: clean, code, pct: Number(pct || 0),
-    kind, expiresAt: Number(expiresAt || 0) || null,
-    createdAt: serverTimestamp(), redeemedAt: null
-  };
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    const ref = await addDoc(collection(db, 'vouchers'), payload);
-    return { code, id: ref.id };
-  }, { code, id: `TRAIN-VCH-${Date.now()}` });
-}
-
-// Bandeja de salida (WA) — el worker externo lo enviará
-export async function sendWhatsAppMessage({ to, text, meta = {} }, opts = {}) {
-  const { training = false } = opts;
-  if (!to || !text) return { ok: false, reason: 'missing_fields' };
-  return guardWrite(training, async () => {
-    await ensureAuth();
-    await addDoc(collection(db, 'outbox_whatsapp'), {
-      to, text, meta, createdAt: serverTimestamp(), status: 'queued'
+  function render(list){
+    const by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
+    (list||[]).forEach(o=>{
+      const s = String(o.status||'PENDING').toUpperCase();
+      if (s==='DELIVERED' && !o.paid) by.BILL.push(o);
+      else if (by[s]) by[s].push(o);
+      else by.PENDING.push(o);
     });
-    return { ok: true };
-  }, { ok: true, _training: true });
-}
 
-/* =================== Exports auxiliares =================== */
-export function subscribeSettings(cb) {
-  return onSnapshot(doc(db, 'settings', 'app'), (d) => cb(d.data() ?? {}));
-}
+    for (const k in by){
+      const cont = k==='BILL' ? COLS.BILL : COLS[k];
+      if (!cont) continue;
+      cont.innerHTML = by[k].length ? by[k].map(renderCard).join('') : '<div class="empty">—</div>';
+    }
+
+    // bind acciones
+    Array.prototype.forEach.call(document.querySelectorAll('[data-id][data-a]'), btn=>{
+      btn.onclick = () => doAction(btn.getAttribute('data-id'), btn.getAttribute('data-a'));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-id][data-charge]'), btn=>{
+      btn.onclick = () => doCharge(btn.getAttribute('data-id'));
+    });
+  }
+
+  function renderCard(o){
+    const total = money(calcTotal(o));
+    const meta  = o.orderType==='dinein' ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
+    const track = `<a class="track" href="../track/?id=${encodeURIComponent(o.id)}" target="_blank" rel="noopener">Ver en Track</a>`;
+
+    const items = Array.isArray(o.items) ? o.items : [];
+    let lines = '';
+    for (let i=0;i<items.length;i++){
+      const it = items[i];
+      const bi = Array.isArray(it.baseIngredients) ? it.baseIngredients : [];
+      const sauces = (it.extras && Array.isArray(it.extras.sauces)) ? it.extras.sauces : [];
+      const ingr   = (it.extras && Array.isArray(it.extras.ingredients)) ? it.extras.ingredients : [];
+      const dlc    = it.extras && it.extras.dlcCarne ? ['DLC carne 85g'] : [];
+      const salsa  = it.salsaCambiada ? ('Salsa: '+it.salsaCambiada+' (cambio)') : (it.salsaDefault ? ('Salsa: '+it.salsaDefault) : '');
+      const chips  = []
+        .concat(bi)
+        .concat(sauces.map(s => 'Aderezo: '+s))
+        .concat(ingr.map(x => 'Extra: '+x))
+        .concat(dlc);
+      lines += `
+        <div class="muted">${(it.qty||1)}× ${it.name||'Producto'}</div>
+        ${salsa ? `<div class="muted">${salsa}</div>` : ``}
+        <div class="chips">${chips.map(chip).join('')}</div>
+        ${it.notes ? `<div class="muted">Notas: ${it.notes}</div>` : ``}
+      `;
+    }
+
+    const s = String(o.status||'PENDING').toUpperCase();
+    const btns =
+      (s==='PENDING')      ? `<button class="btn" data-a="IN_PROGRESS" data-id="${o.id}">Tomar</button>` :
+      (s==='IN_PROGRESS')  ? `<button class="btn ok" data-a="READY" data-id="${o.id}">Listo</button>` :
+      (s==='READY')        ? `<button class="btn" data-a="DELIVERED" data-id="${o.id}">Entregar</button>` :
+      (s==='DELIVERED' && !o.paid) ? `<button class="btn ok" data-charge data-id="${o.id}">Cobrar</button>` : ``;
+
+    return `
+      <div class="ord">
+        <div><b>${o.customer||'-'}</b> · <span class="muted">${meta}</span> · ${track}</div>
+        <div class="muted">Total: <b>${total}</b> ${o.paid ? '· <span class="chip">Pagado</span>' : ''}</div>
+        ${o.notes ? `<div class="muted"><b>Notas generales:</b> ${o.notes}</div>` : ``}
+        ${lines}
+        <div class="row" style="margin-top:6px">${btns}</div>
+      </div>
+    `;
+  }
+
+  // === RTDB Live ===
+  db.ref('kitchen/orders').on('value', snap=>{
+    const val = snap.val() || {};
+    const list = Object.keys(val).map(id => Object.assign({ id }, val[id]));
+    // ordenar por createdAt robusto
+    list.sort((a,b)=> toMs(a.createdAt) - toMs(b.createdAt));
+    render(list);
+  });
+
+  // === Acciones (opcional) ===
+  function doAction(id, action){
+    if (!ENDPOINT_STATUS || !SECRET){ alert('Configura ENDPOINT_STATUS y SECRET'); return; }
+    fetch(ENDPOINT_STATUS, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ id, action, secret: SECRET })
+    }).then(r=>r.json()).then(j=>{
+      if (!j.ok) alert('Error: '+(j.error||''));
+      // el mirror refresca solo
+    }).catch(()=> alert('Error de red'));
+  }
+
+  function doCharge(id){
+    if (!ENDPOINT_CHARGE || !SECRET){ alert('Configura ENDPOINT_CHARGE y SECRET'); return; }
+    const method = prompt('Método (efectivo / tarjeta / transferencia):','efectivo');
+    if (method===null) return;
+    fetch(ENDPOINT_CHARGE, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ id, method, secret: SECRET })
+    }).then(r=>r.json()).then(j=>{
+      if (!j.ok) alert('Error: '+(j.error||''));
+    }).catch(()=> alert('Error de red'));
+  }
+</script>
+</body>
+</html>
