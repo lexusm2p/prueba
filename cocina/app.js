@@ -5,6 +5,7 @@
 
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
+import { ensureAuth } from '../shared/firebase.js';
 
 /* ================== Modo PRUEBA ================== */
 function isTraining(){ return sessionStorage.getItem('training') === '1'; }
@@ -135,18 +136,25 @@ function extractTimestamps(patch){
   return t;
 }
 
-/* ================== Data stream ================== */
+/* ================== Data stream (auth + subscribe) ================== */
 let __streamLocked = false;
-const unsub = subscribeKitchenShim((orders = [])=>{
-  if (__streamLocked) return;
-  __streamLocked = true;
-  try {
-    CURRENT_LIST = mergeByNewest(orders);
-    render(CURRENT_LIST);
-  } finally {
-    queueMicrotask(()=>{ __streamLocked = false; });
-  }
-});
+let unsub = null;
+
+async function initKitchen(){
+  try { await ensureAuth(); } catch(e){ console.warn('[cocina] anon auth fail', e); }
+  unsub = subscribeKitchenShim((orders = [])=>{
+    if (__streamLocked) return;
+    __streamLocked = true;
+    try {
+      CURRENT_LIST = mergeByNewest(orders);
+      render(CURRENT_LIST);
+    } finally {
+      queueMicrotask(()=>{ __streamLocked = false; });
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initKitchen);
 
 /* ================== Totales ================== */
 function calcSubtotal(o={}){
@@ -269,12 +277,13 @@ function renderCard(o={}){
 </article>`;
 }
 
-/* ================== Actions (optimistas) ================== */
+/* ================== Actions (optimistas + no escribe en PRUEBA) ================== */
 document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-a]'); if(!btn) return;
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
   const a = btn.dataset.a;
-  const OPTS = { training: isTraining() };
+  const TRAIN = isTraining();
+  const OPTS = { training: TRAIN };
 
   btn.disabled = true;
   try{
@@ -283,33 +292,39 @@ document.addEventListener('click', async (e)=>{
       btn.textContent = 'Tomando…';
 
       const order = CURRENT_LIST.find(x=>x.id===id);
-      if(order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
+      if(!TRAIN && order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
 
       // Optimista
       patchLocal(id, { status: Status.IN_PROGRESS, startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
 
-      await setStatusShim(id, Status.IN_PROGRESS, OPTS);
-      await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-      beep(); toast('En preparación');
+      if (!TRAIN) {
+        await setStatusShim(id, Status.IN_PROGRESS, OPTS);
+        await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+      }
+      beep(); toast('En preparación' + (TRAIN ? ' (PRUEBA)' : ''));
       return;
     }
 
     if (a==='ready'){
       patchLocal(id, { status: Status.READY, readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
-      await setStatusShim(id, Status.READY, OPTS);
-      await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-      beep(); toast('Listo 🛎️');
+      if (!TRAIN) {
+        await setStatusShim(id, Status.READY, OPTS);
+        await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+      }
+      beep(); toast('Listo 🛎️' + (TRAIN ? ' (PRUEBA)' : ''));
       return;
     }
 
     if (a==='deliver'){
       patchLocal(id, { status: Status.DELIVERED, deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
-      await setStatusShim(id, Status.DELIVERED, OPTS);
-      await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-      beep(); toast('Entregado ✔️ · por cobrar');
+      if (!TRAIN) {
+        await setStatusShim(id, Status.DELIVERED, OPTS);
+        await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+      }
+      beep(); toast('Entregado ✔️ · por cobrar' + (TRAIN ? ' (PRUEBA)' : ''));
       return;
     }
 
@@ -323,16 +338,18 @@ document.addEventListener('click', async (e)=>{
       patchLocal(id, { paid: true, paidAt: now(), payMethod, totalCharged: Number(total), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
 
-      await updateOrderShim(id, {
-        paid: true,
-        paidAt: now(),
-        payMethod,
-        totalCharged: Number(total),
-        updatedAt: now(), 'timestamps.updatedAt': now()
-      }, OPTS);
+      if (!TRAIN) {
+        await updateOrderShim(id, {
+          paid: true,
+          paidAt: now(),
+          payMethod,
+          totalCharged: Number(total),
+          updatedAt: now(), 'timestamps.updatedAt': now()
+        }, OPTS);
 
-      await archiveDeliveredShim(id, Status.DONE, OPTS);
-      beep(); toast('Cobro registrado' + (isTraining() ? ' (PRUEBA)' : ''));
+        await archiveDeliveredShim(id, Status.DONE, OPTS);
+      }
+      beep(); toast('Cobro registrado' + (TRAIN ? ' (PRUEBA)' : ''));
       card.remove();
       return;
     }
@@ -343,8 +360,10 @@ document.addEventListener('click', async (e)=>{
       if (notes!==null){
         patchLocal(id, { notes, updatedAt: now(), 'timestamps.updatedAt': now() });
         render(CURRENT_LIST);
-        await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-        toast('Notas actualizadas' + (isTraining() ? ' (PRUEBA)' : ''));
+        if (!TRAIN) {
+          await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+        }
+        toast('Notas actualizadas' + (TRAIN ? ' (PRUEBA)' : ''));
       }
       return;
     }
@@ -361,16 +380,18 @@ document.addEventListener('click', async (e)=>{
       patchLocal(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
 
-      await updateOrderShim(id, {
-        status: Status.CANCELLED,
-        cancelReason: trimmed,
-        cancelledAt: now(),
-        cancelledBy: 'kitchen',
-        updatedAt: now(), 'timestamps.updatedAt': now()
-      }, OPTS);
+      if (!TRAIN) {
+        await updateOrderShim(id, {
+          status: Status.CANCELLED,
+          cancelReason: trimmed,
+          cancelledAt: now(),
+          cancelledBy: 'kitchen',
+          updatedAt: now(), 'timestamps.updatedAt': now()
+        }, OPTS);
 
-      await archiveDeliveredShim(id, Status.DONE, OPTS);
-      beep(); toast('Pedido eliminado' + (isTraining() ? ' (PRUEBA)' : ''));
+        await archiveDeliveredShim(id, Status.DONE, OPTS);
+      }
+      beep(); toast('Pedido eliminado' + (TRAIN ? ' (PRUEBA)' : ''));
       card.remove();
       return;
     }
