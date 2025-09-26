@@ -3,24 +3,25 @@
 
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
+import { ensureAuth } from '../shared/firebase.js';
 
-const $ = (sel, root=document)=> root.querySelector(sel);
+const $  = (sel, root=document)=> root.querySelector(sel);
 const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
 
 /* ================= Tabs ================= */
 const tabs = $('#admTabs');
 const panels = {
-  reportes: $('#panel-reportes'),
-  hist:     $('#panel-hist'),
-  cobros:   $('#panel-cobros'),
-  compras:  $('#panel-compras'),
+  reportes:   $('#panel-reportes'),
+  hist:       $('#panel-hist'),
+  cobros:     $('#panel-cobros'),
+  compras:    $('#panel-compras'),
   inventario: $('#panel-inventario'),
-  proveedores: $('#panel-proveedores'),
-  productos: $('#panel-productos'),
-  temas: $('#panel-temas'),
-  happy: $('#panel-happy'),
-  recetas: $('#panel-recetas'),
-  articulos: $('#panel-articulos'),
+  proveedores:$('#panel-proveedores'),
+  productos:  $('#panel-productos'),
+  temas:      $('#panel-temas'),
+  happy:      $('#panel-happy'),
+  recetas:    $('#panel-recetas'),
+  articulos:  $('#panel-articulos'),
 };
 
 tabs?.addEventListener('click', e=>{
@@ -28,12 +29,11 @@ tabs?.addEventListener('click', e=>{
   if(!btn) return;
   const name = btn.dataset.tab;
   $$('.tabs-admin .tab').forEach(b=>{
-    b.classList.toggle('is-active', b.dataset.tab===name);
-    b.setAttribute('aria-selected', String(b.dataset.tab===name));
+    const on = b.dataset.tab===name;
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-selected', String(on));
   });
-  Object.entries(panels).forEach(([k,el])=>{
-    el?.classList.toggle('active', k===name);
-  });
+  Object.entries(panels).forEach(([k,el])=> el?.classList.toggle('active', k===name));
 });
 
 /* ============== Utilitarios ============== */
@@ -55,6 +55,88 @@ const download = (filename, text)=>{
   document.body.appendChild(a); a.click(); a.remove();
 };
 
+/* ============== SHIMS DB ============== */
+const dbShim = {
+  // listados/rangos
+  async getOrdersRange({ from, to, includeArchive, orderType }){
+    if (typeof DB.getOrdersRange === 'function') return DB.getOrdersRange({ from, to, includeArchive, orderType });
+    if (typeof DB.listOrdersRange === 'function') return DB.listOrdersRange({ from, to, includeArchive, orderType });
+    // último recurso: traer activos + archivados si existen
+    const act = (await DB.subscribeActiveOrders?.(x=>x) || []) || [];
+    const arc = (includeArchive && typeof DB.listArchivedOrders==='function')
+      ? (await DB.listArchivedOrders({ from, to })) : [];
+    return [...act, ...arc].filter(o=>{
+      const ms = toMs(o.createdAt||o.timestamps?.createdAt);
+      const inRange = (!from || ms>=+from) && (!to || ms<=+to);
+      const typeOk = (orderType==='all') || ((o.orderMeta?.type||o.orderType||'').toLowerCase()===orderType);
+      return inRange && typeOk;
+    });
+  },
+
+  // inventario: compras (+costo promedio)
+  async adjustInventory({ itemId, name, deltaQty, unit, unitCost }){
+    if (typeof DB.adjustInventory === 'function') {
+      return DB.adjustInventory({ itemId, name, deltaQty, unit, unitCost });
+    }
+    if (typeof DB.applyPurchaseToInventory === 'function') {
+      return DB.applyPurchaseToInventory({ itemId, name, qty: deltaQty, unit, unitCost });
+    }
+    if (typeof DB.upsertInventoryItem === 'function') {
+      let current = null;
+      try { if (typeof DB.getInventoryItem === 'function') current = await DB.getInventoryItem(itemId || name); } catch {}
+      const prevQty  = Number(current?.currentStock || 0);
+      const prevCost = Number(current?.costAvg || 0);
+      const newQty   = prevQty + Number(deltaQty||0);
+      const costAvg  = (newQty>0)
+        ? ((prevQty*prevCost + Number(deltaQty||0)*Number(unitCost||0)) / newQty)
+        : prevCost;
+      return DB.upsertInventoryItem({
+        id: current?.id || itemId || name,
+        name: name || current?.name || itemId || 'Item',
+        unit: unit || current?.unit || 'u',
+        currentStock: newQty,
+        costAvg: costAvg
+      });
+    }
+    console.warn('[admin] No hay método para ajustar inventario');
+  },
+
+  // inventario: consumo por pedido (usa recetas/BOM del backend)
+  async consumeForOrder(order, opts={}){
+    // Preferencia 1: método dedicado con idempotencia por orderId
+    if (typeof DB.consumeInventoryForOrder === 'function') {
+      return DB.consumeInventoryForOrder(order, opts);
+    }
+    // Compat con cocina
+    if (typeof DB.applyInventoryForOrder === 'function') {
+      return DB.applyInventoryForOrder(order, opts);
+    }
+    // Último recurso: si exponen consumir ítem a ítem
+    if (Array.isArray(order?.items) && typeof DB.consumeInventoryItem === 'function'){
+      for (const it of order.items){
+        try {
+          await DB.consumeInventoryItem({ productId: it.id, qty: it.qty||1, orderId: order.id, ...opts });
+        } catch(e){ console.warn('consumeInventoryItem fail', it?.id, e); }
+      }
+      return;
+    }
+    console.warn('[admin] No hay método de consumo; noop');
+  },
+
+  async setInitialStock({ name, qty, unit }){
+    if (typeof DB.setInitialStock === 'function') {
+      return DB.setInitialStock({ name, qty, unit });
+    }
+    if (typeof DB.upsertInventoryItem === 'function') {
+      return DB.upsertInventoryItem({
+        id: name, name, unit: unit || 'u', currentStock: Number(qty||0),
+        costAvg: 0
+      });
+    }
+    console.warn('[admin] No hay método para setInitialStock; noop');
+  }
+};
+
 /* ============== REPORTES ============== */
 $('#btnRepGen')?.addEventListener('click', async ()=>{
   try{
@@ -63,7 +145,7 @@ $('#btnRepGen')?.addEventListener('click', async ()=>{
     const type = $('#repType')?.value || 'all';
     const includeArchive = ($('#repHist')?.value||'Sí') === 'Sí';
 
-    const rows = await DB.getOrdersRange({ from, to, includeArchive, orderType:type });
+    const rows = await dbShim.getOrdersRange({ from, to, includeArchive, orderType:type });
 
     // KPIs
     const ordersCount = rows.length;
@@ -114,7 +196,9 @@ $('#btnRepGen')?.addEventListener('click', async ()=>{
 });
 function fillTable(tbody, rows){
   if (!tbody) return;
-  tbody.innerHTML = rows.length ? rows.map(tr=>`<tr>${tr.map(td=>`<td>${td}</td>`).join('')}</tr>`).join('') : '<tr><td colspan="9">—</td></tr>';
+  tbody.innerHTML = rows.length
+    ? rows.map(tr=>`<tr>${tr.map(td=>`<td>${td}</td>`).join('')}</tr>`).join('')
+    : '<tr><td colspan="9">—</td></tr>';
 }
 function calcTotal(o={}){
   const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) :
@@ -134,7 +218,7 @@ async function loadHist(){
   const q    = ($('#histSearch')?.value||'').trim().toLowerCase();
   const limitN = Number($('#histLimit')?.value||50);
 
-  const rowsAll = await DB.getOrdersRange({ from, to, includeArchive:true, orderType:type });
+  const rowsAll = await dbShim.getOrdersRange({ from, to, includeArchive:true, orderType:type });
   let rows = rowsAll;
   if (q){
     rows = rows.filter(o=>{
@@ -157,14 +241,30 @@ async function loadHist(){
       <td>${st}</td>
       <td class="right">
         <button class="btn small ghost" data-a="open" data-id="${o.id}">Ver</button>
+        <button class="btn small" data-a="consume" data-id="${o.id}">Consumo</button>
       </td>
     </tr>`;
   }).join('') : '<tr><td colspan="7">—</td></tr>';
 
-  tb.onclick = (e)=>{
-    const btn = e.target.closest('button[data-a="open"]'); if(!btn) return;
-    const id = btn.dataset.id;
-    window.open(`../track/?id=${encodeURIComponent(id)}`,'_blank');
+  tb.onclick = async (e)=>{
+    const open = e.target.closest('button[data-a="open"]');
+    const consume = e.target.closest('button[data-a="consume"]');
+    if (open){
+      const id = open.dataset.id;
+      window.open(`../track/?id=${encodeURIComponent(id)}`,'_blank');
+      return;
+    }
+    if (consume){
+      const id = consume.dataset.id;
+      consume.disabled = true;
+      try{
+        const order = rows.find(x=> x.id===id);
+        if (!order) { toast('Pedido no encontrado'); return; }
+        await dbShim.consumeForOrder({ ...order, id }, { replay:true, source:'admin' });
+        toast('Consumo reaplicado');
+      }catch(err){ console.error(err); toast('Error al consumir'); }
+      finally{ consume.disabled=false; }
+    }
   };
 
   toast('Historial cargado');
@@ -221,7 +321,7 @@ function startCobros(){
       const method = prompt('Método (efectivo/tarjeta/transferencia):','efectivo');
       if (method==null) return;
       await DB.updateOrder(id, { paid:true, paidAt: new Date(), payMethod: method, totalCharged: null });
-      await DB.setOrderStatus(id, 'DONE', {});
+      await (DB.setOrderStatus ? DB.setOrderStatus(id, 'DONE', {}) : DB.setStatus?.(id, 'DONE', {}));
       toast('Cobro registrado');
     }catch(err){
       console.error(err); toast('Error al cobrar');
@@ -230,25 +330,44 @@ function startCobros(){
 }
 
 /* ============== COMPRAS ============== */
-$('#btnAddPurchase')?.addEventListener('click', async ()=>{
+$('#btnAddPurchase')?.addEventListener('click', onRegisterPurchase);
+async function onRegisterPurchase(){
   try{
     const name = $('#pName')?.value?.trim();
     const qty  = Number($('#pQty')?.value||0);
     const cost = Number($('#pCost')?.value||0);
     const vendor = $('#pVendor')?.value?.trim();
+    const unit = $('#pUnit')?.value?.trim() || 'u';
     if (!name || !(qty>0)) { toast('Completa nombre y cantidad'); return; }
-    const purchase = { name, qty, totalCost: cost, vendor };
-    await DB.recordPurchase({ itemId: name, qty, unitCost: (qty>0? (cost/qty) : 0), vendor, name });
-    toast('Compra registrada');
+
+    // Registrar compra (bitácora)
+    if (typeof DB.recordPurchase === 'function') {
+      await DB.recordPurchase({ itemId: name, qty, unitCost: (qty>0? (cost/qty) : 0), vendor, name, totalCost: cost });
+    } else if (typeof DB.upsertPurchase === 'function') {
+      await DB.upsertPurchase({ itemId: name, qty, unitCost: (qty>0? (cost/qty) : 0), vendor, name, totalCost: cost, createdAt: Date.now() });
+    }
+
+    // Aplicar al inventario (stock y costo promedio)
+    await dbShim.adjustInventory({
+      itemId: name, name, deltaQty: qty, unit, unitCost: (qty>0? (cost/qty) : 0)
+    });
+
+    toast('Compra registrada y aplicada a inventario');
     $('#pName').value=''; $('#pQty').value=''; $('#pCost').value=''; $('#pVendor').value='';
-  }catch(e){ console.error(e); toast('Error al registrar compra'); }
-});
+  }catch(e){
+    console.error(e);
+    toast('Error al registrar compra');
+  }
+}
 
 /* ============== INVENTARIO ============== */
 let INV_CACHE = [];
 function renderInv(){
   const q = ($('#invSearch')?.value||'').toLowerCase();
-  const list = INV_CACHE.filter(x=> !q || String(x.name||'').toLowerCase().includes(q));
+  const list = INV_CACHE.filter(x=>{
+    const n = String(x.name||'').toLowerCase();
+    return !q || n.includes(q);
+  });
   fillTable($('#tblInv tbody'), list.map(it=>{
     const val = Number(it.currentStock||0) * Number(it.costAvg||0);
     return [it.name||'-', Number(it.currentStock||0), it.unit||'-', money(it.costAvg||0), money(val)];
@@ -256,7 +375,56 @@ function renderInv(){
 }
 $('#btnInvRefresh')?.addEventListener('click', ()=> renderInv());
 $('#invSearch')?.addEventListener('input', ()=> renderInv());
-DB.subscribeInventory(list=>{ INV_CACHE = list||[]; renderInv(); });
+
+// Suscripción inventario
+if (typeof DB.subscribeInventory === 'function') {
+  DB.subscribeInventory(list=>{ INV_CACHE = list||[]; renderInv(); });
+} else if (typeof DB.listInventory === 'function') {
+  DB.listInventory().then(list=>{ INV_CACHE = list||[]; renderInv(); }).catch(()=>{});
+}
+
+// Stock inicial (opcional)
+$('#btnInvInitSet')?.addEventListener('click', async ()=>{
+  const name = $('#invInitName')?.value?.trim();
+  const qty  = Number($('#invInitQty')?.value||0);
+  const unit = $('#invInitUnit')?.value?.trim() || 'u';
+  if (!name) { toast('Nombre requerido'); return; }
+  try{
+    await dbShim.setInitialStock({ name, qty, unit });
+    toast('Stock inicial establecido');
+    $('#invInitName').value=''; $('#invInitQty').value=''; $('#invInitUnit').value='';
+  }catch(e){
+    console.error(e); toast('Error al fijar stock inicial');
+  }
+});
+
+// Recalcular consumo (hoy / rango) — opcional si agregas botones en HTML
+$('#btnInvRecalcToday')?.addEventListener('click', async ()=>{
+  const from = new Date(new Date().setHours(0,0,0,0));
+  const to   = new Date();
+  await replayConsumption({ from, to });
+});
+$('#btnInvRecalcRange')?.addEventListener('click', async ()=>{
+  const from = $('#repFrom')?.valueAsDate || new Date(new Date().setHours(0,0,0,0));
+  const to   = $('#repTo')?.valueAsDate   || new Date();
+  await replayConsumption({ from, to });
+});
+async function replayConsumption({ from, to }){
+  try{
+    const rows = await dbShim.getOrdersRange({ from, to, includeArchive:true, orderType:'all' });
+    // Filtra estados “preparados” — tu backend idealmente maneja idempotencia por orderId
+    const okStatuses = new Set(['IN_PROGRESS','READY','DELIVERED','DONE','PAID']);
+    const batch = rows.filter(o=> okStatuses.has(String(o.status||'').toUpperCase()));
+    let n=0;
+    for (const o of batch){
+      try { await dbShim.consumeForOrder({ ...o, id:o.id }, { replay:true, source:'admin-replay' }); n++; }
+      catch(e){ console.warn('consume replay fail', o.id, e); }
+    }
+    toast(`Consumo recalculado: ${n} pedidos`);
+  }catch(e){
+    console.error(e); toast('Error al recalcular consumo');
+  }
+}
 
 /* ============== PROVEEDORES ============== */
 $('#btnSaveVendor')?.addEventListener('click', async ()=>{
@@ -264,13 +432,18 @@ $('#btnSaveVendor')?.addEventListener('click', async ()=>{
     const name = $('#vName')?.value?.trim();
     const contact = $('#vContact')?.value?.trim();
     if (!name){ toast('Completa el nombre'); return; }
-    await DB.upsertSupplier({ name, contact, active:true });
+    const upsert = DB.upsertSupplier || DB.upsertVendor || DB.saveSupplier;
+    if (typeof upsert === 'function') {
+      await upsert({ name, contact, active:true });
+    }
     toast('Proveedor guardado'); $('#vName').value=''; $('#vContact').value='';
   }catch(e){ console.error(e); toast('Error al guardar proveedor'); }
 });
-DB.subscribeSuppliers(list=>{
-  fillTable($('#tblVendors tbody'), (list||[]).map(v=>[v.name||'-', v.contact||'-', v.id||'-']));
-});
+if (typeof DB.subscribeSuppliers === 'function'){
+  DB.subscribeSuppliers(list=>{
+    fillTable($('#tblVendors tbody'), (list||[]).map(v=>[v.name||'-', v.contact||'-', v.id||'-']));
+  });
+}
 
 /* ============== PRODUCTOS (sólo lectura por ahora) ============== */
 $('#btnReloadCatalog')?.addEventListener('click', async ()=>{
@@ -278,33 +451,38 @@ $('#btnReloadCatalog')?.addEventListener('click', async ()=>{
   const count = ['burgers','minis','drinks','sides'].reduce((s,k)=> s + (Array.isArray(cat[k])?cat[k].length:0), 0);
   toast(`Catálogo refrescado (${count} items)`);
 });
-DB.subscribeProducts(items=>{
-  fillTable($('#tblProducts tbody'), (items||[]).map(p=>[
-    p.name||'-', p.type||'-', money(p.price||0),
-    p.active? '<span class="k-badge ok">Sí</span>':'<span class="k-badge warn">No</span>',
-    p.id||'-'
-  ]));
-});
+if (typeof DB.subscribeProducts === 'function'){
+  DB.subscribeProducts(items=>{
+    fillTable($('#tblProducts tbody'), (items||[]).map(p=>[
+      p.name||'-', p.type||'-', money(p.price||0),
+      p.active? '<span class="k-badge ok">Sí</span>':'<span class="k-badge warn">No</span>',
+      p.id||'-'
+    ]));
+  });
+}
 
-/* ============== RECETAS (sólo lectura + modal WIP) ============== */
+/* ============== RECETAS (sólo lectura + modal) ============== */
 let RECIPES = [];
-DB.subscribeRecipes(list=>{
-  RECIPES = list||[];
-  fillTable($('#tblRecipes tbody'), RECIPES.map(r=>[
-    r.name||'-', (r.baseYieldMl||0)+' ml', r.outputName||'-', (Array.isArray(r.ingredients)?r.ingredients.length:0),
-    `<button class="btn small ghost" data-a="open" data-id="${r.id}">Ver</button>`
-  ]));
-});
+if (typeof DB.subscribeRecipes === 'function'){
+  DB.subscribeRecipes(list=>{
+    RECIPES = list||[];
+    fillTable($('#tblRecipes tbody'), RECIPES.map(r=>[
+      r.name||'-', (r.baseYieldMl||0)+' ml', r.outputName||'-', (Array.isArray(r.ingredients)?r.ingredients.length:0),
+      `<button class="btn small ghost" data-a="open" data-id="${r.id}">Ver</button>`
+    ]));
+  });
+}
 $('#tblRecipes tbody')?.addEventListener('click', e=>{
   const btn = e.target.closest('button[data-a="open"]'); if(!btn) return;
   const rec = RECIPES.find(x=> x.id===btn.dataset.id); if(!rec) return;
   const modal = $('#rcpModal'); const body = $('#rcpBody'); const title = $('#rcpTitle');
+  if (!modal) return;
   title.textContent = rec.name || 'Receta';
   body.innerHTML = `<div class="muted small">Rinde base: ${rec.baseYieldMl||0} ml</div>` +
     `<ul>${(rec.ingredients||[]).map(i=>`<li>${i.qty||''} ${i.unit||''} — ${i.name||''}</li>`).join('')}</ul>`;
   modal.style.display='grid';
 });
-$('#rcpClose')?.addEventListener('click', ()=> { $('#rcpModal').style.display='none'; });
+$('#rcpClose')?.addEventListener('click', ()=> { const m=$('#rcpModal'); if(m) m.style.display='none'; });
 
 /* ============== ARTÍCULOS (CRUD básico) ============== */
 let ART_CACHE = [];
@@ -312,6 +490,7 @@ function renderArt(){
   const q = ($('#artSearch')?.value||'').toLowerCase();
   const rows = ART_CACHE.filter(a=> !q || String(a.name||'').toLowerCase().includes(q) || String(a.desc||'').toLowerCase().includes(q));
   const tb = $('#tblArticulos tbody');
+  if (!tb) return;
   tb.innerHTML = rows.length ? rows.map(a=>`
     <tr>
       <td class="break">${a.name||'-'}</td>
@@ -323,7 +502,9 @@ function renderArt(){
       </td>
     </tr>`).join('') : '<tr><td colspan="4">—</td></tr>';
 }
-DB.subscribeArticles(list=>{ ART_CACHE = list||[]; renderArt(); });
+if (typeof DB.subscribeArticles === 'function'){
+  DB.subscribeArticles(list=>{ ART_CACHE = list||[]; renderArt(); });
+}
 $('#artSearch')?.addEventListener('input', renderArt);
 $('#btnAddArticulo')?.addEventListener('click', ()=> openArticleModal());
 $('#tblArticulos tbody')?.addEventListener('click', (e)=>{
@@ -338,7 +519,8 @@ async function deleteArticle(id){
   if (!id) return;
   if (!confirm('¿Eliminar artículo?')) return;
   try{
-    await DB.deleteArticle(id);
+    const del = DB.deleteArticle || DB.removeArticle;
+    if (typeof del === 'function') await del(id);
     toast('Artículo eliminado');
   }catch(e){ console.error(e); toast('Error al eliminar'); }
 }
@@ -374,8 +556,10 @@ function openArticleModal(a={}){
       const desc = $('#artDesc', modal).value.trim();
       if(!name){ toast('Nombre requerido'); return; }
       try{
-        const payload = { id: a?.id, name, price, active, desc };
-        await DB.upsertArticle(payload);
+        const upsert = DB.upsertArticle || DB.saveArticle;
+        if (typeof upsert === 'function') {
+          await upsert({ id: a?.id, name, price, active, desc });
+        }
         toast('Artículo guardado');
         modal.remove();
       }catch(err){ console.error(err); toast('Error al guardar'); }
@@ -384,35 +568,70 @@ function openArticleModal(a={}){
 }
 
 /* ======== HAPPY HOUR (vinculado a DB) ======== */
+function populateHappyForm(hh){
+  if (!hh) return;
+  if ($('#hhEnabled')) $('#hhEnabled').value = hh.enabled ? 'on' : 'off';
+  if ($('#hhDisc'))    $('#hhDisc').value    = Number(hh.discountPercent||0);
+  if ($('#hhMsg'))     $('#hhMsg').value     = hh.bannerText || '';
+  if ($('#hhDurMin'))  $('#hhDurMin').value  = Number(hh.durationMin||0) || '';
+  if ($('#hhEndsAt') && hh.endsAt){
+    const dt = new Date(Number(hh.endsAt||0));
+    $('#hhEndsAt').value = new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  }
+}
 $('#btnSaveHappy')?.addEventListener('click', async ()=>{
   try{
     const enabled = ($('#hhEnabled')?.value==='on');
+    the:
     const discountPercent = Number($('#hhDisc')?.value||0);
     const bannerText = $('#hhMsg')?.value||'';
     const durationMin = Number($('#hhDurMin')?.value||0) || null;
     const endsAt = $('#hhEndsAt')?.value ? new Date($('#hhEndsAt').value).getTime() : null;
-    await DB.setHappyHour({ enabled, discountPercent, bannerText, durationMin, endsAt });
+    const payload = { enabled, discountPercent, bannerText, durationMin, endsAt };
+    if (typeof DB.setHappyHour === 'function') {
+      await DB.setHappyHour(payload);
+    } else if (typeof DB.updateSettings === 'function') {
+      await DB.updateSettings({ happyHour: payload });
+    }
     toast('Happy Hour guardado');
   }catch(e){ console.error(e); toast('Error en Happy Hour'); }
 });
-DB.subscribeHappyHour(hh=>{
-  const pill = $('#hhCountdown');
-  if (!pill) return;
-  if (!hh?.enabled){ pill.textContent='Inactivo'; pill.className='muted small'; return; }
-  const endsMs = Number(hh.endsAt||0);
-  const left = Math.max(0, endsMs - Date.now());
-  const min = Math.floor(left/60000), sec = Math.floor((left%60000)/1000);
-  pill.textContent = `Activo · faltan ${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-  pill.className = 'muted small is-running';
+if (typeof DB.subscribeHappyHour === 'function'){
+  DB.subscribeHappyHour(hh=>{
+    populateHappyForm(hh);
+    const pill = $('#hhCountdown');
+    if (!pill) return;
+    if (!hh?.enabled){ pill.textContent='Inactivo'; pill.className='muted small'; return; }
+    const tick = ()=>{
+      const endsMs = Number(hh.endsAt||0);
+      const left = Math.max(0, endsMs - Date.now());
+      const min = Math.floor(left/60000), sec = Math.floor((left%60000)/1000);
+      pill.textContent = endsMs ? `Activo · faltan ${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `Activo (-${Number(hh.discountPercent||0)}%)`;
+      pill.className = 'muted small is-running';
+    };
+    tick();
+    clearInterval(window.__admHHInt); window.__admHHInt = setInterval(tick, 1000);
+  });
+}
+
+/* ============== TEMAS (si tu HTML los expone aquí) ============== */
+$('#btnThemeGlobal')?.addEventListener('click', async ()=>{
+  try{
+    const name = $('#themeSelect')?.value || '';
+    if (!name) { toast('Selecciona un tema'); return; }
+    if (typeof DB.setTheme === 'function') {
+      await DB.setTheme({ name });
+      toast('Tema GLOBAL actualizado');
+    } else {
+      toast('DB.setTheme no disponible');
+    }
+  }catch(e){ console.error(e); toast('Error al guardar tema'); }
 });
 
 /* ============== Init triggers por defecto ============== */
-(function bootstrap(){
-  // Activa primera pestaña por si HTML no marcó active
-  if (!$('.tabs-admin .tab.is-active')) {
-    const first = $('.tabs-admin .tab'); first?.click();
-  }
-  // Autocargar algunos paneles
+(async function bootstrap(){
+  try { await ensureAuth(); } catch(e){ console.warn('[admin] anon auth fail', e); }
+  if (!$('.tabs-admin .tab.is-active')) { $('.tabs-admin .tab')?.click(); }
   $('#btnRepGen')?.click();
   loadHist().catch(()=>{});
 })();
