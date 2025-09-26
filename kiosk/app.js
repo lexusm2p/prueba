@@ -1189,6 +1189,8 @@ function openCartModal(){
   if (confirmBtn) {
     confirmBtn.onclick = null; // limpia cualquier handler anterior
     confirmBtn.onclick = async ()=>{
+      // Asegura precios actualizados antes de renderizar el contenido del carrito
+  ensureDrinkPrices();
   // 👉 anti‑doble‑tap
   if (state.isSubmittingOrder) return;
   state.isSubmittingOrder = true;
