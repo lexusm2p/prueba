@@ -4,6 +4,8 @@
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 import { app, db, ensureAuth, serverTimestamp } from '../shared/firebase.js';
+import { getDatabase, ref as rtdbRef, set as rtdbSet } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+import { app } from '../shared/firebase.js'; // asegúrate que ya tienes app inicializado con databaseURL
 
 // === RTDB (se importa on-demand desde CDN v10) ==========================
 let getDatabase, rtdbRef, onChildAdded, onChildChanged, onChildRemoved, getRTDB;
