@@ -2,24 +2,28 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Cocina — Seven (Legacy)</title>
   <link rel="stylesheet" href="../shared/styles.css">
   <style>
-    body{ background:#0b1220; color:#e8f0ff; font-family: system-ui, Arial; }
+    :root{ --bg:#0b1220; --card:#0f182a; --panel:#131f33; --muted:#a6b2c7; --chip:#192840; }
+    body{ background:var(--bg); color:#e8f0ff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
     .wrap{ max-width:1200px; margin:12px auto; padding:0 12px; }
     .cols{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
     @media (max-width:900px){ .cols{ grid-template-columns:1fr; } }
-    .card{ background:#0f182a; border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; }
-    .ord{ background:#131f33; border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:10px; margin-bottom:8px; }
-    .muted{ color:#a6b2c7; font-size:12px; }
+    .card{ background:var(--card); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; }
+    .ord{ background:var(--panel); border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:10px; margin-bottom:8px; }
+    .muted{ color:var(--muted); font-size:12px; }
     .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
-    .chip{ background:#192840; border:1px solid rgba(255,255,255,.10); border-radius:999px; padding:4px 8px; font-size:12px; }
+    .chip{ background:var(--chip); border:1px solid rgba(255,255,255,.10); border-radius:999px; padding:4px 8px; font-size:12px; white-space:nowrap; }
     .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
     .btn{ background:#1a2740; border:1px solid rgba(255,255,255,.12); color:#e8f0ff; border-radius:10px; padding:8px 10px; }
+    .btn[disabled]{ opacity:.6; pointer-events:none; }
     .btn.ok{ background:#2fe38b; color:#00150a; font-weight:800; }
     a.track{ color:#8bb4ff; text-decoration:underline; font-size:12px; }
-    .empty{ color:#6f7c96; font-size:12px; padding:6px 0; }
+    .empty{ color:var(--muted); padding:10px; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    h3{ margin: 0 0 8px; }
   </style>
 </head>
 <body>
@@ -32,22 +36,13 @@
   </div>
 </div>
 
-<!-- Test rápido de soporte ES6 (flechas + const) antes de cargar nada -->
-<script>
-  (function(){
-    try { new Function('const a=1;return ((x)=>x+1)(a)===2')(); window.__MODERN_OK__=true; }
-    catch(e){ window.__MODERN_OK__=false; }
-  })();
-</script>
-
-<!-- Firebase v8 para máxima compatibilidad (necesario en modo moderno) -->
+<!-- Firebase v8 para máxima compatibilidad -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-<!-- ============ Script MODERNO (RTDB live + fallback XHR) ============ -->
 <script>
-if (window.__MODERN_OK__) {
-  /* =================== Config =================== */
+(function(){
+  // ================ Config ================
   const firebaseConfig = {
     apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
     authDomain: "seven-de-burgers.firebaseapp.com",
@@ -60,28 +55,25 @@ if (window.__MODERN_OK__) {
   firebase.initializeApp(firebaseConfig);
   const rtdb = firebase.database();
 
+  // Cloud Functions (ajusta SECRET)
   const ENDPOINT_STATUS = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenSetStatus";
   const ENDPOINT_CHARGE = "https://us-central1-seven-de-burgers.cloudfunctions.net/kitchenCharge";
   const SECRET = "pon_el_mismo_secret_de_functions";
 
+  // ============== Helpers UI ==============
   const COLS = {
     PENDING:     document.getElementById('col-pending'),
     IN_PROGRESS: document.getElementById('col-progress'),
     READY:       document.getElementById('col-ready'),
     BILL:        document.getElementById('col-bill'),
   };
-
-  /* =================== Utils UI =================== */
   const money = (n)=> '$'+Number(n||0).toFixed(0);
-  const esc   = (s='') => String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-  const chip  = (txt)=> '<span class="chip">'+esc(txt)+'</span>';
-
+  const esc = (s)=> String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
   function calcTotal(o){
     if (typeof o.subtotal === 'number') return Number(o.subtotal||0) + Number(o.tip||0);
     const items = Array.isArray(o.items) ? o.items : [];
-    let s=0;
-    for (let i=0;i<items.length;i++){
-      const it=items[i];
+    let s = 0; for (let i=0;i<items.length;i++){
+      const it = items[i];
       const line = (typeof it.lineTotal==='number')
         ? Number(it.lineTotal||0)
         : (Number(it.unitPrice||0) * Number(it.qty||1));
@@ -89,9 +81,54 @@ if (window.__MODERN_OK__) {
     }
     return s + Number(o.tip||0);
   }
-  const sortByCreatedAtAsc = (a,b)=> Number(a.createdAt||0) - Number(b.createdAt||0);
+  const chip = (txt)=> '<span class="chip">'+esc(txt)+'</span>';
+  const buzz = (ms=50)=> { try{ if(navigator.vibrate) navigator.vibrate(ms); }catch{} };
 
-  /* =================== Render =================== */
+  // ============== Render ==============
+  function buildCard(o){
+    const total = money(calcTotal(o));
+    const meta  = (String(o.orderType||'').toLowerCase()==='dinein')
+      ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
+    const track = o.id
+      ? `<a class="track" href="../track/?id=${encodeURIComponent(o.id)}" target="_blank" rel="noopener">Ver en Track</a>`
+      : '';
+
+    const items = Array.isArray(o.items) ? o.items : [];
+    let lines = '';
+    for (let i=0;i<items.length;i++){
+      const it = items[i];
+      const bi = Array.isArray(it.baseIngredients) ? it.baseIngredients : (Array.isArray(it.ingredients)?it.ingredients:[]);
+      const sauces = (it.extras && Array.isArray(it.extras.sauces)) ? it.extras.sauces : [];
+      const ingr   = (it.extras && Array.isArray(it.extras.ingredients)) ? it.extras.ingredients : [];
+      const dlc    = (it.extras && it.extras.dlcCarne) ? ['DLC carne 85g'] : [];
+      const salsa  = it.salsaCambiada ? ('Salsa: '+it.salsaCambiada+' (cambio)') :
+                    (it.salsaDefault ? ('Salsa: '+it.salsaDefault) : '');
+      const chips  = [].concat(bi).concat(sauces.map(s=>'Aderezo: '+s)).concat(ingr.map(x=>'Extra: '+x)).concat(dlc);
+      lines += `
+        <div class="muted">${esc(it.qty||1)}× ${esc(it.name||'Producto')}</div>
+        ${salsa ? `<div class="muted">${esc(salsa)}</div>` : ``}
+        <div class="chips">${chips.map(chip).join('')}</div>
+        ${it.notes ? `<div class="muted">Notas: ${esc(it.notes)}</div>` : ``}
+      `;
+    }
+
+    const s = String(o.status||'PENDING').toUpperCase();
+    const btns =
+      (s==='PENDING')      ? `<button class="btn" data-a="IN_PROGRESS" data-id="${esc(o.id)}">Tomar</button>` :
+      (s==='IN_PROGRESS')  ? `<button class="btn ok" data-a="READY" data-id="${esc(o.id)}">Listo</button>` :
+      (s==='READY')        ? `<button class="btn" data-a="DELIVERED" data-id="${esc(o.id)}">Entregar</button>` :
+      (s==='DELIVERED' && !o.paid) ? `<button class="btn ok" data-charge data-id="${esc(o.id)}">Cobrar</button>` : ``;
+
+    return `
+      <div class="ord">
+        <div><b>${esc(o.customer||'-')}</b> · <span class="muted">${esc(meta)}</span> ${track}</div>
+        <div class="muted">Total: <b>${total}</b> ${o.paid ? '· <span class="chip">Pagado</span>' : ''}</div>
+        ${o.notes ? `<div class="muted"><b>Notas generales:</b> ${esc(o.notes)}</div>` : ``}
+        ${lines}
+        <div class="row" style="margin-top:6px">${btns}</div>
+      </div>`;
+  }
+
   function render(list){
     const by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
     (list||[]).forEach(o=>{
@@ -101,224 +138,121 @@ if (window.__MODERN_OK__) {
       else by.PENDING.push(o);
     });
 
-    for (const k in by){
-      const cont = k==='BILL' ? COLS.BILL : COLS[k];
-      if (!cont) continue;
-      cont.innerHTML = by[k].length ? by[k].map(renderCard).join('') : '<div class="empty">—</div>';
+    function setCol(el, arr){
+      if (!el) return;
+      el.innerHTML = arr.length ? arr.map(buildCard).join('') : '<div class="empty">—</div>';
     }
+    setCol(COLS.PENDING, by.PENDING);
+    setCol(COLS.IN_PROGRESS, by.IN_PROGRESS);
+    setCol(COLS.READY, by.READY);
+    setCol(COLS.BILL, by.BILL);
 
-    // bind acciones
+    // enlazar acciones (una sola vez por render)
     document.querySelectorAll('[data-id][data-a]').forEach(btn=>{
-      btn.onclick = () => doAction(btn.getAttribute('data-id'), btn.getAttribute('data-a'));
+      btn.onclick = () => doAction(btn.getAttribute('data-id'), btn.getAttribute('data-a'), btn);
     });
     document.querySelectorAll('[data-id][data-charge]').forEach(btn=>{
-      btn.onclick = () => doCharge(btn.getAttribute('data-id'));
+      btn.onclick = () => doCharge(btn.getAttribute('data-id'), btn);
     });
   }
 
-  function renderCard(o){
-    const total = money(calcTotal(o));
-    const meta  = o.orderType==='dinein' ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
-    const items = Array.isArray(o.items) ? o.items : [];
-    let lines = '';
-    for (let i=0;i<items.length;i++){
-      const it = items[i];
-      const base = Array.isArray(it.baseIngredients) ? it.baseIngredients
-                 : Array.isArray(it.ingredients) ? it.ingredients : [];
-      const ex = it.extras || {};
-      const sauces = Array.isArray(ex.sauces) ? ex.sauces : [];
-      const ingr   = Array.isArray(ex.ingredients) ? ex.ingredients : [];
-      const dlc    = ex.dlcCarne ? ['DLC carne 85g'] : [];
-      const chips = []
-        .concat(base)
-        .concat(sauces.map(s => 'Aderezo: ' + s))
-        .concat(ingr.map(x => 'Extra: ' + x))
-        .concat(dlc);
-      const salsaTxt = it.salsaCambiada
-        ? ('Salsa: ' + it.salsaCambiada)
-        : (it.salsaDefault ? ('Salsa: ' + it.salsaDefault) : '');
-      lines += `
-        <div class="muted">${(it.qty||1)}× ${esc(it.name||'Producto')}</div>
-        ${salsaTxt ? `<div class="muted">${esc(salsaTxt)}</div>` : ``}
-        <div class="chips">${chips.map(chip).join('')}</div>
-        ${it.notes ? `<div class="muted">Notas: ${esc(it.notes)}</div>` : ``}
-      `;
-    }
-    const s = String(o.status||'PENDING').toUpperCase();
-    const btns =
-      (s==='PENDING')      ? `<button class="btn" data-a="IN_PROGRESS" data-id="${esc(o.id)}">Tomar</button>` :
-      (s==='IN_PROGRESS')  ? `<button class="btn ok" data-a="READY" data-id="${esc(o.id)}">Listo</button>` :
-      (s==='READY')        ? `<button class="btn" data-a="DELIVERED" data-id="${esc(o.id)}">Entregar</button>` :
-      (s==='DELIVERED' && !o.paid) ? `<button class="btn ok" data-charge data-id="${esc(o.id)}">Cobrar</button>` : ``;
+  // ============== Estado / fuentes de datos ==============
+  let prevIds = new Set();
+  let rtdbFirstLoad = false;
+  let pollingHandle = null;
 
-    const trackHref = `../track/track.html?oid=${encodeURIComponent(o.id||'')}`;
+  function onNewSnapshot(val){
+    const list = Object.keys(val||{}).map(id => Object.assign({ id }, val[id]));
+    list.sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
+    render(list);
 
-    return `
-      <div class="ord">
-        <div><b>${esc(o.customer||'-')}</b> · <span class="muted">${esc(meta)}</span> · <a class="track" href="${trackHref}" target="_blank" rel="noopener">Ver en Track</a></div>
-        <div class="muted">Total: <b>${total}</b> ${o.paid ? '· <span class="chip">Pagado</span>' : ''}</div>
-        ${o.notes ? `<div class="muted"><b>Notas generales:</b> ${esc(o.notes)}</div>` : ``}
-        ${lines}
-        <div class="row" style="margin-top:6px">${btns}</div>
-      </div>
-    `;
+    // detectar pedidos nuevos (vibrar)
+    const ids = new Set(list.map(o=> String(o.id||'')));
+    let newC = 0;
+    ids.forEach(id => { if (!prevIds.has(id)) newC++; });
+    if (newC > 0) buzz(60);
+    prevIds = ids;
   }
 
-  /* =================== Acciones =================== */
-  function doAction(id, action){
+  // RTDB en vivo
+  try{
+    rtdb.ref('kitchen/orders').on('value', snap=>{
+      rtdbFirstLoad = true;
+      if (pollingHandle) { clearInterval(pollingHandle); pollingHandle = null; } // evita doble render
+      onNewSnapshot(snap.val());
+    });
+  }catch(e){ /* fallback abajo */ }
+
+  // Fallback a polling si en 5s no obtuvimos RTDB
+  setTimeout(()=>{
+    if (!rtdbFirstLoad && !pollingHandle){
+      const ENDPOINT = firebaseConfig.databaseURL.replace(/\/$/,'') + "/kitchen/orders.json";
+      const tick = ()=>{
+        try{
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', ENDPOINT + '?t=' + Date.now(), true);
+          xhr.onreadystatechange = function(){
+            if (xhr.readyState === 4 && xhr.status === 200){
+              const data = JSON.parse(xhr.responseText||'{}') || {};
+              onNewSnapshot(data);
+            }
+          };
+          xhr.send(null);
+        }catch{}
+      };
+      tick();
+      pollingHandle = setInterval(tick, 2500);
+    }
+  }, 5000);
+
+  // ============== Acciones (Functions) ==============
+  const busyByOrder = new Map(); // anti doble tap por id
+
+  function lock(btn, id){
+    if (btn){ btn.disabled = true; btn.setAttribute('aria-busy','true'); }
+    busyByOrder.set(id, Date.now());
+  }
+  function unlock(btn, id){
+    if (btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); }
+    busyByOrder.delete(id);
+  }
+
+  function doAction(id, action, btn){
+    if (!id || !action) return;
+    if (busyByOrder.has(id)) return; // anti spam
+    lock(btn, id);
     fetch(ENDPOINT_STATUS, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ id, action, secret: SECRET })
-    }).then(r=>r.json()).then(j=>{
-      if (!j.ok) alert('Error: '+(j.error||'')); // RTDB refresca solo
-    }).catch(()=> alert('Error de red'));
+    })
+    .then(r=>r.json()).then(j=>{
+      if (!j.ok) alert('Error: ' + (j.error||''));
+      else buzz(30);
+    })
+    .catch(()=> alert('Error de red'))
+    .finally(()=> unlock(btn, id));
   }
-  function doCharge(id){
+
+  function doCharge(id, btn){
+    if (!id) return;
+    if (busyByOrder.has(id)) return;
     const method = prompt('Método (efectivo / tarjeta / transferencia):','efectivo');
     if (method===null) return;
+    lock(btn, id);
     fetch(ENDPOINT_CHARGE, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ id, method, secret: SECRET })
-    }).then(r=>r.json()).then(j=>{
-      if (!j.ok) alert('Error: '+(j.error||'')); 
-    }).catch(()=> alert('Error de red'));
+    })
+    .then(r=>r.json()).then(j=>{
+      if (!j.ok) alert('Error: ' + (j.error||'')); else buzz(40);
+    })
+    .catch(()=> alert('Error de red'))
+    .finally(()=> unlock(btn, id));
   }
 
-  /* =================== Datos: Live + Fallback =================== */
-  let lastLiveAt = 0;
-  try{
-    rtdb.ref('kitchen/orders').on('value', snap=>{
-      const raw = snap.val() || {};
-      const list = Object.keys(raw).map(id => ({ id, ...raw[id] }));
-      list.sort((a,b)=> Number(a.createdAt||0) - Number(b.createdAt||0));
-      render(list);
-      lastLiveAt = Date.now();
-    });
-  }catch(e){/* fallback se hará cargo */}
-
-  const ENDPOINT_JSON = firebaseConfig.databaseURL + "/kitchen/orders.json";
-  function fallbackTick(){
-    const stale = Date.now() - lastLiveAt > 5000; // 5s sin live
-    if (!stale || document.hidden) return;
-    try{
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', ENDPOINT_JSON + '?t=' + Date.now(), true);
-      xhr.onreadystatechange = function(){
-        if (xhr.readyState === 4 && xhr.status === 200){
-          const data = JSON.parse(xhr.responseText || '{}') || {};
-          const list = Object.keys(data).map(id => ({ id, ...data[id] }));
-          list.sort((a,b)=> Number(a.createdAt||0) - Number(b.createdAt||0));
-          render(list);
-        }
-      };
-      xhr.send(null);
-    }catch(e){}
-  }
-  setInterval(fallbackTick, 2000);
-  document.addEventListener('visibilitychange', fallbackTick, false);
-}
-</script>
-
-<!-- ============ Script LEGACY 100% ES5 (para iPad/Safari viejos) ============ -->
-<script>
-if (!window.__MODERN_OK__) {
-  var ENDPOINT = "https://seven-de-burgers-default-rtdb.firebaseio.com/kitchen/orders.json";
-
-  function money(n){ return '$' + Number(n||0).toFixed(0); }
-  function esc(s){ return String(s||'').replace(/[&<>"']/g,function(m){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];}); }
-  function chip(txt){ return '<span class="chip">'+esc(txt)+'</span>'; }
-
-  function calcTotal(o){
-    if (typeof o.subtotal === 'number') return Number(o.subtotal||0) + Number(o.tip||0);
-    var s = 0, items = Array.isArray(o.items)?o.items:[];
-    for (var i=0;i<items.length;i++){
-      var it = items[i];
-      s += (typeof it.lineTotal==='number' ? Number(it.lineTotal||0) : (Number(it.unitPrice||0)*Number(it.qty||1)));
-    }
-    return s + Number(o.tip||0);
-  }
-
-  function renderCard(o){
-    var total = money(calcTotal(o));
-    var meta  = o.orderType==='dinein' ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
-    var items = Array.isArray(o.items)?o.items:[];
-    var lines = '';
-    for (var i=0;i<items.length;i++){
-      var it = items[i];
-      var base = Array.isArray(it.baseIngredients)?it.baseIngredients : (Array.isArray(it.ingredients)?it.ingredients:[]);
-      var ex = it.extras||{};
-      var sauces = Array.isArray(ex.sauces)?ex.sauces:[];
-      var ingr   = Array.isArray(ex.ingredients)?ex.ingredients:[];
-      var dlc    = ex.dlcCarne ? ['DLC carne 85g'] : [];
-      var chips = []
-        .concat(base)
-        .concat(sauces.map(function(s){ return 'Aderezo: '+s; }))
-        .concat(ingr.map(function(x){ return 'Extra: '+x; }))
-        .concat(dlc);
-      var salsaTxt = it.salsaCambiada ? ('Salsa: '+it.salsaCambiada) : (it.salsaDefault?('Salsa: '+it.salsaDefault):'');
-      lines += ''
-        + '<div class="muted">'+(it.qty||1)+'× '+esc(it.name||'Producto')+'</div>'
-        + (salsaTxt?('<div class="muted">'+esc(salsaTxt)+'</div>'):'')
-        + '<div class="chips">'+chips.map(chip).join('')+'</div>'
-        + (it.notes?('<div class="muted">Notas: '+esc(it.notes)+'</div>'):'');
-    }
-    var s = String(o.status||'PENDING').toUpperCase();
-    var btns =
-      (s==='PENDING')      ? '<button class="btn" disabled>Tomar</button>' : // sin CF en legacy ultra antiguo
-      (s==='IN_PROGRESS')  ? '<button class="btn ok" disabled>Listo</button>' :
-      (s==='READY')        ? '<button class="btn" disabled>Entregar</button>' :
-      (s==='DELIVERED' && !o.paid) ? '<button class="btn ok" disabled>Cobrar</button>' : '';
-    var trackHref = '../track/track.html?oid='+encodeURIComponent(o.id||'');
-    return ''
-      + '<div class="ord">'
-      +   '<div><b>'+esc(o.customer||'-')+'</b> · <span class="muted">'+esc(meta)+'</span> · <a class="track" href="'+trackHref+'" target="_blank" rel="noopener">Ver en Track</a></div>'
-      +   '<div class="muted">Total: <b>'+total+'</b>'+(o.paid?' · <span class="chip">Pagado</span>':'')+'</div>'
-      +   (o.notes?('<div class="muted"><b>Notas generales:</b> '+esc(o.notes)+'</div>'):'')
-      +   lines
-      +   '<div class="row" style="margin-top:6px">'+btns+'</div>'
-      + '</div>';
-  }
-
-  function render(list){
-    var by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
-    for (var i=0;i<list.length;i++){
-      var o = list[i]; var s = String(o.status||'').toUpperCase();
-      if (s==='PENDING') by.PENDING.push(o);
-      else if (s==='IN_PROGRESS') by.IN_PROGRESS.push(o);
-      else if (s==='READY') by.READY.push(o);
-      else if (s==='DELIVERED' && !o.paid) by.BILL.push(o);
-    }
-    function setCol(id, arr){
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.innerHTML = arr.length ? arr.map(renderCard).join('') : '<div class="empty">—</div>';
-    }
-    setCol('col-pending', by.PENDING);
-    setCol('col-progress', by.IN_PROGRESS);
-    setCol('col-ready', by.READY);
-    setCol('col-bill', by.BILL);
-  }
-
-  function tick(){
-    try{
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', ENDPOINT + '?t=' + Date.now(), true);
-      xhr.onreadystatechange = function(){
-        if (xhr.readyState===4 && xhr.status===200){
-          var data = JSON.parse(xhr.responseText||'{}')||{};
-          var arr = Object.keys(data).map(function(k){ return data[k]; });
-          arr.sort(function(a,b){ return (Number(a.createdAt||0) - Number(b.createdAt||0)); });
-          render(arr);
-        }
-      };
-      xhr.send(null);
-    }catch(e){}
-  }
-  tick();
-  setInterval(tick, 2000);
-}
+})();
 </script>
 </body>
 </html>
