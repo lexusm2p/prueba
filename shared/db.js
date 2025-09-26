@@ -100,11 +100,14 @@ function _legacyItem(it = {}) {
     name: it.name || it.title || 'Item',
     qty: Number(it.qty || 1),
     unitPrice,
+    // 👇 imprescindibles para la tablet
     baseIngredients: _toStrArr(base),
     ingredients: _toStrArr(base), // duplicado por compat
+    adds: _toStrArr(adds),        // compat tablet vieja
+    removes: _toStrArr(rems),     // compat tablet vieja
     salsaDefault: salsaDefault || null,
     salsaCambiada: salsaCambiada || null,
-    extras: it.extras ?? { adds: _toStrArr(adds), removes: _toStrArr(rems) }
+    extras: { adds: _toStrArr(adds), removes: _toStrArr(rems) }
   };
   if (typeof it.lineTotal === 'number') out.lineTotal = Number(it.lineTotal);
   return out;
