@@ -42,5 +42,16 @@
 
   <!-- Importa sólo TU app; /shared/db.js ya resuelve firebase internamente -->
   <script type="module" src="./app.js"></script>
+  <!-- Compat para navegadores viejos -->
+<script nomodule src="../shared/compat.js"></script>
+
+<!-- Entry legacy específico de la app -->
+<!-- Admin:   ./app.legacy.js  (ya entregado) -->
+<!-- Kiosko:  ./app.legacy.js  (debajo) -->
+<!-- Cocina:  ./app.legacy.js  (debajo) -->
+<script nomodule src="./app.legacy.js"></script>
+
+<!-- Versión moderna para navegadores actuales -->
+<script type="module" src="./app.js"></script>
 </body>
 </html>
