@@ -1164,6 +1164,8 @@ function openCartModal(){
       }
       if (act === 'more') {
         line.qty = Math.min(99, (line.qty || 1) + 1);
+        // Bebidas: su total lo maneja ensureDrinkPrices()
+  if (line?.type === 'drink') return;
         recomputeLine(line);
         updateCartBar(); openCartModal();
         checkComboAchievement();
