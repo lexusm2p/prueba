@@ -1,9 +1,11 @@
 // /shared/db.js
 // Firestore + catálogo con fallback. Reportes, settings (ETA/HH/Theme),
 // inventario, recetas/producción, artículos, clientes y órdenes.
+// Incluye espejo a RTDB para compatibilidad con la tablet legacy.
 // Modo PRUEBA: evita escrituras cuando opts.training === true.
 
 import {
+  app,                 // 👈 necesario para RTDB
   db,
   ensureAuth,
   serverTimestamp,
@@ -32,6 +34,43 @@ function toMillisFlexible(raw) {
 }
 
 const normPhone = (s = '') => String(s).replace(/\D+/g, '').slice(0, 15);
+
+/* =================== RTDB mirror (lazy) =================== */
+// Carga on‑demand la SDK de RTDB (v10) y hace espejo en /kitchen/orders
+let __rtdbMod = null;
+async function _rtdb() {
+  if (__rtdbMod) return __rtdbMod;
+  const mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
+  __rtdbMod = {
+    getDatabase: mod.getDatabase,
+    ref: mod.ref,
+    set: mod.set,
+    update: mod.update,
+    remove: mod.remove
+  };
+  return __rtdbMod;
+}
+/** Espeja un patch hacia RTDB. Si `data.__create__` está presente, hace set completo. */
+async function mirrorToRTDB(orderId, data) {
+  try {
+    const { getDatabase, ref, set, update } = await _rtdb();
+    const r = getDatabase(app);
+    const path = 'kitchen/orders/' + String(orderId);
+    if (data && data.__create__) {
+      const payload = { ...data };
+      delete payload.__create__;
+      await set(ref(r, path), payload);
+    } else {
+      await update(ref(r, path), data || {});
+    }
+  } catch { /* silencioso */ }
+}
+async function removeFromRTDB(orderId) {
+  try {
+    const { getDatabase, ref, remove } = await _rtdb();
+    await remove(ref(getDatabase(app), 'kitchen/orders/' + String(orderId)));
+  } catch { /* silencioso */ }
+}
 
 /* =================== Catálogo: fetch con fallback =================== */
 function normalizeCatalog(cat = {}) {
@@ -69,33 +108,28 @@ function normalizeCatalog(cat = {}) {
 const guessDataPath = () => '../data/menu.json';
 
 export async function fetchCatalogWithFallback() {
-  // 🔒 asegúrate de estar logueado antes de leer Firestore
   try { await ensureAuth(); } catch {}
 
   try {
     const d1 = await getDoc(doc(db, 'settings', 'catalog'));
     if (d1.exists()) return normalizeCatalog(d1.data());
-  } catch (e) {
-    console.warn('[catalog] settings/catalog fallo, sigo...', e);
-  }
+  } catch (e) { console.warn('[catalog] settings/catalog fallo, sigo...', e); }
+
   try {
     const d2 = await getDoc(doc(db, 'catalog', 'public'));
     if (d2.exists()) return normalizeCatalog(d2.data());
-  } catch (e) {
-    console.warn('[catalog] catalog/public fallo, sigo...', e);
-  }
+  } catch (e) { console.warn('[catalog] catalog/public fallo, sigo...', e); }
+
   try {
     const r = await fetch(guessDataPath(), { cache: 'no-store' });
     if (r.ok) return normalizeCatalog(await r.json());
-  } catch (e) {
-    console.warn('[catalog] ../data/menu.json fallo, sigo...', e);
-  }
+  } catch (e) { console.warn('[catalog] ../data/menu.json fallo, sigo...', e); }
+
   try {
     const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
     if (r2.ok) return normalizeCatalog(await r.json());
-  } catch (e) {
-    console.warn('[catalog] shared/catalog.json fallo', e);
-  }
+  } catch (e) { console.warn('[catalog] shared/catalog.json fallo', e); }
+
   return normalizeCatalog({});
 }
 
@@ -136,6 +170,25 @@ export async function createOrder(order, opts = {}) {
   return guardWrite(training, async () => {
     await ensureAuth();
     const ref = await addDoc(collection(db, 'orders'), payload);
+
+    // → Espejo a RTDB para la tablet (incluye ingredientes/base)
+    try {
+      await mirrorToRTDB(ref.id, {
+        __create__: true,
+        id: ref.id,
+        ...order,
+        status: String(payload.status),
+        customer: payload.customer || '',
+        orderType: payload.orderMeta?.type || payload.orderType || '',
+        table: payload.orderMeta?.table || '',
+        phone: payload.orderMeta?.phone || '',
+        tip: Number(payload.tip || 0),
+        subtotal: typeof payload.subtotal === 'number' ? Number(payload.subtotal) : null,
+        createdAt: Date.now(),
+        paid: false
+      });
+    } catch {}
+
     return ref.id;
   }, `TRAIN-ORDER-${Date.now()}`);
 }
@@ -143,7 +196,6 @@ export async function createOrder(order, opts = {}) {
 // Suscribe pedidos del día (para feeds/ETA)
 export function subscribeActiveOrders(cb, { limitN = 120 } = {}) {
   let unsub = () => {};
-  // 🔒 espera auth antes de abrir el snapshot (evita permisos/errores silenciosos)
   ensureAuth()
     .catch(() => {})
     .finally(() => {
@@ -165,7 +217,7 @@ export function subscribeActiveOrders(cb, { limitN = 120 } = {}) {
   return () => { try { unsub(); } catch {} };
 }
 
-// 🔪 Cocina: prioriza sólo estados activos, pero mantiene orden y tiempos
+// 🔪 Cocina: prioriza sólo estados activos
 export function subscribeKitchenOrders(cb, { limitN = 200 } = {}) {
   return subscribeActiveOrders(list => {
     const set = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
@@ -185,13 +237,27 @@ export function subscribeOrder(orderId, cb) {
   return onSnapshot(ref, (d) => cb(d.exists() ? ({ id: d.id, ...d.data() }) : null));
 }
 
-// Update parcial con soporte a dot-notation (updateDoc ya lo soporta)
+// Update parcial con soporte a dot-notation
 export async function updateOrder(id, patch, opts = {}) {
   const { training = false } = opts;
   if (!id || typeof patch !== 'object') throw new Error('updateOrder: datos inválidos');
   return guardWrite(training, async () => {
     await ensureAuth();
     await updateDoc(doc(db, 'orders', id), { ...patch, updatedAt: serverTimestamp() });
+
+    // → espejo de campos relevantes a RTDB
+    try {
+      const m = {};
+      if (patch.status) m.status = String(patch.status).toUpperCase();
+      if (patch.paid) m.paid = true;
+      if (patch.payMethod != null) m.payMethod = String(patch.payMethod);
+      if (typeof patch.totalCharged === 'number') m.totalCharged = Number(patch.totalCharged);
+      if (patch.startedAt)   m.startedAt = Date.now();
+      if (patch.readyAt)     m.readyAt = Date.now();
+      if (patch.deliveredAt) m.deliveredAt = Date.now();
+      if (Object.keys(m).length) await mirrorToRTDB(id, m);
+    } catch {}
+
     return { ok: true };
   }, { ok: true, _training: true });
 }
@@ -208,6 +274,17 @@ export async function upsertOrder(data, opts = {}) {
       updatedAt: serverTimestamp(),
       createdAt: data?.createdAt ?? serverTimestamp()
     }, { merge: true });
+
+    // espejo si trae status/paid
+    try {
+      const m = {};
+      if (data.status) m.status = String(data.status).toUpperCase();
+      if (data.paid) m.paid = true;
+      if (data.payMethod != null) m.payMethod = String(data.payMethod);
+      if (typeof data.totalCharged === 'number') m.totalCharged = Number(data.totalCharged);
+      if (Object.keys(m).length) await mirrorToRTDB(id, m);
+    } catch {}
+
     return { ok: true };
   }, { ok: true, _training: true });
 }
@@ -220,14 +297,25 @@ export async function setOrderStatus(id, status, extra = {}, opts = {}) {
     status: s,
     updatedAt: serverTimestamp(),
   };
-  if (s === 'IN_PROGRESS') stampPatch.startedAt = serverTimestamp(), stampPatch['timestamps.startedAt'] = serverTimestamp();
-  if (s === 'READY')       stampPatch.readyAt   = serverTimestamp(), stampPatch['timestamps.readyAt']   = serverTimestamp();
-  if (s === 'DELIVERED')   stampPatch.deliveredAt = serverTimestamp(), stampPatch['timestamps.deliveredAt'] = serverTimestamp();
-  if (s === 'DONE' || s === 'PAID') stampPatch.doneAt = serverTimestamp(), stampPatch['timestamps.doneAt'] = serverTimestamp();
+  if (s === 'IN_PROGRESS') { stampPatch.startedAt = serverTimestamp(); stampPatch['timestamps.startedAt'] = serverTimestamp(); }
+  if (s === 'READY')       { stampPatch.readyAt   = serverTimestamp(); stampPatch['timestamps.readyAt']   = serverTimestamp(); }
+  if (s === 'DELIVERED')   { stampPatch.deliveredAt = serverTimestamp(); stampPatch['timestamps.deliveredAt'] = serverTimestamp(); }
+  if (s === 'DONE' || s === 'PAID') { stampPatch.doneAt = serverTimestamp(); stampPatch['timestamps.doneAt'] = serverTimestamp(); }
 
   return guardWrite(training, async () => {
     await ensureAuth();
     await updateDoc(doc(db, 'orders', id), { ...stampPatch, ...(extra||{}) });
+
+    // → espejo de estado a RTDB
+    try {
+      const m = { status: s };
+      if (s === 'IN_PROGRESS') m.startedAt = Date.now();
+      if (s === 'READY')       m.readyAt   = Date.now();
+      if (s === 'DELIVERED')   m.deliveredAt = Date.now();
+      if (s === 'DONE' || s === 'PAID') m.paid = true;
+      await mirrorToRTDB(id, m);
+    } catch {}
+
     return { ok: true };
   }, { ok: true, _training: true });
 }
@@ -235,7 +323,7 @@ export async function setOrderStatus(id, status, extra = {}, opts = {}) {
 // Alias de compatibilidad
 export const setStatus = setOrderStatus;
 
-// Archiva pedidos entregados / cancelados (copia a orders_archive y borra original)
+// Archiva pedidos entregados / cancelados
 export async function archiveDelivered(id, opts = {}) {
   const { training = false } = opts;
   return guardWrite(training, async () => {
@@ -245,7 +333,9 @@ export async function archiveDelivered(id, opts = {}) {
     if (!snap.exists()) return { ok: false, reason: 'not_found' };
     const data = snap.data();
     await setDoc(doc(db, 'orders_archive', id), { ...data, archivedAt: serverTimestamp() }, { merge: true });
-    try { await deleteDoc(ref); } catch {} // Puede fallar según reglas; dejamos copia en archive siempre
+    try { await deleteDoc(ref); } catch {}
+    // limpia de RTDB
+    try { await removeFromRTDB(id); } catch {}
     return { ok: true };
   }, { ok: true, _training: true });
 }
@@ -270,9 +360,7 @@ export async function logPrepMetric(metric, opts = {}) {
 /* =================== Reportes por rango =================== */
 export async function getOrdersRange({ from, to, includeArchive = false, orderType = null }) {
   try {
-    // Si las reglas piden auth, garantizamos aquí también
     try { await ensureAuth(); } catch {}
-
     const _from = toTs(from);
     const _to = toTs(to);
 
@@ -436,16 +524,12 @@ export async function adjustStock(itemId, delta, reason = 'use', meta = {}, opts
 
 /**
  * Aplica consumo de inventario para una orden.
- * Compatibilidad con cocina/app.js (applyInventoryForOrderShim):
- * - Si los items incluyen un arreglo `consumes` con { itemId, qty }, descuenta.
- * - Si no hay `consumes`, no hace nada (no falla).
- * - Respeta opts.training para no escribir en PRUEBA.
+ * Si los items incluyen `consumes` con { itemId, qty }, descuenta.
  */
 export async function applyInventoryForOrder(order, opts = {}) {
   const { training = false } = opts;
   if (!order || !Array.isArray(order.items)) return { ok: true, noops: true };
 
-  // Junta consumos explícitos por item
   const acc = new Map(); // itemId -> totalDelta
   for (const it of order.items) {
     const qty = Number(it?.qty || 1);
@@ -454,7 +538,7 @@ export async function applyInventoryForOrder(order, opts = {}) {
       const id = c?.itemId;
       const per = Number(c?.qty || 0);
       if (!id || !(per > 0)) continue;
-      const delta = -(per * qty); // consumir => negativo
+      const delta = -(per * qty);
       acc.set(id, (acc.get(id) || 0) + delta);
     }
   }
