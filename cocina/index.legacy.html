@@ -180,5 +180,85 @@
     }).catch(()=> alert('Error de red'));
   }
 </script>
+  <script>
+(function(){
+  var ENDPOINT = "https://seven-de-burgers-default-rtdb.firebaseio.com/kitchen/orders.json"; // <-- cambia si tu instancia difiere
+
+  function money(n){ return '$' + Number(n||0).toFixed(0); }
+  function calcTotal(o){
+    if (typeof o.subtotal === 'number') return Number(o.subtotal||0) + Number(o.tip||0);
+    var s = 0, items = Array.isArray(o.items)?o.items:[];
+    for (var i=0;i<items.length;i++){
+      var it = items[i];
+      s += Number(it.unitPrice||0) * Number(it.qty||1);
+    }
+    return s + Number(o.tip||0);
+  }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g, function(m){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; }); }
+
+  function card(o){
+    var items = Array.isArray(o.items)?o.items:[];
+    var itemsHtml = '';
+    for (var i=0;i<items.length;i++){
+      var it = items[i];
+      var chips = [];
+      if (it.salsaCambiada) chips.push('Salsa: <b>'+esc(it.salsaCambiada)+'</b>');
+      else if (it.salsaDefault) chips.push('Salsa: '+esc(it.salsaDefault));
+      var ex = it.extras||{};
+      (ex.sauces||[]).forEach(function(s){ chips.push('Aderezo: '+esc(s)); });
+      (ex.ingredients||[]).forEach(function(s){ chips.push('Extra: '+esc(s)); });
+      if (ex.dlcCarne) chips.push('DLC carne 85g');
+      itemsHtml += '<div class="order-item">'
+        + '<h4>'+esc(it.name||'Producto')+' · x'+(it.qty||1)+'</h4>'
+        + (chips.length?('<div class="k-badges" style="margin-top:6px">'+chips.map(function(c){return '<div class="k-badge">'+c+'</div>';}).join('')+'</div>'):'')
+        + '</div>';
+    }
+    return '<article class="k-card" data-id="'+esc(o.id)+'">'
+      + '<div class="muted small">Cliente: <b>'+esc(o.customer||'-')+'</b> · '+esc(o.orderType||'-')+'</div>'
+      + '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(calcTotal(o))+'</b></div>'
+      + itemsHtml
+      + '</article>';
+  }
+
+  function render(list){
+    var pend = [], prog=[], ready=[], bill=[];
+    list.forEach(function(o){
+      var s = String(o.status||'').toUpperCase();
+      if (s==='PENDING') pend.push(o);
+      else if (s==='IN_PROGRESS') prog.push(o);
+      else if (s==='READY') ready.push(o);
+      else if (s==='DELIVERED' && !o.paid) bill.push(o);
+    });
+    function setCol(id, arr){
+      var el = document.getElementById(id); if (!el) return;
+      el.innerHTML = arr.length ? arr.map(card).join('') : '<div class="empty">—</div>';
+    }
+    setCol('col-pending', pend);
+    setCol('col-progress', prog);
+    setCol('col-ready', ready);
+    setCol('col-bill', bill);
+  }
+
+  function tick(){
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', ENDPOINT + '?t=' + Date.now(), true);
+      xhr.onreadystatechange = function(){
+        if (xhr.readyState === 4 && xhr.status === 200){
+          var data = JSON.parse(xhr.responseText || '{}') || {};
+          var arr = Object.keys(data).map(function(k){ return data[k]; });
+          // ordenamos por createdAt asc
+          arr.sort(function(a,b){ return (a.createdAt||0)-(b.createdAt||0); });
+          render(arr);
+        }
+      };
+      xhr.send(null);
+    } catch(e){}
+  }
+
+  tick();
+  setInterval(tick, 2000); // cada 2s
+})();
+</script>
 </body>
 </html>
