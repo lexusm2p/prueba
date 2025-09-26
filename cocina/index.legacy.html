@@ -36,7 +36,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 <script>
-  // === Config del proyecto (revisa databaseURL) ===
+  /* =================== Config / Constantes =================== */
   const firebaseConfig = {
     apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
     authDomain: "seven-de-burgers.firebaseapp.com",
@@ -60,19 +60,34 @@
     BILL:        document.getElementById('col-bill'),
   };
 
-  function money(n){ return '$'+Number(n||0).toFixed(0); }
+  /* =================== Utils UI =================== */
+  const money = (n)=> '$'+Number(n||0).toFixed(0);
+  const esc   = (s='') => String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  const chip  = (txt)=> '<span class="chip">'+esc(txt)+'</span>';
+
   function calcTotal(o){
+    // si viene subtotal ya calculado desde kiosko, úsalo (incluye HH y extras)
+    if (typeof o.subtotal === 'number') return Number(o.subtotal||0) + Number(o.tip||0);
     const items = Array.isArray(o.items) ? o.items : [];
-    let s=0; for (let i=0;i<items.length;i++){
+    let s=0;
+    for (let i=0;i<items.length;i++){
       const it=items[i];
-      const line = (typeof it.lineTotal==='number') ? Number(it.lineTotal||0) : (Number(it.unitPrice||0) * Number(it.qty||1));
+      const line = (typeof it.lineTotal==='number')
+        ? Number(it.lineTotal||0)
+        : (Number(it.unitPrice||0) * Number(it.qty||1));
       s += line;
     }
     return s + Number(o.tip||0);
   }
 
-  function chip(txt){ return '<span class="chip">'+String(txt)+'</span>'; }
+  function sortByCreatedAtAsc(a,b){
+    // En RTDB guardamos createdAt como número (Date.now()) desde el mirror
+    const ta = Number(a.createdAt || 0);
+    const tb = Number(b.createdAt || 0);
+    return ta - tb;
+  }
 
+  /* =================== Render =================== */
   function render(list){
     const by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
     (list||[]).forEach(o=>{
@@ -100,165 +115,121 @@
   function renderCard(o){
     const total = money(calcTotal(o));
     const meta  = o.orderType==='dinein' ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
-    const track = `<a class="track" href="../track/?id=${encodeURIComponent(o.id)}" target="_blank" rel="noopener">Ver en Track</a>`;
 
     const items = Array.isArray(o.items) ? o.items : [];
     let lines = '';
     for (let i=0;i<items.length;i++){
       const it = items[i];
-      const bi = Array.isArray(it.baseIngredients) ? it.baseIngredients : [];
-      const sauces = (it.extras && Array.isArray(it.extras.sauces)) ? it.extras.sauces : [];
-      const ingr   = (it.extras && Array.isArray(it.extras.ingredients)) ? it.extras.ingredients : [];
-      const dlc    = it.extras && it.extras.dlcCarne ? ['DLC carne 85g'] : [];
-      const salsa  = it.salsaCambiada ? ('Salsa: '+it.salsaCambiada+' (cambio)') : (it.salsaDefault ? ('Salsa: '+it.salsaDefault) : '');
-      const chips  = []
-        .concat(bi)
-        .concat(sauces.map(s => 'Aderezo: '+s))
-        .concat(ingr.map(x => 'Extra: '+x))
+
+      // ingredientes base (lo que antes "desaparecía")
+      const base = Array.isArray(it.baseIngredients) ? it.baseIngredients
+                 : Array.isArray(it.ingredients) ? it.ingredients : [];
+
+      const ex = it.extras || {};
+      const sauces = Array.isArray(ex.sauces) ? ex.sauces : [];
+      const ingr   = Array.isArray(ex.ingredients) ? ex.ingredients : [];
+      const dlc    = ex.dlcCarne ? ['DLC carne 85g'] : [];
+
+      const chips = []
+        .concat(base)                                // <= ahora siempre incluidos
+        .concat(sauces.map(s => 'Aderezo: ' + s))
+        .concat(ingr.map(x => 'Extra: ' + x))
         .concat(dlc);
+
+      const salsaTxt = it.salsaCambiada
+        ? ('Salsa: ' + it.salsaCambiada)
+        : (it.salsaDefault ? ('Salsa: ' + it.salsaDefault) : '');
+
       lines += `
-        <div class="muted">${(it.qty||1)}× ${it.name||'Producto'}</div>
-        ${salsa ? `<div class="muted">${salsa}</div>` : ``}
+        <div class="muted">${(it.qty||1)}× ${esc(it.name||'Producto')}</div>
+        ${salsaTxt ? `<div class="muted">${esc(salsaTxt)}</div>` : ``}
         <div class="chips">${chips.map(chip).join('')}</div>
-        ${it.notes ? `<div class="muted">Notas: ${it.notes}</div>` : ``}
+        ${it.notes ? `<div class="muted">Notas: ${esc(it.notes)}</div>` : ``}
       `;
     }
 
     const s = String(o.status||'PENDING').toUpperCase();
     const btns =
-      (s==='PENDING')      ? `<button class="btn" data-a="IN_PROGRESS" data-id="${o.id}">Tomar</button>` :
-      (s==='IN_PROGRESS')  ? `<button class="btn ok" data-a="READY" data-id="${o.id}">Listo</button>` :
-      (s==='READY')        ? `<button class="btn" data-a="DELIVERED" data-id="${o.id}">Entregar</button>` :
-      (s==='DELIVERED' && !o.paid) ? `<button class="btn ok" data-charge data-id="${o.id}">Cobrar</button>` : ``;
+      (s==='PENDING')      ? `<button class="btn" data-a="IN_PROGRESS" data-id="${esc(o.id)}">Tomar</button>` :
+      (s==='IN_PROGRESS')  ? `<button class="btn ok" data-a="READY" data-id="${esc(o.id)}">Listo</button>` :
+      (s==='READY')        ? `<button class="btn" data-a="DELIVERED" data-id="${esc(o.id)}">Entregar</button>` :
+      (s==='DELIVERED' && !o.paid) ? `<button class="btn ok" data-charge data-id="${esc(o.id)}">Cobrar</button>` : ``;
+
+    // “Ver en Track”: usamos OID si lo tenemos
+    const trackHref = `../track/track.html?oid=${encodeURIComponent(o.id||'')}`;
 
     return `
       <div class="ord">
-        <div><b>${o.customer||'-'}</b> · <span class="muted">${meta}</span> · ${track}</div>
+        <div><b>${esc(o.customer||'-')}</b> · <span class="muted">${esc(meta)}</span> · <a class="track" href="${trackHref}" target="_blank" rel="noopener">Ver en Track</a></div>
         <div class="muted">Total: <b>${total}</b> ${o.paid ? '· <span class="chip">Pagado</span>' : ''}</div>
-        ${o.notes ? `<div class="muted"><b>Notas generales:</b> ${o.notes}</div>` : ``}
+        ${o.notes ? `<div class="muted"><b>Notas generales:</b> ${esc(o.notes)}</div>` : ``}
         ${lines}
         <div class="row" style="margin-top:6px">${btns}</div>
       </div>
     `;
   }
 
-  // RTDB live
-  db.ref('kitchen/orders').on('value', snap=>{
-    const val = snap.val() || {};
-    const list = Object.keys(val).map(id => Object.assign({ id }, val[id]));
-    // ordenar por createdAt si existe
-    list.sort((a,b)=>{
-      const ta = a.createdAt?.seconds ? a.createdAt.seconds*1000 : 0;
-      const tb = b.createdAt?.seconds ? b.createdAt.seconds*1000 : 0;
-      return ta - tb;
-    });
-    render(list);
-  });
-
+  /* =================== Acciones =================== */
   function doAction(id, action){
     fetch(ENDPOINT_STATUS, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ id, action, secret: SECRET })
-    }).then(r=>r.json()).then(j=>{
-      if (!j.ok) alert('Error: '+(j.error||''));
-      // el mirror refresca solo
-    }).catch(()=> alert('Error de red'));
+    })
+    .then(r=>r.json())
+    .then(j=>{ if (!j.ok) alert('Error: '+(j.error||'')); })
+    .catch(()=> alert('Error de red'));
   }
 
   function doCharge(id){
     const method = prompt('Método (efectivo / tarjeta / transferencia):','efectivo');
     if (method===null) return;
-    // la UI calcula total para mostrar, pero el backend puede recalcular si quieres
-    // aquí lo dejamos como opcional
     fetch(ENDPOINT_CHARGE, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ id, method, secret: SECRET })
-    }).then(r=>r.json()).then(j=>{
-      if (!j.ok) alert('Error: '+(j.error||''));
-    }).catch(()=> alert('Error de red'));
-  }
-</script>
-  <script>
-(function(){
-  var ENDPOINT = "https://seven-de-burgers-default-rtdb.firebaseio.com/kitchen/orders.json"; // <-- cambia si tu instancia difiere
-
-  function money(n){ return '$' + Number(n||0).toFixed(0); }
-  function calcTotal(o){
-    if (typeof o.subtotal === 'number') return Number(o.subtotal||0) + Number(o.tip||0);
-    var s = 0, items = Array.isArray(o.items)?o.items:[];
-    for (var i=0;i<items.length;i++){
-      var it = items[i];
-      s += Number(it.unitPrice||0) * Number(it.qty||1);
-    }
-    return s + Number(o.tip||0);
-  }
-  function esc(s){ return String(s||'').replace(/[&<>"']/g, function(m){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; }); }
-
-  function card(o){
-    var items = Array.isArray(o.items)?o.items:[];
-    var itemsHtml = '';
-    for (var i=0;i<items.length;i++){
-      var it = items[i];
-      var chips = [];
-      if (it.salsaCambiada) chips.push('Salsa: <b>'+esc(it.salsaCambiada)+'</b>');
-      else if (it.salsaDefault) chips.push('Salsa: '+esc(it.salsaDefault));
-      var ex = it.extras||{};
-      (ex.sauces||[]).forEach(function(s){ chips.push('Aderezo: '+esc(s)); });
-      (ex.ingredients||[]).forEach(function(s){ chips.push('Extra: '+esc(s)); });
-      if (ex.dlcCarne) chips.push('DLC carne 85g');
-      itemsHtml += '<div class="order-item">'
-        + '<h4>'+esc(it.name||'Producto')+' · x'+(it.qty||1)+'</h4>'
-        + (chips.length?('<div class="k-badges" style="margin-top:6px">'+chips.map(function(c){return '<div class="k-badge">'+c+'</div>';}).join('')+'</div>'):'')
-        + '</div>';
-    }
-    return '<article class="k-card" data-id="'+esc(o.id)+'">'
-      + '<div class="muted small">Cliente: <b>'+esc(o.customer||'-')+'</b> · '+esc(o.orderType||'-')+'</div>'
-      + '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(calcTotal(o))+'</b></div>'
-      + itemsHtml
-      + '</article>';
+    })
+    .then(r=>r.json())
+    .then(j=>{ if (!j.ok) alert('Error: '+(j.error||'')); })
+    .catch(()=> alert('Error de red'));
   }
 
-  function render(list){
-    var pend = [], prog=[], ready=[], bill=[];
-    list.forEach(function(o){
-      var s = String(o.status||'').toUpperCase();
-      if (s==='PENDING') pend.push(o);
-      else if (s==='IN_PROGRESS') prog.push(o);
-      else if (s==='READY') ready.push(o);
-      else if (s==='DELIVERED' && !o.paid) bill.push(o);
+  /* =================== Datos: Live + Fallback =================== */
+  let lastLiveAt = 0;
+  let unsubscribed = false;
+
+  // Suscripción en vivo (preferida)
+  try{
+    db.ref('kitchen/orders').on('value', snap=>{
+      const raw = snap.val() || {};
+      const list = Object.keys(raw).map(id => ({ id, ...raw[id] }));
+      list.sort(sortByCreatedAtAsc);
+      render(list);
+      lastLiveAt = Date.now();
     });
-    function setCol(id, arr){
-      var el = document.getElementById(id); if (!el) return;
-      el.innerHTML = arr.length ? arr.map(card).join('') : '<div class="empty">—</div>';
-    }
-    setCol('col-pending', pend);
-    setCol('col-progress', prog);
-    setCol('col-ready', ready);
-    setCol('col-bill', bill);
-  }
+  }catch(e){ /* si falla, el fallback se hará cargo */ }
 
-  function tick(){
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', ENDPOINT + '?t=' + Date.now(), true);
+  // Fallback por XHR SOLO si no hay live por 5s (o se pierde)
+  const ENDPOINT_JSON = firebaseConfig.databaseURL + "/kitchen/orders.json";
+  function fallbackTick(){
+    const stale = Date.now() - lastLiveAt > 5000; // 5s sin evento en vivo
+    if (!stale || document.hidden) return;
+    try{
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', ENDPOINT_JSON + '?t=' + Date.now(), true);
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4 && xhr.status === 200){
-          var data = JSON.parse(xhr.responseText || '{}') || {};
-          var arr = Object.keys(data).map(function(k){ return data[k]; });
-          // ordenamos por createdAt asc
-          arr.sort(function(a,b){ return (a.createdAt||0)-(b.createdAt||0); });
-          render(arr);
+          const data = JSON.parse(xhr.responseText || '{}') || {};
+          const list = Object.keys(data).map(id => ({ id, ...data[id] }));
+          list.sort(sortByCreatedAtAsc);
+          render(list);
         }
       };
       xhr.send(null);
-    } catch(e){}
+    }catch(e){}
   }
-
-  tick();
-  setInterval(tick, 2000); // cada 2s
-})();
+  setInterval(fallbackTick, 2000);
+  document.addEventListener('visibilitychange', fallbackTick, false);
 </script>
 </body>
 </html>
