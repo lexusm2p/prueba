@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme-name="Independencia">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
@@ -13,7 +13,189 @@
   <title>Kiosko — Seven de Burgers</title>
 
   <style>
-    /* …tu CSS tal cual (no lo repito para abreviar)… */
+    /* ====== FIXES GLOBALES ====== */
+    html, body { width:100%; overflow-x:hidden; }
+    * { box-sizing: border-box; }
+
+    /* Safe areas (iPhone con notch) */
+    :root{
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+    }
+
+    /* ====== CART BAR (burbuja de carrito) ====== */
+    .cartbar {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: 12px; z-index: 60;
+      display: none; align-items: center; gap: 12px;
+      background: #111a2a; border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px; box-shadow: var(--shadow);
+      padding: 10px 12px;
+    }
+    .cartbar .pill { background:#18243a; color:var(--ink); padding:8px 10px; border-radius:10px; font-size:12px;}
+    .cartbar .total { color: var(--accent); font-weight: 900; }
+
+    @media (max-width:520px){
+      .cartbar{ left:0; right:0; transform:none; width:auto; margin:0 12px; }
+    }
+
+    /* ====== LATERALES ====== */
+    .side{
+      position:fixed; top:88px; bottom:16px; width:280px; z-index:20;
+      display:flex; align-items:flex-start; pointer-events:auto;
+    }
+    .side-left{  left:16px; }
+    .side-right{ right:16px; }
+    .s-card{
+      width:100%; height:100%; overflow:auto; scrollbar-width:thin;
+      background:#0f182a; border:1px solid rgba(255,255,255,.08);
+      border-radius:14px; box-shadow:var(--shadow); padding:14px;
+    }
+    .s-title{ font-weight:800; margin-bottom:6px; }
+    .s-sub{ color:var(--muted); margin-bottom:10px; }
+    .s-mini{ color:var(--muted); font-size:12px; }
+    .s-eta{ font-size:22px; font-weight:900; color:var(--accent); margin:4px 0 8px; }
+    .s-divider{ height:1px; background:rgba(255,255,255,.08); margin:10px 0; }
+    .s-note{ color:var(--ink); opacity:.8; font-size:13px; }
+
+    .s-list{ list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:8px; }
+    .s-list li{
+      display:flex; gap:8px; align-items:center; justify-content:space-between;
+      background:#131f33; border:1px solid rgba(255,255,255,.07);
+      border-radius:10px; padding:8px 10px;
+    }
+    .s-list .price{ color:var(--accent); font-weight:800; }
+    .s-list .btn.tiny{ padding:4px 8px; font-size:12px; border-radius:8px; }
+
+    .hh-pill{
+      display:inline-flex; align-items:center; gap:8px;
+      background:#1b2438; border:1px solid rgba(255,255,255,.1);
+      border-radius:999px; padding:6px 10px; margin:8px 0;
+    }
+    .hh-pill .dot{ width:8px; height:8px; border-radius:50%; background:#777; }
+    .hh-pill.on{ border-color:#2fe38b; box-shadow:0 0 0 2px rgba(47,227,139,.12); }
+    .hh-pill.on #hhText{ color:#2fe38b; }
+
+    @media (max-width:1280px){ .side{ display:none; } }
+
+    /* ====== TIPOGRAFÍA MOBILE ====== */
+    @media (max-width: 900px){
+      body{ font-size:16px; }
+      .btn{ min-height:44px; }
+      input, select, textarea{ font-size:16px; }
+    }
+
+    /* ====== GRID TARJETAS ====== */
+    @media (max-width: 900px){
+      #cards{
+        display:grid;
+        grid-template-columns: repeat(2, minmax(150px, 1fr));
+        gap:12px;
+      }
+      .card .media{ height:110px; }
+      .icon-img{ max-width:90px; height:auto; }
+    }
+    @media (max-width: 480px){
+      #cards{ grid-template-columns: 1fr; }
+      .card .media{ height:96px; }
+      .icon-img{ max-width:80px; }
+    }
+
+    /* ====== CART BAR pegada al fondo y sin solapes ====== */
+    @media (max-width: 900px){
+      #cartBar{
+        left:0; right:0; bottom:0; transform:none;
+        border-radius: 0;
+        padding:
+          10px calc(12px + var(--safe-right))
+          calc(12px + var(--safe-bottom))
+          calc(12px + var(--safe-left));
+      }
+      main, .container{ padding-bottom: calc(96px + var(--safe-bottom)); }
+    }
+
+    /* ====== MODALES (incluye carrito) ====== */
+    .modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); z-index:70 }
+    .modal[style*="display: block"],
+    .modal[style*="display:block"]{ display:grid !important; } /* por si tu JS usa display:block */
+
+    /* Fullscreen cómodo en móvil */
+    @media (max-width: 900px){
+      .modal .modal-card{
+        width:100vw; max-width:100vw;
+        height:100dvh; max-height:100dvh;
+        border-radius:0;
+      }
+      .modal .modal-head{ padding-top: calc(12px + var(--safe-top)); }
+      .modal .modal-body{
+        overflow:auto;
+        -webkit-overflow-scrolling:touch;
+      }
+      /* FOOTER pegado con safe-area y sin solapes */
+      .modal .modal-foot{
+        position:sticky; bottom:0; left:0; right:0;
+        padding:
+          12px calc(12px + var(--safe-right))
+          calc(12px + var(--safe-bottom))
+          calc(12px + var(--safe-left));
+        background:#0f1f33;
+        border-top:1px solid rgba(255,255,255,.12);
+      }
+      /* La barra total puede “romper” a 2 líneas si falta espacio */
+      .modal .total-bar{
+        display:flex; align-items:center; gap:10px; justify-content:space-between;
+        flex-wrap:wrap;
+      }
+      .modal .total-bar .btn{
+        flex:1 1 240px;
+        max-width:100%;
+      }
+      #cartTotal, #mTotal{ min-width:120px; }
+    }
+
+    /* Extra protección para pantallas muy chicas (alto y ancho) */
+    @media (max-width: 360px), (max-height: 600px){
+      .modal .total-bar .btn{ width:100%; }
+    }
+
+    /* Tabs compactas */
+    @media (max-width: 900px){
+      .tabs{ gap:6px; }
+      .tabs .btn{ padding:10px 12px; }
+    }
+
+    /* ====== DASHBOARD MÓVIL ====== */
+    .mi{ display:none; margin:12px 0 16px; }
+    @media (max-width:1280px){ .mi{ display:block; } }
+    .mi-row{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width:520px){ .mi-row{ grid-template-columns: 1fr; } }
+    .mi-card{
+      background:#0f182a; border:1px solid rgba(255,255,255,.08);
+      border-radius:14px; box-shadow:var(--shadow); padding:12px;
+    }
+    .mi-title{ font-weight:800; margin-bottom:6px; }
+    .mi-note{ color:var(--ink); opacity:.85; font-size:13px; }
+    .mi-eta{ font-size:22px; font-weight:900; color:var(--accent); }
+
+    .mi-list{ list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:8px; }
+    .mi-list li{
+      display:flex; justify-content:space-between; align-items:center; gap:8px;
+      background:#131f33; border:1px solid rgba(255,255,255,.07);
+      border-radius:10px; padding:8px 10px;
+    }
+    .mi-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+    .mi-chip{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:6px 10px; border-radius:999px;
+      background:#131f33; border:1px solid rgba(255,255,255,.08);
+      font-size:13px;
+    }
+    /* Reutilizamos estilos de hh-pill también para móvil */
+    .hh-pill.on #miHHText{ color:#2fe38b; }
+
+    /* body.modal-open { overflow: hidden; } */
   </style>
 </head>
 
@@ -27,36 +209,154 @@
     </div>
   </div>
   <nav id="navRoles" style="display:none;gap:8px">
-    <a class="btn ghost small" href="../mesero/">Mesero</a>
-    <a class="btn ghost small" href="../cocina/">Cocina</a>
-    <a class="btn ghost small" href="../admin/">Admin</a>
+    <a class="btn ghost small" href="../mesero/index.html">Mesero</a>
+    <a class="btn ghost small" href="../cocina/index.html">Cocina</a>
+    <a class="btn ghost small" href="../admin/index.html">Admin</a>
   </nav>
 </header>
 
-<!-- …TU MARCADO (asides, main, modales, cartbar)… -->
+<aside class="side side-left" id="sideLeft" aria-label="Branding y ambiente">
+  <div class="s-card">
+    <div class="s-title">🎮 Seven de Burgers</div>
+    <div class="s-sub">Insert coin for flavor</div>
 
-<!-- ===== Scripts ===== -->
+    <div class="hh-pill" id="hhPill" aria-live="polite">
+      <span class="dot"></span><span id="hhText">HH OFF</span>
+    </div>
+    <div class="s-note" id="hhMsg"></div>
 
-<!-- (Opcional pero MUY recomendado) Aplicar tema -->
-<script type="module">
-  import { applyThemeLocal, initThemeFromSettings } from '../shared/theme.js';
+    <div class="s-divider"></div>
+    <div class="s-mini">Tiempo estimado</div>
+    <div class="s-eta" id="etaTime" data-eta-text>7–10 min</div>
 
-  // 1) Si hay data-theme-name úsalo; 2) si no, toma el global de settings/theme; 3) fallback a "Base"
-  const attr = document.documentElement.getAttribute('data-theme-name');
-  if (attr) {
-    try { applyThemeLocal(attr); } catch {}
-  } else {
-    try { initThemeFromSettings({ defaultName: 'Base' }); } catch {}
-  }
-</script>
+    <div class="s-divider"></div>
+    <div class="s-mini">Ranking hoy</div>
+    <ul class="s-list" id="rankToday"></ul>
+  </div>
+</aside>
 
-<!-- 1) Versión moderna (ESM) — sólo UNA vez -->
+<aside class="side side-right" id="sideRight" aria-label="Promos y sugerencias">
+  <div class="s-card">
+    <div class="s-title">Sugerencias</div>
+    <ul class="s-list" id="upsellList"></ul>
+
+    <div class="s-divider"></div>
+    <div class="s-title">Promos</div>
+    <ul class="s-list" id="promoList"></ul>
+
+    <div class="s-divider"></div>
+    <div class="s-title">Listos 🛎️</div>
+    <ul class="s-list" id="readyFeed"></ul>
+  </div>
+</aside>
+
+<main class="container" aria-live="polite">
+  <section class="mi" id="mobileInfo" aria-label="Resumen rápido">
+    <div class="mi-row">
+      <div class="mi-card">
+        <div class="mi-title">Happy Hour</div>
+        <div class="hh-pill" id="miHHPill" aria-live="polite">
+          <span class="dot"></span><span id="miHHText">OFF</span>
+        </div>
+        <div class="mi-note" id="miHHMsg"></div>
+      </div>
+      <div class="mi-card">
+        <div class="mi-title">Tiempo estimado</div>
+        <div class="mi-eta" id="miEta" data-eta-text>7–10 min</div>
+      </div>
+    </div>
+
+    <div class="mi-card" style="margin-top:12px;">
+      <div class="mi-title">Promos</div>
+      <ul class="mi-list" id="miPromos"></ul>
+    </div>
+
+    <div class="mi-card" style="margin-top:12px;">
+      <div class="mi-title">Más vendidos hoy</div>
+      <div class="mi-chips" id="miTop"></div>
+    </div>
+  </section>
+
+  <div class="card" id="mode">
+    <h2 style="margin:0 0 8px 0">¡Elige tu modo de juego!</h2>
+    <div class="tabs" role="tablist" aria-label="Seleccionar categoría">
+      <button class="btn tab is-active" id="btnMinis" role="tab" aria-selected="true">Minis & Combos</button>
+      <button class="btn tab" id="btnBig" role="tab" aria-selected="false">Hamburguesas grandes</button>
+    </div>
+  </div>
+
+  <div class="grid" id="cards"></div>
+</main>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="mTitle">Orden</div>
+      <button class="btn ghost small" id="mClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="total" id="mTotal">$0</div>
+        <button class="btn" id="mAdd">Agregar al pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="cartModal" role="dialog" aria-modal="true" aria-labelledby="cartTitle" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="cartTitle">Tu pedido</div>
+      <button class="btn ghost small" id="cartClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body" id="cartBody"></div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div class="total" id="cartTotal">$0</div>
+        <button class="btn" id="cartConfirm">Confirmar pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cartBar" class="cartbar" role="button" aria-label="Revisar pedido">
+  <span class="pill" id="cartCount">0 productos</span>
+  <span class="total" id="cartBarTotal">$0</span>
+  <button class="btn small" id="openCart">Revisar</button>
+</div>
+
+<div class="modal" id="pinModal" role="dialog" aria-modal="true" aria-labelledby="pinTitle" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="pinTitle">Acceso</div>
+      <button class="btn ghost small" id="pinClose" aria-label="Cerrar">Cerrar</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Ingresa PIN</label>
+        <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" />
+      </div>
+      <div class="field"><small class="muted">Temporal: 1111=Mesero · 2222=Cocina · 9999=Admin</small></div>
+    </div>
+    <div class="modal-foot">
+      <div class="total-bar">
+        <div></div>
+        <button class="btn" id="pinGo">Entrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCRIPTS ===== -->
+<!-- 1) Versión moderna (ESM) -->
 <script type="module" src="./app.js"></script>
 
-<!-- 2) Compatibilidad para navegadores sin módulos (LEGACY) -->
+<!-- 2) Compatibilidad para navegadores SIN módulos -->
 <script nomodule src="../shared/compat.js"></script>
 <script nomodule src="../shared/notify.legacy.js"></script>
 <script nomodule src="../shared/db.legacy.js"></script>
 <script nomodule src="./app.legacy.js"></script>
+
 </body>
 </html>
