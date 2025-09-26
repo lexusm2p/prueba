@@ -348,6 +348,16 @@
 <!-- Primero Firebase, luego el adaptador, al final tu app -->
 
 <script type="module" src="./app.js"></script>   <!-- o ./track.js -->
+<!-- Compat para navegadores viejos -->
+<script nomodule src="../shared/compat.js"></script>
 
+<!-- Entry legacy específico de la app -->
+<!-- Admin:   ./app.legacy.js  (ya entregado) -->
+<!-- Kiosko:  ./app.legacy.js  (debajo) -->
+<!-- Cocina:  ./app.legacy.js  (debajo) -->
+<script nomodule src="./app.legacy.js"></script>
+
+<!-- Versión moderna para navegadores actuales -->
+<script type="module" src="./app.js"></script>
 </body>
 </html>
