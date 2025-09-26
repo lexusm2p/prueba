@@ -1585,7 +1585,26 @@ document.addEventListener('click', (e)=>{
   ];
   const item = all.find(x=>x.id===id); if(!item) return;
 
-  if (item.type==='drink' || item.type==='side'){
+  if (item.type==='drink'){
+    addDrinkToCart(item);
+    return;
+  }
+  if (item.type==='side'){
+    // stays as is (tu código actual)...
+    const hhDiscPerUnit = hhDiscountPerUnit(item);
+    const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
+    state.cart.push({
+      id:item.id, name:item.name, mini:false, qty:1,
+      unitPrice:Number(item.price||0),
+      baseIngredients:[], salsaDefault:null, salsaCambiada:null,
+      extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+      notes:'',
+      lineTotal: unitBaseAfterHH,
+      hhDisc: hhDiscPerUnit
+    });
+    updateCartBar(); beep(); toast(`${item.name} agregado`);
+    return;
+  }{
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
     state.cart.push({
