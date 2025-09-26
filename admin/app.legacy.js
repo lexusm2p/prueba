@@ -1,7 +1,43 @@
 /* app.legacy.js — Admin compacto ES5 */
 
 (function(){
-  // ====== Imports “globales” (esperamos que shared/db.js ponga window.DB, etc.) ======
+  // ====== NUEVO: Helpers DOM y polyfills mínimos ======
+  var $ = function(sel, root){ return (root||document).querySelector(sel); };
+  var $$ = function(sel, root){
+    var list = (root||document).querySelectorAll(sel);
+    return Array.prototype.slice.call(list);
+  };
+
+  // Polyfill matches/closest para legacy
+  (function(){
+    var EP = window.Element && Element.prototype;
+    if (!EP) return;
+    if (!EP.matches) {
+      EP.matches = EP.msMatchesSelector || EP.webkitMatchesSelector || function(s){
+        var m = (this.document || this.ownerDocument).querySelectorAll(s);
+        var i = 0; while (m[i] && m[i] !== this) i++; return !!m[i];
+      };
+    }
+    if (!EP.closest) {
+      EP.closest = function(s){
+        var el = this;
+        while (el && el.nodeType === 1) { if (el.matches(s)) return el; el = el.parentElement || el.parentNode; }
+        return null;
+      };
+    }
+  })();
+
+  // ====== NUEVO: extend (reemplazo de Object.assign) ======
+  function extend(target){
+    target = target || {};
+    for (var i=1;i<arguments.length;i++){
+      var src = arguments[i]; if (!src) continue;
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src,k)) target[k]=src[k];
+    }
+    return target;
+  }
+
+  // ====== Imports “globales” ======
   var DB = window.DB || {};
   var notify = window.Notify || {};
   var toast = (window.toast || notify.toast || function(s){ try{ console.log('toast:',s);}catch(e){} });
@@ -47,7 +83,7 @@
     if (!t) return 0;
     if (t && typeof t.toMillis === 'function') return t.toMillis();
     if (t && typeof t.seconds !== 'undefined') return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
-    var d = new Date(t); var ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
+    var d = new Date(t); var ms = d.getTime(); return isFinite(ms) ? ms : 0; // CAMBIO: isFinite
   }
   function fmtDate(ms){
     var d = new Date(ms||Date.now());
@@ -103,13 +139,13 @@
           var prevCost = Number((current&&current.costAvg)||0);
           var newQty   = prevQty + Number(p.deltaQty||0);
           var costAvg  = newQty>0 ? ((prevQty*prevCost + Number(p.deltaQty||0)*Number(p.unitCost||0))/newQty) : prevCost;
-          return DB.upsertInventoryItem(Object.assign({}, current||{}, {
+          return DB.upsertInventoryItem(extend({}, current||{}, {
             id:(current&&current.id)||(p.itemId||p.name),
             name:(p.name)||((current&&current.name)||(p.itemId)||'Item'),
             unit:(p.unit)||((current&&current.unit)||'u'),
             currentStock:newQty,
             costAvg:costAvg
-          }));
+          })); // CAMBIO: extend en lugar de Object.assign
         });
       }
       console.warn('[legacy] no adjustInventory'); return Promise.resolve();
@@ -245,9 +281,10 @@
           var order = null;
           for (var z=0; z<rowsCacheHist.length; z++){ if (rowsCacheHist[z].id===id2){ order=rowsCacheHist[z]; break; } }
           if (!order){ toast('Pedido no encontrado'); consume.disabled=false; return; }
-          dbShim.consumeForOrder(Object.assign({id:order.id}, order), {replay:true, source:'admin'}).then(function(){
-            toast('Consumo reaplicado');
-          }).catch(function(){ toast('Error al consumir'); }).then(function(){ consume.disabled=false; });
+          dbShim.consumeForOrder(extend({id:order.id}, order), {replay:true, source:'admin'}) // CAMBIO: extend
+            .then(function(){ toast('Consumo reaplicado'); })
+            .catch(function(){ toast('Error al consumir'); })
+            .then(function(){ consume.disabled=false; });
         }
       };
 
@@ -406,7 +443,7 @@
       var batch = rows.filter(function(o){ return ok[String(o.status||'').toUpperCase()]; });
       var n=0, seq = Promise.resolve();
       batch.forEach(function(o){
-        seq = seq.then(function(){ n++; return dbShim.consumeForOrder(Object.assign({id:o.id}, o), { replay:true, source:'admin-replay' }); });
+        seq = seq.then(function(){ n++; return dbShim.consumeForOrder(extend({id:o.id}, o), { replay:true, source:'admin-replay' }); });
       });
       return seq.then(function(){ toast('Consumo recalculado: '+n+' pedidos'); });
     }).catch(function(){ toast('Error al recalcular consumo'); });
