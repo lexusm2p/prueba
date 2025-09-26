@@ -348,15 +348,19 @@
 <!-- Primero Firebase, luego el adaptador, al final tu app -->
 
 <script type="module" src="./app.js"></script>   <!-- o ./track.js -->
-<!-- Compat para navegadores viejos -->
+<!-- 1) Compat + Firebase "compat" para navegadores viejos -->
 <script nomodule src="../shared/compat.js"></script>
+<script nomodule src="../shared/notify.legacy.js"></script>
+<script nomodule src="../shared/db.legacy.js"></script>
 
-<!-- Entry legacy específico de la app -->
-<!-- Admin:   ./app.legacy.js  (ya entregado) -->
-<!-- Kiosko:  ./app.legacy.js  (debajo) -->
-<!-- Cocina:  ./app.legacy.js  (debajo) -->
+<!-- 2) Modo moderno: expone window.DB/window.toast y mantiene ESM -->
+<script type="module" src="../shared/notify.global.js"></script>
+<script type="module" src="../shared/db.global.js"></script>
+
+<!-- 3) Tu app -->
+<!-- Admin -->
+<script type="module" src="./app.js"></script>
 <script nomodule src="./app.legacy.js"></script>
-
 <!-- Versión moderna para navegadores actuales -->
 <script type="module" src="./app.js"></script>
 </body>
