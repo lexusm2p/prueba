@@ -3,8 +3,23 @@
 
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
-import { ensureAuth } from '../shared/firebase.js';
+import { app, db, ensureAuth, serverTimestamp } from '../shared/firebase.js';
 
+// === RTDB (se importa on-demand desde CDN v10) ==========================
+let getDatabase, rtdbRef, onChildAdded, onChildChanged, onChildRemoved, getRTDB;
+async function lazyRTDB() {
+  if (getRTDB) return getRTDB;
+  const mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
+  getDatabase = mod.getDatabase;
+  rtdbRef     = mod.ref;
+  onChildAdded = mod.onChildAdded;
+  onChildChanged = mod.onChildChanged;
+  onChildRemoved = mod.onChildRemoved;
+  getRTDB = () => getDatabase(app);
+  return getRTDB;
+}
+
+// ========== Mini helpers DOM ==========
 const $  = (sel, root=document)=> root.querySelector(sel);
 const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
 
@@ -23,10 +38,8 @@ const panels = {
   recetas:    $('#panel-recetas'),
   articulos:  $('#panel-articulos'),
 };
-
 tabs?.addEventListener('click', e=>{
-  const btn = e.target.closest('.tab[data-tab]');
-  if(!btn) return;
+  const btn = e.target.closest('.tab[data-tab]'); if(!btn) return;
   const name = btn.dataset.tab;
   $$('.tabs-admin .tab').forEach(b=>{
     const on = b.dataset.tab===name;
@@ -38,15 +51,16 @@ tabs?.addEventListener('click', e=>{
 
 /* ============== Utilitarios ============== */
 const money = (n)=> '$' + Number(n||0).toFixed(0);
-const toMs = (t)=> {
+const toMs = (t)=>{
   if (!t) return 0;
   if (typeof t.toMillis === 'function') return t.toMillis();
-  if (t.seconds != null) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
+  if (t && t.seconds != null) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
   const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
 };
 const fmtDate = (ms)=>{
   const d = new Date(ms||Date.now());
-  return d.toLocaleString([], { dateStyle:'short', timeStyle:'short' });
+  try { return d.toLocaleString([], { dateStyle:'short', timeStyle:'short' }); }
+  catch { return d.toLocaleString(); }
 };
 const download = (filename, text)=>{
   const a = document.createElement('a');
@@ -54,14 +68,25 @@ const download = (filename, text)=>{
   a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
 };
+function fillTable(tbody, rows){
+  if (!tbody) return;
+  tbody.innerHTML = rows.length
+    ? rows.map(tr=>`<tr>${tr.map(td=>`<td>${td}</td>`).join('')}</tr>`).join('')
+    : '<tr><td colspan="9">—</td></tr>';
+}
+function calcTotal(o={}){
+  const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) :
+    (Array.isArray(o.items)
+      ? o.items.reduce((s,it)=> s + ((typeof it.lineTotal==='number')?Number(it.lineTotal||0):(Number(it.unitPrice||0)*Number(it.qty||1))), 0)
+      : Number(o.item?.price||0) * Number(o.qty||1));
+  return sub + Number(o.tip||0);
+}
 
 /* ============== SHIMS DB ============== */
 const dbShim = {
-  // listados/rangos
   async getOrdersRange({ from, to, includeArchive, orderType }){
     if (typeof DB.getOrdersRange === 'function') return DB.getOrdersRange({ from, to, includeArchive, orderType });
     if (typeof DB.listOrdersRange === 'function') return DB.listOrdersRange({ from, to, includeArchive, orderType });
-    // último recurso: traer activos + archivados si existen
     const act = (await DB.subscribeActiveOrders?.(x=>x) || []) || [];
     const arc = (includeArchive && typeof DB.listArchivedOrders==='function')
       ? (await DB.listArchivedOrders({ from, to })) : [];
@@ -72,15 +97,9 @@ const dbShim = {
       return inRange && typeOk;
     });
   },
-
-  // inventario: compras (+costo promedio)
   async adjustInventory({ itemId, name, deltaQty, unit, unitCost }){
-    if (typeof DB.adjustInventory === 'function') {
-      return DB.adjustInventory({ itemId, name, deltaQty, unit, unitCost });
-    }
-    if (typeof DB.applyPurchaseToInventory === 'function') {
-      return DB.applyPurchaseToInventory({ itemId, name, qty: deltaQty, unit, unitCost });
-    }
+    if (typeof DB.adjustInventory === 'function') return DB.adjustInventory({ itemId, name, deltaQty, unit, unitCost });
+    if (typeof DB.applyPurchaseToInventory === 'function') return DB.applyPurchaseToInventory({ itemId, name, qty: deltaQty, unit, unitCost });
     if (typeof DB.upsertInventoryItem === 'function') {
       let current = null;
       try { if (typeof DB.getInventoryItem === 'function') current = await DB.getInventoryItem(itemId || name); } catch {}
@@ -95,41 +114,27 @@ const dbShim = {
         name: name || current?.name || itemId || 'Item',
         unit: unit || current?.unit || 'u',
         currentStock: newQty,
-        costAvg: costAvg
+        costAvg
       });
     }
     console.warn('[admin] No hay método para ajustar inventario');
   },
-
-  // inventario: consumo por pedido (usa recetas/BOM del backend)
   async consumeForOrder(order, opts={}){
-    if (typeof DB.consumeInventoryForOrder === 'function') {
-      return DB.consumeInventoryForOrder(order, opts);
-    }
-    if (typeof DB.applyInventoryForOrder === 'function') {
-      return DB.applyInventoryForOrder(order, opts);
-    }
+    if (typeof DB.consumeInventoryForOrder === 'function') return DB.consumeInventoryForOrder(order, opts);
+    if (typeof DB.applyInventoryForOrder === 'function') return DB.applyInventoryForOrder(order, opts);
     if (Array.isArray(order?.items) && typeof DB.consumeInventoryItem === 'function'){
       for (const it of order.items){
-        try {
-          await DB.consumeInventoryItem({ productId: it.id, qty: it.qty||1, orderId: order.id, ...opts });
-        } catch(e){ console.warn('consumeInventoryItem fail', it?.id, e); }
+        try { await DB.consumeInventoryItem({ productId: it.id, qty: it.qty||1, orderId: order.id, ...opts }); }
+        catch(e){ console.warn('consumeInventoryItem fail', it?.id, e); }
       }
       return;
     }
     console.warn('[admin] No hay método de consumo; noop');
   },
-
   async setInitialStock({ name, qty, unit }){
-    if (typeof DB.setInitialStock === 'function') {
-      return DB.setInitialStock({ name, qty, unit });
-    }
-    if (typeof DB.upsertInventoryItem === 'function') {
-      return DB.upsertInventoryItem({
-        id: name, name, unit: unit || 'u', currentStock: Number(qty||0),
-        costAvg: 0
-      });
-    }
+    if (typeof DB.setInitialStock === 'function') return DB.setInitialStock({ name, qty, unit });
+    if (typeof DB.upsertInventoryItem === 'function')
+      return DB.upsertInventoryItem({ id:name, name, unit: unit||'u', currentStock:Number(qty||0), costAvg:0 });
     console.warn('[admin] No hay método para setInitialStock; noop');
   }
 };
@@ -144,17 +149,14 @@ $('#btnRepGen')?.addEventListener('click', async ()=>{
 
     const rows = await dbShim.getOrdersRange({ from, to, includeArchive, orderType:type });
 
-    // KPIs
     const ordersCount = rows.length;
-    const totals = rows.map(calcTotal);
-    const revenue = totals.reduce((a,b)=>a+b,0);
+    const revenue = rows.reduce((s,o)=> s + calcTotal(o), 0);
     const units   = rows.reduce((a,o)=> a + (Array.isArray(o.items)?o.items.reduce((s,it)=>s+(Number(it.qty||1)),0) : Number(o.qty||1)), 0);
     $('#kpiOrders').textContent = String(ordersCount);
     $('#kpiUnits').textContent  = String(units);
     $('#kpiRevenue').textContent= money(revenue);
     $('#kpiAvg').textContent    = money(ordersCount ? (revenue/ordersCount) : 0);
 
-    // Top y Low
     const acc = new Map();
     for (const o of rows){
       const items = Array.isArray(o.items) ? o.items : (o.item ? [{ name:o.item.name, unitPrice:o.item.price, qty:o.qty||1 }] : []);
@@ -171,15 +173,13 @@ $('#btnRepGen')?.addEventListener('click', async ()=>{
     fillTable($('#tblTop tbody'), arr.slice(0,10).map(r=>[r.name, r.units, money(r.revenue)]));
     fillTable($('#tblLow tbody'), arr.slice(-10).map(r=>[r.name, r.units, money(r.revenue)]));
 
-    // Por hora
     const perHour = new Map();
     for (const o of rows){
       const ms = toMs(o.createdAt || o.timestamps?.createdAt);
       const h = new Date(ms).getHours();
       const k = String(h).padStart(2,'0') + ':00';
       const prev = perHour.get(k) || { k, orders:0, rev:0 };
-      prev.orders += 1;
-      prev.rev += calcTotal(o);
+      prev.orders += 1; prev.rev += calcTotal(o);
       perHour.set(k, prev);
     }
     const arrH = Array.from(perHour.values()).sort((a,b)=> a.k.localeCompare(b.k));
@@ -191,23 +191,11 @@ $('#btnRepGen')?.addEventListener('click', async ()=>{
     toast('Error al generar reporte');
   }
 });
-function fillTable(tbody, rows){
-  if (!tbody) return;
-  tbody.innerHTML = rows.length
-    ? rows.map(tr=>`<tr>${tr.map(td=>`<td>${td}</td>`).join('')}</tr>`).join('')
-    : '<tr><td colspan="9">—</td></tr>';
-}
-function calcTotal(o={}){
-  const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) :
-    (Array.isArray(o.items) ? o.items.reduce((s,it)=> s+((typeof it.lineTotal==='number')?Number(it.lineTotal||0):(Number(it.unitPrice||0)*Number(it.qty||1))), 0)
-                             : Number(o.item?.price||0) * Number(o.qty||1));
-  const tip = Number(o.tip||0);
-  return sub + tip;
-}
 
 /* ============== HISTORIAL ============== */
 $('#btnHistLoad')?.addEventListener('click', loadHist);
 $('#btnHistCSV')?.addEventListener('click', exportHistCSV);
+
 async function loadHist(){
   const from = $('#repFrom')?.valueAsDate || new Date(new Date().setHours(0,0,0,0));
   const to   = $('#repTo')?.valueAsDate   || new Date();
@@ -227,7 +215,8 @@ async function loadHist(){
 
   const tb = $('#tblHist tbody');
   tb.innerHTML = rows.length ? rows.map(o=>{
-    const itemsTxt = Array.isArray(o.items) ? o.items.map(it=>`${it.qty||1}× ${it.name||'Item'}`).join(', ') : (o.item? `${o.qty||1}× ${o.item?.name||'Item'}` : '—');
+    const itemsTxt = Array.isArray(o.items) ? o.items.map(it=>`${it.qty||1}× ${it.name||'Item'}`).join(', ')
+                  : (o.item? `${o.qty||1}× ${o.item?.name||'Item'}` : '—');
     const st = String(o.status||'').toUpperCase();
     return `<tr>
       <td>${fmtDate(toMs(o.createdAt||o.timestamps?.createdAt))}</td>
@@ -252,8 +241,7 @@ async function loadHist(){
       return;
     }
     if (consume){
-      const id = consume.dataset.id;
-      consume.disabled = true;
+      const id = consume.dataset.id; consume.disabled = true;
       try{
         const order = rows.find(x=> x.id===id);
         if (!order) { toast('Pedido no encontrado'); return; }
@@ -267,7 +255,8 @@ async function loadHist(){
   toast('Historial cargado');
 }
 function exportHistCSV(){
-  const rows = $$('#tblHist tbody tr').map(tr=> Array.from(tr.children).slice(0,6).map(td=> `"${td.textContent.replace(/"/g,'""')}"`).join(','));
+  const rows = $$('#tblHist tbody tr')
+    .map(tr=> Array.from(tr.children).slice(0,6).map(td=> `"${td.textContent.replace(/"/g,'""')}"`).join(','));
   const header = ['Fecha','Cliente','Tipo','Artículos','Total','Estado'].join(',');
   download(`historial_${Date.now()}.csv`, [header, ...rows].join('\n'));
 }
@@ -276,6 +265,7 @@ function exportHistCSV(){
 let unsubCob = null;
 $('#btnCobrosRefresh')?.addEventListener('click', startCobros);
 startCobros();
+
 function startCobros(){
   unsubCob?.(); unsubCob = DB.subscribeActiveOrders(list=>{
     const pendingCharge = (list||[]).filter(o=> String(o.status||'').toUpperCase()==='DELIVERED' && !o.paid);
@@ -293,7 +283,8 @@ function startCobros(){
     const by = { efectivo:0, tarjeta:0, transferencia:0, otro:0 };
     for (const o of hist){
       const m = String(o.payMethod||'otro').toLowerCase();
-      if (by[m]==null) by.otro += Number(o.totalCharged||calcTotal(o)); else by[m] += Number(o.totalCharged||calcTotal(o));
+      const val = Number(o.totalCharged||calcTotal(o));
+      if (by[m]==null) by.otro += val; else by[m] += val;
     }
     $('#kpiCobrosCount').textContent = String(hist.length);
     $('#kpiCobrosTotal').textContent = money(total);
@@ -312,17 +303,15 @@ function startCobros(){
 
   $('#tblPorCobrar tbody')?.addEventListener('click', async e=>{
     const btn = e.target.closest('button[data-a="charge"]'); if(!btn) return;
-    const id = btn.dataset.id;
-    btn.disabled = true;
+    const id = btn.dataset.id; btn.disabled = true;
     try{
       const method = prompt('Método (efectivo/tarjeta/transferencia):','efectivo');
       if (method==null) return;
       await DB.updateOrder(id, { paid:true, paidAt: new Date(), payMethod: method, totalCharged: null });
       await (DB.setOrderStatus ? DB.setOrderStatus(id, 'DONE', {}) : DB.setStatus?.(id, 'DONE', {}));
       toast('Cobro registrado');
-    }catch(err){
-      console.error(err); toast('Error al cobrar');
-    }finally{ btn.disabled=false; }
+    }catch(err){ console.error(err); toast('Error al cobrar'); }
+    finally{ btn.disabled=false; }
   });
 }
 
@@ -337,34 +326,26 @@ async function onRegisterPurchase(){
     const unit = $('#pUnit')?.value?.trim() || 'u';
     if (!name || !(qty>0)) { toast('Completa nombre y cantidad'); return; }
 
-    // Registrar compra (bitácora)
+    const unitCost = qty>0 ? (cost/qty) : 0;
+
     if (typeof DB.recordPurchase === 'function') {
-      await DB.recordPurchase({ itemId: name, qty, unitCost: (qty>0? (cost/qty) : 0), vendor, name, totalCost: cost });
+      await DB.recordPurchase({ itemId: name, qty, unitCost, vendor, name, totalCost: cost });
     } else if (typeof DB.upsertPurchase === 'function') {
-      await DB.upsertPurchase({ itemId: name, qty, unitCost: (qty>0? (cost/qty) : 0), vendor, name, totalCost: cost, createdAt: Date.now() });
+      await DB.upsertPurchase({ itemId: name, qty, unitCost, vendor, name, totalCost: cost, createdAt: Date.now() });
     }
 
-    // Aplicar al inventario (stock y costo promedio)
-    await dbShim.adjustInventory({
-      itemId: name, name, deltaQty: qty, unit, unitCost: (qty>0? (cost/qty) : 0)
-    });
+    await dbShim.adjustInventory({ itemId: name, name, deltaQty: qty, unit, unitCost });
 
     toast('Compra registrada y aplicada a inventario');
     $('#pName').value=''; $('#pQty').value=''; $('#pCost').value=''; $('#pVendor').value='';
-  }catch(e){
-    console.error(e);
-    toast('Error al registrar compra');
-  }
+  }catch(e){ console.error(e); toast('Error al registrar compra'); }
 }
 
 /* ============== INVENTARIO ============== */
 let INV_CACHE = [];
 function renderInv(){
   const q = ($('#invSearch')?.value||'').toLowerCase();
-  const list = INV_CACHE.filter(x=>{
-    const n = String(x.name||'').toLowerCase();
-    return !q || n.includes(q);
-  });
+  const list = INV_CACHE.filter(x=> !q || String(x.name||'').toLowerCase().includes(q));
   fillTable($('#tblInv tbody'), list.map(it=>{
     const val = Number(it.currentStock||0) * Number(it.costAvg||0);
     return [it.name||'-', Number(it.currentStock||0), it.unit||'-', money(it.costAvg||0), money(val)];
@@ -373,14 +354,13 @@ function renderInv(){
 $('#btnInvRefresh')?.addEventListener('click', ()=> renderInv());
 $('#invSearch')?.addEventListener('input', ()=> renderInv());
 
-// Suscripción inventario
 if (typeof DB.subscribeInventory === 'function') {
   DB.subscribeInventory(list=>{ INV_CACHE = list||[]; renderInv(); });
 } else if (typeof DB.listInventory === 'function') {
   DB.listInventory().then(list=>{ INV_CACHE = list||[]; renderInv(); }).catch(()=>{});
 }
 
-// Stock inicial (opcional)
+// Stock inicial
 $('#btnInvInitSet')?.addEventListener('click', async ()=>{
   const name = $('#invInitName')?.value?.trim();
   const qty  = Number($('#invInitQty')?.value||0);
@@ -390,12 +370,10 @@ $('#btnInvInitSet')?.addEventListener('click', async ()=>{
     await dbShim.setInitialStock({ name, qty, unit });
     toast('Stock inicial establecido');
     $('#invInitName').value=''; $('#invInitQty').value=''; $('#invInitUnit').value='';
-  }catch(e){
-    console.error(e); toast('Error al fijar stock inicial');
-  }
+  }catch(e){ console.error(e); toast('Error al fijar stock inicial'); }
 });
 
-// Recalcular consumo (hoy / rango) — opcional si agregas botones en HTML
+// Recalcular consumo
 $('#btnInvRecalcToday')?.addEventListener('click', async ()=>{
   const from = new Date(new Date().setHours(0,0,0,0));
   const to   = new Date();
@@ -417,9 +395,7 @@ async function replayConsumption({ from, to }){
       catch(e){ console.warn('consume replay fail', o.id, e); }
     }
     toast(`Consumo recalculado: ${n} pedidos`);
-  }catch(e){
-    console.error(e); toast('Error al recalcular consumo');
-  }
+  }catch(e){ console.error(e); toast('Error al recalcular consumo'); }
 }
 
 /* ============== PROVEEDORES ============== */
@@ -429,9 +405,7 @@ $('#btnSaveVendor')?.addEventListener('click', async ()=>{
     const contact = $('#vContact')?.value?.trim();
     if (!name){ toast('Completa el nombre'); return; }
     const upsert = DB.upsertSupplier || DB.upsertVendor || DB.saveSupplier;
-    if (typeof upsert === 'function') {
-      await upsert({ name, contact, active:true });
-    }
+    if (typeof upsert === 'function') await upsert({ name, contact, active:true });
     toast('Proveedor guardado'); $('#vName').value=''; $('#vContact').value='';
   }catch(e){ console.error(e); toast('Error al guardar proveedor'); }
 });
@@ -441,7 +415,7 @@ if (typeof DB.subscribeSuppliers === 'function'){
   });
 }
 
-/* ============== PRODUCTOS (sólo lectura por ahora) ============== */
+/* ============== PRODUCTOS (solo lectura) ============== */
 $('#btnReloadCatalog')?.addEventListener('click', async ()=>{
   const cat = await DB.fetchCatalogWithFallback();
   const count = ['burgers','minis','drinks','sides'].reduce((s,k)=> s + (Array.isArray(cat[k])?cat[k].length:0), 0);
@@ -457,7 +431,7 @@ if (typeof DB.subscribeProducts === 'function'){
   });
 }
 
-/* ============== RECETAS (sólo lectura + modal) ============== */
+/* ============== RECETAS (solo lectura + modal) ============== */
 let RECIPES = [];
 if (typeof DB.subscribeRecipes === 'function'){
   DB.subscribeRecipes(list=>{
@@ -474,19 +448,20 @@ $('#tblRecipes tbody')?.addEventListener('click', e=>{
   const modal = $('#rcpModal'); const body = $('#rcpBody'); const title = $('#rcpTitle');
   if (!modal) return;
   title.textContent = rec.name || 'Receta';
-  body.innerHTML = `<div class="muted small">Rinde base: ${rec.baseYieldMl||0} ml</div>` +
-    `<ul>${(rec.ingredients||[]).map(i=>`<li>${i.qty||''} ${i.unit||''} — ${i.name||''}</li>`).join('')}</ul>`;
+  body.innerHTML = `<div class="muted small">Rinde base: ${rec.baseYieldMl||0} ml</div>`
+    + `<ul>${(rec.ingredients||[]).map(i=>`<li>${i.qty||''} ${i.unit||''} — ${i.name||''}</li>`).join('')}</ul>`;
   modal.style.display='grid';
 });
 $('#rcpClose')?.addEventListener('click', ()=> { const m=$('#rcpModal'); if(m) m.style.display='none'; });
 
-/* ============== ARTÍCULOS (CRUD básico) ============== */
+/* ============== ARTÍCULOS (CRUD) ============== */
 let ART_CACHE = [];
 function renderArt(){
   const q = ($('#artSearch')?.value||'').toLowerCase();
-  const rows = ART_CACHE.filter(a=> !q || String(a.name||'').toLowerCase().includes(q) || String(a.desc||'').toLowerCase().includes(q));
-  const tb = $('#tblArticulos tbody');
-  if (!tb) return;
+  const rows = ART_CACHE.filter(a=> !q
+    || String(a.name||'').toLowerCase().includes(q)
+    || String(a.desc||'').toLowerCase().includes(q));
+  const tb = $('#tblArticulos tbody'); if (!tb) return;
   tb.innerHTML = rows.length ? rows.map(a=>`
     <tr>
       <td class="break">${a.name||'-'}</td>
@@ -520,7 +495,6 @@ async function deleteArticle(id){
     toast('Artículo eliminado');
   }catch(e){ console.error(e); toast('Error al eliminar'); }
 }
-
 function openArticleModal(a={}){
   const modal = document.createElement('div');
   modal.className='modal open';
@@ -553,17 +527,14 @@ function openArticleModal(a={}){
       if(!name){ toast('Nombre requerido'); return; }
       try{
         const upsert = DB.upsertArticle || DB.saveArticle;
-        if (typeof upsert === 'function') {
-          await upsert({ id: a?.id, name, price, active, desc });
-        }
-        toast('Artículo guardado');
-        modal.remove();
+        if (typeof upsert === 'function') await upsert({ id: a?.id, name, price, active, desc });
+        toast('Artículo guardado'); modal.remove();
       }catch(err){ console.error(err); toast('Error al guardar'); }
     }
   });
 }
 
-/* ======== HAPPY HOUR (vinculado a DB) ======== */
+/* ======== HAPPY HOUR ======== */
 function populateHappyForm(hh){
   if (!hh) return;
   if ($('#hhEnabled')) $('#hhEnabled').value = hh.enabled ? 'on' : 'off';
@@ -574,59 +545,100 @@ function populateHappyForm(hh){
     const dt = new Date(Number(hh.endsAt||0));
     $('#hhEndsAt').value = new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
   }
-}$('#btnSaveHappy')?.addEventListener('click', async ()=>{
+}
+$('#btnSaveHappy')?.addEventListener('click', async ()=>{
   try{
     const enabled = ($('#hhEnabled')?.value==='on');
     const discountPercent = Number($('#hhDisc')?.value||0);
     const bannerText = $('#hhMsg')?.value||'';
     const durationMin = Number($('#hhDurMin')?.value||0) || null;
     const endsAt = $('#hhEndsAt')?.value ? new Date($('#hhEndsAt').value).getTime() : null;
-
     const payload = { enabled, discountPercent, bannerText, durationMin, endsAt };
-    if (typeof DB.setHappyHour === 'function') {
-      await DB.setHappyHour(payload);
-    } else if (typeof DB.updateSettings === 'function') {
-      await DB.updateSettings({ happyHour: payload });
-    }
+    if (typeof DB.setHappyHour === 'function') await DB.setHappyHour(payload);
+    else if (typeof DB.updateSettings === 'function') await DB.updateSettings({ happyHour: payload });
     toast('Happy Hour guardado');
   }catch(e){ console.error(e); toast('Error en Happy Hour'); }
 });
 if (typeof DB.subscribeHappyHour === 'function'){
   DB.subscribeHappyHour(hh=>{
     populateHappyForm(hh);
-    const pill = $('#hhCountdown');
-    if (!pill) return;
+    const pill = $('#hhCountdown'); if (!pill) return;
     if (!hh?.enabled){ pill.textContent='Inactivo'; pill.className='muted small'; return; }
     const tick = ()=>{
       const endsMs = Number(hh.endsAt||0);
       const left = Math.max(0, endsMs - Date.now());
       const min = Math.floor(left/60000), sec = Math.floor((left%60000)/1000);
-      pill.textContent = endsMs ? `Activo · faltan ${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `Activo (-${Number(hh.discountPercent||0)}%)`;
+      pill.textContent = endsMs ? `Activo · faltan ${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+                                : `Activo (-${Number(hh.discountPercent||0)}%)`;
       pill.className = 'muted small is-running';
     };
-    tick();
-    clearInterval(window.__admHHInt); window.__admHHInt = setInterval(tick, 1000);
+    tick(); clearInterval(window.__admHHInt); window.__admHHInt = setInterval(tick, 1000);
   });
 }
 
-/* ============== TEMAS (si tu HTML los expone aquí) ============== */
+/* ============== TEMAS ============== */
 $('#btnThemeGlobal')?.addEventListener('click', async ()=>{
   try{
     const name = $('#themeSelect')?.value || '';
     if (!name) { toast('Selecciona un tema'); return; }
-    if (typeof DB.setTheme === 'function') {
-      await DB.setTheme({ name });
-      toast('Tema GLOBAL actualizado');
-    } else {
-      toast('DB.setTheme no disponible');
-    }
+    if (typeof DB.setTheme === 'function') { await DB.setTheme({ name }); toast('Tema GLOBAL actualizado'); }
+    else { toast('DB.setTheme no disponible'); }
   }catch(e){ console.error(e); toast('Error al guardar tema'); }
 });
 
-/* ============== Init triggers por defecto ============== */
+/* ============== KitchenBridge (RTDB → Firestore) ============== */
+/**
+ * Refleja cambios hechos por la tablet (RTDB) en Firestore.
+ * Campos soportados desde RTDB: status, paid, payMethod, totalCharged, paidAt.
+ * No borra documentos; sólo mergea cambios para mantener compatibilidad.
+ */
+let __bridgeOn = false;
+async function activateKitchenBridge(){
+  if (__bridgeOn) return;
+  try{
+    await ensureAuth();
+    await lazyRTDB();
+    const rtdb = getRTDB();
+    const ORD = rtdbRef(rtdb, 'kitchen/orders');
+
+    const applyPatch = async (o) => {
+      if (!o || !o.id) return;
+      const patch = { updatedAt: serverTimestamp() };
+      if (o.status) patch.status = String(o.status).toUpperCase();
+      if (o.paid) {
+        patch.paid = true;
+        if (o.payMethod)    patch.payMethod = String(o.payMethod);
+        if (typeof o.totalCharged === 'number') patch.totalCharged = Number(o.totalCharged);
+        patch.paidAt = serverTimestamp();
+      }
+      if (o.startedAt)   patch.startedAt   = serverTimestamp();
+      if (o.readyAt)     patch.readyAt     = serverTimestamp();
+      if (o.deliveredAt) patch.deliveredAt = serverTimestamp();
+      await DB.upsertOrder({ id: o.id, ...patch });
+    };
+
+    onChildAdded(ORD, async (snap)=>{ try{ await applyPatch(snap.val()); }catch(e){ console.warn('bridge add', e); } });
+    onChildChanged(ORD, async (snap)=>{ try{ await applyPatch(snap.val()); }catch(e){ console.warn('bridge chg', e); } });
+    onChildRemoved(ORD, async (snap)=>{ // si se elimina en RTDB, marcamos DONE en Firestore (sin borrar)
+      const o = snap.val(); if (!o || !o.id) return;
+      try { await DB.setOrderStatus(o.id, 'DONE', {}); } catch(e){ console.warn('bridge rm', e); }
+    });
+
+    __bridgeOn = true;
+    console.info('[KitchenBridge] activo (RTDB → Firestore)');
+    const badge = $('#bridgeBadge'); if (badge) { badge.textContent='Bridge ON'; badge.classList.add('ok'); }
+  }catch(e){
+    console.warn('[KitchenBridge] no se pudo activar', e);
+  }
+}
+
+/* ============== Bootstrap ============== */
 (async function bootstrap(){
   try { await ensureAuth(); } catch(e){ console.warn('[admin] anon auth fail', e); }
   if (!$('.tabs-admin .tab.is-active')) { $('.tabs-admin .tab')?.click(); }
   $('#btnRepGen')?.click();
   loadHist().catch(()=>{});
+
+  // Activa el puente para mantener sincronía con la tablet legacy
+  activateKitchenBridge(); // no estorba si no usas RTDB/Tablet
 })();
