@@ -472,12 +472,19 @@
   setHistMode(sessionStorage.getItem('hist.compact') === '1');
   toggleBtn?.addEventListener('click', ()=> setHistMode(!histWrap.classList.contains('compact')));
 </script>
-<!-- 1) Polyfills/compat para navegadores viejos -->
+<!-- 1) Compat + Firebase "compat" para navegadores viejos -->
 <script nomodule src="../shared/compat.js"></script>
+<script nomodule src="../shared/notify.legacy.js"></script>
+<script nomodule src="../shared/db.legacy.js"></script>
 
-<!-- 2) Versión legacy del Admin (sin sintaxis moderna) -->
-<script nomodule src="./app.legacy.js"></script>
+<!-- 2) Modo moderno: expone window.DB/window.toast y mantiene ESM -->
+<script type="module" src="../shared/notify.global.js"></script>
+<script type="module" src="../shared/db.global.js"></script>
 
+<!-- 3) Tu app -->
+<!-- Admin -->
+<script type="module" src="./app.js"></script>
+<script nomodule src="./app.legacy.js"></script
 <!-- 3) Versión moderna (ESM) para navegadores actuales -->
 <script type="module" src="./app.js"></script>
 </body>
