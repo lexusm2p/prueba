@@ -1377,8 +1377,9 @@ const orderBase = {
 };
   }
 }
-
 function recomputeLine(line){
+  if (line?.type === 'drink') return;  // ← bebidas: su total lo calcula ensureDrinkPrices()
+
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
   const extrasIngr = normalizeExtraIngredients();
