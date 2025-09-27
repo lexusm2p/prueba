@@ -75,8 +75,7 @@ lastVoucher: null,       // {code, pct, expiresAt}
 };
 /* ======================= Bebidas: precios + maridajes ======================= */
 /** Precio sugerido para lata 355 ml */
-const DRINK_PRICE = { solo: 17, combo: 10 };
-
+const DRINK_PRICE = { solo: 20, combo: 17 };
 /** Detección flexible por id o por nombre (por si cambian ids en catálogo) */
 function findDrinkFlexible(key=''){
   const list = state.menu?.drinks || [];
