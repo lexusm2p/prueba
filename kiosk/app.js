@@ -936,21 +936,14 @@ try {
   holder.className = 'field';
   holder.innerHTML = `<label>Maridaje sugerido</label><div id="pairBox" class="ul-clean" style="gap:6px"></div>`;
 
-  // ⬇️ Inserta ANTES del textarea de comentarios
   const notesField = body.querySelector('#notes')?.closest('.field');
-  if (notesField) {
-    body.insertBefore(holder, notesField);
-  } else {
-    body.appendChild(holder);
-  }
+  if (notesField) body.insertBefore(holder, notesField); else body.appendChild(holder);
 
-  const baseId = (base?.id || item?.baseOf || item?.id || '').toString().toLowerCase();
+  const baseId   = (base?.id || item?.baseOf || item?.id || '').toString().toLowerCase();
   const pairDefs = PAIRING_BY_BURGER[baseId] || PAIRING_FALLBACK;
 
   const box = holder.querySelector('#pairBox');
-  const comboOn = isDrinkComboUnlocked(); // <— antes: cartHasFood()
-  ...
-  btn.textContent = `${d.name} · $${comboOn?DRINK_PRICE.combo:DRINK_PRICE.solo}`;
+  const comboOn = isDrinkComboUnlocked();
   pairDefs.forEach(p => {
     const d = findDrinkFlexible(p.key);
     if (!d) return;
@@ -967,7 +960,7 @@ try {
     const b = e.target.closest('button[data-add-drink]');
     if(!b) return;
     addDrinkByKey(b.getAttribute('data-add-drink'));
-    const comboNow = isDrinkComboUnlocked(); // <— antes: cartHasFood()
+    const comboNow = isDrinkComboUnlocked();
     holder.querySelectorAll('button[data-add-drink]').forEach(btn=>{
       const key = btn.getAttribute('data-add-drink');
       const d = findDrinkFlexible(key);
