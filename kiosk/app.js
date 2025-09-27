@@ -992,8 +992,15 @@ try {
   hhDisc: hhDiscTotal
 };
 
-      if (existingIndex!==null){ state.cart[existingIndex] = newLine; toast('Línea actualizada'); }
-      else { state.cart.push(newLine); toast('Agregado al pedido'); }
+      if (existingIndex!==null){
+  state.cart[existingIndex] = newLine;
+  ensureDrinkPrices();          // ← ajusta bebidas
+  toast('Línea actualizada');
+} else {
+  state.cart.push(newLine);
+  ensureDrinkPrices();          // ← ajusta bebidas
+  toast('Agregado al pedido');
+}
 
       checkComboAchievement();
       document.getElementById('modal')?.classList.remove('open');
@@ -1158,25 +1165,70 @@ function openCartModal(){
       const act = btn.dataset.a;
 
       if (act === 'remove') {
-        state.cart.splice(i, 1);
-        updateCartBar(); openCartModal();
-        return;
-      }
-      if (act === 'more') {
-        line.qty = Math.min(99, (line.qty || 1) + 1);
-        // Bebidas: su total lo maneja ensureDrinkPrices()
-  if (line?.type === 'drink') return;
-        recomputeLine(line);
-        updateCartBar(); openCartModal();
-        checkComboAchievement();
-        return;
-      }
-      if (act === 'less') {
-        line.qty = Math.max(1, (line.qty || 1) - 1);
-        recomputeLine(line);
-        updateCartBar(); openCartModal();
-        return;
-      }
+  state.cart.splice(i, 1);
+  ensureDrinkPrices();          // ← si quitaste la última comida, bebidas vuelven a “solo”
+  updateCartBar(); openCartModal();
+  return;
+}
+
+if (act === 'more') {
+  line.qty = Math.min(99, (line.qty || 1) + 1);
+  if (line?.type === 'drink') {
+    ensureDrinkPrices();        // ← respeta combo/solo
+    updateCartBar(); openCartModal();
+    return;
+  }
+  recomputeLine(line);
+  ensureDrinkPrices();          // ← por si este “+” activa combo para bebidas
+  updateCartBar(); openCartModal();
+  checkComboAchievement();
+  return;
+}
+
+if (act === 'less') {
+  line.qty = Math.max(1, (line.qty || 1) - 1);
+  if (line?.type === 'drink') {
+    ensureDrinkPrices();        // ← respeta combo/solo
+    updateCartBar(); openCartModal();
+    return;
+  }
+  recomputeLine(line);
+  ensureDrinkPrices();          // ← por si este “-” desactiva combo para bebidas
+  updateCartBar(); openCartModal();
+  return;
+}if (act === 'remove') {
+  state.cart.splice(i, 1);
+  ensureDrinkPrices();          // ← si quitaste la última comida, bebidas vuelven a “solo”
+  updateCartBar(); openCartModal();
+  return;
+}
+
+if (act === 'more') {
+  line.qty = Math.min(99, (line.qty || 1) + 1);
+  if (line?.type === 'drink') {
+    ensureDrinkPrices();        // ← respeta combo/solo
+    updateCartBar(); openCartModal();
+    return;
+  }
+  recomputeLine(line);
+  ensureDrinkPrices();          // ← por si este “+” activa combo para bebidas
+  updateCartBar(); openCartModal();
+  checkComboAchievement();
+  return;
+}
+
+if (act === 'less') {
+  line.qty = Math.max(1, (line.qty || 1) - 1);
+  if (line?.type === 'drink') {
+    ensureDrinkPrices();        // ← respeta combo/solo
+    updateCartBar(); openCartModal();
+    return;
+  }
+  recomputeLine(line);
+  ensureDrinkPrices();          // ← por si este “-” desactiva combo para bebidas
+  updateCartBar(); openCartModal();
+  return;
+}
       if (act === 'edit') {
         const item = findItemById(line.id);
         const base = baseOfItem(item);
