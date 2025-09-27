@@ -137,7 +137,7 @@ function ensureDrinkPrices(cart = state.cart){
     state.drinkComboActive = unlocked;
     if (unlocked) {
       try { playAchievement(); } catch {}
-      toast('🎉 ¡Desbloqueaste Combo Drink Seven! Bebidas a $17');
+      toast('🎉 ¡Desbloqueaste Combo Drink Seven! Bebidas y obtienes un descuento');
     } else {
       toast('Combo Drink Seven desactivado — bebidas a $20');
     }
