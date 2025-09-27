@@ -856,12 +856,12 @@ function openItemModal(item, base, existingIndex=null){
       </div>
     </div>` : '' }
     <div class="hr"></div>
-    <div class="field"><label>Potenciar sabor (cambio sin costo)</label>
+    <div class="field"><label>Cambia la salsa base (sin costo)</label>
       <select id="swapSauce"><option value="">Dejar salsa por defecto</option>
         ${((base?.salsasSugeridas || [base?.suggested]).filter(Boolean) || [])
            .map(s=>`<option value="${s}" ${swapVal===s?'selected':''}>${s}</option>`).join('')}
       </select>
-      <div class="muted small">* Extras se cobran aparte.</div>
+      <div class="muted small">* Los aderezos de abajo se cobran aparte.</div>
     </div>
     <div class="field"><label>Aderezos extra</label>
       <div class="ul-clean" id="sauces">
