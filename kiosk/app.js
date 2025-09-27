@@ -60,8 +60,10 @@ isSubmittingOrder: false,
   loyaltyAskShown: false,
   loyaltyOptIn: false,
   lastCollectible: null,   // {rarity, name, title, palette, meta}
-  lastVoucher: null,       // {code, pct, expiresAt}
+lastVoucher: null,       // {code, pct, expiresAt}
 
+  // ===== Combo Drink Seven =====
+  drinkComboActive: false, // UI/sonido controlado por ensureDrinkPrices()
   // ===== Regalo: PowerDog Mini por ticket >= $117 =====
   gift: {
     threshold: 117,
