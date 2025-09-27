@@ -336,6 +336,7 @@ async function init(){
   }
 
   startThemeWatcher();
+  ensureDrinkPrices();
   renderCards();
   setActiveTab('mini');
   updateCartBar();
