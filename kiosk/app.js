@@ -599,7 +599,7 @@ function hideFollowCta(){ const c = document.getElementById('followCta'); if (c)
 let hhTimer = null;
 const HH_REFRESH_GUARD_KEY = 'hhRefreshGuard-app';
 const fmtMMSS = (ms)=>{
-  const s = Math.max(0, Math.floor(ms/1000));
+  const s = (0, Math.floor(ms/1000));
   const m = Math.floor(s/60);
   const ss = s%60;
   return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
@@ -1642,12 +1642,12 @@ document.addEventListener('click', (e)=>{
   ];
   const item = all.find(x=>x.id===id); if(!item) return;
 
-  if (item.type==='drink'){
+  if (item.type === 'drink') {
     addDrinkToCart(item);
     return;
   }
-  if (item.type==='side'){
-    // stays as is (tu código actual)...
+
+  if (item.type === 'side') {
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
     state.cart.push({
@@ -1659,26 +1659,14 @@ document.addEventListener('click', (e)=>{
       lineTotal: unitBaseAfterHH,
       hhDisc: hhDiscPerUnit
     });
+    ensureDrinkPrices();         // ← por si esto activa combo
     updateCartBar(); beep(); toast(`${item.name} agregado`);
     return;
-  }{
-    const hhDiscPerUnit = hhDiscountPerUnit(item);
-    const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
-    state.cart.push({
-      id:item.id, name:item.name, mini:false, qty:1,
-      unitPrice:Number(item.price||0),
-      baseIngredients:[], salsaDefault:null, salsaCambiada:null,
-      extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
-      notes:'',
-      lineTotal: unitBaseAfterHH,
-      hhDisc: hhDiscPerUnit
-    });
-    updateCartBar(); beep(); toast(`${item.name} agregado`);
-  } else {
-    openItemModal(item, item.baseOf ? state.menu?.burgers?.find(b=>b.id===item.baseOf) : item);
   }
-}, false);
 
+  // Para burgers/minis: abre modal (si quisieras “agregar directo”, usa el bloque de arriba análogo)
+  openItemModal(item, item.baseOf ? state.menu?.burgers?.find(b=>b.id===item.baseOf) : item);
+}, false);
 /* ======================= THEME panel ======================= */
 function mountThemePanel() {
   if (document.getElementById('theme-floating-panel')) return;
