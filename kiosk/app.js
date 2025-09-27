@@ -1363,7 +1363,7 @@ const orderBase = {
 };
     let orderId = null;
     try {
-      const created = await DB.createOrder(orderBase);
+      const created = await DB.createOrder(sanitize(orderBase));
       orderId = (typeof created === 'string') ? created : created?.id;
     } catch (e) {
       console.warn('createOrder error, usando provisional:', e);
