@@ -890,7 +890,14 @@ try {
   const holder = document.createElement('div');
   holder.className = 'field';
   holder.innerHTML = `<label>Maridaje sugerido</label><div id="pairBox" class="ul-clean" style="gap:6px"></div>`;
-  body.appendChild(holder);
+
+  // ⬇️ Inserta ANTES del textarea de comentarios
+  const notesField = body.querySelector('#notes')?.closest('.field');
+  if (notesField) {
+    body.insertBefore(holder, notesField);
+  } else {
+    body.appendChild(holder);
+  }
 
   const baseId = (base?.id || item?.baseOf || item?.id || '').toString().toLowerCase();
   const pairDefs = PAIRING_BY_BURGER[baseId] || PAIRING_FALLBACK;
