@@ -115,9 +115,8 @@ const PAIRING_FALLBACK = [
 
 /** ¿El carrito tiene algún alimento (no-bebida)? */
 function cartHasFood(cart = state.cart){
-  return cart.some(l => l && l.type !== 'drink');
+  return cart.some(l => l && l.type !== 'drink' && !l.isGift);
 }
-
 /** Recalcula precios de las bebidas según contexto combo/solo */
 function ensureDrinkPrices(cart = state.cart){
   const comboOn = cartHasFood(cart);
@@ -1027,6 +1026,7 @@ function updateCartBar(){
 }
 
 function openCartModal(){
+  ensureDrinkPrices();
   const m = document.getElementById('cartModal');
   const body = document.getElementById('cartBody');
   const close = ()=> { if(m) m.style.display='none'; if(!state.followCtaShown){ showFollowCta(); state.followCtaShown = true; } };
