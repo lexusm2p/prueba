@@ -419,6 +419,33 @@ function randomPick(weighted){
   return weighted[weighted.length-1]?.value;
 }
 
+/* ======================= Utilidades base ======================= */
+// … money, findItemById, baseOfItem, formatIngredientsFor, slug,
+// normalizeExtraIngredients, escapeHtml, randomPick, etc.
+
+/** Sanitizador: quita `undefined` de forma segura para Firestore.
+ *  - Convierte `undefined` → `null`
+ *  - Mantiene fechas (Date) intactas
+ *  - Normaliza números no finitos (NaN/±Infinity) → null
+ *  - Recorre arrays y objetos recursivamente
+ */
+function sanitize(value){
+  if (value === undefined) return null;
+  if (value === null) return null;
+
+  if (typeof value === 'number' && !Number.isFinite(value)) return null;
+
+  if (Array.isArray(value)) return value.map(sanitize);
+
+  if (value && typeof value === 'object'){
+    if (value instanceof Date) return value; // por si en algún punto envías fechas
+    const clean = {};
+    for (const k of Object.keys(value)) clean[k] = sanitize(value[k]);
+    return clean;
+  }
+
+  return value;
+}
 /* ========= Seguimiento ========= */
 function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
 
