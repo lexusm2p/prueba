@@ -63,9 +63,7 @@ isSubmittingOrder: false,
 lastVoucher: null,       // {code, pct, expiresAt}
   // ===== Combo Drink Seven =====
   drinkComboActive: false, // UI/sonido controlado por ensureDrinkPrices()
-  // ===== Combo Drink Seven =====
-  drinkComboActive: false, // UI/sonido controlado por ensureDrinkPrices()
-  // ===== Regalo: PowerDog Mini por ticket >= $117 =====
+  
   gift: {
     threshold: 117,
     productId: 'powerdog-mini',
