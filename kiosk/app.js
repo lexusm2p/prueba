@@ -386,14 +386,22 @@ function slug(s){
   return String(s).toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
-}
-function normalizeExtraIngredients(){
+}function normalizeExtraIngredients(){
   const raw = state.menu?.extras?.ingredients ?? [];
   const defaultPrice = Number(state.menu?.extras?.ingredientPrice ?? 0);
-  return raw.map(x=>{
-    if (typeof x === 'string') return { id: slug(x), name: x, price: defaultPrice };
-    return { id: x.id || slug(x.name), name: x.name, price: Number(x.price ?? defaultPrice) };
-  });
+
+  // Regex para nombres tipo "Carne 85g", "Carne 80 g", etc.
+  const isCarneGrande = (name='') => /^carne\s*(8[0-9]|9[0-9]|100)\s*g$/i.test(
+    String(name).replace(/\s+/g,' ').trim()
+  );
+
+  return raw
+    .map(x=>{
+      if (typeof x === 'string') return { id: slug(x), name: x, price: defaultPrice };
+      return { id: x.id || slug(x.name), name: x.name, price: Number(x.price ?? defaultPrice) };
+    })
+    // ⛔️ Oculta "Carne 85g/90g/100g..." para no duplicar con el DLC de minis
+    .filter(obj => !isCarneGrande(obj?.name));
 }
 function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
