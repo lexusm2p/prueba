@@ -61,7 +61,8 @@ isSubmittingOrder: false,
   loyaltyOptIn: false,
   lastCollectible: null,   // {rarity, name, title, palette, meta}
 lastVoucher: null,       // {code, pct, expiresAt}
-
+  // ===== Combo Drink Seven =====
+  drinkComboActive: false, // UI/sonido controlado por ensureDrinkPrices()
   // ===== Combo Drink Seven =====
   drinkComboActive: false, // UI/sonido controlado por ensureDrinkPrices()
   // ===== Regalo: PowerDog Mini por ticket >= $117 =====
@@ -114,21 +115,40 @@ const PAIRING_FALLBACK = [
   { key: 'pepsi', line: 'Clásico con carnes + queso' }
 ];
 
-/** ¿El carrito tiene algún alimento (no-bebida)? */
-function cartHasFood(cart = state.cart){
-  return cart.some(l => l && l.type !== 'drink' && !l.isGift);
+/** Subtotal de líneas NO-bebida (excluye regalos) */
+function subtotalSinBebidas(cart = state.cart){
+  return cart.reduce((a,l)=>{
+    if (!l || l.isGift) return a;
+    if (l.type === 'drink') return a;
+    return a + Number(l.lineTotal||0);
+  }, 0);
+}
+/** Regla: Combo Seven activo si subtotal sin bebidas ≥ $77 */
+function isDrinkComboUnlocked(cart = state.cart){
+  return subtotalSinBebidas(cart) >= 77;
 }
 /** Recalcula precios de las bebidas según contexto combo/solo */
 function ensureDrinkPrices(cart = state.cart){
-  const comboOn = cartHasFood(cart);
+  const unlocked = isDrinkComboUnlocked(cart);
+  const target   = unlocked ? DRINK_PRICE.combo : DRINK_PRICE.solo;
+
+  // Si cambia el estado del combo, avisamos 1 vez (sonido solo al desbloquear).
+  if (unlocked !== state.drinkComboActive){
+    state.drinkComboActive = unlocked;
+    if (unlocked) {
+      try { playAchievement(); } catch {}
+      toast('🎉 ¡Desbloqueaste Combo Drink Seven! Bebidas a $17');
+    } else {
+      toast('Combo Drink Seven desactivado — bebidas a $20');
+    }
+  }
+
   for (const l of cart){
     if (l?.type === 'drink'){
-      const target = comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo;
-      // unitPrice se conserva como “precio base del catálogo”; usamos pricingMode para claridad.
       l.meta = l.meta || {};
-      l.meta.pricingMode = comboOn ? 'combo' : 'solo';
+      l.meta.pricingMode = unlocked ? 'combo' : 'solo';
       l.lineTotal = target * (l.qty||1);
-      l.hhDisc = 0; // HH no aplica a bebida (si deseas aplicarlo, quita esta línea)
+      l.hhDisc = 0; // HH no aplica a bebidas
     }
   }
 }
@@ -136,14 +156,14 @@ function ensureDrinkPrices(cart = state.cart){
 /** Agrega una bebida al carrito aplicando el precio correcto en ese momento */
 function addDrinkToCart(drink){
   if (!drink) return;
-  const comboOn = cartHasFood();
+  const comboOn = isDrinkComboUnlocked();           // <— antes usaba cartHasFood()
   const price = comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo;
   state.cart.push({
     id: drink.id,
     type: 'drink',
     name: drink.name,
     qty: 1,
-    unitPrice: Number(drink.price||0), // del catálogo, por si luego lo usas en reportes
+    unitPrice: Number(drink.price||0),
     baseIngredients: [],
     salsaDefault: null,
     salsaCambiada: null,
@@ -155,7 +175,6 @@ function addDrinkToCart(drink){
   });
   updateCartBar(); beep(); toast(`${drink.name} agregado`);
 }
-
 /** Helper: invocar por clave flexible (id o nombre) */
 function addDrinkByKey(key){
   const d = findDrinkFlexible(key);
@@ -931,7 +950,9 @@ try {
   const pairDefs = PAIRING_BY_BURGER[baseId] || PAIRING_FALLBACK;
 
   const box = holder.querySelector('#pairBox');
-  const comboOn = cartHasFood();
+  const comboOn = isDrinkComboUnlocked(); // <— antes: cartHasFood()
+  ...
+  btn.textContent = `${d.name} · $${comboOn?DRINK_PRICE.combo:DRINK_PRICE.solo}`;
   pairDefs.forEach(p => {
     const d = findDrinkFlexible(p.key);
     if (!d) return;
@@ -948,7 +969,7 @@ try {
     const b = e.target.closest('button[data-add-drink]');
     if(!b) return;
     addDrinkByKey(b.getAttribute('data-add-drink'));
-    const comboNow = cartHasFood();
+    const comboNow = isDrinkComboUnlocked(); // <— antes: cartHasFood()
     holder.querySelectorAll('button[data-add-drink]').forEach(btn=>{
       const key = btn.getAttribute('data-add-drink');
       const d = findDrinkFlexible(key);
