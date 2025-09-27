@@ -1164,22 +1164,22 @@ function openCartModal(){
       const line = state.cart[i]; if (!line) return;
       const act = btn.dataset.a;
 
-      if (act === 'remove') {
+ if (act === 'remove') {
   state.cart.splice(i, 1);
-  ensureDrinkPrices();          // ← si quitaste la última comida, bebidas vuelven a “solo”
+  ensureDrinkPrices();                  // si quitaste la última comida, bebidas vuelven a “solo”
   updateCartBar(); openCartModal();
   return;
 }
 
 if (act === 'more') {
   line.qty = Math.min(99, (line.qty || 1) + 1);
-  if (line?.type === 'drink') {
-    ensureDrinkPrices();        // ← respeta combo/solo
+  if (line?.type === 'drink') {         // bebidas: su precio lo maneja ensureDrinkPrices
+    ensureDrinkPrices();
     updateCartBar(); openCartModal();
     return;
   }
   recomputeLine(line);
-  ensureDrinkPrices();          // ← por si este “+” activa combo para bebidas
+  ensureDrinkPrices();                  // por si este “+” activa combo para bebidas
   updateCartBar(); openCartModal();
   checkComboAchievement();
   return;
@@ -1188,44 +1188,12 @@ if (act === 'more') {
 if (act === 'less') {
   line.qty = Math.max(1, (line.qty || 1) - 1);
   if (line?.type === 'drink') {
-    ensureDrinkPrices();        // ← respeta combo/solo
+    ensureDrinkPrices();
     updateCartBar(); openCartModal();
     return;
   }
   recomputeLine(line);
-  ensureDrinkPrices();          // ← por si este “-” desactiva combo para bebidas
-  updateCartBar(); openCartModal();
-  return;
-}if (act === 'remove') {
-  state.cart.splice(i, 1);
-  ensureDrinkPrices();          // ← si quitaste la última comida, bebidas vuelven a “solo”
-  updateCartBar(); openCartModal();
-  return;
-}
-
-if (act === 'more') {
-  line.qty = Math.min(99, (line.qty || 1) + 1);
-  if (line?.type === 'drink') {
-    ensureDrinkPrices();        // ← respeta combo/solo
-    updateCartBar(); openCartModal();
-    return;
-  }
-  recomputeLine(line);
-  ensureDrinkPrices();          // ← por si este “+” activa combo para bebidas
-  updateCartBar(); openCartModal();
-  checkComboAchievement();
-  return;
-}
-
-if (act === 'less') {
-  line.qty = Math.max(1, (line.qty || 1) - 1);
-  if (line?.type === 'drink') {
-    ensureDrinkPrices();        // ← respeta combo/solo
-    updateCartBar(); openCartModal();
-    return;
-  }
-  recomputeLine(line);
-  ensureDrinkPrices();          // ← por si este “-” desactiva combo para bebidas
+  ensureDrinkPrices();                  // por si este “-” desactiva combo
   updateCartBar(); openCartModal();
   return;
 }
