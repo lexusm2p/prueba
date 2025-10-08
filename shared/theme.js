@@ -92,7 +92,7 @@ const THEMES_BUILTIN = {
       finalboss: 'icons/burgers/finalboss.png'
     },
     // Ruta base del pack (absoluta o relativa; el resolver soporta ambas)
-    packBaseUrl:'/themes/dia-de-muertos/'
+    packBaseUrl:'./themes/dia-de-muertos/'
   },
 
   'Navidad MX': {
@@ -170,7 +170,7 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    packBaseUrl:'/themes/halloween/'
+    packBaseUrl:'./themes/halloween/'
   },
 
   'Reyes Magos': {
