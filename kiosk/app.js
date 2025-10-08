@@ -824,6 +824,18 @@ function checkGiftUnlock(autoOpen=true){
   }
 }
 
+function getThemeIconFor(baseId){
+  const preset = window.__lastThemePreset || {};
+  const base   = preset.packBaseUrl || '';
+  const map    = preset.icons || {};
+  const rel    = map?.[baseId];
+  if (!rel || !base) return null;
+  try {
+    return new URL(rel, window.location.origin + base).toString();
+  } catch {
+    return null;
+  }
+}
 /* ======================= Tarjetas ======================= */
 function renderCards(){
   const grid = document.getElementById('cards');
@@ -834,7 +846,9 @@ function renderCards(){
     const base = baseOfItem(it);
     const baseId = base?.id || it.id;
     const mxThemeOn = /independencia|méx|mex|patria|viva/i.test(String(state.themeName || ''));
-    const iconSrc = (mxThemeOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null);
+    const themedSrc = getThemeIconFor(baseId);
+const iconSrc = themedSrc
+  || ((mxThemeOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
     const card = document.createElement('div');
     card.className='card';
     card.innerHTML = `
