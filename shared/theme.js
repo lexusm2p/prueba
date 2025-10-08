@@ -91,8 +91,8 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    // Ruta base del pack (absoluta o relativa; el resolver soporta ambas)
-    packBaseUrl:'./themes/dia-de-muertos/'
+    // Ruta base del pack (en la RAÍZ del sitio)
+    packBaseUrl:'/themes/dia-de-muertos/'
   },
 
   'Navidad MX': {
@@ -170,7 +170,8 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    packBaseUrl:'./themes/halloween/'
+    // Ruta base del pack (en la RAÍZ del sitio)
+    packBaseUrl:'/themes/halloween/'
   },
 
   'Reyes Magos': {
@@ -436,18 +437,19 @@ function ensureFontImport(importUrl) {
 function resolveAssetUrl(url = '', base = '') {
   if (!url) return '';
   try {
-    if (/^(https?:)?\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return url;
-
-    // Normaliza base: si no inicia con '/', resuélvela relativo a la URL actual
-    let baseAbs = base;
-    if (baseAbs && !baseAbs.startsWith('/')) {
-      baseAbs = new URL(baseAbs, window.location.href).pathname;
+    // Si ya es absoluta (http/https), data: o blob:, o empieza en raíz (/), devuélvela tal cual
+    if (/^(https?:)?\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/')) {
+      return url;
     }
-    if (baseAbs && !baseAbs.endsWith('/')) baseAbs += '/';
-
-    return baseAbs
-      ? new URL(url, window.location.origin + baseAbs).toString()
-      : url;
+    // Si base ya es absoluta a raíz, unimos sin perder la raíz
+    if (base && base.startsWith('/')) {
+      const cleanBase = base.replace(/\/+$/, '');
+      const cleanUrl  = url.replace(/^\/+/, '');
+      return `${cleanBase}/${cleanUrl}`;
+    }
+    // Si base es relativa, resuélvela desde el origen del sitio
+    const baseAbs = new URL(base || '', window.location.origin + '/').toString();
+    return new URL(url, baseAbs).toString();
   } catch {
     return url;
   }
@@ -471,6 +473,7 @@ function onResizeDebounced(fn, ms=200){
 }
 
 function pickBgUrl(image, base=''){
+  // Acepta string o {mobile, tablet, desktop, default}
   const w = Math.max(320, Math.min(4096, (window.innerWidth || 1280)));
   let src = '';
   if (!image) return '';
@@ -503,8 +506,10 @@ function applyBackground(bg = {}) {
     body.style.backgroundImage = 'none';
   }
 
+  // Preload elegido
   if (chosen) preloadImages([ chosen ]);
 
+  // Reaplicar al cambiar tamaño/orientación
   if (!window.__bgResizeBound){
     window.__bgResizeBound = true;
     window.addEventListener('resize', ()=> onResizeDebounced(()=>applyBackground(bg), 160), { passive:true });
@@ -656,7 +661,7 @@ export function subscribeThemePresets(cb) {
       const data = snap.exists() ? snap.data() : {};
       const presets = data?.presets || {};
       Object.keys(CUSTOM).forEach((k) => delete CUSTOM[k]);
-      for (const [k, v] of Object.entries(presets)) {
+      for (const [k, v]) of Object.entries(presets)) {
         if (v && v.name) CUSTOM[k] = v;
       }
       try { localStorage.setItem('theme_presets', JSON.stringify(CUSTOM)); } catch {}
