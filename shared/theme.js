@@ -661,7 +661,7 @@ export function subscribeThemePresets(cb) {
       const data = snap.exists() ? snap.data() : {};
       const presets = data?.presets || {};
       Object.keys(CUSTOM).forEach((k) => delete CUSTOM[k]);
-      for (const [k, v]) of Object.entries(presets)) {
+      for (const [k, v] of Object.entries(presets)) {
         if (v && v.name) CUSTOM[k] = v;
       }
       try { localStorage.setItem('theme_presets', JSON.stringify(CUSTOM)); } catch {}
