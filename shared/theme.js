@@ -81,6 +81,7 @@ const THEMES_BUILTIN = {
       overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
     },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
+    // Íconos del pack (las claves deben coincidir con tus baseId)
     icons:{
       starter:   'icons/burgers/starter.png',
       koopa:     'icons/burgers/koopa.png',
@@ -90,6 +91,7 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
+    // Ruta base del pack (absoluta o relativa; el resolver soporta ambas)
     packBaseUrl:'/themes/dia-de-muertos/'
   },
 
@@ -430,13 +432,25 @@ function ensureFontImport(importUrl) {
 }
 
 /* --------- Utilidades de assets por tema --------- */
+// Resolver ROBUSTO: acepta base absoluta (/themes/...), relativa (./themes/...) o ../
 function resolveAssetUrl(url = '', base = '') {
   if (!url) return '';
   try {
     if (/^(https?:)?\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return url;
-    if (base) return new URL(url, window.location.origin + base).toString();
+
+    // Normaliza base: si no inicia con '/', resuélvela relativo a la URL actual
+    let baseAbs = base;
+    if (baseAbs && !baseAbs.startsWith('/')) {
+      baseAbs = new URL(baseAbs, window.location.href).pathname;
+    }
+    if (baseAbs && !baseAbs.endsWith('/')) baseAbs += '/';
+
+    return baseAbs
+      ? new URL(url, window.location.origin + baseAbs).toString()
+      : url;
+  } catch {
     return url;
-  } catch { return url; }
+  }
 }
 
 function preloadImages(urls = []) {
@@ -457,7 +471,6 @@ function onResizeDebounced(fn, ms=200){
 }
 
 function pickBgUrl(image, base=''){
-  // Acepta string o {mobile, tablet, desktop, default}
   const w = Math.max(320, Math.min(4096, (window.innerWidth || 1280)));
   let src = '';
   if (!image) return '';
@@ -557,6 +570,7 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
     ? getPresetByName(nameOrPreset)
     : nameOrPreset) || THEMES_BUILTIN.Base;
 
+  // Guardamos preset activo para resolver correctamente assets responsivos
   window.__lastThemePreset = preset;
 
   const pal   = preset.palette || {};
@@ -595,6 +609,7 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
   try { document.body.setAttribute('data-theme', sname); } catch {}
   try { document.body.setAttribute('data-theme-name', name); } catch {}
 
+  // Aplica packs (images/icons)
   applyThemeAssets(preset);
 
   try { console.info('[theme] aplicado:', name, preset); } catch {}
