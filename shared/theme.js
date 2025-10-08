@@ -9,6 +9,16 @@
 
 import { db, doc, getDoc, setDoc, onSnapshot } from './firebase.js';
 
+/* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
+// Detecta el primer segmento del path actual. Si el sitio vive en /prueba/ -> "/prueba/"
+// Si está en raíz -> "/"
+const BASE_PREFIX = (() => {
+  try {
+    const parts = location.pathname.split('/').filter(Boolean);
+    return parts.length ? `/${parts[0]}/` : '/';
+  } catch { return '/'; }
+})();
+
 /* -------------------- Presets integrados -------------------- */
 const THEMES_BUILTIN = {
   Base: {
@@ -55,7 +65,7 @@ const THEMES_BUILTIN = {
     },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
-    packBaseUrl:'/themes/independencia/'
+    packBaseUrl: `${BASE_PREFIX}themes/independencia/`
   },
 
   'Día de Muertos': {
@@ -81,7 +91,6 @@ const THEMES_BUILTIN = {
       overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
     },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
-    // Íconos del pack (las claves deben coincidir con tus baseId)
     icons:{
       starter:   'icons/burgers/starter.png',
       koopa:     'icons/burgers/koopa.png',
@@ -91,8 +100,7 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    // Ruta base del pack (en la RAÍZ del sitio)
-    packBaseUrl:'/themes/dia-de-muertos/'
+    packBaseUrl: `${BASE_PREFIX}themes/dia-de-muertos/`
   },
 
   'Navidad MX': {
@@ -116,7 +124,7 @@ const THEMES_BUILTIN = {
     },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{ burger:'icons/burger.svg', fries:'icons/fries.svg', drink:'icons/drink.svg' },
-    packBaseUrl:'/themes/navidad/'
+    packBaseUrl: `${BASE_PREFIX}themes/navidad/`
   },
 
   '5 de Mayo': {
@@ -170,8 +178,7 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    // Ruta base del pack (en la RAÍZ del sitio)
-    packBaseUrl:'/themes/halloween/'
+    packBaseUrl: `${BASE_PREFIX}themes/halloween/`
   },
 
   'Reyes Magos': {
@@ -433,26 +440,22 @@ function ensureFontImport(importUrl) {
 }
 
 /* --------- Utilidades de assets por tema --------- */
-// Resolver ROBUSTO: acepta base absoluta (/themes/...), relativa (./themes/...) o ../
 function resolveAssetUrl(url = '', base = '') {
   if (!url) return '';
   try {
-    // Si ya es absoluta (http/https), data: o blob:, o empieza en raíz (/), devuélvela tal cual
     if (/^(https?:)?\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/')) {
-      return url;
+      return url; // absoluta o especial
     }
-    // Si base ya es absoluta a raíz, unimos sin perder la raíz
+    // Si base empieza en '/', mantenemos raíz
     if (base && base.startsWith('/')) {
-      const cleanBase = base.replace(/\/+$/, '');
-      const cleanUrl  = url.replace(/^\/+/, '');
-      return `${cleanBase}/${cleanUrl}`;
+      const b = base.replace(/\/+$/, '');
+      const u = url.replace(/^\/+/, '');
+      return `${b}/${u}`;
     }
-    // Si base es relativa, resuélvela desde el origen del sitio
+    // Base relativa -> resuélvela desde origen
     const baseAbs = new URL(base || '', window.location.origin + '/').toString();
     return new URL(url, baseAbs).toString();
-  } catch {
-    return url;
-  }
+  } catch { return url; }
 }
 
 function preloadImages(urls = []) {
@@ -473,7 +476,6 @@ function onResizeDebounced(fn, ms=200){
 }
 
 function pickBgUrl(image, base=''){
-  // Acepta string o {mobile, tablet, desktop, default}
   const w = Math.max(320, Math.min(4096, (window.innerWidth || 1280)));
   let src = '';
   if (!image) return '';
@@ -501,15 +503,12 @@ function applyBackground(bg = {}) {
     body.style.backgroundSize = bg.size || 'cover';
     body.style.backgroundPosition = bg.position || 'center';
     body.style.backgroundRepeat = 'no-repeat';
-    body.style.backgroundAttachment = 'scroll';
   } else {
     body.style.backgroundImage = 'none';
   }
 
-  // Preload elegido
   if (chosen) preloadImages([ chosen ]);
 
-  // Reaplicar al cambiar tamaño/orientación
   if (!window.__bgResizeBound){
     window.__bgResizeBound = true;
     window.addEventListener('resize', ()=> onResizeDebounced(()=>applyBackground(bg), 160), { passive:true });
@@ -575,7 +574,6 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
     ? getPresetByName(nameOrPreset)
     : nameOrPreset) || THEMES_BUILTIN.Base;
 
-  // Guardamos preset activo para resolver correctamente assets responsivos
   window.__lastThemePreset = preset;
 
   const pal   = preset.palette || {};
@@ -614,7 +612,6 @@ export function applyThemeLocal(nameOrPreset, presetObj = null) {
   try { document.body.setAttribute('data-theme', sname); } catch {}
   try { document.body.setAttribute('data-theme-name', name); } catch {}
 
-  // Aplica packs (images/icons)
   applyThemeAssets(preset);
 
   try { console.info('[theme] aplicado:', name, preset); } catch {}
