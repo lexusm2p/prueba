@@ -81,6 +81,20 @@ const THEMES_BUILTIN = {
         tablet:'images/bg-t.webp',
         desktop:'images/bg-d.webp'
       },
+       // 👇 AÑADE ESTO:
+  packBaseUrl: '/themes/dia-de-muertos/',
+  icons: {
+    starter:   'icons/burgers/starter.png',
+    koopa:     'icons/burgers/koopa.png',
+    fatality:  'icons/burgers/fatality.png',
+    mega:      'icons/burgers/mega.png',
+    hadouken:  'icons/burgers/hadouken.png',
+    nintendo:  'icons/burgers/nintendo.png',
+    finalboss: 'icons/burgers/finalboss.png'
+  },
+
+  images:{ hero:'images/hero.jpg', logo:'images/logo.svg' } // (como ya lo traías)
+}
       overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0
     },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
@@ -138,24 +152,37 @@ const THEMES_BUILTIN = {
     images:{}, icons:{}, packBaseUrl:''
   },
 
-  Halloween: { name:'Halloween',
-    palette:{
-      bg:'#09070c', text:'#ffe9cf',
-      panel1:'#100c14', panel2:'#140f19',
-      ink1:'#ffe9cf', ink2:'#ffd8a6', muted:'#ffcb85',
-      primary:'#ff7a00', accent:'#7f5bff',
-      ok:'#53e0a6', warn:'#ffc266', danger:'#ff6262',
-    },
-    // Fuente más cercana a tu referencia
-    fonts:{
-      importUrl:'https://fonts.googleapis.com/css2?family=Butcherman&family=Nosifer&family=Inter:wght@400;600&display=swap',
-      base:'Inter, system-ui, Arial',
-      display:'"Butcherman","Nosifer",cursive'
-    },
-    bg:{ image:'', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
-    images:{}, icons:{}, packBaseUrl:''
+  Halloween: {
+  name:'Halloween',
+  palette:{
+    bg:'#09070c', text:'#ffe9cf',
+    panel1:'#100c14', panel2:'#140f19',
+    ink1:'#ffe9cf', ink2:'#ffd8a6', muted:'#ffcb85',
+    primary:'#ff7a00', accent:'#7f5bff',
+    ok:'#53e0a6', warn:'#ffc266', danger:'#ff6262',
+  },
+  // Fuente más cercana a tu referencia
+  fonts:{
+    importUrl:'https://fonts.googleapis.com/css2?family=Butcherman&family=Nosifer&family=Inter:wght@400;600&display=swap',
+    base:'Inter, system-ui, Arial',
+    display:'"Butcherman","Nosifer",cursive'
+  },
+  bg:{ image:'', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
+
+  // 👇 AÑADIDO AQUÍ
+  packBaseUrl: '/themes/halloween/',
+  icons: {
+    starter:   'icons/burgers/starter.png',
+    koopa:     'icons/burgers/koopa.png',
+    fatality:  'icons/burgers/fatality.png',
+    mega:      'icons/burgers/mega.png',
+    hadouken:  'icons/burgers/hadouken.png',
+    nintendo:  'icons/burgers/nintendo.png',
+    finalboss: 'icons/burgers/finalboss.png'
   },
 
+  images:{ hero:'images/hero.jpg', logo:'images/logo.svg' }
+},
   'Reyes Magos': { name:'Reyes Magos',
     palette:{
       bg:'#0b0d16', text:'#f6f3ff', panel1:'#0c0f19', panel2:'#0d1020',
