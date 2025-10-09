@@ -1499,15 +1499,22 @@ function setupSidebars(){
     if (state.menu?.drinks?.length) picks.push(...state.menu.drinks.slice(0,2));
     if (state.menu?.sides?.length)  picks.push(...state.menu.sides.slice(0,2));
     if (!picks.length) picks.push(...(state.menu?.minis||[]).slice(0,3));
-    upsell.innerHTML = picks.map(p => `
-      <li>
-        <div style="flex:1 1 auto;min-width:0">
-          <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-          <div class="muted small">${(p.type||'').toUpperCase()}</div>
-        </div>
-        <div class="price">${money(p.price||0)}</div>
-        <button class="btn tiny" data-add="${p.id}">Agregar</button>
-      </li>`).join('');
+    upsell.innerHTML = picks.map(p => {
+  // 👇 Mostrar base $20 para bebidas; lo demás queda igual
+  const displayPrice = (p.type === 'drink')
+    ? DRINK_PRICE.solo            // => 20
+    : Number(p.price || 0);
+
+  return `
+    <li>
+      <div style="flex:1 1 auto;min-width:0">
+        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+        <div class="muted small">${(p.type||'').toUpperCase()}</div>
+      </div>
+      <div class="price">${money(displayPrice)}</div>
+      <button class="btn tiny" data-add="${p.id}">Agregar</button>
+    </li>`;
+}).join('');
   }
 
   const promo = document.getElementById('promoList');
