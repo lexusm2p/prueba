@@ -130,10 +130,10 @@
     }
   ],
   "drinks": [
-    { "id": "pepsi",  "name": "Pepsi 355",      "type": "drink", "price": 17 },
-    { "id": "7up",    "name": "7 Up 355",       "type": "drink", "price": 17 },
-    { "id": "canada", "name": "Canada Dry 355", "type": "drink", "price": 17 },
-    { "id": "agua",   "name": "Agua natural",   "type": "drink", "price": 17 }
+    { "id": "pepsi",  "name": "Pepsi 355ml",      "type": "drink", "price": 17 },
+    { "id": "7up",    "name": "7 Up 355ml",       "type": "drink", "price": 17 },
+    { "id": "canada", "name": "Canada Dry 355ml", "type": "drink", "price": 17 },
+    { "id": "agua",   "name": "Agua mineral 355ml",   "type": "drink", "price": 17 }
   ],
   "sides": [
     { "id": "papas",   "name": "Papas a la francesa", "type": "side", "price": 22 },
