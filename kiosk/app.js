@@ -946,10 +946,27 @@ function openItemModal(item, base, existingIndex=null){
       <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea>
     </div>`;
 /* ======== Bloque de maridaje (bebidas) ======== */
+/* ======== Bloque de maridaje (bebidas) ======== */
 try {
   const holder = document.createElement('div');
   holder.className = 'field';
-  holder.innerHTML = `<label>Maridaje sugerido</label><div id="pairBox" class="ul-clean" style="gap:6px"></div>`;
+  holder.innerHTML = `
+    <label>Maridaje sugerido</label>
+    <div class="muted small" style="margin:.25rem 0 .5rem">
+      Bebida recomendada para mejorar la experiencia de sabor (opcional).
+    </div>
+    <div id="pairBox" class="ul-clean" style="gap:6px;flex-wrap:wrap"></div>
+
+    <div class="row" style="gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
+      <button class="btn tiny ghost" id="toggleAllDrinks" type="button">
+        …o elegir cualquier bebida
+      </button>
+      <div id="allDrinksWrap" style="display:none;align-items:center;gap:6px;flex-wrap:wrap">
+        <select id="allDrinksSel" style="min-width:180px"></select>
+        <button class="btn tiny" id="addSelectedDrink" type="button">Agregar</button>
+      </div>
+    </div>
+  `;
 
   const notesField = body.querySelector('#notes')?.closest('.field');
   if (notesField) body.insertBefore(holder, notesField); else body.appendChild(holder);
@@ -957,32 +974,68 @@ try {
   const baseId   = (base?.id || item?.baseOf || item?.id || '').toString().toLowerCase();
   const pairDefs = PAIRING_BY_BURGER[baseId] || PAIRING_FALLBACK;
 
-  const box = holder.querySelector('#pairBox');
-  const comboOn = isDrinkComboUnlocked();
-  pairDefs.forEach(p => {
-    const d = findDrinkFlexible(p.key);
-    if (!d) return;
-    const btn = document.createElement('button');
-    btn.className = 'btn tiny';
-    btn.type = 'button';
-    btn.setAttribute('data-add-drink', String(p.key));
-    btn.textContent = `${d.name} · $${comboOn?DRINK_PRICE.combo:DRINK_PRICE.solo}`;
-    btn.title = p.line || '';
-    box.appendChild(btn);
+  const box       = holder.querySelector('#pairBox');
+  const wrapAll   = holder.querySelector('#allDrinksWrap');
+  const btnToggle = holder.querySelector('#toggleAllDrinks');
+  const selAll    = holder.querySelector('#allDrinksSel');
+  const btnAddSel = holder.querySelector('#addSelectedDrink');
+
+  // Render botones de maridaje
+  function updatePairButtons(){
+    const comboOn = isDrinkComboUnlocked();
+    box.innerHTML = '';
+    pairDefs.forEach(p => {
+      const d = findDrinkFlexible(p.key);
+      if (!d) return;
+      const btn = document.createElement('button');
+      btn.className = 'btn tiny';
+      btn.type = 'button';
+      btn.setAttribute('data-add-drink', String(p.key));
+      btn.textContent = `${d.name} · $${comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo}`;
+      btn.title = p.line || '';
+      box.appendChild(btn);
+    });
+  }
+
+  // Render select con TODAS las bebidas
+  function updateAllDrinksSelect(){
+    const all = state.menu?.drinks || [];
+    const comboOn = isDrinkComboUnlocked();
+    selAll.innerHTML = all.map(d =>
+      `<option value="${d.id}">${d.name} · $${comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo}</option>`
+    ).join('');
+  }
+
+  updatePairButtons();
+  updateAllDrinksSelect();
+
+  // Toggle del selector “todas las bebidas”
+  btnToggle?.addEventListener('click', ()=>{
+    wrapAll.style.display = (wrapAll.style.display === 'none' || !wrapAll.style.display) ? 'flex' : 'none';
+    if (wrapAll.style.display === 'flex') updateAllDrinksSelect();
   });
 
+  // Click en botones de maridaje
   holder.addEventListener('click', (e)=>{
     const b = e.target.closest('button[data-add-drink]');
     if(!b) return;
     addDrinkByKey(b.getAttribute('data-add-drink'));
-    const comboNow = isDrinkComboUnlocked();
-    holder.querySelectorAll('button[data-add-drink]').forEach(btn=>{
-      const key = btn.getAttribute('data-add-drink');
-      const d = findDrinkFlexible(key);
-      if (d) btn.textContent = `${d.name} · $${comboNow?DRINK_PRICE.combo:DRINK_PRICE.solo}`;
-    });
+    // Después de agregar, refrescamos precios visibles por si el combo se activó
+    updatePairButtons();
+    updateAllDrinksSelect();
   });
-} catch {}
+
+  // Agregar bebida desde el selector general
+  btnAddSel?.addEventListener('click', ()=>{
+    const id = selAll?.value;
+    const d = (state.menu?.drinks || []).find(x => x.id === id);
+    if (!d) { toast('Bebida no disponible'); return; }
+    addDrinkToCart(d);
+    updatePairButtons();
+    updateAllDrinksSelect();
+  });
+
+} catch {} 
   const addBtn = document.getElementById('mAdd');
   if (addBtn) addBtn.textContent = editing ? 'Guardar cambios' : 'Agregar al pedido';
 
