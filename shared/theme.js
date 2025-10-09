@@ -167,7 +167,17 @@ const THEMES_BUILTIN = {
       base:'Inter, system-ui, Arial',
       display:'"Butcherman","Nosifer",cursive'
     },
-    bg:{ image:'', overlay:'rgba(0,0,0,.35)', size:'cover', position:'center', blur:0 },
+    bg:{
+      image:{
+        mobile:'images/bg-m.webp',
+        tablet:'images/hero.jpg',
+        desktop:'images/hero.jpg'
+      },
+      overlay:'rgba(0,0,0,.35)',
+      size:'cover',
+      position:'center',
+      blur:0
+    },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
     icons:{
       starter:   'icons/burgers/starter.png',
@@ -178,9 +188,8 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    packBaseUrl: `${BASE_PREFIX}themes/halloween/`
+    packBaseUrl:`${BASE_PREFIX}themes/halloween/`
   },
-
   'Reyes Magos': {
     name:'Reyes Magos',
     palette:{
