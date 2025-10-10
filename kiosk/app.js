@@ -311,9 +311,13 @@ function setMode(mode){ state.mode = mode; renderCards(); setActiveTab(mode); }
 function setActiveTab(mode=state.mode){
   const btnMinis = document.getElementById('btnMinis');
   const btnBig   = document.getElementById('btnBig');
+  const btnCombos= document.getElementById('btnCombos');
   const on  = el => { el?.classList.add('is-active'); el?.setAttribute('aria-selected','true'); };
   const off = el => { el?.classList.remove('is-active'); el?.setAttribute('aria-selected','false'); };
-  if(mode==='mini'){ on(btnMinis); off(btnBig); } else { on(btnBig); off(btnMinis); }
+  off(btnMinis); off(btnBig); off(btnCombos);
+  if (mode==='mini') on(btnMinis);
+  else if (mode==='big') on(btnBig);
+  else if (mode==='combos') on(btnCombos);
 }
 
 /* ======================= Init ======================= */
@@ -847,53 +851,83 @@ function getThemeIconFor(baseId){
 /* ======================= Combos (modo seguro) ======================= */
 function addComboToCart(combo){
   try{
-    // Burgers/minis
+    // Meta por defecto para papas
+    const sideTpl = findItemById('papasgajo');
+    const defMeta = {
+      grams: Number(sideTpl?.grams ?? 150),
+      seasoningId: sideTpl?.seasoningId || 'ajo-gamer',
+      seasoningGrams: Number(sideTpl?.seasoningGrams ?? 1.0),
+      sauce: sideTpl?.sauce || 'Aderezo Cheddar 2oz'
+    };
+
+    // 1) Burgers/minis del combo
     (combo.items||[]).filter(i=>i.kind==='burger').forEach(i=>{
       const it = findItemById(i.id); if(!it) return;
       const base = baseOfItem(it);
-      const d=hhDiscountPerUnit(it); const unit=Math.max(0, Number(it.price||0)-d);
+      const d = hhDiscountPerUnit(it);
+      const unit = Math.max(0, Number(it.price||0) - d);
       state.cart.push({
         id: it.id, name: it.name, mini: !!it.mini, qty: i.qty||1,
         unitPrice: Number(it.price||0),
         baseIngredients: formatIngredientsFor(it, base),
-        ingredients: formatIngredientsFor(it, base),
+        ingredients:     formatIngredientsFor(it, base),
         extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
-      meta: defMeta,
-      notes: `PAPAS META: ${defMeta.grams}g · ${defMeta.seasoningId} (${defMeta.seasoningGrams}g) · ${defMeta.sauce}`,
-        notes:'', lineTotal: unit*(i.qty||1), hhDisc: d*(i.qty||1)
+        notes: '',
+        lineTotal: unit*(i.qty||1),
+        hhDisc: d*(i.qty||1)
       });
     });
-    // Papas gajo con meta
+
+    // 2) Papas gajo con meta (y nota para cocina)
     (combo.items||[]).filter(i=>i.kind==='side' && i.id==='papasgajo').forEach(i=>{
-      const side = findItemById('papasgajo'); if(!side) return;
-      const d = hhDiscountPerUnit(side); const eff = Math.max(0, Number(side.price||0)-d);
-      const meta={ grams:i.grams, seasoningId:i.seasoningId, seasoningGrams:i.seasoningGrams, sauce:(side.sauce||'Aderezo Cheddar 2oz') };
-      const metaTxt=`PAPAS META: ${meta.grams||150}g · ${meta.seasoningId||'ajo-gamer'} (${meta.seasoningGrams??1.0}g) · ${meta.sauce}`;
+      const side = sideTpl || { id:'papasgajo', name:'Papas Gajo', price:27 };
+      const d = hhDiscountPerUnit(side);
+      const eff = Math.max(0, Number(side.price||0) - d);
+      const meta = {
+        grams: Number(i.grams ?? defMeta.grams),
+        seasoningId: i.seasoningId || defMeta.seasoningId,
+        seasoningGrams: Number(i.seasoningGrams ?? defMeta.seasoningGrams),
+        sauce: defMeta.sauce
+      };
+      const metaTxt = `PAPAS META: ${meta.grams}g · ${meta.seasoningId} (${meta.seasoningGrams}g) · ${meta.sauce}`;
       state.cart.push({
-        id:'papasgajo', type:'side', name: side.name||'Papas Gajo', qty: i.qty||1,
-        unitPrice: Number(side.price||0), baseIngredients:[],
+        id:'papasgajo', type:'side', name: side.name, qty: i.qty||1,
+        unitPrice: Number(side.price||0),
+        baseIngredients:[],
         extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
-      meta: defMeta,
-      notes: `PAPAS META: ${defMeta.grams}g · ${defMeta.seasoningId} (${defMeta.seasoningGrams}g) · ${defMeta.sauce}`,
-        meta, notes: metaTxt, lineTotal: eff*(i.qty||1), hhDisc: d*(i.qty||1)
+        meta,
+        notes: metaTxt,
+        lineTotal: eff*(i.qty||1),
+        hhDisc: d*(i.qty||1)
       });
     });
-    // Dips incluidos
+
+    // 3) Dip incluido (no como línea, lo anotamos en la nota de papas)
     (combo.items||[]).filter(i=>i.kind==='sauce').forEach(i=>{
       if (FEATURES.comboSauceAsLine){
-        state.cart.push({ id:'combo-sauce', type:'sauce', name:i.name+' (incluido)', qty:i.qty||1, unitPrice:0, lineTotal:0, hhDisc:0, isGift:true, extras:{sauces:[],ingredients:[],dlcCarne:false,surpriseSauce:null}, notes:'' });
+        state.cart.push({
+          id:'combo-sauce', type:'sauce', name:`${i.name} (incluido)`, qty:i.qty||1,
+          unitPrice:0, lineTotal:0, hhDisc:0, isGift:true,
+          extras:{sauces:[],ingredients:[],dlcCarne:false,surpriseSauce:null}, notes:''
+        });
       } else {
         const papas = state.cart.find(l=>l.type==='side' && l.id==='papasgajo');
-        if (papas) papas.notes = (papas.notes? papas.notes+' · ' : '') + `Dip incluido: ${i.name} (2oz)`;
+        if (papas) papas.notes = (papas.notes ? papas.notes+' · ' : '') + `Dip incluido: ${i.name} (2oz)`;
       }
     });
-    // Bebida por defecto
+
+    // 4) Bebida por defecto
     if (combo.includesDrink && combo.defaultDrinkId){
       const d = (state.menu?.drinks||[]).find(x=>x.id===combo.defaultDrinkId);
       if (d) addDrinkToCart(d);
     }
-    ensureDrinkPrices(); updateCartBar(); beep(); toast(`${combo.name} agregado`);
-  }catch(e){ console.warn('addComboToCart fail', e); toast('No pude agregar el combo'); }
+
+    ensureDrinkPrices();
+    updateCartBar(); beep(); toast(`${combo.name} agregado`);
+  } catch(e){
+    console.warn('addComboToCart fail', e);
+    toast('No pude agregar el combo');
+  }
 }
 function renderCards(){
   const grid = document.getElementById('cards');
@@ -1837,32 +1871,29 @@ document.addEventListener('click', (e)=>{
     return;
   }
 
-  if (item.type === 'side') {
-  // meta segura para papasgajo
+ if (item.type === 'side') {
   const defMeta = {
-    grams: item.grams || 150,
+    grams: Number(item.grams ?? 150),
     seasoningId: item.seasoningId || 'ajo-gamer',
-    seasoningGrams: (item.seasoningGrams ?? 1.0),
+    seasoningGrams: Number(item.seasoningGrams ?? 1.0),
     sauce: item.sauce || 'Aderezo Cheddar 2oz'
   };
-    const hhDiscPerUnit = hhDiscountPerUnit(item);
-    const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
-    state.cart.push({
-      id:item.id, name:item.name, mini:false, qty:1,
-      unitPrice:Number(item.price||0),
-      baseIngredients:[], salsaDefault:null, salsaCambiada:null,
-      extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
-      meta: defMeta,
-      notes: `PAPAS META: ${defMeta.grams}g · ${defMeta.seasoningId} (${defMeta.seasoningGrams}g) · ${defMeta.sauce}`,
-      notes:'',
-      lineTotal: unitBaseAfterHH,
-      hhDisc: hhDiscPerUnit
-    });
-    ensureDrinkPrices();         // ← por si esto activa combo
-    updateCartBar(); beep(); toast(`${item.name} agregado`);
-    return;
-  }
-
+  const hhDiscPerUnit = hhDiscountPerUnit(item);
+  const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
+  state.cart.push({
+    id:item.id, type:'side', name:item.name, mini:false, qty:1,
+    unitPrice:Number(item.price||0),
+    baseIngredients:[], salsaDefault:null, salsaCambiada:null,
+    extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+    meta: defMeta,
+    notes: `PAPAS META: ${defMeta.grams}g · ${defMeta.seasoningId} (${defMeta.seasoningGrams}g) · ${defMeta.sauce}`,
+    lineTotal: unitBaseAfterHH,
+    hhDisc: hhDiscPerUnit
+  });
+  ensureDrinkPrices();
+  updateCartBar(); beep(); toast(`${item.name} agregado`);
+  return;
+}
   // Para burgers/minis: abre modal (si quisieras “agregar directo”, usa el bloque de arriba análogo)
   openItemModal(item, item.baseOf ? state.menu?.burgers?.find(b=>b.id===item.baseOf) : item);
 }, false);
