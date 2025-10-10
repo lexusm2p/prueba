@@ -349,6 +349,7 @@ async function init(){
   ensureDrinkPrices();
   renderCards();
   setActiveTab('mini');
+  enableCombosTab();    // 👈 aquí, ya hay menú y tabs
   updateCartBar();
   setupSidebars();
   renderMobileInfo();
@@ -945,7 +946,7 @@ function renderCards(){
     items = state.menu?.minis || [];
   }
 
-  items.forEach(it=>{
+  items.forEach(it => {
     const base   = baseOfItem(it);
     const baseId = base?.id || it.id;
     const mxThemeOn = /independencia|méx|mex|patria|viva/i.test(String(state.themeName || ''));
@@ -954,11 +955,11 @@ function renderCards(){
       || ((mxThemeOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
 
     const card = document.createElement('div');
-    card.className='card';
+    card.className = 'card';
 
     const disc = hhDiscountPerUnit(it);
-    const eff  = Math.max(0, Number(it.price||0) - disc);
-    const priceHtml = disc>0
+    const eff  = Math.max(0, Number(it.price || 0) - disc);
+    const priceHtml = disc > 0
       ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span></div>`
       : `<div class="price">${money(it.price)}</div>`;
 
@@ -966,8 +967,9 @@ function renderCards(){
     card.innerHTML = `
       <h3>${it.name}</h3>
       <div class="media">
-        ${iconSrc ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
-                  : `<div class="icon" aria-hidden="true"></div>`}
+        ${iconSrc 
+          ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
+          : `<div class="icon" aria-hidden="true"></div>`}
       </div>
       <div class="row">
         ${priceHtml}
@@ -979,21 +981,27 @@ function renderCards(){
     `;
     grid.appendChild(card);
 
-    if (isCombo){
-      card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> addComboToCart(it));
+    if (isCombo) {
+      card.querySelector('[data-a="order"]')
+        ?.addEventListener('click', () => addComboToCart(it));
     } else {
-      card.querySelector('[data-a="ing"]')?.addEventListener('click', ()=>{
-        alert(`${it.name}\n\nIngredientes:\n- ${formatIngredientsFor(it, base).join('\n- ')}`);
-      });
-      card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> openItemModal(it, base));
+      card.querySelector('[data-a="ing"]')
+        ?.addEventListener('click', () => {
+          alert(`${it.name}\n\nIngredientes:\n- ${formatIngredientsFor(it, base).join('\n- ')}`);
+        });
+      card.querySelector('[data-a="order"]')
+        ?.addEventListener('click', () => openItemModal(it, base));
     }
   });
-}
-// Botón opcional de Combos si hay combos en el menú
-(function enableCombosTab(){
+
+  // 👇 Agrega o actualiza la pestaña "Combos" si hay combos en el menú
+  enableCombosTab();
+}// Botón opcional de Combos si hay combos en el menú
+function enableCombosTab(){
   if (!FEATURES.combosUI) return;
-  const hasCombos = Array.isArray(state.menu?.combos) && state.menu.combos.length>0;
+  const hasCombos = Array.isArray(state.menu?.combos) && state.menu.combos.length > 0;
   if (!hasCombos) return;
+
   const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
   if (!bar || document.getElementById('btnCombos')) return;
 
@@ -1003,7 +1011,7 @@ function renderCards(){
   btn.textContent = 'Combos';
   btn.addEventListener('click', ()=> setMode('combos'));
   bar.appendChild(btn);
-})();
+}
 /* ======================= Modal producto ======================= */
 function openItemModal(item, base, existingIndex=null){
   const modal = document.getElementById('modal'); modal?.classList.add('open');
