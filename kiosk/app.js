@@ -929,7 +929,7 @@ const iconSrc = themedSrc
           <button class="btn ghost small" data-a="ing">Ingredientes</button>
           <button class="btn small" data-a="order">Ordenar</button>
         </div>
-      </div>`;
+      </div>;
     grid.appendChild(card);
     if (it.type==='combo'){
       card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> addComboToCart(it));
