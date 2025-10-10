@@ -897,48 +897,62 @@ function addComboToCart(combo){
 }
 function renderCards(){
   const grid = document.getElementById('cards');
-  if(!grid) return;
+  if (!grid) return;
   grid.innerHTML = '';
-  const items = state.mode==='mini' ? (state.menu?.minis||[]) : state.mode==='big' ? (state.menu?.burgers||[]) : (state.menu?.combos||[]);
+
+  let items;
+  if (state.mode === 'mini') {
+    items = state.menu?.minis || [];
+  } else if (state.mode === 'big') {
+    items = state.menu?.burgers || [];
+  } else if (state.mode === 'combos') {
+    items = state.menu?.combos || [];
+  } else {
+    items = state.menu?.minis || [];
+  }
+
   items.forEach(it=>{
-    const base = baseOfItem(it);
+    const base   = baseOfItem(it);
     const baseId = base?.id || it.id;
     const mxThemeOn = /independencia|méx|mex|patria|viva/i.test(String(state.themeName || ''));
     const themedSrc = getThemeIconFor(baseId);
-const iconSrc = themedSrc
-  || ((mxThemeOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
+    const iconSrc = themedSrc
+      || ((mxThemeOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
+
     const card = document.createElement('div');
     card.className='card';
-    const isCombo = (it.type==='combo');
-    card.innerHTML = isCombo ? `
+
+    const disc = hhDiscountPerUnit(it);
+    const eff  = Math.max(0, Number(it.price||0) - disc);
+    const priceHtml = disc>0
+      ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span></div>`
+      : `<div class="price">${money(it.price)}</div>`;
+
+    const isCombo = it.type === 'combo';
+    card.innerHTML = `
       <h3>${it.name}</h3>
       <div class="media">
-        ${iconSrc
-          ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
-          : `<div class="icon" aria-hidden="true"></div>`}
+        ${iconSrc ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
+                  : `<div class="icon" aria-hidden="true"></div>`}
       </div>
       <div class="row">
-        ${(()=>{
-          const disc = hhDiscountPerUnit(it);
-          const eff  = Math.max(0, Number(it.price||0) - disc);
-          return disc>0
-            ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span></div>`
-            : `<div class="price">${money(it.price)}</div>`;
-        })()}
+        ${priceHtml}
         <div class="row" style="gap:8px">
-          <button class="btn ghost small" data-a="ing">Ingredientes</button>
-          <button class="btn small" data-a="order">Ordenar</button>
+          ${isCombo ? '' : `<button class="btn ghost small" data-a="ing">Ingredientes</button>`}
+          <button class="btn small" data-a="order">${isCombo ? 'Ordenar combo' : 'Ordenar'}</button>
         </div>
-      </div>;
+      </div>
+    `;
     grid.appendChild(card);
-    if (it.type==='combo'){
+
+    if (isCombo){
       card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> addComboToCart(it));
-      return; // skip default handlers for combos
+    } else {
+      card.querySelector('[data-a="ing"]')?.addEventListener('click', ()=>{
+        alert(`${it.name}\n\nIngredientes:\n- ${formatIngredientsFor(it, base).join('\n- ')}`);
+      });
+      card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> openItemModal(it, base));
     }
-    card.querySelector('[data-a="ing"]')?.addEventListener('click', ()=>{
-      alert(`${it.name}\n\nIngredientes:\n- ${formatIngredientsFor(it, base).join('\n- ')}`);
-    });
-    card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> openItemModal(it, base));
   });
 }
 
