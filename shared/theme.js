@@ -162,10 +162,10 @@ const THEMES_BUILTIN = {
       primary:'#ff7a00', accent:'#7f5bff',
       ok:'#53e0a6', warn:'#ffc266', danger:'#ff6262',
     },
-   fonts:{
-  importUrl:'https://fonts.googleapis.com/css2?family=Creepster&family=Eater&family=Inter:wght@400;600&display=swap',
+  fonts:{
+  importUrl:'https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@400;600&display=swap',
   base:'Inter, system-ui, Arial',
-  display:'"Creepster","Eater",cursive'
+  display:'"Special Elite", cursive'
 },
     bg:{
       image:{
