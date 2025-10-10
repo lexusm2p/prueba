@@ -17,6 +17,12 @@ import { ensureAuth } from '../shared/firebase.js';
 import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
 import { setTheme } from '../shared/db.js';
 
+
+// === Feature flags seguros (apaga si algo falla) ===
+const FEATURES = {
+  combosUI: true,          // pestaña y tarjetas de combos
+  comboSauceAsLine: false  // si false: dip incluido se anota en notes de Papas
+};
 /* ======================= Estado global ======================= */
 const state = {
   menu: null,
@@ -837,11 +843,63 @@ function getThemeIconFor(baseId){
   }
 }
 /* ======================= Tarjetas ======================= */
+
+/* ======================= Combos (modo seguro) ======================= */
+function addComboToCart(combo){
+  try{
+    // Burgers/minis
+    (combo.items||[]).filter(i=>i.kind==='burger').forEach(i=>{
+      const it = findItemById(i.id); if(!it) return;
+      const base = baseOfItem(it);
+      const d=hhDiscountPerUnit(it); const unit=Math.max(0, Number(it.price||0)-d);
+      state.cart.push({
+        id: it.id, name: it.name, mini: !!it.mini, qty: i.qty||1,
+        unitPrice: Number(it.price||0),
+        baseIngredients: formatIngredientsFor(it, base),
+        ingredients: formatIngredientsFor(it, base),
+        extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+      meta: defMeta,
+      notes: `PAPAS META: ${defMeta.grams}g · ${defMeta.seasoningId} (${defMeta.seasoningGrams}g) · ${defMeta.sauce}`,
+        notes:'', lineTotal: unit*(i.qty||1), hhDisc: d*(i.qty||1)
+      });
+    });
+    // Papas gajo con meta
+    (combo.items||[]).filter(i=>i.kind==='side' && i.id==='papasgajo').forEach(i=>{
+      const side = findItemById('papasgajo'); if(!side) return;
+      const d = hhDiscountPerUnit(side); const eff = Math.max(0, Number(side.price||0)-d);
+      const meta={ grams:i.grams, seasoningId:i.seasoningId, seasoningGrams:i.seasoningGrams, sauce:(side.sauce||'Aderezo Cheddar 2oz') };
+      const metaTxt=`PAPAS META: ${meta.grams||150}g · ${meta.seasoningId||'ajo-gamer'} (${meta.seasoningGrams??1.0}g) · ${meta.sauce}`;
+      state.cart.push({
+        id:'papasgajo', type:'side', name: side.name||'Papas Gajo', qty: i.qty||1,
+        unitPrice: Number(side.price||0), baseIngredients:[],
+        extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+      meta: defMeta,
+      notes: `PAPAS META: ${defMeta.grams}g · ${defMeta.seasoningId} (${defMeta.seasoningGrams}g) · ${defMeta.sauce}`,
+        meta, notes: metaTxt, lineTotal: eff*(i.qty||1), hhDisc: d*(i.qty||1)
+      });
+    });
+    // Dips incluidos
+    (combo.items||[]).filter(i=>i.kind==='sauce').forEach(i=>{
+      if (FEATURES.comboSauceAsLine){
+        state.cart.push({ id:'combo-sauce', type:'sauce', name:i.name+' (incluido)', qty:i.qty||1, unitPrice:0, lineTotal:0, hhDisc:0, isGift:true, extras:{sauces:[],ingredients:[],dlcCarne:false,surpriseSauce:null}, notes:'' });
+      } else {
+        const papas = state.cart.find(l=>l.type==='side' && l.id==='papasgajo');
+        if (papas) papas.notes = (papas.notes? papas.notes+' · ' : '') + `Dip incluido: ${i.name} (2oz)`;
+      }
+    });
+    // Bebida por defecto
+    if (combo.includesDrink && combo.defaultDrinkId){
+      const d = (state.menu?.drinks||[]).find(x=>x.id===combo.defaultDrinkId);
+      if (d) addDrinkToCart(d);
+    }
+    ensureDrinkPrices(); updateCartBar(); beep(); toast(`${combo.name} agregado`);
+  }catch(e){ console.warn('addComboToCart fail', e); toast('No pude agregar el combo'); }
+}
 function renderCards(){
   const grid = document.getElementById('cards');
   if(!grid) return;
   grid.innerHTML = '';
-  const items = state.mode==='mini' ? (state.menu?.minis||[]) : (state.menu?.burgers||[]);
+  const items = state.mode==='mini' ? (state.menu?.minis||[]) : state.mode==='big' ? (state.menu?.burgers||[]) : (state.menu?.combos||[]);
   items.forEach(it=>{
     const base = baseOfItem(it);
     const baseId = base?.id || it.id;
@@ -851,7 +909,8 @@ const iconSrc = themedSrc
   || ((mxThemeOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
     const card = document.createElement('div');
     card.className='card';
-    card.innerHTML = `
+    const isCombo = (it.type==='combo');
+    card.innerHTML = isCombo ? `
       <h3>${it.name}</h3>
       <div class="media">
         ${iconSrc
@@ -872,6 +931,10 @@ const iconSrc = themedSrc
         </div>
       </div>`;
     grid.appendChild(card);
+    if (it.type==='combo'){
+      card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> addComboToCart(it));
+      return; // skip default handlers for combos
+    }
     card.querySelector('[data-a="ing"]')?.addEventListener('click', ()=>{
       alert(`${it.name}\n\nIngredientes:\n- ${formatIngredientsFor(it, base).join('\n- ')}`);
     });
@@ -1747,6 +1810,13 @@ document.addEventListener('click', (e)=>{
   }
 
   if (item.type === 'side') {
+  // meta segura para papasgajo
+  const defMeta = {
+    grams: item.grams || 150,
+    seasoningId: item.seasoningId || 'ajo-gamer',
+    seasoningGrams: (item.seasoningGrams ?? 1.0),
+    sauce: item.sauce || 'Aderezo Cheddar 2oz'
+  };
     const hhDiscPerUnit = hhDiscountPerUnit(item);
     const unitBaseAfterHH = Math.max(0, Number(item.price||0) - hhDiscPerUnit);
     state.cart.push({
@@ -1754,6 +1824,8 @@ document.addEventListener('click', (e)=>{
       unitPrice:Number(item.price||0),
       baseIngredients:[], salsaDefault:null, salsaCambiada:null,
       extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+      meta: defMeta,
+      notes: `PAPAS META: ${defMeta.grams}g · ${defMeta.seasoningId} (${defMeta.seasoningGrams}g) · ${defMeta.sauce}`,
       notes:'',
       lineTotal: unitBaseAfterHH,
       hhDisc: hhDiscPerUnit
