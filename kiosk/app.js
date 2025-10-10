@@ -995,8 +995,8 @@ function renderCards(){
   });
 
   // 👇 Agrega o actualiza la pestaña "Combos" si hay combos en el menú
-  enableCombosTab();
-}// Botón opcional de Combos si hay combos en el menú
+  if (typeof enableCombosTab === 'function') enableCombosTab();
+}
 function enableCombosTab(){
   if (!FEATURES.combosUI) return;
   const hasCombos = Array.isArray(state.menu?.combos) && state.menu.combos.length > 0;
