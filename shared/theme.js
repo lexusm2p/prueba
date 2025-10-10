@@ -162,11 +162,11 @@ const THEMES_BUILTIN = {
       primary:'#ff7a00', accent:'#7f5bff',
       ok:'#53e0a6', warn:'#ffc266', danger:'#ff6262',
     },
-    fonts:{
-      importUrl:'https://fonts.googleapis.com/css2?family=Butcherman&family=Nosifer&family=Inter:wght@400;600&display=swap',
-      base:'Inter, system-ui, Arial',
-      display:'"Butcherman","Nosifer",cursive'
-    },
+   fonts:{
+  importUrl:'https://fonts.googleapis.com/css2?family=Creepster&family=Eater&family=Inter:wght@400;600&display=swap',
+  base:'Inter, system-ui, Arial',
+  display:'"Creepster","Eater",cursive'
+},
     bg:{
       image:{
         mobile:'images/bg-m.webp',
