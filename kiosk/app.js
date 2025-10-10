@@ -955,7 +955,21 @@ function renderCards(){
     }
   });
 }
+// Botón opcional de Combos si hay combos en el menú
+(function enableCombosTab(){
+  if (!FEATURES.combosUI) return;
+  const hasCombos = Array.isArray(state.menu?.combos) && state.menu.combos.length>0;
+  if (!hasCombos) return;
+  const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
+  if (!bar || document.getElementById('btnCombos')) return;
 
+  const btn = document.createElement('button');
+  btn.id = 'btnCombos';
+  btn.className = 'tab';
+  btn.textContent = 'Combos';
+  btn.addEventListener('click', ()=> setMode('combos'));
+  bar.appendChild(btn);
+})();
 /* ======================= Modal producto ======================= */
 function openItemModal(item, base, existingIndex=null){
   const modal = document.getElementById('modal'); modal?.classList.add('open');
