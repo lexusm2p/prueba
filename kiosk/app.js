@@ -1379,7 +1379,8 @@ function openCartModal(){
   ensureDrinkPrices();
   const m = document.getElementById('cartModal');
   const body = document.getElementById('cartBody');
-  const close = ()=> { if(m) m.style.display='none'; if(!state.followCtaShown){ showFollowCta(); state.followCtaShown = true; } };
+  // Al cerrar el carrito SIN confirmar, NO mostrar CTA de seguimiento
+const close = ()=> { if(m) m.style.display='none'; };
   document.getElementById('cartClose')?.addEventListener('click', close, { once:true });
   if(m) m.style.display='grid';
 
