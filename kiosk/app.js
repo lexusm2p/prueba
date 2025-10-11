@@ -1172,7 +1172,7 @@ function openItemModal(item, base, existingIndex=null){
     <div class="field"><label>Comentarios a cocina</label>
       <textarea id="notes" placeholder="sin jitomate, poco picante…">${notesVal}</textarea>
     </div>`;
-/* ======== Bloque de maridaje (bebidas) ======== */
+
 /* ======== Bloque de maridaje (bebidas) ======== */
 try {
   const holder = document.createElement('div');
@@ -1383,7 +1383,8 @@ function openCartModal(){
 const close = ()=> { if(m) m.style.display='none'; };
   document.getElementById('cartClose')?.addEventListener('click', close, { once:true });
   if(m) m.style.display='grid';
-
+  // Decide recompensa si aplica (no HH, hay 3+ minis, una vez por carrito)
+ensureRewardsIfEligible();
   const confirmBtn = document.getElementById('cartConfirm');
   const totalEl    = document.getElementById('cartTotal');
 
@@ -1396,74 +1397,84 @@ const close = ()=> { if(m) m.style.display='none'; };
 
   if (confirmBtn) confirmBtn.style.display = '';
   if (totalEl) totalEl.style.display = '';
+if (body) body.innerHTML = `
+  <div class="field"><label>Nombre del cliente</label>
+    <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
 
-  if(body) body.innerHTML = `
-    <div class="field"><label>Nombre del cliente</label>
-      <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
+    <div class="field">
+      <label>Tipo de pedido</label>
+      <select id="orderType">
+        <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
+        <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
+      </select>
+    </div>
 
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
-      <div class="field">
-        <label>Tipo de pedido</label>
-        <select id="orderType">
-          <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
-          <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
-        </select>
+    <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
+      <label>Teléfono de contacto (Pickup)</label>
+      <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
+             placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
+      <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
+      <div class="muted small" style="margin-top:6px">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input id="loyaltyOpt" type="checkbox" ${state.loyaltyOptIn?'checked':''}/>
+          <span>Quiero guardar mi tarjeta y participar por premios</span>
+        </label>
       </div>
+    </div>
 
-      <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
-        <label>Teléfono de contacto (Pickup)</label>
-        <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
-               placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
-        <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
-        <div class="muted small" style="margin-top:6px">
-          <label style="display:flex;gap:8px;align-items:center">
-            <input id="loyaltyOpt" type="checkbox" ${state.loyaltyOptIn?'checked':''}/>
-            <span>Quiero guardar mi tarjeta y participar por premios</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
-        <label>Número de mesa</label>
-        <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
-      </div>
-
-      <div class="field">
-        <label>Método de pago</label>
-        <select id="payMethod">
-          <option value="efectivo" ${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
-          <option value="tarjeta" ${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
-          <option value="transferencia" ${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
-        </select>
-      </div>
+    <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
+      <label>Número de mesa</label>
+      <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
     </div>
 
     <div class="field">
-      ${state.cart.map((l,idx)=>{
-        const extrasTxt = [
-          (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
-          ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
-          ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
-          (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
-        ].filter(Boolean).join(', ');
-        return `
-        <div class="k-card" style="margin:8px 0" data-i="${idx}">
-          <h4>${l.name} · x${l.qty}</h4>
-          ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
-          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
-          ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
-          <div class="k-actions" style="gap:6px">
-            <button class="btn small ghost" data-a="less">-</button>
-            <button class="btn small ghost" data-a="more">+</button>
-            <button class="btn small" data-a="edit">Editar</button>
-            <button class="btn small danger" data-a="remove">Eliminar</button>
-            <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
-          </div>
-        </div>`;}).join('')}
+      <label>Método de pago</label>
+      <select id="payMethod">
+        <option value="efectivo" ${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
+        <option value="tarjeta" ${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
+        <option value="transferencia" ${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
+      </select>
     </div>
+  </div>
 
-    <div class="field"><label>Comentarios generales</label>
-      <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea></div>`;
+  <div class="field">
+    ${state.cart.map((l,idx)=>{
+      const extrasTxt = [
+        (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
+        ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
+        ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
+        (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
+      ].filter(Boolean).join(', ');
+      return `
+      <div class="k-card" style="margin:8px 0" data-i="${idx}">
+        <h4>${l.name} · x${l.qty}</h4>
+        ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
+        ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
+        ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
+        <div class="k-actions" style="gap:6px">
+          <button class="btn small ghost" data-a="less">-</button>
+          <button class="btn small ghost" data-a="more">+</button>
+          <button class="btn small" data-a="edit">Editar</button>
+          <button class="btn small danger" data-a="remove">Eliminar</button>
+          <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
+        </div>
+      </div>`;}).join('')}
+  </div>
+
+  ${ (state.rewards?.type==='discount' && state.rewards?.discountCents>0) ? `
+    <div class="field">
+      <div class="k-card" style="margin:8px 0">
+        <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+          <div>🎁 Descuento combo minis</div>
+          <div class="price" style="color:#A7F3D0">${rewardDiscountMoney()}</div>
+        </div>
+        <div class="muted small">Aplicado por desbloquear ${REWARDS.minMinis}+ minis</div>
+      </div>
+    </div>` : '' }
+
+  <div class="field"><label>Comentarios generales</label>
+    <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea></div>`;
 
   const typeSel    = document.getElementById('orderType');
   const mesaField  = document.getElementById('mesaField');
