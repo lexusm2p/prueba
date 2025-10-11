@@ -55,12 +55,12 @@ isSubmittingOrder: false,
 
   comboUnlocked: false,
 
-  // Promoción seguimiento
-  followCtaShown: false,
-
   // Happy Hour countdown (solo UI)
   hhLeftText: '',
-
+// Recompensas / combo
+  rewards: { type: null, discountCents: 0, miniDog: false, decided: false },
+  // Evita CTA de seguimiento si NO se confirmó
+  followCtaShown: false, // (ya existía, lo conservamos pero no lo usaremos para mostrar al cerrar)
   // Admin local
   adminMode: false,
 
@@ -484,6 +484,91 @@ function sanitize(value){
   }
 
   return value;
+}
+
+/* ======================= Rewards helpers ======================= */
+function isHHActive(){
+  const { enabled, pct } = hhInfo();
+  return !!enabled && pct > 0;
+}
+function resetRewards(){
+  state.rewards = { type:null, discountCents:0, miniDog:false, decided:false };
+}
+
+// RNG ponderado
+function pickReward(){
+  const p = REWARDS.probabilities;
+  let r = Math.random();
+  if (r < p.discount) return 'discount';
+  r -= p.discount;
+  if (r < p.miniDog) return 'miniDog';
+  return 'none';
+}
+
+// Sube a centavos una cantidad $X
+const toCents = (n)=> Math.round((Number(n||0)) * 100);
+
+// Subtotal SOLO de minis del carrito (sin extras/hh ya están en lineTotal)
+function minisSubtotal(cart = state.cart){
+  return cart.filter(l=> !!l.mini).reduce((a,l)=> a + Number(l.lineTotal||0), 0);
+}
+// Cantidad de minis
+function minisCount(cart = state.cart){
+  return cart.filter(l=> !!l.mini).reduce((a,l)=> a + Number(l.qty||1), 0);
+}
+
+// Computa el descuento de combo por bloques de 3 minis sobre el SUBTOTAL de minis
+function computeComboDiscountCents(cart = state.cart){
+  const count = minisCount(cart);
+  if (count < REWARDS.minMinis) return 0;
+  const blocks = Math.floor(count / REWARDS.minMinis);
+  const subMin = minisSubtotal(cart);
+  const pct = Math.max(0, Math.min(100, REWARDS.discountPercent)) / 100;
+  // descuento = % * (proporción de minis que entran al combo)
+  const discount = subMin * pct * blocks; 
+  return Math.max(0, Math.round(discount * 100) / 100) * 100; // a centavos (x100)
+}
+
+// Aplica/decide recompensa si procede (no HH, no decidida, hay 3+ minis)
+function ensureRewardsIfEligible(){
+  if (!REWARDS.enabled || isHHActive()) { resetRewards(); return; }
+  if (state.rewards.decided) return;
+
+  const count = minisCount();
+  if (count < REWARDS.minMinis) { resetRewards(); return; }
+
+  const choice = pickReward();
+  state.rewards.decided = true;
+
+  if (choice === 'discount'){
+    const cents = computeComboDiscountCents();
+    if (cents > 0) {
+      state.rewards.type = 'discount';
+      state.rewards.discountCents = cents;
+      state.rewards.miniDog = false;
+      toast('🎉 Combo de minis con descuento aplicado');
+    } else {
+      state.rewards.type = 'none';
+    }
+    return;
+  }
+
+  if (choice === 'miniDog' && REWARDS.miniDogEnabled){
+    state.rewards.type = 'miniDog';
+    state.rewards.miniDog = true;
+    state.rewards.discountCents = 0;
+    toast('🌭 ¡Mini Dog de cortesía desbloqueado!');
+    return;
+  }
+
+  state.rewards.type = 'none';
+}
+
+// Resta el descuento en la UI de totales
+function rewardDiscountMoney(){
+  return (state.rewards.type==='discount' && state.rewards.discountCents>0)
+    ? ('-$' + Math.round(state.rewards.discountCents/100))
+    : null;
 }
 /* ========= Seguimiento ========= */
 function normalizePhone(raw=''){ return String(raw).replace(/\D+/g,'').slice(0,15); }
