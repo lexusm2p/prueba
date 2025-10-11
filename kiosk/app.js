@@ -1760,7 +1760,9 @@ function recomputeLine(line){
   line.hhDisc = hhDiscPerUnit * (line.qty||1);
 }
 function refreshCartTotals(){
-  const total = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
+  const baseTotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
+  const discount = (state.rewards?.type==='discount') ? Math.round((state.rewards.discountCents||0)/100) : 0;
+  const total = Math.max(0, baseTotal - discount);
   const totalEl = document.getElementById('cartTotal');
   if (totalEl){
     totalEl.textContent = money(total);
