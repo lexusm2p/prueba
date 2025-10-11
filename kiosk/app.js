@@ -521,12 +521,14 @@ function minisCount(cart = state.cart){
 function computeComboDiscountCents(cart = state.cart){
   const count = minisCount(cart);
   if (count < REWARDS.minMinis) return 0;
-  const blocks = Math.floor(count / REWARDS.minMinis);
+
+  const blocks = Math.floor(count / REWARDS.minMinis);     // bloques de 3
+  const eligibleRatio = Math.min(1, (blocks * REWARDS.minMinis) / count); // proporción elegible
   const subMin = minisSubtotal(cart);
   const pct = Math.max(0, Math.min(100, REWARDS.discountPercent)) / 100;
-  // descuento = % * (proporción de minis que entran al combo)
-  const discount = subMin * pct * blocks; 
-  return Math.max(0, Math.round(discount * 100) / 100) * 100; // a centavos (x100)
+
+  const discount = subMin * pct * eligibleRatio;
+  return Math.round(discount * 100); // centavos exactos
 }
 
 // Aplica/decide recompensa si procede (no HH, no decidida, hay 3+ minis)
