@@ -101,7 +101,16 @@ function escapeHtml(s=''){
 
 /* ================== Dedupe & merge ================== */
 function updatedAtMs(o){
-  return toMs(o.updatedAt || o.timestamps?.updatedAt || o.readyAt || o.timestamps?.readyAt || o.startedAt || o.timestamps?.startedAt || o.createdAt || o.timestamps?.createdAt);
+  return toMs(
+    o.updatedAt
+    || o.timestamps?.updatedAt
+    || o.readyAt
+    || o.timestamps?.readyAt
+    || o.startedAt
+    || o.timestamps?.startedAt
+    || o.createdAt
+    || o.timestamps?.createdAt
+  );
 }
 function mergeByNewest(list){
   const byId = new Map();
@@ -186,38 +195,52 @@ function render(list){
   const bill = (by.DELIVERED||[]).filter(o => !o.paid);
   setCol('col-bill',     bill);
 }
+
+// 🧠 Perf: pintado por lotes para evitar bloqueos largos cuando hay 10–20+ tarjetas
 function setCol(id, arr){
   const el = document.getElementById(id);
   if (!el) return;
-  el.innerHTML = (arr||[]).map(renderCard).join('') || '<div class="empty">—</div>';
+  const html = (arr||[]).map(renderCard).join('') || '<div class="empty">—</div>';
+  requestAnimationFrame(()=> { el.innerHTML = html; });
 }
 
 /* ================== Card ================== */
-function renderCard(o={}){
+function renderCard(o = {}) {
+  // ===== Items normalizados (compatible con órdenes antiguas) =====
   const items = Array.isArray(o.items) && o.items.length
     ? o.items
     : (o.item ? [{
-        id:o.item.id, name:o.item.name, qty:o.qty||1, unitPrice:o.item.price||0,
-        baseIngredients:o.baseIngredients||[], salsaDefault:o.salsaDefault||null,
-        salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||'',
-        lineTotal: (o.item?.price||0) * (o.qty||1)
+        id: o.item.id, name: o.item.name, qty: o.qty || 1, unitPrice: o.item.price || 0,
+        baseIngredients: o.baseIngredients || [], salsaDefault: o.salsaDefault || null,
+        salsaCambiada: o.salsaCambiada || null, extras: o.extras || {}, notes: o.notes || '',
+        lineTotal: (o.item?.price || 0) * (o.qty || 1)
       }] : []);
 
+  // ===== Meta (pickup/mesa) =====
   let meta = '—';
-  if (o.orderType === 'dinein') meta = `Mesa: <b>${escapeHtml(o.table||'?')}</b>`;
+  if (o.orderType === 'dinein') meta = `Mesa: <b>${escapeHtml(o.table || '?')}</b>`;
   else if (o.orderType === 'pickup') meta = 'Pickup';
   else if (o.orderType) meta = escapeHtml(o.orderType);
 
-  const total = calcTotal(o);
+  // ===== Totales (subtotal ya trae descuento combo si existe) =====
+  const sub = (typeof o.subtotal === 'number')
+    ? Number(o.subtotal || 0)
+    : items.reduce((s, it) => s + (typeof it.lineTotal === 'number'
+        ? Number(it.lineTotal || 0)
+        : (Number(it.unitPrice || 0) * Number(it.qty || 1))), 0);
+  const total = sub + Number(o.tip || 0);
+
+  // ===== Datos contacto =====
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
+  // ===== Tiempos (evita Date() costosa de más) =====
   const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
   const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
   const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
   const tNow     = Date.now();
-  const totalRunMs   = (tReady || tNow) - (tCreated || tNow);
-  const inKitchenMs  = (tReady || tNow) - (tStarted || tNow);
+  const totalRunMs  = (tReady || tNow) - (tCreated || tNow);
+  const inKitchenMs = (tReady || tNow) - (tStarted || tNow);
 
   const timerHtml = `
     <div class="muted small mono" style="margin-top:6px">
@@ -226,49 +249,82 @@ function renderCard(o={}){
     </div>
   `;
 
-  const itemsHtml = items.map(it=>{
-    const ingr = (it.baseIngredients||[]).map(i=>`<div class="k-badge">${escapeHtml(i)}</div>`).join('');
+  // ===== Resumen Happy Hour =====
+  const hh = o.hh || {};
+  const hhSummary = (hh.enabled && Number(hh.totalDiscount || 0) > 0)
+    ? `<span class="k-badge">HH -${Number(hh.discountPercent || 0)}% · ahorro ${money(hh.totalDiscount)}</span>`
+    : '';
+
+  // ===== Resumen Recompensas (combo minis / mini dog) =====
+  const rw = o.rewards || {};
+  const rwDiscount = (rw.type === 'discount' && Number(rw.discount || 0) > 0)
+    ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount || 0))}</span>`
+    : '';
+  const rwMiniDog = (rw.type === 'miniDog' && rw.miniDog)
+    ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>`
+    : '';
+  const rewardsSummary = `${rwDiscount} ${rwMiniDog}`.trim();
+
+  // ===== Items HTML =====
+  const itemsHtml = items.map(it => {
+    const ingrBadges = (it.baseIngredients || [])
+      .map(i => `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
+
+    // Aliases + compat (adds/removes/surprise)
+    const extraAdds = (it.adds || it.extras?.adds || it.extras?.ingredients || []);
+    const extraRems = (it.removes || it.extras?.removes || []);
+    const surprise  = it.extras?.surpriseSauce
+      ? [`Sorpresa 🎁: ${it.extras.surpriseSauce}`]
+      : [];
+
     const extrasBadges = [
-      ...(it.extras?.sauces||[]).map(s=>`<div class="k-badge">Aderezo: ${escapeHtml(s)}</div>`),
-      ...(it.extras?.ingredients||[]).map(s=>`<div class="k-badge">Extra: ${escapeHtml(s)}</div>`),
+      ...surprise.map(s => `<div class="k-badge">${escapeHtml(s)}</div>`),
+      ...(it.extras?.sauces || []).map(s => `<div class="k-badge">Aderezo: ${escapeHtml(s)}</div>`),
+      ...extraAdds.map(s => `<div class="k-badge">Extra: ${escapeHtml(s)}</div>`),
+      ...extraRems.map(s => `<div class="k-badge warn">Sin: ${escapeHtml(s)}</div>`),
       (it.extras?.dlcCarne ? '<div class="k-badge">DLC carne 85g</div>' : '')
     ].join('');
+
     const salsaInfo = it.salsaCambiada
       ? `Salsa: <b>${escapeHtml(it.salsaCambiada)}</b> (cambio)`
       : (it.salsaDefault ? `Salsa: ${escapeHtml(it.salsaDefault)}` : '');
+
     return `
       <div class="order-item">
-        <h4>${escapeHtml(it.name||'Producto')} · x${it.qty||1}</h4>
+        <h4>${escapeHtml(it.name || 'Producto')} · x${it.qty || 1}</h4>
         ${salsaInfo ? `<div class="muted small">${salsaInfo}</div>` : ''}
         ${it.notes ? `<div class="muted small">Notas: ${escapeHtml(it.notes)}</div>` : ''}
-        <div class="k-badges" style="margin-top:6px">${ingr}${extrasBadges}</div>
+        <div class="k-badges" style="margin-top:6px">${ingrBadges}${extrasBadges}</div>
       </div>`;
   }).join('');
 
-  const hh = o.hh || {};
-  const hhSummary = (hh.enabled && Number(hh.totalDiscount||0)>0)
-    ? `<span class="k-badge">HH -${Number(hh.discountPercent||0)}% · ahorro ${money(hh.totalDiscount)}</span>`
-    : '';
-
+  // ===== Acciones disponibles =====
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
     (o.status === Status.IN_PROGRESS) ? `<button class="btn ok" data-a="ready">Listo</button>` : '',
     (o.status === Status.READY) ? `<button class="btn ok" data-a="deliver">Entregar</button>` : '',
     (o.status === Status.DELIVERED && !o.paid) ? `<button class="btn" data-a="charge">Cobrar</button>` : '',
-    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid))
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status === Status.DELIVERED && !o.paid))
       ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
-    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid))
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status === Status.DELIVERED && !o.paid))
       ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
+
+  // ===== Cabecera (total + badges HH/Recompensas + pago) =====
+  const paidBadge = o.paid ? '· <span class="k-badge ok">Pagado</span>' : '';
+  const payMethodBadge = (o.paid && o.payMethod)
+    ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>`
+    : '';
 
   return `
 <article class="k-card" data-id="${o.id}">
   <div class="muted small">
-    Cliente: <b>${escapeHtml(o.customer||'-')}</b>${phoneTxt} · ${meta}
+    Cliente: <b>${escapeHtml(o.customer || '-')}</b>${phoneTxt} · ${meta}
   </div>
   <div class="muted small mono" style="margin-top:4px">
-    Total por cobrar: <b>${money(total)}</b> ${o.paid ? '· <span class="k-badge ok">Pagado</span>' : ''} ${hhSummary}
+    Total por cobrar: <b>${money(total)}</b> ${paidBadge}${payMethodBadge}
+    ${hhSummary} ${rewardsSummary}
   </div>
   ${timerHtml}
   ${itemsHtml}
@@ -286,6 +342,10 @@ document.addEventListener('click', async (e)=>{
   const OPTS = { training: TRAIN };
 
   btn.disabled = true;
+  // 🛡️ Failsafe por si render/stream tarda y el botón queda “muerto”
+  const reenable = ()=> { try{ btn.disabled = false; }catch{} };
+  const fsId = setTimeout(reenable, 1200);
+
   try{
     if (a==='take'){
       LOCALLY_TAKEN.add(id);
@@ -401,7 +461,8 @@ document.addEventListener('click', async (e)=>{
     toast('Error al actualizar');
     if(a==='take'){ LOCALLY_TAKEN.delete(id); }
   }finally{
-    btn.disabled = false;
+    clearTimeout(fsId);
+    reenable();
   }
 });
 
@@ -409,7 +470,7 @@ document.addEventListener('click', async (e)=>{
 setInterval(()=>{
   if (!CURRENT_LIST.length) return;
   render(CURRENT_LIST);
-}, 15000);
+}, 20000); // 20s: reduce trabajo cuando hay muchas tarjetas
 
 /* ========== Limpieza ========== */
 window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} });
