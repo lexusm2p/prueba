@@ -1380,11 +1380,13 @@ function openCartModal(){
   const m = document.getElementById('cartModal');
   const body = document.getElementById('cartBody');
   // Al cerrar el carrito SIN confirmar, NO mostrar CTA de seguimiento
-const close = ()=> { if(m) m.style.display='none'; };
+  const close = ()=> { if(m) m.style.display='none'; };
   document.getElementById('cartClose')?.addEventListener('click', close, { once:true });
   if(m) m.style.display='grid';
-  // Decide recompensa si aplica (no HH, hay 3+ minis, una vez por carrito)
-ensureRewardsIfEligible();
+
+  // 🔔 Decide recompensa si aplica (no HH, hay 3+ minis, una vez por carrito)
+  ensureRewardsIfEligible();
+
   const confirmBtn = document.getElementById('cartConfirm');
   const totalEl    = document.getElementById('cartTotal');
 
@@ -1397,84 +1399,85 @@ ensureRewardsIfEligible();
 
   if (confirmBtn) confirmBtn.style.display = '';
   if (totalEl) totalEl.style.display = '';
-if (body) body.innerHTML = `
-  <div class="field"><label>Nombre del cliente</label>
-    <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
 
-  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
-    <div class="field">
-      <label>Tipo de pedido</label>
-      <select id="orderType">
-        <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
-        <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
-      </select>
-    </div>
+  if (body) body.innerHTML = `
+    <div class="field"><label>Nombre del cliente</label>
+      <input id="cartName" type="text" required value="${state.customerName||''}" /></div>
 
-    <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
-      <label>Teléfono de contacto (Pickup)</label>
-      <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
-             placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
-      <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
-      <div class="muted small" style="margin-top:6px">
-        <label style="display:flex;gap:8px;align-items:center">
-          <input id="loyaltyOpt" type="checkbox" ${state.loyaltyOptIn?'checked':''}/>
-          <span>Quiero guardar mi tarjeta y participar por premios</span>
-        </label>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px">
+      <div class="field">
+        <label>Tipo de pedido</label>
+        <select id="orderType">
+          <option value="pickup" ${state.orderMeta.type!=='dinein'?'selected':''}>Pickup (para llevar)</option>
+          <option value="dinein"  ${state.orderMeta.type==='dinein'?'selected':''}>Mesa</option>
+        </select>
+      </div>
+
+      <div class="field" id="phoneField" style="${state.orderMeta.type==='pickup'?'':'display:none'}">
+        <label>Teléfono de contacto (Pickup)</label>
+        <input id="phoneNum" type="tel" inputmode="numeric" autocomplete="tel" maxlength="10"
+               placeholder="10 dígitos" pattern="[0-9]{10}" value="${state.orderMeta.phone||''}" />
+        <div class="muted small">Lo usamos solo para avisarte cuando tu pedido esté listo.</div>
+        <div class="muted small" style="margin-top:6px">
+          <label style="display:flex;gap:8px;align-items:center">
+            <input id="loyaltyOpt" type="checkbox" ${state.loyaltyOptIn?'checked':''}/>
+            <span>Quiero guardar mi tarjeta y participar por premios</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
+        <label>Número de mesa</label>
+        <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
+      </div>
+
+      <div class="field">
+        <label>Método de pago</label>
+        <select id="payMethod">
+          <option value="efectivo" ${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
+          <option value="tarjeta" ${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
+          <option value="transferencia" ${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
+        </select>
       </div>
     </div>
 
-    <div class="field" id="mesaField" style="${state.orderMeta.type==='dinein'?'':'display:none'}">
-      <label>Número de mesa</label>
-      <input id="tableNum" type="text" placeholder="Ej. 4" value="${state.orderMeta.table||''}" />
+    <div class="field">
+      ${state.cart.map((l,idx)=>{
+        const extrasTxt = [
+          (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
+          ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
+          ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
+          (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
+        ].filter(Boolean).join(', ');
+        return `
+        <div class="k-card" style="margin:8px 0" data-i="${idx}">
+          <h4>${l.name} · x${l.qty}</h4>
+          ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
+          ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
+          ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
+          <div class="k-actions" style="gap:6px">
+            <button class="btn small ghost" data-a="less">-</button>
+            <button class="btn small ghost" data-a="more">+</button>
+            <button class="btn small" data-a="edit">Editar</button>
+            <button class="btn small danger" data-a="remove">Eliminar</button>
+            <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
+          </div>
+        </div>`;}).join('')}
     </div>
 
-    <div class="field">
-      <label>Método de pago</label>
-      <select id="payMethod">
-        <option value="efectivo" ${state.orderMeta.payMethodPref==='efectivo'?'selected':''}>Efectivo</option>
-        <option value="tarjeta" ${state.orderMeta.payMethodPref==='tarjeta'?'selected':''}>Tarjeta</option>
-        <option value="transferencia" ${state.orderMeta.payMethodPref==='transferencia'?'selected':''}>Transferencia</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="field">
-    ${state.cart.map((l,idx)=>{
-      const extrasTxt = [
-        (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
-        ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+s),
-        ...(l.extras?.ingredients||[]).map(s=>'Extra: '+s),
-        (l.extras?.surpriseSauce ? 'Sorpresa 🎁: '+l.extras.surpriseSauce : '')
-      ].filter(Boolean).join(', ');
-      return `
-      <div class="k-card" style="margin:8px 0" data-i="${idx}">
-        <h4>${l.name} · x${l.qty}</h4>
-        ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${l.salsaCambiada}</div>`:''}
-        ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
-        ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
-        <div class="k-actions" style="gap:6px">
-          <button class="btn small ghost" data-a="less">-</button>
-          <button class="btn small ghost" data-a="more">+</button>
-          <button class="btn small" data-a="edit">Editar</button>
-          <button class="btn small danger" data-a="remove">Eliminar</button>
-          <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
+    ${ (state.rewards?.type==='discount' && state.rewards?.discountCents>0) ? `
+      <div class="field">
+        <div class="k-card" style="margin:8px 0">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <div>🎁 Descuento combo minis</div>
+            <div class="price" style="color:#A7F3D0">${rewardDiscountMoney()}</div>
+          </div>
+          <div class="muted small">Aplicado por desbloquear ${REWARDS.minMinis}+ minis</div>
         </div>
-      </div>`;}).join('')}
-  </div>
+      </div>` : '' }
 
-  ${ (state.rewards?.type==='discount' && state.rewards?.discountCents>0) ? `
-    <div class="field">
-      <div class="k-card" style="margin:8px 0">
-        <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
-          <div>🎁 Descuento combo minis</div>
-          <div class="price" style="color:#A7F3D0">${rewardDiscountMoney()}</div>
-        </div>
-        <div class="muted small">Aplicado por desbloquear ${REWARDS.minMinis}+ minis</div>
-      </div>
-    </div>` : '' }
-
-  <div class="field"><label>Comentarios generales</label>
-    <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea></div>`;
+    <div class="field"><label>Comentarios generales</label>
+      <textarea id="cartNotes" placeholder="comentarios para todo el pedido"></textarea></div>`;
 
   const typeSel    = document.getElementById('orderType');
   const mesaField  = document.getElementById('mesaField');
@@ -1526,39 +1529,40 @@ if (body) body.innerHTML = `
       const line = state.cart[i]; if (!line) return;
       const act = btn.dataset.a;
 
- if (act === 'remove') {
-  state.cart.splice(i, 1);
-  ensureDrinkPrices();                  // si quitaste la última comida, bebidas vuelven a “solo”
-  updateCartBar(); openCartModal();
-  return;
-}
+      if (act === 'remove') {
+        state.cart.splice(i, 1);
+        ensureDrinkPrices();                  // si quitaste la última comida, bebidas vuelven a “solo”
+        updateCartBar(); openCartModal();
+        return;
+      }
 
-if (act === 'more') {
-  line.qty = Math.min(99, (line.qty || 1) + 1);
-  if (line?.type === 'drink') {         // bebidas: su precio lo maneja ensureDrinkPrices
-    ensureDrinkPrices();
-    updateCartBar(); openCartModal();
-    return;
-  }
-  recomputeLine(line);
-  ensureDrinkPrices();                  // por si este “+” activa combo para bebidas
-  updateCartBar(); openCartModal();
-  checkComboAchievement();
-  return;
-}
+      if (act === 'more') {
+        line.qty = Math.min(99, (line.qty || 1) + 1);
+        if (line?.type === 'drink') {         // bebidas: su precio lo maneja ensureDrinkPrices
+          ensureDrinkPrices();
+          updateCartBar(); openCartModal();
+          return;
+        }
+        recomputeLine(line);
+        ensureDrinkPrices();                  // por si este “+” activa combo para bebidas
+        updateCartBar(); openCartModal();
+        checkComboAchievement();
+        return;
+      }
 
-if (act === 'less') {
-  line.qty = Math.max(1, (line.qty || 1) - 1);
-  if (line?.type === 'drink') {
-    ensureDrinkPrices();
-    updateCartBar(); openCartModal();
-    return;
-  }
-  recomputeLine(line);
-  ensureDrinkPrices();                  // por si este “-” desactiva combo
-  updateCartBar(); openCartModal();
-  return;
-}
+      if (act === 'less') {
+        line.qty = Math.max(1, (line.qty || 1) - 1);
+        if (line?.type === 'drink') {
+          ensureDrinkPrices();
+          updateCartBar(); openCartModal();
+          return;
+        }
+        recomputeLine(line);
+        ensureDrinkPrices();                  // por si este “-” desactiva combo
+        updateCartBar(); openCartModal();
+        return;
+      }
+
       if (act === 'edit') {
         const item = findItemById(line.id);
         const base = baseOfItem(item);
@@ -1573,172 +1577,217 @@ if (act === 'less') {
   if (confirmBtn) {
     confirmBtn.onclick = null; // limpia cualquier handler anterior
     confirmBtn.onclick = async ()=>{
-  // 👉 anti‑doble‑tap
-  if (state.isSubmittingOrder) return;
-  state.isSubmittingOrder = true;
-// Asegura precios actualizados antes de renderizar el contenido del carrito
-  ensureDrinkPrices();
-  // feedback UI
-  const prevLabel = confirmBtn.textContent;
-  confirmBtn.disabled = true;
-  confirmBtn.setAttribute('aria-busy','true');
-  confirmBtn.textContent = 'Enviando…';
+      // 👉 anti-doble-tap
+      if (state.isSubmittingOrder) return;
+      state.isSubmittingOrder = true;
 
-  try {
-    const name = (document.getElementById('cartName')?.value||'').trim();
-    if(!name){ alert('Escribe tu nombre'); return; }
-    state.customerName = name;
+      // Asegura precios actualizados
+      ensureDrinkPrices();
 
-    state.orderMeta.type  = (document.getElementById('orderType')?.value||'pickup');
-    state.orderMeta.payMethodPref = (document.getElementById('payMethod')?.value || 'efectivo');
+      // feedback UI
+      const prevLabel = confirmBtn.textContent;
+      confirmBtn.disabled = true;
+      confirmBtn.setAttribute('aria-busy','true');
+      confirmBtn.textContent = 'Enviando…';
 
-    if(state.orderMeta.type==='dinein'){
-      state.orderMeta.table = (document.getElementById('tableNum')?.value||'').trim();
-      if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
-      state.orderMeta.phone = '';
-    } else {
-      const raw = (document.getElementById('phoneNum')?.value || '');
-      const norm = normalizePhone(raw);
-      if(norm.length < 10){
-        alert('Para Pickup, ingresa un teléfono de 10 dígitos.');
-        return;
-      }
-      state.orderMeta.phone = norm;
-      state.orderMeta.table = '';
-    }
+      try {
+        const name = (document.getElementById('cartName')?.value||'').trim();
+        if(!name){ alert('Escribe tu nombre'); return; }
+        state.customerName = name;
 
-   // === Notas generales ingresadas en el carrito
-const generalNotes = (document.getElementById('cartNotes')?.value || '').trim();
+        state.orderMeta.type  = (document.getElementById('orderType')?.value||'pickup');
+        state.orderMeta.payMethodPref = (document.getElementById('payMethod')?.value || 'efectivo');
 
-// === Filtrar líneas: no mandar regalos al backend y sumar una nota para cocina
-const giftNotes = [];
-    const itemsForDB = state.cart.map(l => ({
-  id: l.id,
-  name: l.name,
-  mini: l.mini,
-  qty: l.qty,
-  unitPrice: l.unitPrice,
+        if(state.orderMeta.type==='dinein'){
+          state.orderMeta.table = (document.getElementById('tableNum')?.value||'').trim();
+          if(!state.orderMeta.table){ alert('Indica el número de mesa.'); return; }
+          state.orderMeta.phone = '';
+        } else {
+          const raw = (document.getElementById('phoneNum')?.value || '');
+          const norm = normalizePhone(raw);
+          if(norm.length < 10){
+            alert('Para Pickup, ingresa un teléfono de 10 dígitos.');
+            return;
+          }
+          state.orderMeta.phone = norm;
+          state.orderMeta.table = '';
+        }
 
-  // Base + alias
-  baseIngredients: l.baseIngredients,
-  ingredients: l.ingredients || l.baseIngredients || [], // 👈 alias para tablet
+        // === Notas generales ingresadas en el carrito
+        const generalNotes = (document.getElementById('cartNotes')?.value || '').trim();
 
-  // Salsas
-  salsaDefault: l.salsaDefault,
-  salsaCambiada: l.salsaCambiada,
+        // === Filtrar líneas: no mandar regalos de otros programas (umbral) al backend
+        const giftNotes = [];
+        const itemsForDB = state.cart.map(l => ({
+          id: l.id,
+          name: l.name,
+          mini: l.mini,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
 
-  // Extras + alias agregados/removidos
-  extras: l.extras,
-  adds: l.adds || l.extras?.adds || l.extras?.ingredients || [],   // 👈 alias
-  removes: l.removes || l.extras?.removes || [],                    // 👈 alias
+          // Base + alias
+          baseIngredients: l.baseIngredients,
+          ingredients: l.ingredients || l.baseIngredients || [], // 👈 alias para tablet
 
-  notes: l.notes || null,
-  lineTotal: l.lineTotal,
-  hhDisc: Number(l.hhDisc || 0),
-  isGift: !!l.isGift
-})).filter(l => {
-  if (l.isGift) {
-    giftNotes.push(`• ${l.name} x${l.qty}`);
-    return false;
-  }
-  return true;
-});
+          // Salsas
+          salsaDefault: l.salsaDefault,
+          salsaCambiada: l.salsaCambiada,
 
-// === Nota compuesta para cocina (incluye los regalos)
-const notesForKitchen = [
-  generalNotes,
-  giftNotes.length ? `REGALO: agregar sin costo:\n${giftNotes.join('\n')}` : ''
-].filter(Boolean).join('\n');
+          // Extras + alias agregados/removidos
+          extras: l.extras,
+          adds: l.adds || l.extras?.adds || l.extras?.ingredients || [],   // 👈 alias
+          removes: l.removes || l.extras?.removes || [],                    // 👈 alias
 
-// === Totales SOLO con líneas no-regalo
-const subtotal = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
-const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
-
-// === Resumen HH
-const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
-const hhSummary = {
-  enabled: !!hh.enabled,
-  discountPercent: Number(hh.discountPercent || 0),
-  applyEligibleOnly: hh.applyEligibleOnly !== false,
-  totalDiscount: Number(hhTotalDiscount || 0)
-};
-
-// ID idempotente desde cliente
-const clientId = `c_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
-const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-
-// === Pedido a persistir (sin regalos)
-const orderBase = {
-  clientId,
-  customer: state.customerName,
-  orderType: state.orderMeta.type,
-  table: state.orderMeta.type === 'dinein' ? state.orderMeta.table : null,
-  phone: state.orderMeta.type === 'pickup' ? state.orderMeta.phone : null,
-  payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
-  items: itemsForDB,
-  subtotal,
-  notes: notesForKitchen,           // ⬅️ cocina verá aquí el/los regalos
-  hh: hhSummary,
-  createdAt: Date.now()
-};
-    let orderId = null;
-    try {
-      const created = await DB.createOrder(sanitize(orderBase));
-      orderId = (typeof created === 'string') ? created : created?.id;
-    } catch (e) {
-      console.warn('createOrder error, usando provisional:', e);
-    }
-    if (!orderId) orderId = provisionalId;
-
-    state.lastOrderId = orderId;
-
-    try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
-
-    if (orderBase.phone) {
-      await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId }).catch(()=>{});
-      await DB.attachLastOrderRef?.(orderBase.phone, orderId).catch(()=>{});
-      sendWaOrderCreated({
-        phone: orderBase.phone,
-        name: orderBase.customer,
-        orderId,
-        subtotal: orderBase.subtotal,
-        etaText: state.etaText || '7–10 min',
-        hhTotalDiscount: orderBase?.hh?.totalDiscount || 0
-      });
-    }
-
-    beep();
-    toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
-    state.cart = []; updateCartBar();
-    const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
-
-    setTimeout(()=>{
-      openFollowModal({
-        phone: orderBase.phone || state.orderMeta.phone || '',
-        orderId
-      });
-    }, 200);
-
-    if (state.loyaltyEnabled && !state.loyaltyAskShown) {
-      state.loyaltyAskShown = true;
-      setTimeout(()=>{
-        openLoyaltyModal({
-          name: orderBase.customer || '',
-          phone: orderBase.phone || '',
-          orderId
+          notes: l.notes || null,
+          lineTotal: l.lineTotal,
+          hhDisc: Number(l.hhDisc || 0),
+          isGift: !!l.isGift
+        })).filter(l => {
+          // Quitamos regalos del programa de umbral (PowerDog Mini por total),
+          // pero NO removemos la recompensa Mini Dog (va como item normal $0).
+          if (l.isGift) {
+            giftNotes.push(`• ${l.name} x${l.qty}`);
+            return false;
+          }
+          return true;
         });
-      }, 500);
-    }
-  } finally {
-    // 🧹 reactivar UI solo si aún está abierto (si cerraste, da igual)
-    state.isSubmittingOrder = false;
-    confirmBtn.disabled = false;
-    confirmBtn.removeAttribute('aria-busy');
-    confirmBtn.textContent = prevLabel;
-  }
-};
+
+        // === Si la recompensa decidió Mini Dog, lo agregamos como línea $0 para cocina
+        if (state.rewards?.type === 'miniDog' && REWARDS.miniDogEnabled) {
+          const dog = findItemById('powerdog-mini') || { id:'powerdog-mini', name:'Mini Dog (cortesía)', mini:true, price:0 };
+          itemsForDB.push({
+            id: dog.id,
+            name: dog.name || 'Mini Dog (cortesía)',
+            mini: true,
+            qty: 1,
+            unitPrice: 0,
+            baseIngredients: dog.baseIngredients || [],
+            ingredients: dog.ingredients || dog.baseIngredients || [],
+            salsaDefault: dog.salsaDefault || null,
+            salsaCambiada: null,
+            extras: { sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+            notes: null,
+            lineTotal: 0,
+            hhDisc: 0
+          });
+        }
+
+        // === Nota compuesta para cocina (incluye regalos de umbral en texto)
+        const notesForKitchen = [
+          generalNotes,
+          giftNotes.length ? `REGALO: agregar sin costo:\n${giftNotes.join('\n')}` : ''
+        ].filter(Boolean).join('\n');
+
+        // === Totales base (solo líneas “reales” del pedido)
+        const subtotalBase = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
+        const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
+
+        // === Descuento por combo minis (si tocó y NO hay HH)
+        const discountCents = (state.rewards?.type==='discount') ? (state.rewards.discountCents||0) : 0;
+        const discountMoney = Math.round(discountCents / 100);
+
+        // === Subtotal final tras descuento
+        const subtotal = Math.max(0, subtotalBase - discountMoney);
+
+        // === Resumen HH
+        const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
+        const hhSummary = {
+          enabled: !!hh.enabled,
+          discountPercent: Number(hh.discountPercent || 0),
+          applyEligibleOnly: hh.applyEligibleOnly !== false,
+          totalDiscount: Number(hhTotalDiscount || 0)
+        };
+
+        // ID idempotente desde cliente
+        const clientId = `c_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+        const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
+        // === Pedido a persistir
+        const orderBase = {
+          clientId,
+          customer: state.customerName,
+          orderType: state.orderMeta.type,
+          table: state.orderMeta.type === 'dinein' ? state.orderMeta.table : null,
+          phone: state.orderMeta.type === 'pickup' ? state.orderMeta.phone : null,
+          payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
+          items: itemsForDB,
+          subtotal,                     // 👈 ya con descuento de combo (si aplica)
+          notes: notesForKitchen,       // ⬅️ cocina verá aquí regalos del umbral
+          hh: hhSummary,
+          rewards: {
+            type: state.rewards?.type || null,
+            discount: discountMoney,          // en $ (entero)
+            discountCents: discountCents,     // en centavos
+            miniDog: !!state.rewards?.miniDog,
+            decided: !!state.rewards?.decided
+          },
+          createdAt: Date.now()
+        };
+
+        let orderId = null;
+        try {
+          const created = await DB.createOrder(sanitize(orderBase));
+          orderId = (typeof created === 'string') ? created : created?.id;
+        } catch (e) {
+          console.warn('createOrder error, usando provisional:', e);
+        }
+        if (!orderId) orderId = provisionalId;
+
+        state.lastOrderId = orderId;
+
+        try { localStorage.setItem(`prepMetrics:${orderId}`, JSON.stringify({ createdAt: orderBase.createdAt })); } catch {}
+
+        if (orderBase.phone) {
+          await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId }).catch(()=>{});
+          await DB.attachLastOrderRef?.(orderBase.phone, orderId).catch(()=>{});
+          sendWaOrderCreated({
+            phone: orderBase.phone,
+            name: orderBase.customer,
+            orderId,
+            subtotal: orderBase.subtotal,
+            etaText: state.etaText || '7–10 min',
+            hhTotalDiscount: orderBase?.hh?.totalDiscount || 0
+          });
+        }
+
+        beep();
+        toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
+
+        // 🧹 limpiar carrito y recompensas para la siguiente orden
+        state.cart = [];
+        resetRewards();
+        updateCartBar();
+
+        const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
+
+        setTimeout(()=>{
+          openFollowModal({
+            phone: orderBase.phone || state.orderMeta.phone || '',
+            orderId
+          });
+        }, 200);
+
+        if (state.loyaltyEnabled && !state.loyaltyAskShown) {
+          state.loyaltyAskShown = true;
+          setTimeout(()=>{
+            openLoyaltyModal({
+              name: orderBase.customer || '',
+              phone: orderBase.phone || '',
+              orderId
+            });
+          }, 500);
+        }
+      } finally {
+        // 🧹 reactivar UI solo si aún está abierto (si cerraste, da igual)
+        state.isSubmittingOrder = false;
+        confirmBtn.disabled = false;
+        confirmBtn.removeAttribute('aria-busy');
+        confirmBtn.textContent = prevLabel;
+      }
+    };
   }
 }
+
 function recomputeLine(line){
   if (line?.type === 'drink') return;  // ← bebidas: su total lo calcula ensureDrinkPrices()
 
@@ -1759,6 +1808,7 @@ function recomputeLine(line){
   line.lineTotal = unitTotal * (line.qty||1);
   line.hhDisc = hhDiscPerUnit * (line.qty||1);
 }
+
 function refreshCartTotals(){
   const baseTotal = state.cart.reduce((a,l)=> a + (l.lineTotal||0), 0);
   const discount = (state.rewards?.type==='discount') ? Math.round((state.rewards.discountCents||0)/100) : 0;
@@ -1769,7 +1819,6 @@ function refreshCartTotals(){
     totalEl.style.display = state.cart.length ? '' : 'none';
   }
 }
-
 /* ======================= Laterales ======================= */
 function setupSidebars(){
   const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, bannerText:'' };
