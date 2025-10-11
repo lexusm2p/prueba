@@ -17,7 +17,16 @@ import { ensureAuth } from '../shared/firebase.js';
 import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
 import { setTheme } from '../shared/db.js';
 
-
+/* ======================= Recompensas (config) ======================= */
+// % ponderados (deben sumar ~1.0). Ajustables.
+const REWARDS = {
+  enabled: true,
+  miniDogEnabled: true,    // apágalo si ya no habrá Mini Dog
+  minMinis: 3,
+  probabilities: { discount: 0.40, miniDog: 0.20, none: 0.40 },
+  // % descuento aplicado al subtotal de MINIS, por cada bloque de 3 minis
+  discountPercent: 12
+};
 // === Feature flags seguros (apaga si algo falla) ===
 const FEATURES = {
   combosUI: true,          // pestaña y tarjetas de combos
