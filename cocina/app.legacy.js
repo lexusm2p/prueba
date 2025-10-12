@@ -31,13 +31,18 @@
     return String(s||'').replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
   }
 
-  // ==== Normalizadores ====
+  // ==== Normalizadores (robustos) ====
   function isPaid(o){
-    var p = (o && (o.paid != null ? o.paid : (o.payment && o.payment.paid)));
+    // Soporta paid en varias rutas y como string
+    var p = (o && (
+      (o.paid != null ? o.paid : null) ||
+      (o.payment && o.payment.paid != null ? o.payment.paid : null) ||
+      (o.meta && o.meta.paid != null ? o.meta.paid : null)
+    ));
     if (p === true || p === 1) return true;
     if (typeof p === 'string') {
       var s = p.trim().toLowerCase();
-      return s === 'true' || s === '1' || s === 'yes' || s === 'paid';
+      return s === 'true' || s === '1' || s === 'paid' || s === 'pagado' || s === 'sí' || s === 'si' || s === 'yes';
     }
     return false;
   }
@@ -145,30 +150,23 @@
     for (var i=0;i<list.length;i++){
       var o = list[i] || {};
       var s = normStatus(o.status || (o.timestamps && o.timestamps.status));
-      var paid = isPaid(o);
+      var paid = isPaid(o) || s === 'PAID';
       var total = calcTotal(o);
+      var hasItems = Array.isArray(o.items) && o.items.length > 0;
 
-      // Entregada + pagada o status 'PAID' -> archivar una vez y no mostrar
-      if ((s === Status.DELIVERED || s === 'PAID') && paid){
-        if (!AUTO_ARCH[o.id]) {
+      // 1) Cualquier orden pagada queda fuera de activas; si además está entregada, archiva
+      if (paid){
+        if ((s === Status.DELIVERED || s === 'PAID') && !AUTO_ARCH[o.id]) {
           AUTO_ARCH[o.id] = 1;
           archiveDelivered(o.id, Status.DONE, {}).catch(function(){});
         }
         continue;
       }
 
-      // Si está pagada, no debe estar en activas (pendiente/en progreso/lista)
-      if (paid && (s === Status.PENDING || s === Status.IN_PROGRESS || s === Status.READY)) {
-        continue;
-      }
+      // 2) “Fantasmas”: total <= 0 o sin items -> fuera
+      if (total <= 0 || !hasItems) continue;
 
-      // Evitar "fantasmas" con $0 o sin items en PENDING/IN_PROGRESS
-      if ((total <= 0 || !o.items || o.items.length === 0) &&
-          (s === Status.PENDING || s === Status.IN_PROGRESS)) {
-        continue;
-      }
-
-      // Filtra DONE/CANCELLED fuera de la vista
+      // 3) Fuera DONE/CANCELLED
       if (s === Status.DONE || s === Status.CANCELLED) continue;
 
       cleaned.push(o);
@@ -188,8 +186,8 @@
     setCol('col-progress', by[Status.IN_PROGRESS] || []);
     setCol('col-ready',    by[Status.READY]       || []);
 
-    // "Por cobrar": SOLO entregadas y NO pagadas
-    var bill = (by[Status.DELIVERED] || []).filter(function(o){ return !isPaid(o); });
+    // "Por cobrar": entregadas y NO pagadas (las pagadas ya salieron arriba)
+    var bill = by[Status.DELIVERED] || [];
     setCol('col-bill', bill);
   }
 
@@ -279,7 +277,7 @@
 
     // Acciones
     var st = normStatus(o.status);
-    var paidFlag = isPaid(o);
+    var paidFlag = isPaid(o); // ya filtradas arriba, pero por si cambia en tiempo real
     var canShowTake = (st===Status.PENDING) && !LOCALLY_TAKEN[o.id];
     var actions = ''
       + (canShowTake ? '<button class="btn" data-a="take">Tomar</button>' : '')
@@ -307,7 +305,7 @@
     if (__lock) return; __lock=true;
     try{
       var raw = Array.isArray(orders)?orders.slice(0):[];
-      // filtra DONE/CANCELLED/PAID fuera de la vista
+      // fuera DONE/CANCELLED/PAID
       raw = raw.filter(function(o){
         var s = normStatus(o && o.status);
         return s !== Status.DONE && s !== Status.CANCELLED && s !== 'PAID';
