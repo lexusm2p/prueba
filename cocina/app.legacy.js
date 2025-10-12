@@ -1,4 +1,4 @@
-/* cocina/app.legacy.js — ES5 (reemplazo completo, ES5 puro) */
+/* cocina/app.legacy.js — ES5 (hard-fix anti fantasmas) */
 
 (function(){
   if (!window.DB) { console.warn('[cocina.legacy] DB no listo aún'); }
@@ -11,7 +11,7 @@
 
   // ===== Estado local =====
   var Status = { PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY', DELIVERED:'DELIVERED', CANCELLED:'CANCELLED', DONE:'DONE', PAID:'PAID' };
-  var CURRENT_LIST = [];      // también lo exponemos como window.CURRENT_LIST (abajo)
+  var CURRENT_LIST = [];
   var LOCALLY_TAKEN = {};
   var AUTO_ARCH = {}; // evita archivar dos veces la misma orden
 
@@ -31,25 +31,31 @@
     return String(s||'').replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
   }
 
-  // ==== Normalizadores (robustos) ====
-  function isPaid(o){
-    // Soporta paid en varias rutas y como string (“pagado”, “true”, “1”, “sí/si/yes”)
-    var p = (o && (
-      (o.paid != null ? o.paid : null) ||
-      (o.payment && o.payment.paid != null ? o.payment.paid : null) ||
-      (o.meta && o.meta.paid != null ? o.meta.paid : null)
-    ));
-    if (p === true || p === 1) return true;
-    if (typeof p === 'string') {
-      var s = p.trim().toLowerCase();
-      return s === 'true' || s === '1' || s === 'paid' || s === 'pagado' || s === 'sí' || s === 'si' || s === 'yes';
-    }
-    return false;
-  }
+  // ==== Normalizadores (ultra-robustos) ====
   function normStatus(s){
     s = String(s || '').trim().toUpperCase();
-    if (!s) return 'PENDING';
-    return s;
+    return s || 'PENDING';
+  }
+  function isPaid(o){
+    if (!o) return false;
+    // señales posibles
+    var raw = (o.paid != null ? o.paid : null);
+    if (raw == null && o.payment && o.payment.paid != null) raw = o.payment.paid;
+    if (raw == null && o.meta && o.meta.paid != null)       raw = o.meta.paid;
+    if (raw == null && o.payStatus != null)                 raw = o.payStatus; // e.g. "paid"/"pagado"
+    // booleans/números
+    if (raw === true || raw === 1) return true;
+    // strings
+    if (typeof raw === 'string'){
+      var s = raw.trim().toLowerCase();
+      if (s === 'true' || s === '1' || s === 'paid' || s === 'pagado' || s === 'sí' || s === 'si' || s === 'yes') return true;
+    }
+    // estado PAID cuenta como pagado
+    var st = normStatus(o.status);
+    if (st === 'PAID') return true;
+    // si tiene paidAt/ticket de cobro
+    if (o.paidAt || (o.payment && (o.payment.paidAt || o.payment.tx || o.payment.reference))) return true;
+    return false;
   }
 
   // ===== Shims DB =====
@@ -142,6 +148,20 @@
     el.innerHTML = html;
   }
 
+  // Purgado extra por si algo se coló visualmente
+  function purgeGhostCards(){
+    try{
+      var cards = document.querySelectorAll('article.k-card');
+      for (var i=0;i<cards.length;i++){
+        var txt = (cards[i].innerText || '').toLowerCase();
+        // Heurística: total $0 y dice pagado
+        if (txt.indexOf('total: $0')>=0 && (txt.indexOf('pagado')>=0 || txt.indexOf('paid')>=0)){
+          cards[i].parentNode && cards[i].parentNode.removeChild(cards[i]);
+        }
+      }
+    }catch(_){}
+  }
+
   function render(list){
     // 1) Limpieza / filtros
     var cleaned = [];
@@ -150,11 +170,11 @@
     for (var i=0;i<list.length;i++){
       var o = list[i] || {};
       var s = normStatus(o.status || (o.timestamps && o.timestamps.status));
-      var paid = isPaid(o) || s === 'PAID';
+      var paid = isPaid(o);
       var total = calcTotal(o);
       var hasItems = Array.isArray(o.items) && o.items.length > 0;
 
-      // 1) Cualquier orden pagada queda fuera de activas; si además está entregada, archiva
+      // Pago -> fuera de activas; si además está entregada/PAID, archiva
       if (paid){
         if ((s === Status.DELIVERED || s === 'PAID') && !AUTO_ARCH[o.id]) {
           AUTO_ARCH[o.id] = 1;
@@ -163,10 +183,10 @@
         continue;
       }
 
-      // 2) “Fantasmas”: total <= 0 o sin items -> fuera
+      // “Fantasmas”: total ≤ 0 o sin items -> fuera
       if (total <= 0 || !hasItems) continue;
 
-      // 3) Fuera DONE/CANCELLED
+      // Fuera DONE/CANCELLED
       if (s === Status.DONE || s === Status.CANCELLED) continue;
 
       cleaned.push(o);
@@ -186,9 +206,12 @@
     setCol('col-progress', by[Status.IN_PROGRESS] || []);
     setCol('col-ready',    by[Status.READY]       || []);
 
-    // "Por cobrar": entregadas y NO pagadas (las pagadas ya salieron arriba)
+    // "Por cobrar": entregadas y NO pagadas (las pagadas ya se filtraron)
     var bill = by[Status.DELIVERED] || [];
     setCol('col-bill', bill);
+
+    // Purgado visual por si algo quedó (defensa final)
+    setTimeout(purgeGhostCards, 0);
   }
 
   function renderCard(o){
@@ -277,7 +300,7 @@
 
     // Acciones
     var st = normStatus(o.status);
-    var paidFlag = isPaid(o); // redundante: arriba ya se filtró, pero por si cambia en tiempo real
+    var paidFlag = isPaid(o); // redundante, pero por si cambia en tiempo real
     var canShowTake = (st===Status.PENDING) && !LOCALLY_TAKEN[o.id];
     var actions = ''
       + (canShowTake ? '<button class="btn" data-a="take">Tomar</button>' : '')
@@ -288,7 +311,7 @@
       + ((st===Status.PENDING || st===Status.IN_PROGRESS || (st===Status.DELIVERED && !paidFlag)) ? '<button class="btn warn" data-a="cancel">Eliminar</button>' : '');
 
     return ''+
-      '<article class="k-card" data-id="'+o.id+'">'+
+      '<article class="k-card" data-id="'+o.id+'" class="k-card">'+
         '<div class="muted small">Cliente: <b>'+escapeHtml(o.customer||'-')+'</b>'+phoneTxt+' · '+escapeHtml(meta)+' · '+trackLink+'</div>'+
         '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(total)+'</b> '+(paidFlag ? '· <span class="k-badge ok">Pagado</span>' : '')+' '+hhSummary+'</div>'+
         rewardsHtml+
@@ -305,13 +328,13 @@
     if (__lock) return; __lock=true;
     try{
       var raw = Array.isArray(orders)?orders.slice(0):[];
-      // fuera DONE/CANCELLED/PAID
+      // fuera DONE/CANCELLED/PAID (estado)
       raw = raw.filter(function(o){
         var s = normStatus(o && o.status);
         return s !== Status.DONE && s !== Status.CANCELLED && s !== 'PAID';
       });
       CURRENT_LIST = raw;
-      window.CURRENT_LIST = CURRENT_LIST; // expone para consola/diagnóstico
+      window.CURRENT_LIST = CURRENT_LIST; // para diagnóstico en consola
       render(CURRENT_LIST);
     } finally { setTimeout(function(){ __lock=false; },0); }
   });
@@ -332,7 +355,6 @@
       }
       if (!found) CURRENT_LIST.push(Object.assign({id:id}, patch));
     }
-
     function re(){ render(CURRENT_LIST); }
 
     try{
@@ -411,50 +433,5 @@
 
   // ===== Limpieza =====
   window.addEventListener('beforeunload', function(){ try{unsub && unsub();}catch(_){ } });
-
-  // ====== Utilidad opcional: limpieza masiva desde consola ======
-  // Ejecuta: kitchenArchiveGhosts().then(...)
-  window.kitchenArchiveGhosts = function(){
-    if (!window.DB) { console.warn('DB no disponible'); return Promise.resolve(0); }
-    var list = (window.CURRENT_LIST && window.CURRENT_LIST.slice()) || [];
-    if (!list.length) { console.log('No hay pedidos en la lista actual.'); return Promise.resolve(0); }
-
-    function calcSub(o){ var it=Array.isArray(o.items)?o.items:[]; var s=0; for(var i=0;i<it.length;i++){ var x=it[i]; s += (typeof x.lineTotal==='number')? Number(x.lineTotal||0) : (Number(x.unitPrice||0)*Number(x.qty||1)); } return s; }
-    function calcTot(o){ return (typeof o.subtotal==='number'?Number(o.subtotal||0):calcSub(o)) + Number(o.tip||0); }
-
-    var ops = []; var touched = 0;
-    for (var i=0;i<list.length;i++){
-      var o = list[i]||{}; var s = normStatus(o.status);
-      var paid = isPaid(o); var total = calcTot(o);
-      var noItems = !Array.isArray(o.items) || o.items.length===0;
-      var isActive = (s===Status.PENDING || s===Status.IN_PROGRESS || s===Status.READY);
-      var isGhost  = (paid && isActive) || (total<=0 || noItems);
-
-      if (isGhost){
-        touched++;
-        (function(oid){
-          var p = Promise.resolve();
-          if (typeof DB.updateOrder==='function') {
-            p = p.then(function(){ return DB.updateOrder(oid, { status: Status.DONE, updatedAt: new Date() }, {}); });
-          } else if (typeof DB.setStatus==='function') {
-            p = p.then(function(){ return DB.setStatus(oid, Status.DONE, {}); });
-          }
-          if (typeof DB.archiveDelivered==='function') {
-            p = p.then(function(){ return DB.archiveDelivered(oid, {}); });
-          }
-          ops.push(p);
-        })(o.id);
-      }
-    }
-
-    return Promise.all(ops).then(function(){
-      if (typeof toast==='function') toast('Archivados: '+touched);
-      console.log('Archivados:', touched);
-      return touched;
-    }).catch(function(e){
-      console.warn('Error al archivar:', e);
-      return touched;
-    });
-  };
 
 })();
