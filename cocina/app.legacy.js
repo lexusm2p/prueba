@@ -31,6 +31,22 @@
     return String(s||'').replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
   }
 
+  // ==== Normalizadores ====
+  function isPaid(o){
+    var p = (o && (o.paid != null ? o.paid : (o.payment && o.payment.paid)));
+    if (p === true || p === 1) return true;
+    if (typeof p === 'string') {
+      var s = p.trim().toLowerCase();
+      return s === 'true' || s === '1' || s === 'yes' || s === 'paid';
+    }
+    return false;
+  }
+  function normStatus(s){
+    s = String(s || '').trim().toUpperCase();
+    if (!s) return 'PENDING';
+    return s;
+  }
+
   // ===== Shims DB =====
   function subscribeKitchen(cb){
     if (typeof DB.subscribeKitchenOrders==='function') return DB.subscribeKitchenOrders(cb);
@@ -124,15 +140,16 @@
   function render(list){
     // 1) Limpieza / filtros
     var cleaned = [];
-    list = list || [];
+    list = Array.isArray(list) ? list : [];
 
     for (var i=0;i<list.length;i++){
       var o = list[i] || {};
-      var s = String(o.status || Status.PENDING).toUpperCase();
+      var s = normStatus(o.status || (o.timestamps && o.timestamps.status));
+      var paid = isPaid(o);
       var total = calcTotal(o);
 
-      // Si entregada y pagada -> archivar una vez y no mostrar
-      if (s === Status.DELIVERED && o.paid){
+      // Entregada + pagada o status 'PAID' -> archivar una vez y no mostrar
+      if ((s === Status.DELIVERED || s === 'PAID') && paid){
         if (!AUTO_ARCH[o.id]) {
           AUTO_ARCH[o.id] = 1;
           archiveDelivered(o.id, Status.DONE, {}).catch(function(){});
@@ -140,11 +157,19 @@
         continue;
       }
 
-      // Pagadas no deben estar en activas
-      if (o.paid && (s===Status.PENDING || s===Status.IN_PROGRESS || s===Status.READY)) continue;
+      // Si está pagada, no debe estar en activas (pendiente/en progreso/lista)
+      if (paid && (s === Status.PENDING || s === Status.IN_PROGRESS || s === Status.READY)) {
+        continue;
+      }
 
-      // Evitar "fantasmas" $0 en activas (permitimos READY por si son cortesías que sí se pasan)
-      if (total<=0 && (s===Status.PENDING || s===Status.IN_PROGRESS)) continue;
+      // Evitar "fantasmas" con $0 o sin items en PENDING/IN_PROGRESS
+      if ((total <= 0 || !o.items || o.items.length === 0) &&
+          (s === Status.PENDING || s === Status.IN_PROGRESS)) {
+        continue;
+      }
+
+      // Filtra DONE/CANCELLED fuera de la vista
+      if (s === Status.DONE || s === Status.CANCELLED) continue;
 
       cleaned.push(o);
     }
@@ -153,18 +178,18 @@
     var by = {};
     for (var j=0;j<cleaned.length;j++){
       var oo = cleaned[j];
-      var sj = String(oo.status || Status.PENDING).toUpperCase();
+      var sj = normStatus(oo.status);
       if (!by[sj]) by[sj] = [];
       by[sj].push(oo);
     }
 
     // 3) Pintar columnas
-    setCol('col-pending',  by.PENDING || []);
-    setCol('col-progress', by.IN_PROGRESS || []);
-    setCol('col-ready',    by.READY || []);
+    setCol('col-pending',  by[Status.PENDING]     || []);
+    setCol('col-progress', by[Status.IN_PROGRESS] || []);
+    setCol('col-ready',    by[Status.READY]       || []);
 
     // "Por cobrar": SOLO entregadas y NO pagadas
-    var bill = (by.DELIVERED || []).filter(function(o){ return !o.paid; });
+    var bill = (by[Status.DELIVERED] || []).filter(function(o){ return !isPaid(o); });
     setCol('col-bill', bill);
   }
 
@@ -253,19 +278,21 @@
     var rewardsHtml = rewardsSummaryHtml(o);
 
     // Acciones
-    var canShowTake = (o.status===Status.PENDING) && !LOCALLY_TAKEN[o.id];
+    var st = normStatus(o.status);
+    var paidFlag = isPaid(o);
+    var canShowTake = (st===Status.PENDING) && !LOCALLY_TAKEN[o.id];
     var actions = ''
       + (canShowTake ? '<button class="btn" data-a="take">Tomar</button>' : '')
-      + (o.status===Status.IN_PROGRESS ? '<button class="btn ok" data-a="ready">Listo</button>' : '')
-      + (o.status===Status.READY ? '<button class="btn ok" data-a="deliver">Entregar</button>' : '')
-      + ((o.status===Status.DELIVERED && !o.paid) ? '<button class="btn" data-a="charge">Cobrar</button>' : '')
-      + ((o.status===Status.PENDING || o.status===Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid)) ? '<button class="btn ghost" data-a="edit">Editar</button>' : '')
-      + ((o.status===Status.PENDING || o.status===Status.IN_PROGRESS || (o.status===Status.DELIVERED && !o.paid)) ? '<button class="btn warn" data-a="cancel">Eliminar</button>' : '');
+      + (st===Status.IN_PROGRESS ? '<button class="btn ok" data-a="ready">Listo</button>' : '')
+      + (st===Status.READY ? '<button class="btn ok" data-a="deliver">Entregar</button>' : '')
+      + ((st===Status.DELIVERED && !paidFlag) ? '<button class="btn" data-a="charge">Cobrar</button>' : '')
+      + ((st===Status.PENDING || st===Status.IN_PROGRESS || (st===Status.DELIVERED && !paidFlag)) ? '<button class="btn ghost" data-a="edit">Editar</button>' : '')
+      + ((st===Status.PENDING || st===Status.IN_PROGRESS || (st===Status.DELIVERED && !paidFlag)) ? '<button class="btn warn" data-a="cancel">Eliminar</button>' : '');
 
     return ''+
       '<article class="k-card" data-id="'+o.id+'">'+
         '<div class="muted small">Cliente: <b>'+escapeHtml(o.customer||'-')+'</b>'+phoneTxt+' · '+escapeHtml(meta)+' · '+trackLink+'</div>'+
-        '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(total)+'</b> '+(o.paid ? '· <span class="k-badge ok">Pagado</span>' : '')+' '+hhSummary+'</div>'+
+        '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(total)+'</b> '+(paidFlag ? '· <span class="k-badge ok">Pagado</span>' : '')+' '+hhSummary+'</div>'+
         rewardsHtml+
         timerHtml+
         itemsHtml+
@@ -280,10 +307,10 @@
     if (__lock) return; __lock=true;
     try{
       var raw = Array.isArray(orders)?orders.slice(0):[];
-      // filtra DONE/CANCELLED fuera de la vista
+      // filtra DONE/CANCELLED/PAID fuera de la vista
       raw = raw.filter(function(o){
-        var s = String(o && o.status || '').toUpperCase();
-        return s !== Status.DONE && s !== Status.CANCELLED;
+        var s = normStatus(o && o.status);
+        return s !== Status.DONE && s !== Status.CANCELLED && s !== 'PAID';
       });
       CURRENT_LIST = raw;
       render(CURRENT_LIST);
