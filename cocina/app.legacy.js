@@ -1,16 +1,15 @@
-/* cocina/app.legacy.js — ES5 (hard-fix anti fantasmas) */
-// Evita inicializar dos veces
-if (window.__KITCHEN_BOOTED__) {
-  console.warn('[cocina] ya inicializado, ignorando segunda carga');
-  // corta aquí
-} else {
-  window.__KITCHEN_BOOTED__ = 'legacy';
-}
-(function(){
-  if (!window.DB) { console.warn('[cocina.legacy] DB no listo aún'); }
-})();
+/* cocina/app.legacy.js — ES5 (hard-fix anti fantasmas + guard correcto) */
 
 (function(){
+  // === Guard: evita inicializar dos veces ===
+  if (window.__KITCHEN_BOOTED__) {
+    console.warn('[cocina] ya inicializado, ignorando segunda carga');
+    return; // ¡esto SÍ detiene el resto!
+  }
+  window.__KITCHEN_BOOTED__ = 'legacy';
+
+  if (!window.DB) { console.warn('[cocina.legacy] DB no listo aún'); }
+
   var DB = window.DB || {};
   var toast = window.toast || function(s){ try{console.log('toast:',s);}catch(_){ } };
   var beep  = window.beep  || function(){};
@@ -44,22 +43,17 @@ if (window.__KITCHEN_BOOTED__) {
   }
   function isPaid(o){
     if (!o) return false;
-    // señales posibles
     var raw = (o.paid != null ? o.paid : null);
     if (raw == null && o.payment && o.payment.paid != null) raw = o.payment.paid;
     if (raw == null && o.meta && o.meta.paid != null)       raw = o.meta.paid;
-    if (raw == null && o.payStatus != null)                 raw = o.payStatus; // e.g. "paid"/"pagado"
-    // booleans/números
+    if (raw == null && o.payStatus != null)                 raw = o.payStatus;
     if (raw === true || raw === 1) return true;
-    // strings
     if (typeof raw === 'string'){
       var s = raw.trim().toLowerCase();
       if (s === 'true' || s === '1' || s === 'paid' || s === 'pagado' || s === 'sí' || s === 'si' || s === 'yes') return true;
     }
-    // estado PAID cuenta como pagado
     var st = normStatus(o.status);
     if (st === 'PAID') return true;
-    // si tiene paidAt/ticket de cobro
     if (o.paidAt || (o.payment && (o.payment.paidAt || o.payment.tx || o.payment.reference))) return true;
     return false;
   }
@@ -160,7 +154,6 @@ if (window.__KITCHEN_BOOTED__) {
       var cards = document.querySelectorAll('article.k-card');
       for (var i=0;i<cards.length;i++){
         var txt = (cards[i].innerText || '').toLowerCase();
-        // Heurística: total $0 y dice pagado
         if (txt.indexOf('total: $0')>=0 && (txt.indexOf('pagado')>=0 || txt.indexOf('paid')>=0)){
           cards[i].parentNode && cards[i].parentNode.removeChild(cards[i]);
         }
@@ -169,7 +162,6 @@ if (window.__KITCHEN_BOOTED__) {
   }
 
   function render(list){
-    // 1) Limpieza / filtros
     var cleaned = [];
     list = Array.isArray(list) ? list : [];
 
@@ -198,7 +190,7 @@ if (window.__KITCHEN_BOOTED__) {
       cleaned.push(o);
     }
 
-    // 2) Agrupar por estado
+    // Agrupar por estado
     var by = {};
     for (var j=0;j<cleaned.length;j++){
       var oo = cleaned[j];
@@ -207,7 +199,7 @@ if (window.__KITCHEN_BOOTED__) {
       by[sj].push(oo);
     }
 
-    // 3) Pintar columnas
+    // Pintar columnas
     setCol('col-pending',  by[Status.PENDING]     || []);
     setCol('col-progress', by[Status.IN_PROGRESS] || []);
     setCol('col-ready',    by[Status.READY]       || []);
@@ -216,7 +208,7 @@ if (window.__KITCHEN_BOOTED__) {
     var bill = by[Status.DELIVERED] || [];
     setCol('col-bill', bill);
 
-    // Purgado visual por si algo quedó (defensa final)
+    // Defensa visual final
     setTimeout(purgeGhostCards, 0);
   }
 
@@ -231,22 +223,18 @@ if (window.__KITCHEN_BOOTED__) {
       meta: o.meta || {}
     }] : []);
 
-    // Meta (mesa/pickup)
     var meta='—';
     if (o.orderType==='dinein') meta='Mesa: <b>'+escapeHtml(o.table||'?')+'</b>';
     else if (o.orderType==='pickup') meta='pickup';
     else if (o.orderType) meta = escapeHtml(o.orderType);
 
-    // Totales
     var total = calcTotal(o);
 
-    // Teléfono + Track
     var phone = getPhone(o);
     var phoneTxt = phone ? ' · Tel: <b>'+escapeHtml(phone)+'</b>' : '';
     var trackUrl = buildTrackUrl(o);
     var trackLink = '<a href="'+trackUrl+'" target="_blank" rel="noopener" class="muted small">Ver en Track</a>';
 
-    // Tiempos
     var tCreated = toMs(o.createdAt || (o.timestamps&&o.timestamps.createdAt));
     var tStarted = toMs(o.startedAt || (o.timestamps&&o.timestamps.startedAt));
     var tReady   = toMs(o.readyAt   || (o.timestamps&&o.timestamps.readyAt));
@@ -256,17 +244,14 @@ if (window.__KITCHEN_BOOTED__) {
 
     var timerHtml = '<div class="muted small mono" style="margin-top:6px">⏱️ Total: <b>'+fmtMMSS(totalRunMs)+'</b>' + (tStarted ? ' · 👩‍🍳 En cocina: <b>'+fmtMMSS(inKitchenMs)+'</b>' : '') + '</div>';
 
-    // Ítems
     var itemsHtml='';
     for (var i=0;i<items.length;i++){
       var it=items[i]||{};
       var name = String(it.name || 'Producto');
 
-      // Badges de ingredientes base
       var ingr=''; var bi=it.baseIngredients||[];
       for (var j=0;j<bi.length;j++){ ingr += '<div class="k-badge">'+escapeHtml(bi[j])+'</div>'; }
 
-      // Badges de extras
       var extrasBadges='';
       var sx = (it.extras&&it.extras.sauces)||[];
       for (j=0;j<sx.length;j++){ extrasBadges += '<div class="k-badge">Aderezo: '+escapeHtml(sx[j])+'</div>'; }
@@ -275,17 +260,14 @@ if (window.__KITCHEN_BOOTED__) {
       if (it.extras && it.extras.dlcCarne) extrasBadges += '<div class="k-badge">DLC carne 85g</div>';
       if (it.extras && it.extras.surpriseSauce) extrasBadges += '<div class="k-badge">Sorpresa: '+escapeHtml(it.extras.surpriseSauce)+'</div>';
 
-      // Salsas (default/cambio)
       var salsaInfo = it.salsaCambiada ? ('Salsa: <b>'+escapeHtml(it.salsaCambiada)+'</b> (cambio)') : (it.salsaDefault ? ('Salsa: '+escapeHtml(it.salsaDefault)) : '');
 
-      // Tipo de línea
       var typeBadge = '';
       var t = (it.type || '').toLowerCase();
       if (t === 'drink') typeBadge = '<span class="k-badge">🥤 Bebida</span>';
       else if (t === 'side') typeBadge = '<span class="k-badge">🍟 Side</span>';
       else if (it.mini) typeBadge = '<span class="k-badge">Mini</span>';
 
-      // Meta de papas
       var sideMeta = (t==='side') ? sideMetaLine(it) : '';
 
       itemsHtml += ''+
@@ -298,15 +280,13 @@ if (window.__KITCHEN_BOOTED__) {
         '</div>';
     }
 
-    // HH + Rewards (combos/promos)
     var hh = o.hh || {};
     var hhSummary = (hh.enabled && Number(hh.totalDiscount||0)>0)
       ? '<span class="k-badge">HH -'+Number(hh.discountPercent||0)+'% · ahorro '+money(hh.totalDiscount)+'</span>' : '';
     var rewardsHtml = rewardsSummaryHtml(o);
 
-    // Acciones
     var st = normStatus(o.status);
-    var paidFlag = isPaid(o); // redundante, pero por si cambia en tiempo real
+    var paidFlag = isPaid(o);
     var canShowTake = (st===Status.PENDING) && !LOCALLY_TAKEN[o.id];
     var actions = ''
       + (canShowTake ? '<button class="btn" data-a="take">Tomar</button>' : '')
@@ -317,7 +297,7 @@ if (window.__KITCHEN_BOOTED__) {
       + ((st===Status.PENDING || st===Status.IN_PROGRESS || (st===Status.DELIVERED && !paidFlag)) ? '<button class="btn warn" data-a="cancel">Eliminar</button>' : '');
 
     return ''+
-      '<article class="k-card" data-id="'+o.id+'" class="k-card">'+
+      '<article class="k-card" data-id="'+o.id+'">'+
         '<div class="muted small">Cliente: <b>'+escapeHtml(o.customer||'-')+'</b>'+phoneTxt+' · '+escapeHtml(meta)+' · '+trackLink+'</div>'+
         '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(total)+'</b> '+(paidFlag ? '· <span class="k-badge ok">Pagado</span>' : '')+' '+hhSummary+'</div>'+
         rewardsHtml+
@@ -334,13 +314,12 @@ if (window.__KITCHEN_BOOTED__) {
     if (__lock) return; __lock=true;
     try{
       var raw = Array.isArray(orders)?orders.slice(0):[];
-      // fuera DONE/CANCELLED/PAID (estado)
       raw = raw.filter(function(o){
         var s = normStatus(o && o.status);
         return s !== Status.DONE && s !== Status.CANCELLED && s !== 'PAID';
       });
       CURRENT_LIST = raw;
-      window.CURRENT_LIST = CURRENT_LIST; // para diagnóstico en consola
+      window.CURRENT_LIST = CURRENT_LIST; // diagnóstico
       render(CURRENT_LIST);
     } finally { setTimeout(function(){ __lock=false; },0); }
   });
@@ -401,7 +380,7 @@ if (window.__KITCHEN_BOOTED__) {
         patchLocal(id, { paid:true, paidAt:now(), payMethod:payMethod, totalCharged:Number(total), updatedAt:now() }); re();
         updateOrder(id, { paid:true, paidAt:now(), payMethod:payMethod, totalCharged:Number(total), updatedAt:now() }, OPTS)
           .then(function(){ return archiveDelivered(id, Status.DONE, OPTS); })
-          .then(function(){ beep(); toast('Cobro registrado'); card.parentNode && card.parentNode.removeChild(card); })
+          .then(function(){ beep(); toast('Cobro registrado'); var c=card; c.parentNode && c.parentNode.removeChild(c); })
           .catch(function(){ toast('Error'); })
           .then(function(){ btn.disabled=false; });
         return;
@@ -426,7 +405,7 @@ if (window.__KITCHEN_BOOTED__) {
         patchLocal(id, { status:Status.CANCELLED, cancelReason:reason, cancelledAt:now(), updatedAt:now() }); re();
         updateOrder(id, { status:Status.CANCELLED, cancelReason:reason, cancelledAt:now(), cancelledBy:'kitchen', updatedAt:now() }, OPTS)
           .then(function(){ return archiveDelivered(id, Status.DONE, OPTS); })
-          .then(function(){ beep(); toast('Pedido eliminado'); card.parentNode && card.parentNode.removeChild(card); })
+          .then(function(){ beep(); toast('Pedido eliminado'); var c2=card; c2.parentNode && c2.parentNode.removeChild(c2); })
           .catch(function(){ toast('Error'); })
           .then(function(){ btn.disabled=false; });
         return;
