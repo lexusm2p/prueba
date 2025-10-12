@@ -1,5 +1,11 @@
 /* cocina/app.legacy.js — ES5 (hard-fix anti fantasmas) */
-
+// Evita inicializar dos veces
+if (window.__KITCHEN_BOOTED__) {
+  console.warn('[cocina] ya inicializado, ignorando segunda carga');
+  // corta aquí
+} else {
+  window.__KITCHEN_BOOTED__ = 'legacy';
+}
 (function(){
   if (!window.DB) { console.warn('[cocina.legacy] DB no listo aún'); }
 })();
