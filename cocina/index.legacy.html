@@ -81,9 +81,27 @@
   }
   function chip(txt){ return '<span class="chip">'+esc(txt)+'</span>'; }
 
+  // === Normalizador de pagos (robusto) ===
+  function isPaid(o){
+    if (!o) return false;
+    var raw = (o.paid != null ? o.paid : null);
+    if (raw == null && o.payment && o.payment.paid != null) raw = o.payment.paid;
+    if (raw == null && o.meta && o.meta.paid != null)       raw = o.meta.paid;
+    if (raw == null && o.payStatus != null)                 raw = o.payStatus;
+    if (raw === true || raw === 1) return true;
+    if (typeof raw === 'string'){
+      var s = raw.trim().toLowerCase();
+      if (s === 'true' || s === '1' || s === 'paid' || s === 'pagado' || s === 'sí' || s === 'si' || s === 'yes') return true;
+    }
+    var st = String(o.status||'').toUpperCase();
+    if (st === 'PAID') return true;
+    if (o.paidAt || (o.payment && (o.payment.paidAt || o.payment.tx || o.payment.reference))) return true;
+    return false;
+  }
+
   // ========= Render =========
   function buildCard(o){
-    var total = money(calcTotal(o));
+    var totalVal = calcTotal(o);
     var isDine = String(o.orderType||'').toLowerCase()==='dinein';
     var meta  = isDine ? ('Mesa '+(o.table||'?')) : (o.orderType||'pickup');
     var track = o.id ? '<a class="track" href="../track/?id='+encodeURIComponent(o.id)+'" target="_blank" rel="noopener">Ver en Track</a>' : '';
@@ -105,17 +123,22 @@
         + (it.notes ? '<div class="muted">Notas: '+esc(it.notes)+'</div>' : '');
     }
 
+    // Línea de totales: cambia el texto si está pagado
+    var totalLine = isPaid(o)
+      ? ('Total: <b>'+money(totalVal)+'</b> · <span class="chip">Pagado</span>')
+      : ('Total por cobrar: <b>'+money(totalVal)+'</b>');
+
     var s = String(o.status||'PENDING').toUpperCase();
     var btns =
       (s==='PENDING')      ? '<button class="btn" data-a="IN_PROGRESS" data-id="'+esc(o.id)+'">Tomar</button>' :
       (s==='IN_PROGRESS')  ? '<button class="btn ok" data-a="READY" data-id="'+esc(o.id)+'">Listo</button>' :
       (s==='READY')        ? '<button class="btn" data-a="DELIVERED" data-id="'+esc(o.id)+'">Entregar</button>' :
-      ((s==='DELIVERED' && !o.paid) ? '<button class="btn ok" data-charge data-id="'+esc(o.id)+'">Cobrar</button>' : '');
+      ((s==='DELIVERED' && !isPaid(o)) ? '<button class="btn ok" data-charge data-id="'+esc(o.id)+'">Cobrar</button>' : '');
 
     return ''
       + '<div class="ord">'
       +   '<div><b>'+esc(o.customer||'-')+'</b> · <span class="muted">'+esc(meta)+'</span> '+track+'</div>'
-      +   '<div class="muted">Total: <b>'+total+'</b> '+(o.paid ? '· <span class="chip">Pagado</span>' : '')+'</div>'
+      +   '<div class="muted">'+totalLine+'</div>'
       +   (o.notes ? '<div class="muted"><b>Notas generales:</b> '+esc(o.notes)+'</div>' : '')
       +   lines
       +   '<div class="row" style="margin-top:6px">'+btns+'</div>'
@@ -123,13 +146,28 @@
   }
 
   function render(list){
-    var by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
+    // 1) Filtro duro: fuera pagadas, $0, sin items, DONE/CANCELLED/PAID
+    var cleaned = [];
     (list||[]).forEach(function(o){
       var s = String(o.status||'PENDING').toUpperCase();
-      if (s==='DELIVERED' && !o.paid) by.BILL.push(o);
-      else if (by[s]) by[s].push(o); else by.PENDING.push(o);
+      var total = calcTotal(o);
+      var hasItems = Array.isArray(o.items) && o.items.length>0;
+      if (isPaid(o)) return;
+      if (total <= 0 || !hasItems) return;
+      if (s==='DONE' || s==='CANCELLED' || s==='PAID') return;
+      cleaned.push(o);
     });
 
+    // 2) Agrupar
+    var by = {PENDING:[], IN_PROGRESS:[], READY:[], BILL:[]};
+    cleaned.forEach(function(o){
+      var s = String(o.status||'PENDING').toUpperCase();
+      if (s==='DELIVERED') by.BILL.push(o);
+      else if (by[s]) by[s].push(o);
+      else by.PENDING.push(o);
+    });
+
+    // 3) Pintar
     function setCol(el, arr){
       if (!el) return;
       el.innerHTML = arr.length ? arr.map(buildCard).join('') : '<div class="empty">—</div>';
@@ -139,18 +177,14 @@
     setCol(COLS.READY, by.READY);
     setCol(COLS.BILL, by.BILL);
 
-    // bind acciones (por render)
+    // 4) Bind acciones
     var btns = document.querySelectorAll('[data-id][data-a]');
     for (var i=0;i<btns.length;i++){
-      (function(b){
-        b.onclick = function(){ doAction(b.getAttribute('data-id'), b.getAttribute('data-a'), b); };
-      })(btns[i]);
+      (function(b){ b.onclick = function(){ doAction(b.getAttribute('data-id'), b.getAttribute('data-a'), b); }; })(btns[i]);
     }
     var chs = document.querySelectorAll('[data-id][data-charge]');
     for (var j=0;j<chs.length;j++){
-      (function(b){
-        b.onclick = function(){ doCharge(b.getAttribute('data-id'), b); };
-      })(chs[j]);
+      (function(b){ b.onclick = function(){ doCharge(b.getAttribute('data-id'), b); }; })(chs[j]);
     }
   }
 
@@ -169,7 +203,7 @@
       if (!o.id) o.id = id;
       arr.push(o);
     }
-    // ordenar por createdAt (number u objeto {seconds})
+    // ordenar por createdAt
     arr.sort(function(a,b){
       var ta = (a.createdAt && a.createdAt.seconds) ? a.createdAt.seconds*1000 : Number(a.createdAt||0);
       var tb = (b.createdAt && b.createdAt.seconds) ? b.createdAt.seconds*1000 : Number(b.createdAt||0);
@@ -197,12 +231,11 @@
   try{
     rtdb.ref(RTDB_PATH).on('value', function(snap){
       var data = snap.val();
-      // No marcamos “ok” si viene null; dejamos que el watchdog suba el polling.
       onSnapshot(data || {});
     });
   }catch(e){/* sigue con polling */ }
 
-  // Polling siempre activo (lento) + watchdog (acelera si RTDB no entrega)
+  // Polling (fallback)
   var ENDPOINT = firebaseConfig.databaseURL.replace(/\/$/,'') + '/' + RTDB_PATH + '.json';
   var pollFast = false;
   function tick(){
@@ -213,8 +246,6 @@
         if (xhr.readyState === 4 && xhr.status === 200){
           try{
             var data = JSON.parse(xhr.responseText||'{}') || {};
-            // Sólo usamos el polling para “rellenar” si RTDB no está rindiendo.
-            // Si RTDB ya pintó algo en < 2s, evitamos sobreescribir demasiado.
             if ((Date.now()-lastRenderAt) > 1200) onSnapshot(data);
           }catch(e){}
         }
@@ -222,34 +253,21 @@
       xhr.send(null);
     }catch(e){}
   }
-  // ritmo de polling: normal 5s; rápido 2s si watchdog detecta vacío.
   setInterval(function(){ tick(); }, function(){ return pollFast ? 2000 : 5000; }());
 
-  // Watchdog: si 6s sin datos o 10s sin lista no vacía, acelera polling.
+  // Watchdog: acelera si RTDB no entrega
   setInterval(function(){
     var now = Date.now();
-    if ((now - lastRenderAt) > 6000 || (now - lastNonEmptyAt) > 10000){
-      pollFast = true;
-    } else {
-      pollFast = false;
-    }
+    pollFast = ((now - lastRenderAt) > 6000 || (now - lastNonEmptyAt) > 10000);
   }, 1500);
 
-  // ========= Acciones (Functions) =========
+  // ========= Acciones (Cloud Functions) =========
   var busyByOrder = {}; // id -> ts
-
-  function lock(btn, id){
-    if (btn){ btn.disabled = true; btn.setAttribute('aria-busy','true'); }
-    busyByOrder[id] = Date.now();
-  }
-  function unlock(btn, id){
-    if (btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); }
-    delete busyByOrder[id];
-  }
+  function lock(btn, id){ if (btn){ btn.disabled = true; btn.setAttribute('aria-busy','true'); } busyByOrder[id] = Date.now(); }
+  function unlock(btn, id){ if (btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); } delete busyByOrder[id]; }
 
   function doAction(id, action, btn){
-    if (!id || !action) return;
-    if (busyByOrder[id]) return;
+    if (!id || !action || busyByOrder[id]) return;
     lock(btn, id);
     fetch(ENDPOINT_STATUS, {
       method:'POST',
@@ -262,8 +280,7 @@
   }
 
   function doCharge(id, btn){
-    if (!id) return;
-    if (busyByOrder[id]) return;
+    if (!id || busyByOrder[id]) return;
     var method = prompt('Método (efectivo / tarjeta / transferencia):','efectivo');
     if (method===null) return;
     lock(btn, id);
