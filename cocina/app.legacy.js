@@ -13,6 +13,7 @@
   var Status = { PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY', DELIVERED:'DELIVERED', CANCELLED:'CANCELLED', DONE:'DONE', PAID:'PAID' };
   var CURRENT_LIST = [];
   var LOCALLY_TAKEN = {};
+  var AUTO_ARCH = {}; // evita archivar dos veces la misma orden
 
   function now(){ return new Date(); }
   function toMs(t){
@@ -74,7 +75,6 @@
 
   // ===== Extras: helpers de visualización =====
   function getPhone(o){
-    // Rutas comunes según distintas versiones del kiosko
     var p = (o && o.phone) ||
             (o && o.meta && o.meta.phone) ||
             (o && o.customer && o.customer.phone) ||
@@ -82,7 +82,6 @@
             (o && o.customerPhone);
     return String(p||'').trim();
   }
-
   function rewardsSummaryHtml(o){
     var rw = o && o.rewards || {};
     var parts = [];
@@ -95,7 +94,6 @@
     if (!parts.length) return '';
     return '<div style="margin-top:6px">' + parts.join(' ') + '</div>';
   }
-
   function sideMetaLine(it){
     var m = (it && it.meta) || {};
     if (!m || (!m.grams && !m.seasoningId && !m.sauce)) return '';
@@ -105,6 +103,15 @@
       (m.sauce ? (' · ' + m.sauce) : '');
     return '<div class="muted small">' + escapeHtml(txt) + '</div>';
   }
+  function buildTrackUrl(o){
+    var base = './track.html';
+    var q = [];
+    if (o && o.id) q.push('oid=' + encodeURIComponent(String(o.id)));
+    var p = getPhone(o);
+    if (p) q.push('phone=' + encodeURIComponent(p));
+    q.push('autostart=1');
+    return base + (q.length?'?'+q.join('&'):'');
+  }
 
   // ===== Render =====
   function setCol(id, arr){
@@ -113,17 +120,51 @@
     var html=''; for (var i=0;i<arr.length;i++) html += renderCard(arr[i]);
     el.innerHTML = html;
   }
+
   function render(list){
-    var by = {};
-    list = list||[];
+    // 1) Limpieza / filtros
+    var cleaned = [];
+    list = list || [];
+
     for (var i=0;i<list.length;i++){
-      var o=list[i]; var s=String(o.status||Status.PENDING).toUpperCase();
-      if (!by[s]) by[s]=[]; by[s].push(o);
+      var o = list[i] || {};
+      var s = String(o.status || Status.PENDING).toUpperCase();
+      var total = calcTotal(o);
+
+      // Si entregada y pagada -> archivar una vez y no mostrar
+      if (s === Status.DELIVERED && o.paid){
+        if (!AUTO_ARCH[o.id]) {
+          AUTO_ARCH[o.id] = 1;
+          archiveDelivered(o.id, Status.DONE, {}).catch(function(){});
+        }
+        continue;
+      }
+
+      // Pagadas no deben estar en activas
+      if (o.paid && (s===Status.PENDING || s===Status.IN_PROGRESS || s===Status.READY)) continue;
+
+      // Evitar "fantasmas" $0 en activas (permitimos READY por si son cortesías que sí se pasan)
+      if (total<=0 && (s===Status.PENDING || s===Status.IN_PROGRESS)) continue;
+
+      cleaned.push(o);
     }
-    setCol('col-pending',  by.PENDING||[]);
-    setCol('col-progress', by.IN_PROGRESS||[]);
-    setCol('col-ready',    by.READY||[]);
-    var bill = (by.DELIVERED||[]).filter(function(o){ return !o.paid; });
+
+    // 2) Agrupar por estado
+    var by = {};
+    for (var j=0;j<cleaned.length;j++){
+      var oo = cleaned[j];
+      var sj = String(oo.status || Status.PENDING).toUpperCase();
+      if (!by[sj]) by[sj] = [];
+      by[sj].push(oo);
+    }
+
+    // 3) Pintar columnas
+    setCol('col-pending',  by.PENDING || []);
+    setCol('col-progress', by.IN_PROGRESS || []);
+    setCol('col-ready',    by.READY || []);
+
+    // "Por cobrar": SOLO entregadas y NO pagadas
+    var bill = (by.DELIVERED || []).filter(function(o){ return !o.paid; });
     setCol('col-bill', bill);
   }
 
@@ -141,15 +182,17 @@
     // Meta (mesa/pickup)
     var meta='—';
     if (o.orderType==='dinein') meta='Mesa: <b>'+escapeHtml(o.table||'?')+'</b>';
-    else if (o.orderType==='pickup') meta='Pickup';
+    else if (o.orderType==='pickup') meta='pickup';
     else if (o.orderType) meta = escapeHtml(o.orderType);
 
     // Totales
     var total = calcTotal(o);
 
-    // Teléfono (robusto)
+    // Teléfono + Track
     var phone = getPhone(o);
     var phoneTxt = phone ? ' · Tel: <b>'+escapeHtml(phone)+'</b>' : '';
+    var trackUrl = buildTrackUrl(o);
+    var trackLink = '<a href="'+trackUrl+'" target="_blank" rel="noopener" class="muted small">Ver en Track</a>';
 
     // Tiempos
     var tCreated = toMs(o.createdAt || (o.timestamps&&o.timestamps.createdAt));
@@ -183,14 +226,14 @@
       // Salsas (default/cambio)
       var salsaInfo = it.salsaCambiada ? ('Salsa: <b>'+escapeHtml(it.salsaCambiada)+'</b> (cambio)') : (it.salsaDefault ? ('Salsa: '+escapeHtml(it.salsaDefault)) : '');
 
-      // Tipo de línea (para que en cocina se noten bebidas/papas)
+      // Tipo de línea
       var typeBadge = '';
       var t = (it.type || '').toLowerCase();
       if (t === 'drink') typeBadge = '<span class="k-badge">🥤 Bebida</span>';
       else if (t === 'side') typeBadge = '<span class="k-badge">🍟 Side</span>';
       else if (it.mini) typeBadge = '<span class="k-badge">Mini</span>';
 
-      // Meta de papas si viene (PAPAS META…)
+      // Meta de papas
       var sideMeta = (t==='side') ? sideMetaLine(it) : '';
 
       itemsHtml += ''+
@@ -221,7 +264,7 @@
 
     return ''+
       '<article class="k-card" data-id="'+o.id+'">'+
-        '<div class="muted small">Cliente: <b>'+escapeHtml(o.customer||'-')+'</b>'+phoneTxt+' · '+meta+'</div>'+
+        '<div class="muted small">Cliente: <b>'+escapeHtml(o.customer||'-')+'</b>'+phoneTxt+' · '+escapeHtml(meta)+' · '+trackLink+'</div>'+
         '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(total)+'</b> '+(o.paid ? '· <span class="k-badge ok">Pagado</span>' : '')+' '+hhSummary+'</div>'+
         rewardsHtml+
         timerHtml+
@@ -236,7 +279,13 @@
   var unsub = subscribeKitchen(function(orders){
     if (__lock) return; __lock=true;
     try{
-      CURRENT_LIST = Array.isArray(orders)?orders.slice(0):[];
+      var raw = Array.isArray(orders)?orders.slice(0):[];
+      // filtra DONE/CANCELLED fuera de la vista
+      raw = raw.filter(function(o){
+        var s = String(o && o.status || '').toUpperCase();
+        return s !== Status.DONE && s !== Status.CANCELLED;
+      });
+      CURRENT_LIST = raw;
       render(CURRENT_LIST);
     } finally { setTimeout(function(){ __lock=false; },0); }
   });
