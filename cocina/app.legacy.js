@@ -72,6 +72,40 @@
     return sub + Number(o.tip||0);
   }
 
+  // ===== Extras: helpers de visualización =====
+  function getPhone(o){
+    // Rutas comunes según distintas versiones del kiosko
+    var p = (o && o.phone) ||
+            (o && o.meta && o.meta.phone) ||
+            (o && o.customer && o.customer.phone) ||
+            (o && o.orderMeta && o.orderMeta.phone) ||
+            (o && o.customerPhone);
+    return String(p||'').trim();
+  }
+
+  function rewardsSummaryHtml(o){
+    var rw = o && o.rewards || {};
+    var parts = [];
+    if (rw && rw.type === 'discount' && Number(rw.discount||0) > 0){
+      parts.push('<span class="k-badge ok">🎁 Combo minis: -$' + Number(rw.discount||0).toFixed(0) + '</span>');
+    }
+    if (rw && rw.type === 'miniDog'){
+      parts.push('<span class="k-badge">🌭 Mini Dog (cortesía)</span>');
+    }
+    if (!parts.length) return '';
+    return '<div style="margin-top:6px">' + parts.join(' ') + '</div>';
+  }
+
+  function sideMetaLine(it){
+    var m = (it && it.meta) || {};
+    if (!m || (!m.grams && !m.seasoningId && !m.sauce)) return '';
+    var txt = 'PAPAS META: ' +
+      (m.grams ? (m.grams + 'g') : '') +
+      (m.seasoningId ? (' · ' + m.seasoningId + (m.seasoningGrams ? (' ('+m.seasoningGrams+'g)') : '')) : '') +
+      (m.sauce ? (' · ' + m.sauce) : '');
+    return '<div class="muted small">' + escapeHtml(txt) + '</div>';
+  }
+
   // ===== Render =====
   function setCol(id, arr){
     var el = document.getElementById(id); if (!el) return;
@@ -99,18 +133,25 @@
       id:o.item.id, name:o.item.name, qty:o.qty||1, unitPrice:o.item.price||0,
       baseIngredients:o.baseIngredients||[], salsaDefault:o.salsaDefault||null,
       salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||'',
-      lineTotal: (o.item&&o.item.price||0) * (o.qty||1)
+      lineTotal: (o.item&&o.item.price||0) * (o.qty||1),
+      type: o.item.type || null,
+      meta: o.meta || {}
     }] : []);
 
+    // Meta (mesa/pickup)
     var meta='—';
     if (o.orderType==='dinein') meta='Mesa: <b>'+escapeHtml(o.table||'?')+'</b>';
     else if (o.orderType==='pickup') meta='Pickup';
     else if (o.orderType) meta = escapeHtml(o.orderType);
 
+    // Totales
     var total = calcTotal(o);
-    var phone = String((o&&o.phone) || (o&&o.meta&&o.meta.phone) || (o&&o.customer&&o.customer.phone) || '').trim();
-    var phoneTxt = phone ? ' · Tel: <b>'+escapeHtml(String(phone))+'</b>' : '';
 
+    // Teléfono (robusto)
+    var phone = getPhone(o);
+    var phoneTxt = phone ? ' · Tel: <b>'+escapeHtml(phone)+'</b>' : '';
+
+    // Tiempos
     var tCreated = toMs(o.createdAt || (o.timestamps&&o.timestamps.createdAt));
     var tStarted = toMs(o.startedAt || (o.timestamps&&o.timestamps.startedAt));
     var tReady   = toMs(o.readyAt   || (o.timestamps&&o.timestamps.readyAt));
@@ -120,30 +161,55 @@
 
     var timerHtml = '<div class="muted small mono" style="margin-top:6px">⏱️ Total: <b>'+fmtMMSS(totalRunMs)+'</b>' + (tStarted ? ' · 👩‍🍳 En cocina: <b>'+fmtMMSS(inKitchenMs)+'</b>' : '') + '</div>';
 
+    // Ítems
     var itemsHtml='';
     for (var i=0;i<items.length;i++){
-      var it=items[i];
+      var it=items[i]||{};
+      var name = String(it.name || 'Producto');
+
+      // Badges de ingredientes base
       var ingr=''; var bi=it.baseIngredients||[];
       for (var j=0;j<bi.length;j++){ ingr += '<div class="k-badge">'+escapeHtml(bi[j])+'</div>'; }
+
+      // Badges de extras
       var extrasBadges='';
       var sx = (it.extras&&it.extras.sauces)||[];
       for (j=0;j<sx.length;j++){ extrasBadges += '<div class="k-badge">Aderezo: '+escapeHtml(sx[j])+'</div>'; }
       var ix = (it.extras&&it.extras.ingredients)||[];
       for (j=0;j<ix.length;j++){ extrasBadges += '<div class="k-badge">Extra: '+escapeHtml(ix[j])+'</div>'; }
       if (it.extras && it.extras.dlcCarne) extrasBadges += '<div class="k-badge">DLC carne 85g</div>';
+      if (it.extras && it.extras.surpriseSauce) extrasBadges += '<div class="k-badge">Sorpresa: '+escapeHtml(it.extras.surpriseSauce)+'</div>';
+
+      // Salsas (default/cambio)
       var salsaInfo = it.salsaCambiada ? ('Salsa: <b>'+escapeHtml(it.salsaCambiada)+'</b> (cambio)') : (it.salsaDefault ? ('Salsa: '+escapeHtml(it.salsaDefault)) : '');
-      itemsHtml += '<div class="order-item">'+
-        '<h4>'+escapeHtml(it.name||'Producto')+' · x'+(it.qty||1)+'</h4>'+
-        (salsaInfo?('<div class="muted small">'+salsaInfo+'</div>'):'')+
-        (it.notes?('<div class="muted small">Notas: '+escapeHtml(it.notes)+'</div>'):'')+
-        '<div class="k-badges" style="margin-top:6px">'+ingr+extrasBadges+'</div>'+
-      '</div>';
+
+      // Tipo de línea (para que en cocina se noten bebidas/papas)
+      var typeBadge = '';
+      var t = (it.type || '').toLowerCase();
+      if (t === 'drink') typeBadge = '<span class="k-badge">🥤 Bebida</span>';
+      else if (t === 'side') typeBadge = '<span class="k-badge">🍟 Side</span>';
+      else if (it.mini) typeBadge = '<span class="k-badge">Mini</span>';
+
+      // Meta de papas si viene (PAPAS META…)
+      var sideMeta = (t==='side') ? sideMetaLine(it) : '';
+
+      itemsHtml += ''+
+        '<div class="order-item">'+
+          '<h4>'+escapeHtml(name)+' · x'+(it.qty||1)+' '+typeBadge+'</h4>'+
+          (salsaInfo?('<div class="muted small">'+salsaInfo+'</div>'):'')+
+          (it.notes?('<div class="muted small">Notas: '+escapeHtml(it.notes)+'</div>'):'')+
+          sideMeta+
+          '<div class="k-badges" style="margin-top:6px">'+ingr+extrasBadges+'</div>'+
+        '</div>';
     }
 
+    // HH + Rewards (combos/promos)
     var hh = o.hh || {};
     var hhSummary = (hh.enabled && Number(hh.totalDiscount||0)>0)
       ? '<span class="k-badge">HH -'+Number(hh.discountPercent||0)+'% · ahorro '+money(hh.totalDiscount)+'</span>' : '';
+    var rewardsHtml = rewardsSummaryHtml(o);
 
+    // Acciones
     var canShowTake = (o.status===Status.PENDING) && !LOCALLY_TAKEN[o.id];
     var actions = ''
       + (canShowTake ? '<button class="btn" data-a="take">Tomar</button>' : '')
@@ -157,6 +223,7 @@
       '<article class="k-card" data-id="'+o.id+'">'+
         '<div class="muted small">Cliente: <b>'+escapeHtml(o.customer||'-')+'</b>'+phoneTxt+' · '+meta+'</div>'+
         '<div class="muted small mono" style="margin-top:4px">Total por cobrar: <b>'+money(total)+'</b> '+(o.paid ? '· <span class="k-badge ok">Pagado</span>' : '')+' '+hhSummary+'</div>'+
+        rewardsHtml+
         timerHtml+
         itemsHtml+
         (o.notes ? '<div class="muted small"><b>Notas generales:</b> '+escapeHtml(o.notes)+'</div>' : '')+
