@@ -297,5 +297,23 @@ input, select{width:100%;padding:12px;border-radius:14px;border:1px solid var(--
   if (document.readyState !== 'loading') startWhenReady();
   document.addEventListener('DOMContentLoaded', startWhenReady);
   window.onerror = function(msg){ try{ toast('JS error: '+msg); }catch(_){} };
+  </script>  <script>
+    // Hotfix: evitar incrementos 6→22→342 por listeners duplicados en el carrito
+    (function(){
+      if(typeof renderCart !== 'function') return;
+      const _origRenderCart = renderCart;
+      renderCart = function(){
+        const list = document.getElementById('cartList');
+        if(list && !list.__bound){
+          list.__bound = true;
+          list.addEventListener('click', function(e){
+            const b = e.target.closest('[data-qty]');
+            if(!b || !window.addToCart) return;
+            addToCart(b.getAttribute('data-id'), parseInt(b.getAttribute('data-qty'),10));
+          }, { passive:true });
+        }
+        _origRenderCart();
+      };
+    })();
   </script></body>
 </html>
