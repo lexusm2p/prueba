@@ -1,6 +1,6 @@
 <!doctype html>
 
-<html lang="es" data-theme="retro">
+<html lang="es" data-theme="arcade">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
@@ -8,173 +8,142 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="format-detection" content="telephone=no" />
   <meta name="theme-color" content="#0b1220" />
-  <title>Seven — Kiosko Lite (DEMO)</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%230b1220'/%3E%3Cpath d='M20 16h24v8H28v8h8v8h-8v8h-8V16z' fill='%23ffd400'/%3E%3Cpath d='M36 16h8v8h-8z' fill='%23ff2e88'/%3E%3C/svg%3E" />
+  <title>Seven — Kiosko Lite (Vertical Arcade)</title>
   <style>
     :root{
-      --bg:#0b1220; --panel:#101a2d; --card:#0f182a; --txt:#e8f0ff; --muted:#a6b2c7;
-      --primary:#ff2e88; --primary-2:#ffd400; --accent:#00e0ff; --ok:#20e070; --warn:#ff9c2e;
-      --chip:#192840; --border:#2a3b5e; --danger:#ff4d4d;
-      --px: clamp(12px, 2.2vw, 16px);
+      --bg:#0b1220; --panel:#0e1630; --card:#0a1326; --txt:#f5fbff; --muted:#a6b2c7;
+      --p1:#ff2e88; --p2:#ffd400; --p3:#00e0ff; --ok:#20e070; --warn:#ff9c2e; --border:#233257;
+      --px: clamp(14px, 2.6vw, 18px); /* +25% base */
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--txt);font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;}
-    .wrap{max-width:980px;margin:0 auto;padding:12px}
-    header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg, rgba(11,18,32,.95) 60%, rgba(11,18,32,0));backdrop-filter:saturate(1.2) blur(6px);padding:10px 12px;border-bottom:1px solid var(--border)}
+    body{margin:0;background:var(--bg);color:var(--txt);font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size:var(--px)}
+    /* Arcade vibe */
+    .arc{letter-spacing:0.6px;text-shadow:0 0 6px rgba(255,212,0,.25), 0 0 14px rgba(0,224,255,.15)}
+    header{position:sticky;top:0;z-index:20;background:linear-gradient(180deg, rgba(11,18,32,.95) 60%, rgba(11,18,32,0));backdrop-filter:saturate(1.2) blur(6px);padding:10px 12px;border-bottom:1px solid var(--border)}
     .brand{display:flex;align-items:center;gap:10px}
-    .brand .logo{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,var(--primary),var(--primary-2));display:grid;place-items:center;font-weight:900;color:#0b1220}
-    .brand h1{font-size:16px;margin:0;letter-spacing:.5px}
-    .badge{padding:3px 8px;border:1px dashed var(--primary);color:var(--primary);border-radius:999px;font-size:12px}
-    .grid{display:grid;grid-template-columns: 1fr 360px; gap:10px}
-    @media (max-width:900px){ .grid{ grid-template-columns:1fr } }
-    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px}
-    .card h2{margin:0 0 8px 0;font-size:16px}
-    .products{display:grid;grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px}
-    @media (max-width:640px){ .products{ grid-template-columns:1fr } }
-    .p{display:grid;grid-template-columns: 86px 1fr; gap:10px; align-items:center;background:linear-gradient(180deg,#0f192c,#0b1324);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-    .p .img{width:86px;height:86px;background:#0b1220;display:grid;place-items:center;font-size:22px}
-    .p .meta{padding:6px 6px 6px 0}
-    .p .meta h3{margin:0;font-size:14px}
-    .p .meta p{margin:2px 0 0 0;color:var(--muted);font-size:12px}
-    .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-    button{appearance:none;border:1px solid var(--border);background:var(--chip);color:var(--txt);padding:10px 12px;border-radius:12px;font-weight:700}
-    button.primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));border:none;color:#0b1220}
-    button.ghost{background:transparent;border-color:var(--border)}
-    button.danger{background:linear-gradient(135deg,#ff5a5a,#ff9a9a);border:none;color:#2b0a0a}
-    .cart{position:sticky; top:64px}
-    .cart .line{display:grid;grid-template-columns: 1fr auto auto; gap:8px; align-items:center;margin-bottom:8px}
-    .qty{display:flex;align-items:center;gap:6px}
-    .qty button{width:28px;height:28px;padding:0}
-    .total{font-size:18px;font-weight:900}
-    .muted{color:var(--muted)}
-    .chip{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border:1px solid var(--border);padding:6px 8px;border-radius:999px;font-size:12px}
-    .panel{display:grid;gap:8px}
-    input, select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:#0e182b;color:var(--txt)}
-    .foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:8px}
-    .note{font-size:12px;color:var(--muted)}
-    .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111b2f;border:1px solid var(--border);padding:10px 12px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s, transform .2s}
-    .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
-    .floating{position:fixed;right:10px;bottom:10px;display:flex;flex-direction:column;gap:8px}
-    .floating button{font-size:12px;padding:6px 10px}
-    .hh{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-    .divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:6px 0}
-    .kiosk-title{font-weight:900;letter-spacing:1px}
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .logo{width:32px;height:32px;border-radius:6px;background:linear-gradient(135deg,var(--p1),var(--p2));display:grid;place-items:center;font-weight:900;color:#0b1220}
+    .wrap{max-width:540px;margin:0 auto;padding:10px}
+    .badge{padding:4px 10px;border:1px dashed var(--p3);color:var(--p3);border-radius:999px;font-size:.8em}main{max-width:540px;margin:0 auto;padding:8px 10px 80px}
+.card{background:linear-gradient(180deg,#0a1428,#0c1730);border:1px solid var(--border);border-radius:16px;padding:10px}
+h1,h2{margin:0 0 8px 0}
+
+/* Productos: una columna vertical */
+.products{display:grid;grid-template-columns: 1fr; gap:10px}
+.p{display:grid;grid-template-columns: 84px 1fr; gap:10px; align-items:center;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#0f1a34,#0b152a)}
+.p .img{width:84px;height:84px;display:grid;place-items:center;font-size:28px;background:radial-gradient(closest-side, #0f1f3f, #0b1220)}
+.p .meta{padding:6px 8px 8px 0}
+.p .meta h3{margin:0 0 2px 0;font-size:1.05em}
+.p .meta p{margin:2px 0 0 0;color:var(--muted);font-size:.9em}
+
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.btn{appearance:none;border:2px solid var(--border);background:#0e1830;color:var(--txt);padding:12px 14px;border-radius:14px;font-weight:900;text-transform:uppercase}
+.btn-xl{padding:14px 18px;font-size:1.05em}
+.btn-primary{background:linear-gradient(135deg,var(--p1),var(--p2));border:none;color:#0b1220;box-shadow:0 0 10px rgba(255,212,0,.25)}
+.btn-ghost{background:transparent;border-color:var(--border)}
+
+/* Carrito abajo (vertical) */
+.cart{position:relative;margin-top:10px}
+.cart .line{display:grid;grid-template-columns: 1fr auto auto; gap:10px; align-items:center;margin-bottom:8px}
+.qty{display:flex;align-items:center;gap:8px}
+.qty .btn{width:40px;height:40px;padding:0}
+.total{font-size:1.2em;font-weight:900}
+
+input, select{width:100%;padding:12px;border-radius:14px;border:1px solid var(--border);background:#0c1730;color:var(--txt)}
+.note{font-size:.85em;color:var(--muted)}
+
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0f1a34;border:1px solid var(--border);padding:12px 14px;border-radius:14px;opacity:0;pointer-events:none;transition:opacity .18s, transform .18s}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+
+/* HUD flotante arcade */
+.hud{position:fixed;right:10px;bottom:10px;display:flex;flex-direction:column;gap:8px;z-index:30}
+.hud .btn{font-size:.85em;padding:8px 12px}
+
+.chip{display:inline-flex;align-items:center;gap:6px;background:#0e1832;border:1px solid var(--border);padding:6px 10px;border-radius:999px;font-size:.85em}
+.divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:8px 0}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
   </style>
 </head>
 <body>
   <header>
     <div class="wrap row">
       <div class="brand">
-        <div class="logo">7</div>
-        <h1 class="kiosk-title">Seven de Burgers · Kiosko Lite</h1>
+        <div class="logo arc">7</div>
+        <h1 class="arc">Seven de Burgers · Player Select</h1>
         <span id="trainingBadge" class="badge" aria-live="polite">MODO DEMO</span>
       </div>
-      <div class="hh" id="hhStrip" aria-live="polite"></div>
+      <div class="chip" id="hhStrip" aria-live="polite">Inicializando…</div>
     </div>
-  </header>  <main class="wrap grid" id="app" aria-busy="true">
+  </header>  <main class="wrap" id="app" aria-busy="true">
     <section class="card">
-      <h2>Player Select</h2>
-      <div class=\"products\" id=\"productList\" role=\"list\">
-          <!-- Fallback HTML estático por si JS tarda en iniciar -->
-          <div class=\"p\" role=\"listitem\"> 
-            <div class=\"img\">🍔</div>
-            <div class=\"meta\">
-              <div class=\"row\"><h3>Starter Burger</h3><strong>$47</strong></div>
-              <p class=\"muted\">Carne 85g, quesos, lechuga, jitomate, cebolla.</p>
-              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"starter\">Agregar</button><button class=\"ghost\" data-less=\"starter\">Quitar</button></div>
-            </div>
-          </div>
-          <div class=\"p\" role=\"listitem\"> 
-            <div class=\"img\">🍍</div>
-            <div class=\"meta\">
-              <div class=\"row\"><h3>Koopa Crunch</h3><strong>$57</strong></div>
-              <p class=\"muted\">Queso blanco, piña, tocino. Sugerido: Chimichurri.</p>
-              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"koopa\">Agregar</button><button class=\"ghost\" data-less=\"koopa\">Quitar</button></div>
-            </div>
-          </div>
-          <div class=\"p\" role=\"listitem\"> 
-            <div class=\"img\">🧀</div>
-            <div class=\"meta\">
-              <div class=\"row\"><h3>Mega Byte</h3><strong>$77</strong></div>
-              <p class=\"muted\">Cheddar, tocino, salchicha en tiras, cebolla.</p>
-              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"megabyte\">Agregar</button><button class=\"ghost\" data-less=\"megabyte\">Quitar</button></div>
-            </div>
-          </div>
-          <div class=\"p\" role=\"listitem\"> 
-            <div class=\"img\">🔥</div>
-            <div class=\"meta\">
-              <div class=\"row\"><h3>Hadouken</h3><strong>$67</strong></div>
-              <p class=\"muted\">Doble queso, chipotle, lechuga, jitomate, cebolla.</p>
-              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"hadouken\">Agregar</button><button class=\"ghost\" data-less=\"hadouken\">Quitar</button></div>
-            </div>
-          </div>
-          <div class=\"p\" role=\"listitem\"> 
-            <div class=\"img\">👑</div>
-            <div class=\"meta\">
-              <div class=\"row\"><h3>Final Boss</h3><strong>$87</strong></div>
-              <p class=\"muted\">La jefa. Tocino + salchicha + quesos.</p>
-              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"finalboss\">Agregar</button><button class=\"ghost\" data-less=\"finalboss\">Quitar</button></div>
-            </div>
-          </div>
-          <div class=\"p\" role=\"listitem\"> 
-            <div class=\"img\">🎮</div>
-            <div class=\"meta\">
-              <div class=\"row\"><h3>Combo 3 Minis</h3><strong>$97</strong></div>
-              <p class=\"muted\">Tres minis de 45g. Logro: Combo Unlocked.</p>
-              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"mini3\">Agregar</button><button class=\"ghost\" data-less=\"mini3\">Quitar</button></div>
+      <h2 class="arc">Menú</h2>
+      <div class="products" id="productList" role="list">
+        <!-- Fallback estático para que siempre haya algo visible -->
+        <div class="p" role="listitem">
+          <div class="img">🍔</div>
+          <div class="meta">
+            <div class="row"><h3>Starter Burger</h3><strong>$47</strong></div>
+            <p class="note">Carne 85g, quesos, lechuga, jitomate, cebolla.</p>
+            <div class="row" style="margin-top:6px">
+              <button class="btn btn-xl" data-add="starter">Agregar</button>
+              <button class="btn btn-ghost btn-xl" data-less="starter">Quitar</button>
             </div>
           </div>
         </div>
-    </section><aside class="card cart" aria-label="Carrito">
-  <h2>Tu pedido</h2>
+      </div>
+    </section><section class="card cart" aria-label="Carrito">
+  <h2 class="arc">Tu pedido</h2>
   <div id="cartList"></div>
   <div class="divider"></div>
-  <div class="panel">
-    <div class="row"><span class="muted">Subtotal</span><span id="subtotal">$0</span></div>
-    <div class="row"><span class="muted">Descuento HH</span><span id="hhDiscount">$0</span></div>
-    <div class="row total"><span>Total</span><span id="total">$0</span></div>
-    <label class="sr-only" for="custName">Nombre</label>
-    <input id="custName" placeholder="Tu nombre" autocomplete="name" />
-    <div class="row">
-      <select id="orderType" aria-label="Tipo de pedido">
-        <option value="pickup">Pickup</option>
-        <option value="dinein">Mesa</option>
-      </select>
-      <input id="tableNum" placeholder="# mesa (si aplica)" inputmode="numeric" />
-    </div>
-    <button id="confirm" class="primary">Confirmar pedido</button>
-    <div class="foot">
-      <span class="note">Demo local sin conexión a Firestore.</span>
-      <button id="clear" class="ghost">Vaciar</button>
-    </div>
+  <div class="row"><span class="note">Subtotal</span><span id="subtotal">$0</span></div>
+  <div class="row"><span class="note">Descuento HH</span><span id="hhDiscount">$0</span></div>
+  <div class="row total"><span>Total</span><span id="total">$0</span></div>
+  <label class="sr-only" for="custName">Nombre</label>
+  <input id="custName" placeholder="Tu nombre" autocomplete="name" />
+  <div class="row">
+    <select id="orderType" aria-label="Tipo de pedido">
+      <option value="pickup">Pickup</option>
+      <option value="dinein">Mesa</option>
+    </select>
+    <input id="tableNum" placeholder="# mesa (si aplica)" inputmode="numeric" />
   </div>
-</aside>
+  <button id="confirm" class="btn btn-primary btn-xl">Confirmar pedido</button>
+  <div class="row" style="margin-top:8px">
+    <span class="note">Demo local sin conexión a Firestore.</span>
+    <button id="clear" class="btn btn-ghost">Vaciar</button>
+  </div>
+</section>
 
-  </main>  <div id="toast" class="toast" role="status" aria-live="polite"></div>  <div class="floating">
-    <button id="btnFullscreen">Pantalla completa</button>
-    <button id="btnSound">Probar sonido</button>
-    <button id="btnToggleHH">HH ON/OFF</button>
-    <button id="btnScaleUp">Zoom +</button>
-    <button id="btnScaleDown">Zoom −</button>
+  </main>  <div id="toast" class="toast" role="status" aria-live="polite"></div>  <div class="hud">
+    <button id="btnFullscreen" class="btn">Pantalla completa</button>
+    <button id="btnSound" class="btn">Probar sonido</button>
+    <button id="btnToggleHH" class="btn">HH ON/OFF</button>
+    <button id="btnScaleUp" class="btn">Zoom +</button>
+    <button id="btnScaleDown" class="btn">Zoom −</button>
+    <button id="btnReload" class="btn">Recargar menú</button>
   </div>  <audio id="sfx" preload="auto">
     <source src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" type="audio/mpeg" />
   </audio>  <script>
   /* =====================================================================
-     Kiosko Lite (DEMO) — single-file, sin imports. Listo para iPad mini.
-     - Catálogo mínimo
-     - Carrito + HH simulado
-     - Confirmación de pedido (mock) + ID de demo
-     - Botones grandes, sticky cart, PWA-like headers
+     Kiosko Lite Vertical Arcade — sin imports, seguro para iPad mini.
+     - Wait-until-DOM: no renderiza hasta que #productList exista
+     - Fallback estático + delegación global de clicks
+     - HH simulado + carrito + confirmación mock
      ===================================================================== */
 
-  // ======= Utilidades UI breves =======
+  // ======= Polyfills mínimos =======
+  if (!Element.prototype.matches) Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
+  if (!Element.prototype.closest) Element.prototype.closest = function(s){ var el=this; if(!document.documentElement.contains(el)) return null; do{ if(el.matches(s)) return el; el=el.parentElement||el.parentNode; }while(el&&el.nodeType===1); return null; };
+
+  // ======= Utils =======
   const $ = (s, r=document)=> r.querySelector(s);
   const $$ = (s, r=document)=> Array.from(r.querySelectorAll(s));
   const money = n=> `$${n.toFixed(0)}`;
-  const toast = (msg)=>{ const el = $('#toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1600); };
+  const toast = (msg)=>{ const el = $('#toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1500); };
 
-  // ======= Catálogo demo (precios terminan en 7) =======
+  // ======= Catálogo =======
   const CATALOG = [
     {id:'starter', name:'Starter Burger', price:47, desc:'Carne 85g, quesos, lechuga, jitomate, cebolla.'},
     {id:'koopa', name:'Koopa Crunch', price:57, desc:'Queso blanco, piña, tocino. Sugerido: Chimichurri.'},
@@ -185,212 +154,148 @@
   ];
 
   // ======= Estado =======
-  const state = {
-    cart: [],
-    hh: { active:true, discountPct:20, endsAt: Date.now()+45*60*1000 }, // demo
-    zoom: 1
-  };
+  const state = { cart: [], hh: { active:true, discountPct:20, endsAt: Date.now()+45*60*1000 }, zoom:1 };
 
-  // ======= DB shim (demo) =======
+  // ======= DB shim =======
   const DB = {
-    subscribeHappyHour(cb){ cb({...state.hh}); this._hhCB = cb; },
-    toggleHH(){ state.hh.active = !state.hh.active; state.hh.endsAt = Date.now()+30*60*1000; this._hhCB && this._hhCB({...state.hh}); },
-    async createOrder(payload){ await new Promise(r=>setTimeout(r, 600)); return { id: `DEMO-${Date.now().toString(36).toUpperCase()}` }; }
+    subscribeHappyHour(cb){ cb({...state.hh}); this._cb = cb; },
+    toggleHH(){ state.hh.active = !state.hh.active; state.hh.endsAt = Date.now()+30*60*1000; this._cb && this._cb({...state.hh}); },
+    async createOrder(payload){ await new Promise(r=>setTimeout(r, 500)); return { id: `DEMO-${Date.now().toString(36).toUpperCase()}` } }
   };
-  window.DB = DB; // por si quieres probar desde consola
+  window.DB = DB;
 
-  // ======= Render productos =======
+  // ======= Render =======
   function renderProducts(){
-    const list = $('#productList');
+    const list = $('#productList'); if(!list){ return false; }
     list.innerHTML = '';
-    for (const p of CATALOG){
-      const el = document.createElement('div'); el.className = 'p'; el.setAttribute('role','listitem');
+    for(const p of CATALOG){
+      const el = document.createElement('div'); el.className='p'; el.setAttribute('role','listitem');
       el.innerHTML = `
-        <div class="img" aria-hidden="true">🍔</div>
+        <div class="img" aria-hidden="true">${iconFor(p.id)}</div>
         <div class="meta">
-          <div class="row">
-            <h3>${p.name}</h3>
-            <strong>${money(p.price)}</strong>
-          </div>
-          <p class="muted">${p.desc}</p>
+          <div class="row"><h3>${p.name}</h3><strong>${money(p.price)}</strong></div>
+          <p class="note">${p.desc}</p>
           <div class="row" style="margin-top:6px">
-            <button data-add="${p.id}">Agregar</button>
-            <button class="ghost" data-less="${p.id}">Quitar</button>
+            <button class="btn btn-xl" data-add="${p.id}">Agregar</button>
+            <button class="btn btn-ghost btn-xl" data-less="${p.id}">Quitar</button>
           </div>
         </div>`;
       list.appendChild(el);
     }
-    list.addEventListener('click', (e)=>{
-      const add = e.target.closest('[data-add]');
-      const less = e.target.closest('[data-less]');
-      if(add){ addToCart(add.dataset.add); }
-      if(less){ addToCart(less.dataset.less, -1); }
-    }, { passive:true });
+    return true;
+  }
+  function iconFor(id){
+    switch(id){ case 'koopa': return '🍍'; case 'megabyte': return '🧀'; case 'hadouken': return '🔥'; case 'finalboss': return '👑'; case 'mini3': return '🎮'; default: return '🍔'; }
   }
 
-  // ======= Carrito =======
+  // ======= Cart =======
   function addToCart(id, delta=1){
-    const prod = CATALOG.find(p=>p.id===id); if(!prod){ return; }
-    const line = state.cart.find(l=>l.id===id);
-    if(!line){ state.cart.push({ id, name:prod.name, price:prod.price, qty: Math.max(0, delta>0?1:0) }); }
-    else { line.qty = Math.max(0, line.qty + delta); }
+    const prod = CATALOG.find(p=>p.id===id); if(!prod) return;
+    let line = state.cart.find(l=>l.id===id);
+    if(!line){ line = { id, name:prod.name, price:prod.price, qty:0 }; state.cart.push(line); }
+    line.qty = Math.max(0, line.qty + delta);
     state.cart = state.cart.filter(l=>l.qty>0);
     renderCart();
   }
-
   function renderCart(){
-    const list = $('#cartList'); list.innerHTML='';
-    let subtotal=0;
+    const list = $('#cartList'); if(!list) return;
+    list.innerHTML=''; let subtotal=0;
     for(const l of state.cart){
-      subtotal += l.price * l.qty;
+      subtotal += l.price*l.qty;
       const row = document.createElement('div'); row.className='line';
       row.innerHTML = `
         <div>
           <div>${l.name}</div>
-          <div class="muted">${money(l.price)} × ${l.qty}</div>
+          <div class="note">${money(l.price)} × ${l.qty}</div>
         </div>
         <div class="qty">
-          <button data-qty="-1" data-id="${l.id}">−</button>
+          <button class="btn" data-qty="-1" data-id="${l.id}">−</button>
           <span>${l.qty}</span>
-          <button data-qty="1" data-id="${l.id}">+</button>
+          <button class="btn" data-qty="1" data-id="${l.id}">+</button>
         </div>
         <div><strong>${money(l.price*l.qty)}</strong></div>`;
       list.appendChild(row);
     }
     list.addEventListener('click', (e)=>{
-      const btn = e.target.closest('[data-qty]'); if(!btn) return;
-      const id = btn.dataset.id; const d = parseInt(btn.dataset.qty,10);
-      addToCart(id, d);
+      const b = e.target.closest('[data-qty]'); if(!b) return; addToCart(b.dataset.id, parseInt(b.dataset.qty,10));
     }, { passive:true });
 
-    const hhPct = (state.hh.active? state.hh.discountPct : 0);
-    const discount = Math.round(subtotal * hhPct / 100);
+    const hhPct = state.hh.active ? state.hh.discountPct : 0;
+    const discount = Math.round(subtotal*hhPct/100);
     const total = Math.max(0, subtotal - discount);
     $('#subtotal').textContent = money(subtotal);
     $('#hhDiscount').textContent = `−${money(discount)}`;
     $('#total').textContent = money(total);
-    $('#app').setAttribute('aria-busy','false');
+    $('#app')?.setAttribute('aria-busy','false');
   }
 
   // ======= HH strip =======
   function renderHHStrip(hh){
-    const el = $('#hhStrip');
-    if(!hh.active){ el.innerHTML = '<span class="chip">Happy Hour: apagado</span>'; return; }
+    const el = $('#hhStrip'); if(!el) return;
+    if(!hh.active){ el.innerHTML = '<span>Happy Hour: apagado</span>'; return; }
     const mins = Math.max(0, Math.ceil((hh.endsAt - Date.now())/60000));
-    el.innerHTML = `
-      <span class="chip">Happy Hour <strong>${hh.discountPct}%</strong> OFF</span>
-      <span class="chip">Termina en ~ ${mins} min</span>`;
+    el.innerHTML = `<span>Happy Hour <strong>${hh.discountPct}%</strong> OFF · ~${mins} min</span>`;
   }
 
-  // ======= Confirmar pedido (mock) =======
+  // ======= Confirm =======
   async function confirmOrder(){
-    const name = ($('#custName').value||'').trim();
-    if(!name){ toast('Escribe tu nombre'); return; }
+    const name = ($('#custName')?.value||'').trim(); if(!name){ toast('Escribe tu nombre'); return; }
     if(state.cart.length===0){ toast('Agrega algo al carrito'); return; }
-    const orderType = $('#orderType').value;
-    const table = ($('#orderType').value==='dinein') ? ($('#tableNum').value||'').trim() : '';
-
-    const payload = {
-      customerName: name,
-      lines: state.cart,
-      subtotal: $('#subtotal').textContent,
-      discount: $('#hhDiscount').textContent,
-      total: $('#total').textContent,
-      orderMeta: { type: orderType, table },
-      hh: { ...state.hh }
-    };
+    const orderType = $('#orderType')?.value || 'pickup';
+    const table = orderType==='dinein' ? ($('#tableNum')?.value||'').trim() : '';
+    const payload = { customerName:name, lines:state.cart, subtotal:$('#subtotal').textContent, discount:$('#hhDiscount').textContent, total:$('#total').textContent, orderMeta:{type:orderType, table}, hh:{...state.hh} };
     const btn = $('#confirm'); const prev = btn.textContent; btn.disabled=true; btn.textContent='Enviando…';
     const { id } = await DB.createOrder(payload);
-    btn.disabled=false; btn.textContent=prev;
-    toast(`Pedido confirmado: ${id}`);
-    // Limpia carrito tras confirmar
+    btn.disabled=false; btn.textContent=prev; toast(`Pedido confirmado: ${id}`);
     state.cart = []; renderCart();
   }
 
-  // ======= Pantalla completa / sonido / zoom =======
-  async function goFullscreen(){
-    const el = document.documentElement; if(el.requestFullscreen){ try{ await el.requestFullscreen(); }catch{} }
-  }
-  function playSound(){ const a = $('#sfx'); a.currentTime=0; a.play().catch(()=>toast('Toca la pantalla antes para habilitar audio')); }
-  function zoom(dx){ state.zoom = Math.max(.85, Math.min(1.4, state.zoom + dx)); document.body.style.fontSize = `calc(var(--px) * ${state.zoom})`; }
+  // ======= HUD actions =======
+  async function goFullscreen(){ const el=document.documentElement; if(el.requestFullscreen){ try{ await el.requestFullscreen(); }catch{} } }
+  function playSound(){ const a=$('#sfx'); a.currentTime=0; a.play().catch(()=>toast('Toca la pantalla antes para habilitar audio')); }
+  function zoom(dx){ state.zoom = Math.max(.9, Math.min(1.5, state.zoom+dx)); document.body.style.fontSize = `calc(var(--px) * ${state.zoom})`; }
 
-  // ======= Inicialización =======
-  function init(){
-    renderProducts(); renderCart();
-    DB.subscribeHappyHour((hh)=>{ state.hh = hh; renderHHStrip(hh); renderCart(); });
-    $('#confirm').addEventListener('click', confirmOrder);
-    $('#clear').addEventListener('click', ()=>{ state.cart=[]; renderCart(); });
-    $('#btnFullscreen').addEventListener('click', goFullscreen);
-    $('#btnSound').addEventListener('click', playSound);
-    $('#btnScaleUp').addEventListener('click', ()=>zoom(+0.05));
-    $('#btnScaleDown').addEventListener('click', ()=>zoom(-0.05));
-    $('#btnToggleHH').addEventListener('click', ()=> DB.toggleHH());
-
-    // Accesibilidad básica por teclado/botones HID
-    window.addEventListener('keydown', (e)=>{
-      if(e.key==='+'||e.key==='=') zoom(+0.05);
-      if(e.key==='-'||e.key==='_') zoom(-0.05);
-      if(e.key==='Enter') confirmOrder();
-    });
-
-    // iOS: evita zoom accidental en inputs
-    $$('input,select').forEach(el=> el.addEventListener('focus', ()=> document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1') ));
+  // ======= Delegación de clicks global (productos) =======
+  function bindProductClicks(){
+    const list = $('#productList'); if(!list) return;
+    if(list.__bound) return; list.__bound=true;
+    list.addEventListener('click', (e)=>{
+      const add = e.target.closest('[data-add]');
+      const less = e.target.closest('[data-less]');
+      if(add) addToCart(add.dataset.add, +1);
+      if(less) addToCart(less.dataset.less, -1);
+    }, { passive:true });
   }
 
-  document.addEventListener('DOMContentLoaded', init);
-  </script>  <script>
-    // Compat: fallback de arranque para iOS (apertura desde Archivos)
-    (function(){
-      function safeRender(){
-        try{
-          var list = document.getElementById('productList');
-          if(list && !list.children.length && typeof renderProducts==='function'){
-            renderProducts();
-          }
-        }catch(e){ /* noop */ }
-      }
-      // Botón manual para recargar menú
-      var br = document.getElementById('btnReload');
-      if(br){ br.addEventListener('click', function(){ safeRender(); toast('Menú recargado'); }); }
-      // Doble intento de inicialización
-      if (document.readyState !== 'loading') setTimeout(safeRender, 0);
-      document.addEventListener('DOMContentLoaded', safeRender);
-      setTimeout(safeRender, 400);
-      // Mostrar errores en pantalla
-      window.onerror = function(msg){ try{ toast('JS error: '+msg); }catch(_){} };
-    })();
-  </script>  <script>
-    // Polyfills mínimos para iOS antiguos (closest/matches)
-    (function(){
-      if (!Element.prototype.matches) {
-        Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
-      }
-      if (!Element.prototype.closest) {
-        Element.prototype.closest = function(s){
-          var el = this; if (!document.documentElement.contains(el)) return null;
-          do { if (el.matches(s)) return el; el = el.parentElement || el.parentNode; } while (el !== null && el.nodeType === 1);
-          return null;
-        };
-      }
-    })();
+  // ======= Arranque seguro (espera a que exista #productList) =======
+  function startWhenReady(){
+    let tries = 0;
+    const iv = setInterval(()=>{
+      tries++;
+      const ok = !!document.getElementById('productList');
+      if(ok){
+        clearInterval(iv);
+        toast('Menú cargado');
+        renderProducts(); bindProductClicks(); renderCart();
+        DB.subscribeHappyHour((hh)=>{ state.hh = hh; renderHHStrip(hh); renderCart(); });
+        // Controles
+        $('#confirm')?.addEventListener('click', confirmOrder);
+        $('#clear')?.addEventListener('click', ()=>{ state.cart=[]; renderCart(); });
+        $('#btnFullscreen')?.addEventListener('click', goFullscreen);
+        $('#btnSound')?.addEventListener('click', playSound);
+        $('#btnScaleUp')?.addEventListener('click', ()=>zoom(+0.06));
+        $('#btnScaleDown')?.addEventListener('click', ()=>zoom(-0.06));
+        $('#btnToggleHH')?.addEventListener('click', ()=> DB.toggleHH());
+        $('#btnReload')?.addEventListener('click', ()=>{ renderProducts(); toast('Menú recargado'); });
+        // Inputs iOS
+        $$('input,select').forEach(el=> el.addEventListener('focus', ()=> document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1, maximum-scale=1') ));
+      } else if (tries===1){ toast('Inicializando…'); }
+      else if (tries>50){ clearInterval(iv); toast('No se pudo inicializar (revisa el HTML)'); }
+    }, 200);
+  }
 
-    // Delegación global para Agregar/Quitar que funciona aun con HTML estático
-    (function(){
-      function bind(){
-        var list = document.getElementById('productList');
-        if(!list) return;
-        if(list.__bound) return; // evita doble binding
-        list.__bound = true;
-        list.addEventListener('click', function(e){
-          var add = e.target.closest('[data-add]');
-          var less = e.target.closest('[data-less]');
-          if(add && window.addToCart){ addToCart(add.getAttribute('data-add'), +1); }
-          if(less && window.addToCart){ addToCart(less.getAttribute('data-less'), -1); }
-        }, { passive:true });
-      }
-      if (document.readyState !== 'loading') bind();
-      document.addEventListener('DOMContentLoaded', bind);
-      setTimeout(bind, 300);
-    })();
+  if (document.readyState !== 'loading') startWhenReady();
+  document.addEventListener('DOMContentLoaded', startWhenReady);
+  window.onerror = function(msg){ try{ toast('JS error: '+msg); }catch(_){} };
   </script></body>
 </html>
