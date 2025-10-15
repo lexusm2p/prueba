@@ -75,7 +75,57 @@
   </header>  <main class="wrap grid" id="app" aria-busy="true">
     <section class="card">
       <h2>Player Select</h2>
-      <div class="products" id="productList" role="list"></div>
+      <div class=\"products\" id=\"productList\" role=\"list\">
+          <!-- Fallback HTML estático por si JS tarda en iniciar -->
+          <div class=\"p\" role=\"listitem\"> 
+            <div class=\"img\">🍔</div>
+            <div class=\"meta\">
+              <div class=\"row\"><h3>Starter Burger</h3><strong>$47</strong></div>
+              <p class=\"muted\">Carne 85g, quesos, lechuga, jitomate, cebolla.</p>
+              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"starter\">Agregar</button><button class=\"ghost\" data-less=\"starter\">Quitar</button></div>
+            </div>
+          </div>
+          <div class=\"p\" role=\"listitem\"> 
+            <div class=\"img\">🍍</div>
+            <div class=\"meta\">
+              <div class=\"row\"><h3>Koopa Crunch</h3><strong>$57</strong></div>
+              <p class=\"muted\">Queso blanco, piña, tocino. Sugerido: Chimichurri.</p>
+              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"koopa\">Agregar</button><button class=\"ghost\" data-less=\"koopa\">Quitar</button></div>
+            </div>
+          </div>
+          <div class=\"p\" role=\"listitem\"> 
+            <div class=\"img\">🧀</div>
+            <div class=\"meta\">
+              <div class=\"row\"><h3>Mega Byte</h3><strong>$77</strong></div>
+              <p class=\"muted\">Cheddar, tocino, salchicha en tiras, cebolla.</p>
+              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"megabyte\">Agregar</button><button class=\"ghost\" data-less=\"megabyte\">Quitar</button></div>
+            </div>
+          </div>
+          <div class=\"p\" role=\"listitem\"> 
+            <div class=\"img\">🔥</div>
+            <div class=\"meta\">
+              <div class=\"row\"><h3>Hadouken</h3><strong>$67</strong></div>
+              <p class=\"muted\">Doble queso, chipotle, lechuga, jitomate, cebolla.</p>
+              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"hadouken\">Agregar</button><button class=\"ghost\" data-less=\"hadouken\">Quitar</button></div>
+            </div>
+          </div>
+          <div class=\"p\" role=\"listitem\"> 
+            <div class=\"img\">👑</div>
+            <div class=\"meta\">
+              <div class=\"row\"><h3>Final Boss</h3><strong>$87</strong></div>
+              <p class=\"muted\">La jefa. Tocino + salchicha + quesos.</p>
+              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"finalboss\">Agregar</button><button class=\"ghost\" data-less=\"finalboss\">Quitar</button></div>
+            </div>
+          </div>
+          <div class=\"p\" role=\"listitem\"> 
+            <div class=\"img\">🎮</div>
+            <div class=\"meta\">
+              <div class=\"row\"><h3>Combo 3 Minis</h3><strong>$97</strong></div>
+              <p class=\"muted\">Tres minis de 45g. Logro: Combo Unlocked.</p>
+              <div class=\"row\" style=\"margin-top:6px\"><button data-add=\"mini3\">Agregar</button><button class=\"ghost\" data-less=\"mini3\">Quitar</button></div>
+            </div>
+          </div>
+        </div>
     </section><aside class="card cart" aria-label="Carrito">
   <h2>Tu pedido</h2>
   <div id="cartList"></div>
