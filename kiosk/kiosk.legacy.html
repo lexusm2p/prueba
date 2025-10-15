@@ -288,5 +288,26 @@
   }
 
   document.addEventListener('DOMContentLoaded', init);
+  </script>  <script>
+    // Compat: fallback de arranque para iOS (apertura desde Archivos)
+    (function(){
+      function safeRender(){
+        try{
+          var list = document.getElementById('productList');
+          if(list && !list.children.length && typeof renderProducts==='function'){
+            renderProducts();
+          }
+        }catch(e){ /* noop */ }
+      }
+      // Botón manual para recargar menú
+      var br = document.getElementById('btnReload');
+      if(br){ br.addEventListener('click', function(){ safeRender(); toast('Menú recargado'); }); }
+      // Doble intento de inicialización
+      if (document.readyState !== 'loading') setTimeout(safeRender, 0);
+      document.addEventListener('DOMContentLoaded', safeRender);
+      setTimeout(safeRender, 400);
+      // Mostrar errores en pantalla
+      window.onerror = function(msg){ try{ toast('JS error: '+msg); }catch(_){} };
+    })();
   </script></body>
 </html>
