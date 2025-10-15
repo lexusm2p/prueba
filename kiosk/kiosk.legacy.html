@@ -359,5 +359,38 @@
       // Mostrar errores en pantalla
       window.onerror = function(msg){ try{ toast('JS error: '+msg); }catch(_){} };
     })();
+  </script>  <script>
+    // Polyfills mínimos para iOS antiguos (closest/matches)
+    (function(){
+      if (!Element.prototype.matches) {
+        Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
+      }
+      if (!Element.prototype.closest) {
+        Element.prototype.closest = function(s){
+          var el = this; if (!document.documentElement.contains(el)) return null;
+          do { if (el.matches(s)) return el; el = el.parentElement || el.parentNode; } while (el !== null && el.nodeType === 1);
+          return null;
+        };
+      }
+    })();
+
+    // Delegación global para Agregar/Quitar que funciona aun con HTML estático
+    (function(){
+      function bind(){
+        var list = document.getElementById('productList');
+        if(!list) return;
+        if(list.__bound) return; // evita doble binding
+        list.__bound = true;
+        list.addEventListener('click', function(e){
+          var add = e.target.closest('[data-add]');
+          var less = e.target.closest('[data-less]');
+          if(add && window.addToCart){ addToCart(add.getAttribute('data-add'), +1); }
+          if(less && window.addToCart){ addToCart(less.getAttribute('data-less'), -1); }
+        }, { passive:true });
+      }
+      if (document.readyState !== 'loading') bind();
+      document.addEventListener('DOMContentLoaded', bind);
+      setTimeout(bind, 300);
+    })();
   </script></body>
 </html>
