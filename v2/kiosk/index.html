@@ -3,25 +3,45 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Seven — Kiosko V2</title>
+  <title>Seven — Kiosko V2 (test)</title>
   <meta name="robots" content="noindex,nofollow">
   <link rel="stylesheet" href="../shared/styles.css">
   <link rel="stylesheet" href="../shared/styles.legacy.css">
+  <style>
+    body{background:#0f1422;color:#fff8e6;font-family:system-ui,Arial}
+    #app{padding:16px;font-size:20px}
+    .err{position:fixed;left:8px;bottom:8px;background:#000a;color:#ffb;padding:8px;border:1px solid #834;max-width:92vw;white-space:pre-wrap}
+  </style>
 </head>
 <body data-theme="base">
   <div id="app">Cargando Kiosko V2…</div>
-  <script type="module">
-    import { MODE, detectLegacy } from './config.js';
-    const q=new URLSearchParams(location.search);
-    const m=(q.get('mode')||'active').toLowerCase();
-    if(m==='offline') MODE.OFFLINE=true;
-    if(m==='readonly'||m==='light') MODE.READONLY=true;
-    MODE.LEGACY = MODE.LEGACY || detectLegacy();
-    if(MODE.LEGACY){ document.documentElement.setAttribute('data-legacy','1'); import('./legacy.js'); }
 
-    // Firebase + App
-    import '../shared/firebase.js';
-    import './app.js';
+  <script type="module">
+    // Mostrar errores en pantalla
+    window.addEventListener('error', e=>{
+      const b=document.createElement('div'); b.className='err';
+      b.textContent='[Error] '+(e.message||e.error); document.body.appendChild(b);
+    });
+    window.addEventListener('unhandledrejection', e=>{
+      const b=document.createElement('div'); b.className='err';
+      b.textContent='[Promise] '+(e.reason && e.reason.message ? e.reason.message : e.reason);
+      document.body.appendChild(b);
+    });
+
+    // Paso 1: confirmar que este archivo sí corre
+    document.getElementById('app').textContent = 'Kiosko V2 base OK — sin app.js aún';
+
+    // Paso 2: flags/legacy (seguro)
+    import './config.js';
+    try { await import('./legacy.js'); } catch(e) {}
+
+    // Paso 3: IMPORTAR por etapas (descomenta una a la vez):
+
+    // a) Firebase (si falla aquí verás el error en pantalla)
+    // await import('../shared/firebase.js');
+
+    // b) App real
+    // await import('./app.js');
   </script>
 </body>
 </html>
