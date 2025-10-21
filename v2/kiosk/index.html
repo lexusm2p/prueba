@@ -1,1 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Seven — Kiosko V2</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="../shared/styles.css">
+  <link rel="stylesheet" href="../shared/styles.legacy.css">
+</head>
+<body data-theme="base">
+  <div id="app">Cargando Kiosko V2…</div>
+  <script type="module">
+    import { MODE, detectLegacy } from './config.js';
+    const q=new URLSearchParams(location.search);
+    const m=(q.get('mode')||'active').toLowerCase();
+    if(m==='offline') MODE.OFFLINE=true;
+    if(m==='readonly'||m==='light') MODE.READONLY=true;
+    MODE.LEGACY = MODE.LEGACY || detectLegacy();
+    if(MODE.LEGACY){ document.documentElement.setAttribute('data-legacy','1'); import('./legacy.js'); }
 
+    // Firebase + App
+    import '../shared/firebase.js';
+    import './app.js';
+  </script>
+</body>
+</html>
