@@ -9,7 +9,10 @@
 // + Cuenta regresiva HH con auto-refresh al terminar.
 // + Sistema de temas festivos mexicanos (local/global) — requiere /shared/theme.js y /shared/db.js
 // + Lealtad: registro sencillo + tarjeta coleccionable con chance Dorado (cupón -30%)
-
+// DEBUG MINIMO EN V2 (puedes borrarlo después)
+console.log('[v2] app.js cargado');
+const el = document.getElementById('app');
+if (el) el.textContent = 'App.js cargado — iniciando módulos…';
 import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
 // agrega esta línea a tus imports de /shared/*
