@@ -1,0 +1,4 @@
+
+/* legacy minimal */
+:root[data-legacy="1"] html{font-size:18px}
+:root[data-legacy="1"] *{text-shadow:none!important;filter:none!important;box-shadow:none!important}
