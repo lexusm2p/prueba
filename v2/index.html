@@ -1,1 +1,44 @@
-
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Seven de Burgers — V2 (staging)</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="stylesheet" href="./shared/styles.css">
+  <link rel="stylesheet" href="./shared/styles.legacy.css">
+  <style>
+    body{max-width:960px;margin:0 auto;padding:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .card{background:#111a2b;border:1px solid #23304a;border-radius:12px;padding:12px}
+    .card h3{margin:6px 0 8px}
+    .price{font-weight:800}
+    .cta{display:inline-block;margin-top:8px;padding:10px 14px;border:1px solid #ffd54f;border-radius:10px;text-decoration:none}
+  </style>
+</head>
+<body data-theme="base">
+  <h1>🍔 Seven de Burgers — V2 (staging)</h1>
+  <p>Versión de pruebas conectada a Firestore (usa <code>./shared/firebase.js</code> del proyecto).</p>
+  <p><a class="cta" href="./kiosk/index.html?mode=active">Ir al Kiosko V2 →</a></p>
+  <hr>
+  <h2>Menú (ligero, sin Firebase)</h2>
+  <div id="menu" class="grid"></div>
+  <script>
+    const MENU = [
+      {id:'starter', name:'Starter Burger', price:47, img:'./shared/img/burgers/file_000000002fb461f8a2ce58b6ae291a9b.png'},
+      {id:'koopa',   name:'Koopa Crunch',   price:57, img:'./shared/img/burgers/koopa.png'},
+      {id:'fatality',name:'Fatality Flame', price:67, img:'./shared/img/burgers/fatality.png'},
+      {id:'mega',    name:'Mega Byte',      price:77, img:'./shared/img/burgers/mega.png'}
+    ];
+    const el=document.getElementById('menu');
+    el.innerHTML = MENU.map(x=>`
+      <div class="card">
+        <img loading="lazy" src="\${x.img}" alt="\${x.name}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px"/>
+        <h3>\${x.name}</h3>
+        <div class="price">$ \${x.price}</div>
+        <a class="cta" href="./kiosk/index.html?mode=active&pid=\${x.id}">Pedir →</a>
+      </div>
+    `).join('');
+  </script>
+</body>
+</html>
