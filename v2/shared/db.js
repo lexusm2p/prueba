@@ -1,17 +1,58 @@
-// /shared/db.js
-// Firestore + catálogo con fallback. Reportes, settings (ETA/HH/Theme),
-// inventario, recetas/producción, artículos, clientes y órdenes.
-// Incluye espejo a RTDB para compatibilidad con la tablet legacy.
-// Modo PRUEBA: evita escrituras cuando opts.training === true.
+// /shared/db.js  (V2 SAFE)
+// - Firestore + catálogo con fallback, con soporte OFFLINE/LIGHT/LEGACY.
+// - Si Firestore no está disponible, usa mocks seguros que no rompen.
+// - guardWrite() fuerza simulación cuando OFFLINE o READONLY.
+// - Mantiene la API original (mismos exports/nombres).
 
-import {
-  app,
-  db,
-  ensureAuth,
-  serverTimestamp,
-  doc, getDoc, setDoc, updateDoc, addDoc, collection, deleteDoc,
-  onSnapshot, query, where, orderBy, limit, Timestamp, increment, getDocs
-} from './firebase.js';
+/* =================== Contexto de modo =================== */
+const MODE = (typeof window !== 'undefined' && window.MODE) ? window.MODE : { OFFLINE:false, READONLY:false, LEGACY:false };
+
+/* =================== Carga segura de Firestore =================== */
+let fs = null;
+let app = null;
+let db  = null;
+
+// Intento cargar firebase.js local (app, db)
+try {
+  const mod = await import('./firebase.js');
+  app = mod.app ?? null;
+  db  = mod.db  ?? null;
+} catch (e) {
+  console.warn('[db.js] No se pudo importar ./firebase.js (OK en offline):', e);
+}
+
+// Intento cargar Firestore modular desde CDN
+try {
+  fs = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+} catch (e) {
+  console.warn('[db.js] Firestore CDN no disponible (OK en offline):', e);
+}
+
+/* ===== Helpers: usar Firestore real si existe; si no, mocks ===== */
+const _mockTs = () => Date.now();
+const Timestamp = fs?.Timestamp ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date? d.getTime(): new Date(d).getTime()) }) };
+const serverTimestamp = fs?.serverTimestamp ?? (() => _mockTs());
+const increment        = fs?.increment ?? ((n)=>n);
+const doc              = fs?.doc ?? (()=>({}));
+const getDoc           = fs?.getDoc ?? (async()=>({ exists:()=>false, data:()=>null }));
+const setDoc           = fs?.setDoc ?? (async()=>void 0);
+const updateDoc        = fs?.updateDoc ?? (async()=>void 0);
+const addDoc           = fs?.addDoc ?? (async()=>({ id: `TRAIN-${Math.random().toString(36).slice(2,8)}` }));
+const deleteDoc        = fs?.deleteDoc ?? (async()=>void 0);
+const collection       = fs?.collection ?? (()=>({}));
+const onSnapshot       = fs?.onSnapshot ?? (()=>()=>{});
+const query            = fs?.query ?? ((...a)=>a);
+const where            = fs?.where ?? ((...a)=>a);
+const orderBy          = fs?.orderBy ?? ((...a)=>a);
+const limit            = fs?.limit ?? ((...a)=>a);
+const getDocs          = fs?.getDocs ?? (async()=>({ docs: [] }));
+
+/* ===== Auth segura (stub) ===== */
+async function ensureAuth(){
+  // Si tienes auth real, puedes hacer signInAnonymously aquí.
+  // Como stub para kiosk V2 no bloqueamos lecturas/escrituras.
+  return true;
+}
 
 /* =================== Utils =================== */
 const sleep = (ms = 60) => new Promise(r => setTimeout(r, ms));
@@ -19,9 +60,10 @@ const toTs = (d) => Timestamp.fromDate(new Date(d));
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
 async function guardWrite(training, realWriteFn, fakeValue = null) {
-  if (!training) return realWriteFn();
+  const forceSim = MODE.OFFLINE || MODE.READONLY || training;
+  if (!forceSim && db && addDoc && setDoc) return realWriteFn();
   await sleep(60);
-  return fakeValue ?? { ok: true, _training: true };
+  return (fakeValue ?? { ok:true, _training:true });
 }
 
 function toMillisFlexible(raw) {
@@ -39,20 +81,26 @@ const normPhone = (s = '') => String(s).replace(/\D+/g, '').slice(0, 15);
 let __rtdbMod = null;
 async function _rtdb() {
   if (__rtdbMod) return __rtdbMod;
-  const mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
-  __rtdbMod = {
-    getDatabase: mod.getDatabase,
-    ref: mod.ref,
-    set: mod.set,
-    update: mod.update,
-    remove: mod.remove
-  };
+  try {
+    const mod = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js');
+    __rtdbMod = {
+      getDatabase: mod.getDatabase,
+      ref: mod.ref,
+      set: mod.set,
+      update: mod.update,
+      remove: mod.remove
+    };
+  } catch {
+    __rtdbMod = { getDatabase:()=>null, ref:()=>({}), set:async()=>{}, update:async()=>{}, remove:async()=>{} };
+  }
   return __rtdbMod;
 }
 async function mirrorToRTDB(orderId, data) {
   try {
+    if (MODE.OFFLINE) return; // en offline no espejamos
     const { getDatabase, ref, set, update } = await _rtdb();
-    const r = getDatabase(app);
+    const r = getDatabase?.(app);
+    if (!r) return;
     const path = 'kitchen/orders/' + String(orderId);
     if (data && data.__create__) {
       const payload = { ...data }; delete payload.__create__;
@@ -60,16 +108,19 @@ async function mirrorToRTDB(orderId, data) {
     } else {
       await update(ref(r, path), data || {});
     }
-  } catch { /* silencioso */ }
+  } catch {}
 }
 async function removeFromRTDB(orderId) {
   try {
+    if (MODE.OFFLINE) return;
     const { getDatabase, ref, remove } = await _rtdb();
-    await remove(ref(getDatabase(app), 'kitchen/orders/' + String(orderId)));
-  } catch { /* silencioso */ }
+    const r = getDatabase?.(app);
+    if (!r) return;
+    await remove(ref(r, 'kitchen/orders/' + String(orderId)));
+  } catch {}
 }
 
-/* -------- Normalización de items para la tablet (legacy) -------- */
+/* -------- Normalización de items para legacy -------- */
 function _toStrArr(x) {
   if (!x) return [];
   if (Array.isArray(x)) {
@@ -144,9 +195,9 @@ async function _buildLegacyAliasesFromFS(orderId, fallbackItems=null) {
   try {
     if (fallbackItems && Array.isArray(fallbackItems)) {
       itemsLegacy = _legacyItems({ items: fallbackItems });
-    } else {
+    } else if (db) {
       const snap = await getDoc(doc(db, 'orders', String(orderId)));
-      if (snap.exists()) itemsLegacy = _legacyItems(snap.data());
+      if (snap?.exists()) itemsLegacy = _legacyItems(snap.data());
     }
   } catch {}
   const aliases = itemsLegacy ? _flattenFirstItemForLegacy(itemsLegacy) : {};
@@ -185,27 +236,33 @@ function normalizeCatalog(cat = {}) {
     happyHour,
   };
 }
-
 const guessDataPath = () => '../data/menu.json';
 
 export async function fetchCatalogWithFallback() {
   try { await ensureAuth(); } catch {}
-
+  // 1) settings/catalog
   try {
-    const d1 = await getDoc(doc(db, 'settings', 'catalog'));
-    if (d1.exists()) return normalizeCatalog(d1.data());
+    if (db) {
+      const d1 = await getDoc(doc(db, 'settings', 'catalog'));
+      if (d1?.exists()) return normalizeCatalog(d1.data());
+    }
   } catch (e) { console.warn('[catalog] settings/catalog fallo, sigo...', e); }
 
+  // 2) catalog/public
   try {
-    const d2 = await getDoc(doc(db, 'catalog', 'public'));
-    if (d2.exists()) return normalizeCatalog(d2.data());
+    if (db) {
+      const d2 = await getDoc(doc(db, 'catalog', 'public'));
+      if (d2?.exists()) return normalizeCatalog(d2.data());
+    }
   } catch (e) { console.warn('[catalog] catalog/public fallo, sigo...', e); }
 
+  // 3) ../data/menu.json
   try {
     const r = await fetch(guessDataPath(), { cache: 'no-store' });
     if (r.ok) return normalizeCatalog(await r.json());
   } catch (e) { console.warn('[catalog] ../data/menu.json fallo, sigo...', e); }
 
+  // 4) shared/catalog.json
   try {
     const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
     if (r2.ok) return normalizeCatalog(await r2.json());
@@ -229,7 +286,6 @@ export function subscribeProducts(cb) {
 }
 
 /* =================== Órdenes =================== */
-
 export async function createOrder(order, opts = {}) {
   const { training = false } = opts;
   const payload = { ...order };
@@ -276,6 +332,7 @@ export async function createOrder(order, opts = {}) {
 }
 
 export function subscribeActiveOrders(cb, { limitN = 120 } = {}) {
+  if (!db || !onSnapshot) { cb([]); return () => {}; }
   let unsub = () => {};
   ensureAuth()
     .catch(() => {})
@@ -310,9 +367,9 @@ export const subscribeOrders = subscribeActiveOrders;
 export const onOrdersSnapshot = subscribeActiveOrders;
 
 export function subscribeOrder(orderId, cb) {
-  if (!orderId) return () => {};
+  if (!orderId || !db || !onSnapshot) return () => {};
   const ref = doc(db, 'orders', String(orderId));
-  return onSnapshot(ref, (d) => cb(d.exists() ? ({ id: d.id, ...d.data() }) : null));
+  return onSnapshot(ref, (d) => cb(d.exists ? ({ id: d.id, ...d.data() }) : null));
 }
 
 export async function updateOrder(id, patch, opts = {}) {
@@ -339,7 +396,6 @@ export async function updateOrder(id, patch, opts = {}) {
       } else {
         const built = await _buildLegacyAliasesFromFS(id, null);
         itemsLegacy = built.itemsLegacy;
-        // si no hay itemsLegacy, no tocamos m.items
       }
       if (itemsLegacy) Object.assign(m, _flattenFirstItemForLegacy(itemsLegacy));
 
@@ -406,7 +462,6 @@ export async function setOrderStatus(id, status, extra = {}, opts = {}) {
       if (s === 'DELIVERED')   m.deliveredAt = Date.now();
       if (s === 'DONE' || s === 'PAID') m.paid = true;
 
-      // 🔁 Reinyectar alias legacy aunque nadie haya tocado los items
       const { itemsLegacy, aliases } = await _buildLegacyAliasesFromFS(id, null);
       if (itemsLegacy) m.items = itemsLegacy;
       Object.assign(m, aliases);
@@ -417,7 +472,6 @@ export async function setOrderStatus(id, status, extra = {}, opts = {}) {
     return { ok: true };
   }, { ok: true, _training: true });
 }
-
 export const setStatus = setOrderStatus;
 
 export async function archiveDelivered(id, opts = {}) {
@@ -426,7 +480,7 @@ export async function archiveDelivered(id, opts = {}) {
     await ensureAuth();
     const ref = doc(db, 'orders', id);
     const snap = await getDoc(ref);
-    if (!snap.exists()) return { ok: false, reason: 'not_found' };
+    if (!snap?.exists?.()) return { ok: false, reason: 'not_found' };
     const data = snap.data();
     await setDoc(doc(db, 'orders_archive', id), { ...data, archivedAt: serverTimestamp() }, { merge: true });
     try { await deleteDoc(ref); } catch {}
@@ -455,6 +509,7 @@ export async function logPrepMetric(metric, opts = {}) {
 export async function getOrdersRange({ from, to, includeArchive = false, orderType = null }) {
   try {
     try { await ensureAuth(); } catch {}
+    if (!db) return [];
 
     const _from = toTs(from);
     const _to = toTs(to);
@@ -495,7 +550,8 @@ export async function getOrdersRange({ from, to, includeArchive = false, orderTy
 
 /* =================== Settings: Happy Hour / ETA / Theme =================== */
 export function subscribeHappyHour(cb) {
-  return onSnapshot(doc(db, 'settings', 'happyHour'), (d) => cb(d.data() ?? null));
+  if (!db || !onSnapshot) { cb(null); return () => {}; }
+  return onSnapshot(doc(db, 'settings', 'happyHour'), (d) => cb(d.data ? d.data() : null));
 }
 
 export async function setHappyHour(payload, opts = {}) {
@@ -521,14 +577,16 @@ export async function setHappyHour(payload, opts = {}) {
 }
 
 export function subscribeETA(cb) {
+  if (!db || !onSnapshot) { cb(null); return () => {}; }
   return onSnapshot(doc(db, 'settings', 'eta'), (d) => {
-    const txt = d?.data()?.text;
+    const txt = d?.data?.()?.text;
     cb(txt != null ? String(txt) : null);
   });
 }
 
 export function subscribeTheme(cb) {
-  return onSnapshot(doc(db, 'settings', 'theme'), (d) => cb(d.data() ?? null));
+  if (!db || !onSnapshot) { cb(null); return () => {}; }
+  return onSnapshot(doc(db, 'settings', 'theme'), (d) => cb(d.data ? d.data() : null));
 }
 
 // ⚠️ Compat: acepta string ("Base") o objeto ({ name, overrides })
@@ -551,6 +609,7 @@ export async function setTheme(payload, opts = {}) {
 
 /* =================== Inventario / Proveedores / Compras =================== */
 export function subscribeInventory(cb) {
+  if (!db || !onSnapshot) { cb([]); return () => {}; }
   const qy = query(collection(db, 'inventory'), orderBy('name', 'asc'));
   return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
@@ -566,6 +625,7 @@ export async function upsertInventoryItem(item, opts = {}) {
 }
 
 export function subscribeSuppliers(cb) {
+  if (!db || !onSnapshot) { cb([]); return () => {}; }
   const qy = query(collection(db, 'suppliers'), orderBy('name', 'asc'));
   return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
@@ -584,14 +644,15 @@ export async function recordPurchase(purchase, opts = {}) {
   const { training = false } = opts;
   return guardWrite(training, async () => {
     await ensureAuth();
+    if (!db) return { ok: true, _training: true };
     const { itemId, qty = 0, unitCost = 0 } = purchase || {};
     await addDoc(collection(db, 'purchases'), { ...purchase, createdAt: serverTimestamp() });
 
     if (itemId && qty > 0) {
       const ref = doc(db, 'inventory', itemId);
       const snap = await getDoc(ref);
-      const cur = snap.exists() ? Number(snap.data().currentStock || 0) : 0;
-      const prevCost = snap.exists() ? Number(snap.data().costAvg || 0) : 0;
+      const cur = snap?.exists?.() ? Number(snap.data().currentStock || 0) : 0;
+      const prevCost = snap?.exists?.() ? Number(snap.data().costAvg || 0) : 0;
       const newStock = cur + Number(qty);
       const newCost =
         (prevCost > 0 && cur > 0) ? ((prevCost * cur + unitCost * qty) / newStock) : unitCost;
@@ -615,10 +676,7 @@ export async function adjustStock(itemId, delta, reason = 'use', meta = {}, opts
   }, { ok: true, _training: true });
 }
 
-/**
- * Aplica consumo de inventario para una orden.
- * Si los items incluyen `consumes` con { itemId, qty }, descuenta.
- */
+/** Aplica consumo de inventario para una orden. */
 export async function applyInventoryForOrder(order, opts = {}) {
   const { training = false } = opts;
   if (!order || !Array.isArray(order.items)) return { ok: true, noops: true };
@@ -655,6 +713,7 @@ export async function applyInventoryForOrder(order, opts = {}) {
 
 /* =================== Recetas / Producción =================== */
 export function subscribeRecipes(cb) {
+  if (!db || !onSnapshot) { cb([]); return () => {}; }
   const qy = query(collection(db, 'recipes'), orderBy('name', 'asc'));
   return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
@@ -671,6 +730,7 @@ export async function produceBatch({ recipeId, outputQty }, opts = {}) {
 
 /* =================== Artículos (CRUD) =================== */
 export function subscribeArticles(cb) {
+  if (!db || !onSnapshot) { cb([]); return () => {}; }
   const qy = query(collection(db, 'articles'), orderBy('updatedAt', 'desc'), limit(100));
   return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 }
@@ -704,7 +764,6 @@ export async function deleteArticle(id, opts = {}) {
     }
   }, { ok: true, _training: true });
 }
-
 export const removeArticle = deleteArticle;
 
 /* =================== Clientes / WhatsApp / Lealtad =================== */
@@ -713,8 +772,9 @@ export async function fetchCustomer(phone) {
   if (!clean) return null;
   try {
     await ensureAuth();
+    if (!db) return null;
     const snap = await getDoc(doc(db, 'customers', clean));
-    return snap.exists() ? { id: clean, ...snap.data() } : null;
+    return snap?.exists?.() ? { id: clean, ...snap.data() } : null;
   } catch { return null; }
 }
 
@@ -814,5 +874,12 @@ export async function sendWhatsAppMessage({ to, text, meta = {} }, opts = {}) {
 
 /* =================== Exports auxiliares =================== */
 export function subscribeSettings(cb) {
-  return onSnapshot(doc(db, 'settings', 'app'), (d) => cb(d.data() ?? {}));
+  if (!db || !onSnapshot) { cb({}); return () => {}; }
+  return onSnapshot(doc(db, 'settings', 'app'), (d) => cb(d.data ? d.data() : {}));
 }
+
+// Exportar símbolos usados por otros módulos si lo requieren
+export {
+  app, db, Timestamp, serverTimestamp, doc, getDoc, setDoc, updateDoc, addDoc, collection,
+  deleteDoc, onSnapshot, query, where, orderBy, limit, increment, getDocs
+};
