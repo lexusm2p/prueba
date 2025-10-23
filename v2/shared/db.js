@@ -28,27 +28,52 @@ try {
   console.warn('[db.js] Firestore CDN no disponible (OK en offline):', e);
 }
 
-/* ===== Helpers: usar Firestore real si existe; si no, mocks ===== */
+// ===== Helpers: usar Firestore real si existe; si no, mocks =====
 const _mockTs = () => Date.now();
-const Timestamp        = fs?.Timestamp ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date? d.getTime(): new Date(d).getTime()) }) };
+const Timestamp        = fs?.Timestamp ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date ? d.getTime() : new Date(d).getTime()) }) };
 // Fallback distinguible (útil para depurar)
 const serverTimestamp  = fs?.serverTimestamp ?? (() => ({ __localServerTimestamp: Date.now() }));
 const increment        = fs?.increment ?? ((n)=>n);
-const doc              = fs?.doc ?? (()=>({}));
+
+// Wrappers SEGUROS: si db/ref es inválido, regresan dummies y no truenan
+const _safeDoc = fs?.doc
+  ? (...args) => {
+      if (!args?.[0]) return {};            // sin db -> dummy
+      try { return fs.doc(...args); } catch { return {}; }
+    }
+  : (()=>({}));
+
+const _safeCollection = fs?.collection
+  ? (...args) => {
+      if (!args?.[0]) return {};            // sin db -> dummy
+      try { return fs.collection(...args); } catch { return {}; }
+    }
+  : (()=>({}));
+
+const _safeOnSnapshot = fs?.onSnapshot
+  ? (ref, next, err) => {
+      // si ref es el dummy, no intentes abrir snapshot
+      if (!ref || typeof ref !== 'object' || !('type' in ref || 'id' in ref)) return () => {};
+      try { return fs.onSnapshot(ref, next, err); } catch { return () => {}; }
+    }
+  : (()=>()=>{});
+
+// Demás utilidades con fallback
 const getDoc           = fs?.getDoc ?? (async()=>({ exists:()=>false, data:()=>null }));
 const setDoc           = fs?.setDoc ?? (async()=>void 0);
 const updateDoc        = fs?.updateDoc ?? (async()=>void 0);
 const addDoc           = fs?.addDoc ?? (async()=>({ id: `TRAIN-${Math.random().toString(36).slice(2,8)}` }));
 const deleteDoc        = fs?.deleteDoc ?? (async()=>void 0);
-const collection       = fs?.collection ?? (()=>({}));
-const onSnapshot       = fs?.onSnapshot ?? (()=>()=>{});
 const query            = fs?.query ?? ((...a)=>a);
 const where            = fs?.where ?? ((...a)=>a);
 const orderBy          = fs?.orderBy ?? ((...a)=>a);
 const limit            = fs?.limit ?? ((...a)=>a);
 const getDocs          = fs?.getDocs ?? (async()=>({ docs: [] }));
 
-/* ===== Auth segura (stub) ===== */
+// Exporta los wrappers como las funciones "oficiales"
+const doc         = _safeDoc;
+const collection  = _safeCollection;
+const onSnapshot  = _safeOnSnapshot;/* ===== Auth segura (stub) ===== */
 async function ensureAuth(){
   // Si tienes auth real, puedes hacer signInAnonymously aquí.
   // Como stub para kiosk V2 no bloqueamos lecturas/escrituras.
