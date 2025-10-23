@@ -1,64 +1,73 @@
-// /shared/notify.js — versión segura retrocompatible
-(() => {
-  // Evita redefinir si ya existen globalmente
-  if (window.beep && window.toast) {
-    console.log("🔁 Notify.js ya estaba definido, se reutiliza versión previa.");
-    return;
+// /shared/notify.js  — V2 compatible (named + default + global-safe)
+
+/**
+ * Beep con Web Audio API.
+ * @param {number} ms  - duración (ms)
+ * @param {number} freq- frecuencia (Hz)
+ */
+function beep(ms = 140, freq = 880) {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) throw new Error('AudioContext no disponible');
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.value = 0.06;
+    osc.start();
+    setTimeout(() => {
+      try { osc.stop(); } catch {}
+      try { ctx.close(); } catch {}
+    }, ms);
+  } catch (err) {
+    console.warn('[notify/beep] error:', err);
   }
+}
 
-  /**
-   * Emite un beep simple usando Web Audio API.
-   * @param {number} ms - Duración del beep en milisegundos.
-   * @param {number} freq - Frecuencia del tono en Hz.
-   */
-  window.beep = function (ms = 140, freq = 880) {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.type = 'square';
-      o.frequency.value = freq;
-      g.gain.value = 0.06;
-      o.start();
-      setTimeout(() => {
-        o.stop();
-        ctx.close();
-      }, ms);
-    } catch (err) {
-      console.warn("Beep error:", err);
-    }
-  };
+/**
+ * Toast simple.
+ * @param {string} msg
+ * @param {string} [icon]
+ * @param {{theme?:string, duration?:number}} [opts]
+ */
+function toast(msg, icon = '', opts = {}) {
+  try {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
 
-  /**
-   * Muestra un toast emergente en pantalla.
-   * @param {string} msg - Mensaje principal a mostrar.
-   * @param {string} [icon] - HTML opcional para ícono (ej. emoji).
-   * @param {Object} [opts] - Opciones: { theme, duration }.
-   * @param {string} [opts.theme='default'] - Tema visual: 'ok', 'err', 'warn', etc.
-   * @param {number} [opts.duration=2400] - Duración en milisegundos antes de desaparecer.
-   */
-  window.toast = function (msg, icon = "", opts = {}) {
-    const t = document.createElement("div");
-    t.className = "toast";
-    t.setAttribute("role", "status");
-    t.setAttribute("aria-live", "polite");
-
-    const theme = opts.theme || "default";
+    const theme = opts.theme || 'default';
     if (theme) t.classList.add(`toast-${theme}`);
 
-    t.innerHTML = icon
-      ? `<span style="margin-right:6px">${icon}</span>${msg}`
-      : msg;
+    t.innerHTML = icon ? `<span style="margin-right:6px">${icon}</span>${msg}` : msg;
     document.body.appendChild(t);
-    requestAnimationFrame(() => t.classList.add("show"));
+    requestAnimationFrame(() => t.classList.add('show'));
 
     setTimeout(() => {
-      t.classList.remove("show");
+      t.classList.remove('show');
       setTimeout(() => t.remove(), 300);
     }, opts.duration || 2400);
-  };
+  } catch (err) {
+    console.warn('[notify/toast] error:', err);
+  }
+}
 
-  console.log("✅ Notify.js cargado sin conflictos");
-})();
+/* ===== Exports ESM ===== */
+export { beep, toast };           // named
+export default { beep, toast };   // default
+
+/* ===== Fallback global (no rompe módulos) ===== */
+try {
+  if (typeof window !== 'undefined') {
+    window.notify = window.notify || {};
+    window.notify.beep = window.notify.beep || beep;
+    window.notify.toast = window.notify.toast || toast;
+    // sólo asignamos propiedades del window, NO redeclaramos variables
+    if (!window.beep) window.beep = beep;
+    if (!window.toast) window.toast = toast;
+  }
+} catch {}
