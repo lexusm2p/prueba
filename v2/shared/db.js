@@ -30,8 +30,9 @@ try {
 
 /* ===== Helpers: usar Firestore real si existe; si no, mocks ===== */
 const _mockTs = () => Date.now();
-const Timestamp = fs?.Timestamp ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date? d.getTime(): new Date(d).getTime()) }) };
-const serverTimestamp = fs?.serverTimestamp ?? (() => _mockTs());
+const Timestamp        = fs?.Timestamp ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date? d.getTime(): new Date(d).getTime()) }) };
+// Fallback distinguible (útil para depurar)
+const serverTimestamp  = fs?.serverTimestamp ?? (() => ({ __localServerTimestamp: Date.now() }));
 const increment        = fs?.increment ?? ((n)=>n);
 const doc              = fs?.doc ?? (()=>({}));
 const getDoc           = fs?.getDoc ?? (async()=>({ exists:()=>false, data:()=>null }));
@@ -369,7 +370,8 @@ export const onOrdersSnapshot = subscribeActiveOrders;
 export function subscribeOrder(orderId, cb) {
   if (!orderId || !db || !onSnapshot) return () => {};
   const ref = doc(db, 'orders', String(orderId));
-  return onSnapshot(ref, (d) => cb(d.exists ? ({ id: d.id, ...d.data() }) : null));
+  // ✅ usa exists() como método
+  return onSnapshot(ref, (d) => cb(d.exists() ? ({ id: d.id, ...d.data() }) : null));
 }
 
 export async function updateOrder(id, patch, opts = {}) {
@@ -551,7 +553,7 @@ export async function getOrdersRange({ from, to, includeArchive = false, orderTy
 /* =================== Settings: Happy Hour / ETA / Theme =================== */
 export function subscribeHappyHour(cb) {
   if (!db || !onSnapshot) { cb(null); return () => {}; }
-  return onSnapshot(doc(db, 'settings', 'happyHour'), (d) => cb(d.data ? d.data() : null));
+  return onSnapshot(doc(db, 'settings', 'happyHour'), (d) => cb(d.data?.() ?? null));
 }
 
 export async function setHappyHour(payload, opts = {}) {
@@ -578,15 +580,12 @@ export async function setHappyHour(payload, opts = {}) {
 
 export function subscribeETA(cb) {
   if (!db || !onSnapshot) { cb(null); return () => {}; }
-  return onSnapshot(doc(db, 'settings', 'eta'), (d) => {
-    const txt = d?.data?.()?.text;
-    cb(txt != null ? String(txt) : null);
-  });
+  return onSnapshot(doc(db, 'settings', 'eta'), (d) => cb(d.data?.()?.text ?? null));
 }
 
 export function subscribeTheme(cb) {
   if (!db || !onSnapshot) { cb(null); return () => {}; }
-  return onSnapshot(doc(db, 'settings', 'theme'), (d) => cb(d.data ? d.data() : null));
+  return onSnapshot(doc(db, 'settings', 'theme'), (d) => cb(d.data?.() ?? null));
 }
 
 // ⚠️ Compat: acepta string ("Base") o objeto ({ name, overrides })
@@ -875,7 +874,7 @@ export async function sendWhatsAppMessage({ to, text, meta = {} }, opts = {}) {
 /* =================== Exports auxiliares =================== */
 export function subscribeSettings(cb) {
   if (!db || !onSnapshot) { cb({}); return () => {}; }
-  return onSnapshot(doc(db, 'settings', 'app'), (d) => cb(d.data ? d.data() : {}));
+  return onSnapshot(doc(db, 'settings', 'app'), (d) => cb(d.data?.() ?? {}));
 }
 
 // Exportar símbolos usados por otros módulos si lo requieren
