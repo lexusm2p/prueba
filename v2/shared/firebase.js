@@ -1,5 +1,5 @@
 // /shared/firebase.js
-// Firebase v10.12 (ESM) — App, Auth (anónima), Firestore + helpers y re-exports.
+// Firebase v10.12 (ESM) — App, Auth anónima, Firestore y helpers seguros.
 
 import { initializeApp, getApps, getApp }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -9,17 +9,15 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 import {
+  // OJO: todas estas funciones deben venir del MISMO archivo que crea el db
   getFirestore,
-  // lecturas/queries
-  collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  onSnapshot,
-  // escrituras/utilidades
+  collection, doc, getDoc, getDocs,
+  query, where, orderBy, limit, onSnapshot,
   addDoc, setDoc, updateDoc, deleteDoc,
-  // valores especiales
   serverTimestamp, increment, Timestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-// Config pública (asegura reglas de seguridad en Firestore)
+// --- Config pública de tu proyecto ---
 const firebaseConfig = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
   authDomain: "seven-de-burgers.firebaseapp.com",
@@ -28,46 +26,43 @@ const firebaseConfig = {
   messagingSenderId: "34089845279",
   appId: "1:34089845279:web:d13440c34e6bb7fa910b2a",
   measurementId: "G-Q8YQJGL2XY",
-  // 👇 añade esto (URL exacta de tu RTDB)
   databaseURL: "https://seven-de-burgers-default-rtdb.firebaseio.com"
 };
-// App única
-export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Servicios
+// --- Singletons ---
+export const app  = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db   = getFirestore(app);
 
-// Sesión anónima silenciosa al iniciar
+// Arranque: asegura sesión anónima silenciosa
 onAuthStateChanged(auth, (u) => {
   if (!u) signInAnonymously(auth).catch(() => {});
 });
 
-// ensureAuth robusto (espera confirmación completa)
+// Robust: espera a que Auth esté lista (evita carreras)
 export async function ensureAuth() {
-  const user = auth.currentUser;
-  if (user) return user;
-
-  // Espera breve por si está en proceso de login anónimo
-  await new Promise(r => setTimeout(r, 10));
   if (auth.currentUser) return auth.currentUser;
-
-  // Inicia sesión anónima
-  await signInAnonymously(auth);
-
-  // Espera a que esté confirmada
+  await signInAnonymously(auth).catch(()=>{});
   return await new Promise((resolve, reject) => {
     const off = onAuthStateChanged(auth, (u) => {
-      off();
-      u ? resolve(u) : reject(new Error("No auth"));
+      off(); u ? resolve(u) : reject(new Error('No auth'));
     }, reject);
   });
 }
 
-// Re-exports para usar desde otros módulos
+/**
+ * Helper seguro: devuelve una CollectionReference usando SIEMPRE
+ * el mismo `db` singleton exportado arriba. Úsalo como `col('orders')`.
+ */
+export function col(path) {
+  return collection(db, path);
+}
+
+// Re-exports (todas del MISMO módulo que creó `db`)
 export {
-  // Firestore base
-  collection, doc, getDoc, getDocs, query, where, orderBy, limit, onSnapshot,
+  // Firestore core
+  collection, doc, getDoc, getDocs,
+  query, where, orderBy, limit, onSnapshot,
   addDoc, setDoc, updateDoc, deleteDoc,
   serverTimestamp, increment, Timestamp,
 };
