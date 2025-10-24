@@ -1,13 +1,13 @@
-// /shared/firebase.js
-import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+// /shared/firebase.js  (alineado con 10.12.5)
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 import {
   getFirestore,
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
   onSnapshot,
   addDoc, setDoc, updateDoc, deleteDoc,
   serverTimestamp, increment, Timestamp,
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
@@ -24,6 +24,7 @@ export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db   = getFirestore(app);
 
+// Asegura sesión anónima
 onAuthStateChanged(auth, (u) => { if (!u) signInAnonymously(auth).catch(() => {}); });
 
 export async function ensureAuth() {
