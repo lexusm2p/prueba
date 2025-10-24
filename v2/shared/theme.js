@@ -77,8 +77,6 @@ const THEMES_BUILTIN = {
     // ⬇️ ahora resuelve a /prueba/v2/kiosk/themes/halloween/
     packBaseUrl:`${BASE_PREFIX}themes/halloween/`
   },
-
-  // Aquí puedes agregar tus otros temas si los tienes
 };
 
 /* -------------------- Estado en memoria -------------------- */
@@ -416,4 +414,39 @@ function detectRequestedTheme() {
       const s = sessionStorage.getItem(k) || localStorage.getItem(k);
       if (s) return s;
     }
-  } catch
+  } catch {}
+  return null;
+}
+
+function validateThemeAssets(preset) {
+  const base = preset.packBaseUrl || '';
+  const images = preset.images || {};
+  const icons  = preset.icons  || {};
+  const missing = [];
+  Object.entries(images).forEach(([k,v]) => { if (!v) missing.push(`images.${k}`); });
+  Object.entries(icons).forEach(([k,v]) => { if (!v) missing.push(`icons.${k}`); });
+  if (missing.length) {
+    console.warn('[theme] faltan rutas en preset', preset.name, missing);
+  }
+  const resolved = {
+    images: Object.fromEntries(Object.entries(images).map(([k,v])=>[k, resolveAssetUrl(v, base)])),
+    icons : Object.fromEntries(Object.entries(icons ).map(([k,v])=>[k, resolveAssetUrl(v, base)])),
+  };
+  console.debug('[theme] assets resueltos', preset.name, resolved);
+}
+
+if (typeof window !== 'undefined') {
+  window.applyThemeLocal = (nameOrPreset, presetObj=null) => {
+    const p = applyThemeLocal(nameOrPreset, presetObj);
+    validateThemeAssets(p);
+    return p;
+  };
+  window.ThemeAPI = { applyThemeLocal, initThemeFromSettings, listThemes, subscribeThemePresets, saveThemePreset };
+
+  const __initial = detectRequestedTheme();
+  if (__initial) {
+    try { window.applyThemeLocal(__initial); } catch (e) { console.warn('[theme] auto-init falló', e); }
+  }
+}
+
+export default THEMES_BUILTIN;
