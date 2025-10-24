@@ -10,38 +10,61 @@
   <style>
     body{background:#0f1422;color:#fff8e6;font-family:system-ui,Arial}
     #app{padding:16px;font-size:20px}
-    .err{position:fixed;left:8px;bottom:8px;background:#000a;color:#ffb;padding:8px;border:1px solid #834;max-width:92vw;white-space:pre-wrap}
+    .err{position:fixed;left:8px;bottom:8px;background:#000a;color:#ffb;padding:8px;border:1px solid #834;max-width:92vw;white-space:pre-wrap;z-index:99999}
+    .badge{position:fixed;right:8px;bottom:8px;background:#111a;border:1px solid #345;color:#9fe;padding:4px 8px;border-radius:6px;font:12px/1.2 system-ui}
   </style>
 </head>
 <body data-theme="base">
   <div id="app">Cargando Kiosko V2…</div>
 
+  <script>
+    // 0) Flags de modo visibles para TODOS los módulos 👈
+    const qs = new URLSearchParams(location.search);
+    const mode = (qs.get('mode') || 'online').toLowerCase();
+    window.MODE = {
+      OFFLINE: mode === 'offline',
+      READONLY: qs.get('ro') === '1',
+      LEGACY: qs.get('legacy') === '1'
+    };
+    // insignia de modo
+    const badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.textContent = `mode=${mode}${window.MODE.READONLY?' · RO':''}${window.MODE.LEGACY?' · LEGACY':''}`;
+    document.body.appendChild(badge);
+  </script>
+
+  <!-- 1) Guard del tema: define window._freezeSettings si no existe 👈 -->
+  <script type="module" src="../shared/theme-guard.js"></script>
+
   <script type="module">
-    // Mostrar errores en pantalla
-    window.addEventListener('error', e=>{
-      const b=document.createElement('div'); b.className='err';
-      b.textContent='[Error] '+(e.message||e.error); document.body.appendChild(b);
-    });
-    window.addEventListener('unhandledrejection', e=>{
-      const b=document.createElement('div'); b.className='err';
-      b.textContent='[Promise] '+(e.reason && e.reason.message ? e.reason.message : e.reason);
+    // 2) Overlay de errores robusto 👈
+    const showErr = (label, val) => {
+      const b = document.createElement('div'); b.className='err';
+      let msg = '';
+      if (val && typeof val === 'object') {
+        msg = val.message || JSON.stringify(val);
+      } else {
+        msg = String(val);
+      }
+      b.textContent = `[${label}] ${msg}`;
       document.body.appendChild(b);
-    });
+    };
+    window.addEventListener('error', (e)=> showErr('Error', e.message || e.error));
+    window.addEventListener('unhandledrejection', (e)=> showErr('Promise', (e.reason && e.reason.message) || e.reason));
 
-    // Paso 1: confirmar que este archivo sí corre
-    document.getElementById('app').textContent = 'Kiosko V2 base OK — sin app.js aún';
+    // 3) Confirmar que corre
+    document.getElementById('app').textContent = 'Kiosko V2 base OK — cargando módulos…';
 
-    // Paso 2: flags/legacy (seguro)
+    // 4) Flags/legacy
     import './config.js';
-    try { await import('./legacy.js'); } catch(e) {}
+    try { await import('./legacy.js'); } catch(_) {}
 
-    // Paso 3: IMPORTAR por etapas (descomenta una a la vez):
+    // 5) Cargar Firebase (opcional si db.js ya lo importa)
+    // Si quieres evitar doble import, comenta la línea siguiente:
+    await import('../shared/firebase.js');
 
-    //a) Firebase (si falla aquí verás el error en pantalla)
-     await import('../shared/firebase.js');
-
-    // b) App real
-     await import('./app.js');
+    // 6) Cargar la app real
+    await import('./app.js');
   </script>
 </body>
 </html>
