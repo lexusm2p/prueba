@@ -4,8 +4,8 @@
 import { db, doc, getDoc, setDoc, onSnapshot } from './firebase.js';
 
 /* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
-// Queremos que en /prueba/v2/kiosk/ -> BASE_PREFIX sea "/prueba/v2/"
-// Si no hay "v2", usamos el primer segmento ("/prueba/") o "/" en raíz.
+// En /prueba/v2/kiosk/ -> BASE_PREFIX = "/prueba/v2/"
+// Si no hay "v2", usa el primer segmento ("/prueba/") o "/" en raíz.
 const BASE_PREFIX = (() => {
   try {
     const parts = location.pathname.split('/').filter(Boolean); // ["prueba","v2","kiosk"]
@@ -36,7 +36,7 @@ const THEMES_BUILTIN = {
     images:{}, icons:{}, packBaseUrl:''
   },
 
-  /* ====== tus presets (sin cambios salvo packBaseUrl) ====== */
+  /* ====== Halloween (apunta a themes/halloween/) ====== */
   Halloween: {
     name:'Halloween',
     palette:{
@@ -72,11 +72,11 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    // ⬇️ ahora resuelve a /prueba/v2/themes/halloween/ (ya no a /prueba/themes)
+    // Resuelve a /prueba/v2/themes/halloween/ (o /prueba/themes/halloween/ según el path)
     packBaseUrl:`${BASE_PREFIX}themes/halloween/`
   },
 
-  /* …(deja aquí el resto de presets que ya tenías)… */
+  /* —— puedes dejar aquí el resto de presets que uses —— */
 };
 
 /* -------------------- Estado en memoria -------------------- */
