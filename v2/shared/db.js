@@ -1,84 +1,63 @@
-// /shared/db.js — V2 SAFE (completo)
-// - Usa Firestore real si está disponible via ./firebase.js.
-// - Si falla, expone mocks seguros (no truenan).
-// - Catálogo con fallback a /data/menu.json o ../shared/catalog.json.
-// - Suscripción a órdenes en vivo (subscribeOrders) + alias.
-// - Mantiene API mínima para el kiosko.
+// /shared/db.js  (V2 SAFE con BASE_PREFIX = "/prueba/")
+const MODE = (typeof window !== 'undefined' && window.MODE) ? window.MODE : { OFFLINE:false, READONLY:false, LEGACY:false };
 
-const MODE = (typeof window !== 'undefined' && window.MODE)
-  ? window.MODE
-  : { OFFLINE:false, READONLY:false, LEGACY:false };
+/* ------------ Prefijo para archivos estáticos en GitHub Pages ------------ */
+// Tomamos el primer segmento de la URL: /prueba/...
+const BASE_PREFIX = (() => {
+  try {
+    const parts = location.pathname.split('/').filter(Boolean);
+    const first = parts[0];
+    return first ? `/${first}/` : '/';
+  } catch { return '/'; }
+})();
 
-/* =========================
-   Carga segura de Firebase
-   ========================= */
+let fs = null;
 let app = null;
 let db  = null;
 
-// Intentamos importar TODO desde tu firebase.js
-let fns = {};
 try {
   const mod = await import('./firebase.js');
   app = mod.app ?? null;
   db  = mod.db  ?? null;
-  fns = {
-    // Lectura
-    collection:   mod.collection,
-    doc:          mod.doc,
-    getDoc:       mod.getDoc,
-    getDocs:      mod.getDocs,
-    query:        mod.query,
-    where:        mod.where,
-    orderBy:      mod.orderBy,
-    limit:        mod.limit,
-    onSnapshot:   mod.onSnapshot,
-    // Escritura
-    addDoc:       mod.addDoc,
-    setDoc:       mod.setDoc,
-    updateDoc:    mod.updateDoc,
-    deleteDoc:    mod.deleteDoc,
-    // Utilidades
-    serverTimestamp: mod.serverTimestamp,
-    increment:    mod.increment,
-    Timestamp:    mod.Timestamp,
-    // (opcional) ensureAuth si lo exportas
-    ensureAuth:   mod.ensureAuth,
-  };
 } catch (e) {
-  console.warn('[db.js] No se pudo importar ./firebase.js (OK si estás offline):', e);
+  console.warn('[db.js] No se pudo importar ./firebase.js (OK en offline):', e);
 }
 
-// Mocks ultra-seguros si faltara algo:
-const noopAsync = async () => void 0;
-const noop      = () => ({});
-const TS_fallback = { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date ? d.getTime() : new Date(d).getTime()) }) };
+try {
+  fs = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+} catch (e) {
+  console.warn('[db.js] Firestore CDN no disponible (OK en offline):', e);
+}
 
-const collection      = fns.collection    ?? (()=>({}));
-const doc             = fns.doc           ?? (()=>({}));
-const getDoc          = fns.getDoc        ?? (async()=>({ exists:()=>false, data:()=>null }));
-const getDocs         = fns.getDocs       ?? (async()=>({ docs: [] }));
-const query           = fns.query         ?? ((...a)=>a);
-const where           = fns.where         ?? ((...a)=>a);
-const orderBy         = fns.orderBy       ?? ((...a)=>a);
-const limit           = fns.limit         ?? ((...a)=>a);
-const onSnapshot      = fns.onSnapshot    ?? (()=>()=>{});
+const Timestamp        = fs?.Timestamp ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date? d.getTime(): new Date(d).getTime()) }) };
+const serverTimestamp  = fs?.serverTimestamp ?? (() => ({ __localServerTimestamp: Date.now() }));
+const increment        = fs?.increment ?? ((n)=>n);
+const doc              = fs?.doc ?? (()=>({}));
+const getDoc           = fs?.getDoc ?? (async()=>({ exists:()=>false, data:()=>null }));
+const setDoc           = fs?.setDoc ?? (async()=>void 0);
+const updateDoc        = fs?.updateDoc ?? (async()=>void 0);
+const addDoc           = fs?.addDoc ?? (async()=>({ id: `TRAIN-${Math.random().toString(36).slice(2,8)}` }));
+const deleteDoc        = fs?.deleteDoc ?? (async()=>void 0);
+const collection       = fs?.collection ?? (()=>({}));
+const onSnapshot       = fs?.onSnapshot ?? (()=>()=>{});
+const query            = fs?.query ?? ((...a)=>a);
+const where            = fs?.where ?? ((...a)=>a);
+const orderBy          = fs?.orderBy ?? ((...a)=>a);
+const limit            = fs?.limit ?? ((...a)=>a);
+const getDocs          = fs?.getDocs ?? (async()=>({ docs: [] }));
 
-const addDoc          = fns.addDoc        ?? (async()=>({ id: `TRAIN-${Math.random().toString(36).slice(2,8)}` }));
-const setDoc          = fns.setDoc        ?? noopAsync;
-const updateDoc       = fns.updateDoc     ?? noopAsync;
-const deleteDoc       = fns.deleteDoc     ?? noopAsync;
+async function ensureAuth(){ return true; }
 
-const serverTimestamp = fns.serverTimestamp ?? (() => ({ __localServerTimestamp: Date.now() }));
-const increment       = fns.increment       ?? ((n)=>n);
-const Timestamp       = fns.Timestamp       ?? TS_fallback;
-
-const ensureAuth = fns.ensureAuth ?? (async()=>true);
-
-/* =========================
-   Helpers comunes
-   ========================= */
 const sleep = (ms = 60) => new Promise(r => setTimeout(r, ms));
-const toTs  = (d) => Timestamp.fromDate(new Date(d));
+const toTs = (d) => Timestamp.fromDate(new Date(d));
+const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+
+async function guardWrite(training, realWriteFn, fakeValue = null) {
+  const forceSim = MODE.OFFLINE || MODE.READONLY || training;
+  if (!forceSim && db && addDoc && setDoc) return realWriteFn();
+  await sleep(60);
+  return (fakeValue ?? { ok:true, _training:true });
+}
 
 function toMillisFlexible(raw) {
   if (raw == null) return null;
@@ -89,18 +68,9 @@ function toMillisFlexible(raw) {
   return Number.isFinite(ms) ? ms : null;
 }
 
-async function guardWrite(training, realWriteFn, fakeValue = null) {
-  const forceSim = MODE.OFFLINE || MODE.READONLY || training || !db;
-  if (!forceSim && db && addDoc && setDoc) return realWriteFn();
-  await sleep(60);
-  return (fakeValue ?? { ok:true, _training:true });
-}
-
-/* =========================
-   Catálogo con fallback
-   ========================= */
+// ======= Catálogo =======
 function normalizeCatalog(cat = {}) {
-  const A = (x) => Array.isArray(x) ? x : (x ? [x] : []);
+  const safeArr = (x) => Array.isArray(x) ? x : (x ? [x] : []);
   const appSettings = {
     miniMeatGrams: Number(cat?.appSettings?.miniMeatGrams ?? 45),
     meatGrams: Number(cat?.appSettings?.meatGrams ?? 85),
@@ -115,13 +85,13 @@ function normalizeCatalog(cat = {}) {
     endsAt: toMillisFlexible(cat?.happyHour?.endsAt ?? null),
   };
   return {
-    burgers: A(cat.burgers),
-    minis:   A(cat.minis),
-    drinks:  A(cat.drinks),
-    sides:   A(cat.sides),
+    burgers: safeArr(cat.burgers),
+    minis:   safeArr(cat.minis),
+    drinks:  safeArr(cat.drinks),
+    sides:   safeArr(cat.sides),
     extras: {
-      sauces: A(cat?.extras?.sauces ?? []),
-      ingredients: A(cat?.extras?.ingredients ?? []),
+      sauces: safeArr(cat?.extras?.sauces ?? []),
+      ingredients: safeArr(cat?.extras?.ingredients ?? []),
       ingredientPrice: Number(cat?.extras?.ingredientPrice ?? 0),
       saucePrice: Number(cat?.extras?.saucePrice ?? 0),
       dlcCarneMini: Number(cat?.extras?.dlcCarneMini ?? 0),
@@ -131,123 +101,50 @@ function normalizeCatalog(cat = {}) {
   };
 }
 
-// Siempre queremos que en GitHub Pages bajo /prueba/... busque /prueba/data/menu.json
-const guessDataPath = () => '../data/menu.json';
+/* Rutas correctas en GitHub Pages */
+const DATA_MENU_URL   = `${BASE_PREFIX}data/menu.json`;      // -> /prueba/data/menu.json
+const SHARED_MENU_URL = `${BASE_PREFIX}shared/catalog.json`; // -> /prueba/shared/catalog.json`
 
 export async function fetchCatalogWithFallback() {
   try { await ensureAuth(); } catch {}
-  // 1) settings/catalog
+
+  // 1) Primero: JSON local (para que siempre tengas menú aunque falle Firestore)
+  try {
+    const r = await fetch(DATA_MENU_URL, { cache: 'no-store' });
+    if (r.ok) return normalizeCatalog(await r.json());
+    console.warn('[catalog] no está', DATA_MENU_URL, r.status);
+  } catch (e) { console.warn('[catalog] fallo leyendo', DATA_MENU_URL, e); }
+
+  try {
+    const r2 = await fetch(SHARED_MENU_URL, { cache: 'no-store' });
+    if (r2.ok) return normalizeCatalog(await r2.json());
+    console.warn('[catalog] no está', SHARED_MENU_URL, r2.status);
+  } catch (e) { console.warn('[catalog] fallo leyendo', SHARED_MENU_URL, e); }
+
+  // 2) Luego: Firestore (si está configurado)
   try {
     if (db) {
       const d1 = await getDoc(doc(db, 'settings', 'catalog'));
-      if (d1?.exists?.()) return normalizeCatalog(d1.data());
+      if (d1?.exists()) return normalizeCatalog(d1.data());
     }
-  } catch (e) { console.warn('[catalog] settings/catalog falló, sigo...', e); }
+  } catch (e) { console.warn('[catalog] settings/catalog fallo, sigo...', e); }
 
-  // 2) catalog/public
   try {
     if (db) {
       const d2 = await getDoc(doc(db, 'catalog', 'public'));
-      if (d2?.exists?.()) return normalizeCatalog(d2.data());
+      if (d2?.exists()) return normalizeCatalog(d2.data());
     }
-  } catch (e) { console.warn('[catalog] catalog/public falló, sigo...', e); }
+  } catch (e) { console.warn('[catalog] catalog/public fallo, sigo...', e); }
 
-  // 3) /data/menu.json (proyecto)
-  try {
-    const r = await fetch(guessDataPath(), { cache: 'no-store' });
-    if (r.ok) return normalizeCatalog(await r.json());
-  } catch (e) { console.warn('[catalog] ../data/menu.json falló, sigo...', e); }
-
-  // 4) ../shared/catalog.json (fallback adicional)
-  try {
-    const r2 = await fetch('../shared/catalog.json', { cache: 'no-store' });
-    if (r2.ok) return normalizeCatalog(await r2.json());
-  } catch (e) { console.warn('[catalog] shared/catalog.json falló', e); }
-
+  // 3) Último recurso: vacío normalizado
   return normalizeCatalog({});
 }
 
-// Tabla simple para Admin (solo lectura, usando el catálogo actual)
-export function subscribeProducts(cb) {
-  (async () => {
-    const cat = await fetchCatalogWithFallback();
-    const items = [
-      ...(cat.burgers || []).map(p => ({ ...p, type: 'burger' })),
-      ...(cat.minis   || []).map(p => ({ ...p, type: 'mini' })),
-      ...(cat.drinks  || []).map(p => ({ ...p, type: 'drink' })),
-      ...(cat.sides   || []).map(p => ({ ...p, type: 'side'  })),
-    ];
-    cb?.(items);
-  })();
-}
-
-/* =========================
-   Órdenes — lectura en vivo
-   ========================= */
-export function subscribeOrders(cb, { limitN = 50 } = {}) {
-  if (!db || !onSnapshot) {
-    console.warn('[db.js] subscribeOrders: no DB activo (modo offline/readonly).');
-    cb?.([]);
-    return () => {};
-  }
-  const ref = collection(db, 'orders');
-  const qy  = query(ref, orderBy('createdAt', 'desc'), limit(limitN));
-  return onSnapshot(
-    qy,
-    (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      cb?.(list);
-    },
-    (err) => console.error('[subscribeOrders] onSnapshot error:', err)
-  );
-}
-
-// Alias de compatibilidad
-export const onOrdersSnapshot   = subscribeOrders;
-export const subscribeActiveOrders = subscribeOrders;
-
-// Kitchen: filtra por estados típicos
-export function subscribeKitchenOrders(cb, { limitN = 120 } = {}) {
-  const valid = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
-  return subscribeOrders((rows) => {
-    cb?.((rows || []).filter(o => valid.has(String(o?.status || '').toUpperCase())));
-  }, { limitN });
-}
-
-/* =========================
-   (Opcional) CRUD mínimos
-   ========================= */
-export async function createOrder(order, opts = {}) {
-  const { training = false } = opts;
-  const payload = {
-    ...order,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-  return guardWrite(training, async () => {
-    await ensureAuth().catch(()=>{});
-    const ref = await addDoc(collection(db, 'orders'), payload);
-    return ref.id;
-  }, `TRAIN-ORDER-${Date.now()}`);
-}
-
-export async function updateOrder(id, patch, opts = {}) {
-  const { training = false } = opts;
-  if (!id || typeof patch !== 'object') return { ok:false, reason: 'invalid' };
-  return guardWrite(training, async () => {
-    await ensureAuth().catch(()=>{});
-    await updateDoc(doc(db, 'orders', id), { ...patch, updatedAt: serverTimestamp() });
-    return { ok:true };
-  }, { ok:true, _training:true });
-}
-
-/* =========================
-   Exports “públicos”
-   ========================= */
+// ======= Aux exports =======
 export {
-  app, db,
-  // Firestore helpers
-  collection, doc, getDoc, getDocs, query, where, orderBy, limit, onSnapshot,
-  addDoc, setDoc, updateDoc, deleteDoc,
-  serverTimestamp, increment, Timestamp,
+  db, collection, onSnapshot, query, where, orderBy, limit, getDocs,
+  addDoc, setDoc, updateDoc, doc, getDoc, deleteDoc,
+  Timestamp, serverTimestamp, increment
 };
+
+console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'DATA_MENU_URL =', DATA_MENU_URL);
