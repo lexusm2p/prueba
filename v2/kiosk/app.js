@@ -18,8 +18,7 @@ import * as DB from '../shared/db.js';
 // agrega esta línea a tus imports de /shared/*
 import { ensureAuth } from '../shared/firebase.js';
 import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
-import { setTheme } from '../shared/db.js';
-
+import { setTheme } from '../shared/theme.js';
 /* ======================= Recompensas (config) ======================= */
 // % ponderados (deben sumar ~1.0). Ajustables.
 const REWARDS = {
