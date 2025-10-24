@@ -6,15 +6,13 @@ import { db, doc, getDoc, setDoc, onSnapshot } from './firebase.js';
 /* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
 // En /prueba/v2/kiosk/... -> BASE_PREFIX = "/prueba/v2/kiosk/"
 // Si no hay "kiosk", usa "/prueba/v2/" o el primer segmento.
+/* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
+// Queremos que los assets queden en /prueba/themes/... (primer segmento del path)
 const BASE_PREFIX = (() => {
   try {
-    const parts = location.pathname.split('/').filter(Boolean); // p.ej. ["prueba","v2","kiosk","index.html"]
-    const iKiosk = parts.indexOf('kiosk');
-    if (iKiosk >= 0) return '/' + parts.slice(0, iKiosk + 1).join('/') + '/';
-    const iV2 = parts.indexOf('v2');
-    if (iV2 >= 0) return '/' + parts.slice(0, iV2 + 1).join('/') + '/';
-    if (parts.length >= 1) return '/' + parts[0] + '/';
-    return '/';
+    const parts = location.pathname.split('/').filter(Boolean);
+    const first = parts[0];              // "prueba" en /prueba/v2/kiosk/...
+    return first ? `/${first}/` : '/';   // => "/prueba/"
   } catch { return '/'; }
 })();
 
