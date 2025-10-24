@@ -1,11 +1,8 @@
 // /shared/theme.js
 // Temas para Kiosko/UI: presets integrados + presets guardados + packs de imágenes/iconos.
 
-import { db, doc, getDoc, setDoc, onSnapshot } from './firebase.js';
+import { db, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from './firebase.js';
 
-/* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
-// En /prueba/v2/kiosk/... -> BASE_PREFIX = "/prueba/v2/kiosk/"
-// Si no hay "kiosk", usa "/prueba/v2/" o el primer segmento.
 /* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
 // Queremos que los assets queden en /prueba/themes/... (primer segmento del path)
 const BASE_PREFIX = (() => {
@@ -36,7 +33,7 @@ const THEMES_BUILTIN = {
     images:{}, icons:{}, packBaseUrl:''
   },
 
-  /* ====== Halloween (apunta a themes/halloween/) ====== */
+  /* ====== Halloween (apunta a /prueba/themes/halloween/) ====== */
   Halloween: {
     name:'Halloween',
     palette:{
@@ -72,7 +69,6 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    // ⬇️ ahora resuelve a /prueba/v2/kiosk/themes/halloween/
     packBaseUrl:`${BASE_PREFIX}themes/halloween/`
   },
 };
@@ -446,6 +442,24 @@ if (typeof window !== 'undefined') {
     try { window.applyThemeLocal(__initial); } catch (e) { console.warn('[theme] auto-init falló', e); }
   }
 }
+
+// Alias de compatibilidad para módulos antiguos
+export async function setTheme(name) {
+  try {
+    const preset = applyThemeLocal(name);
+    if (db) {
+      const ref = doc(db, 'settings', 'theme');
+      await setDoc(ref, { name, updatedAt: serverTimestamp() }, { merge: true });
+    }
+    console.info('[theme] setTheme aplicado:', name);
+    return preset;
+  } catch (e) {
+    console.error('[theme] Error en setTheme:', e);
+    return null;
+  }
+}
+
+// Diagnóstico adicional
 window.addEventListener('error', e => {
   console.error('[theme-error]', e.message, e.filename, e.lineno);
 });
@@ -453,4 +467,5 @@ window.addEventListener('unhandledrejection', e => {
   console.error('[theme-promise]', e.reason);
 });
 console.info('[theme] BASE_PREFIX =', BASE_PREFIX);
+
 export default THEMES_BUILTIN;
