@@ -4,11 +4,13 @@
 import { db, doc, getDoc, setDoc, onSnapshot } from './firebase.js';
 
 /* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
-// En /prueba/v2/kiosk/ -> BASE_PREFIX = "/prueba/v2/"
-// Si no hay "v2", usa el primer segmento ("/prueba/") o "/" en raíz.
+// En /prueba/v2/kiosk/... -> BASE_PREFIX = "/prueba/v2/kiosk/"
+// Si no hay "kiosk", usa "/prueba/v2/" o el primer segmento.
 const BASE_PREFIX = (() => {
   try {
-    const parts = location.pathname.split('/').filter(Boolean); // ["prueba","v2","kiosk"]
+    const parts = location.pathname.split('/').filter(Boolean); // p.ej. ["prueba","v2","kiosk","index.html"]
+    const iKiosk = parts.indexOf('kiosk');
+    if (iKiosk >= 0) return '/' + parts.slice(0, iKiosk + 1).join('/') + '/';
     const iV2 = parts.indexOf('v2');
     if (iV2 >= 0) return '/' + parts.slice(0, iV2 + 1).join('/') + '/';
     if (parts.length >= 1) return '/' + parts[0] + '/';
@@ -72,11 +74,11 @@ const THEMES_BUILTIN = {
       nintendo:  'icons/burgers/nintendo.png',
       finalboss: 'icons/burgers/finalboss.png'
     },
-    // Resuelve a /prueba/v2/themes/halloween/ (o /prueba/themes/halloween/ según el path)
+    // ⬇️ ahora resuelve a /prueba/v2/kiosk/themes/halloween/
     packBaseUrl:`${BASE_PREFIX}themes/halloween/`
   },
 
-  /* —— puedes dejar aquí el resto de presets que uses —— */
+  // Aquí puedes agregar tus otros temas si los tienes
 };
 
 /* -------------------- Estado en memoria -------------------- */
@@ -414,39 +416,4 @@ function detectRequestedTheme() {
       const s = sessionStorage.getItem(k) || localStorage.getItem(k);
       if (s) return s;
     }
-  } catch {}
-  return null;
-}
-
-function validateThemeAssets(preset) {
-  const base = preset.packBaseUrl || '';
-  const images = preset.images || {};
-  const icons  = preset.icons  || {};
-  const missing = [];
-  Object.entries(images).forEach(([k,v]) => { if (!v) missing.push(`images.${k}`); });
-  Object.entries(icons).forEach(([k,v]) => { if (!v) missing.push(`icons.${k}`); });
-  if (missing.length) {
-    console.warn('[theme] faltan rutas en preset', preset.name, missing);
-  }
-  const resolved = {
-    images: Object.fromEntries(Object.entries(images).map(([k,v])=>[k, resolveAssetUrl(v, base)])),
-    icons : Object.fromEntries(Object.entries(icons ).map(([k,v])=>[k, resolveAssetUrl(v, base)])),
-  };
-  console.debug('[theme] assets resueltos', preset.name, resolved);
-}
-
-if (typeof window !== 'undefined') {
-  window.applyThemeLocal = (nameOrPreset, presetObj=null) => {
-    const p = applyThemeLocal(nameOrPreset, presetObj);
-    validateThemeAssets(p);
-    return p;
-  };
-  window.ThemeAPI = { applyThemeLocal, initThemeFromSettings, listThemes, subscribeThemePresets, saveThemePreset };
-
-  const __initial = detectRequestedTheme();
-  if (__initial) {
-    try { window.applyThemeLocal(__initial); } catch (e) { console.warn('[theme] auto-init falló', e); }
-  }
-}
-
-export default THEMES_BUILTIN;
+  } catch
