@@ -446,5 +446,11 @@ if (typeof window !== 'undefined') {
     try { window.applyThemeLocal(__initial); } catch (e) { console.warn('[theme] auto-init falló', e); }
   }
 }
-
+window.addEventListener('error', e => {
+  console.error('[theme-error]', e.message, e.filename, e.lineno);
+});
+window.addEventListener('unhandledrejection', e => {
+  console.error('[theme-promise]', e.reason);
+});
+console.info('[theme] BASE_PREFIX =', BASE_PREFIX);
 export default THEMES_BUILTIN;
