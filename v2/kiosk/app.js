@@ -24,6 +24,52 @@ import * as DB from '../shared/db.js';
 import { ensureAuth } from '../shared/firebase.js';
 import { initThemeFromSettings, listThemes, applyThemeLocal } from '../shared/theme.js';
 import { setTheme } from '../shared/theme.js';
+
+// Carga de catálogo con fallback + pequeño cuadro DEBUG
+async function fetchCatalogWithFallback() {
+  try {
+    const r = await fetch(DATA_MENU_URL, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const cat = await r.json();
+    console.info('[kiosk] catálogo cargado:', {
+      burgers: cat?.burgers?.length||0,
+      minis:   cat?.minis?.length||0,
+      sides:   cat?.sides?.length||0,
+      drinks:  cat?.drinks?.length||0,
+    });
+    window.__CATALOG = cat;
+
+    // DEBUG visual no-invasivo (puedes borrar luego)
+    if (!document.querySelector('#__debugMenu')) {
+      const box = document.createElement('div');
+      box.id = '__debugMenu';
+      box.style.cssText = 'position:fixed;right:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;padding:10px 12px;border-radius:10px;font:14px/1.2 system-ui;z-index:99999;max-width:40vw';
+      box.innerHTML = `
+        <div style="opacity:.8">DEBUG menú</div>
+        <div>Burgers: <b>${cat?.burgers?.length||0}</b></div>
+        <div>Minis: <b>${cat?.minis?.length||0}</b></div>
+        <div>Sides: <b>${cat?.sides?.length||0}</b></div>
+        <div>Drinks: <b>${cat?.drinks?.length||0}</b></div>
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.2);margin:6px 0">
+        <div>${(cat?.burgers||[]).map(b=>`• ${b.name} — $${b.price}`).join('<br>')}</div>
+      `;
+      document.body.appendChild(box);
+    }
+
+    return cat;
+  } catch (e) {
+    console.error('[kiosk] error cargando catálogo', e);
+    // Fallback mínimo para que se vea algo
+    const fallback = {
+      burgers: [{ id:'starter', name:'Starter Burger', price:47 }],
+      minis:   [],
+      drinks:  [],
+      sides:   []
+    };
+    window.__CATALOG = fallback;
+    return fallback;
+  }
+}
 /* ======================= Recompensas (config) ======================= */
 // % ponderados (deben sumar ~1.0). Ajustables.
 const REWARDS = {
