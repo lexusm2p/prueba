@@ -71,17 +71,7 @@ async function fetchCatalogWithFallback() {
   }
 }
 // 🟢 Render visual temporal del menú (hasta que vuelva el layout oficial)
-if (window.__CATALOG?.burgers?.length) {
-  const zone = document.createElement('div');
-  zone.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:20px;';
-  window.__CATALOG.burgers.forEach(b => {
-    const card = document.createElement('div');
-    card.style.cssText = 'background:rgba(0,0,0,.6);border:2px solid #ff7a00;padding:10px;border-radius:10px;color:#fff;font-family:system-ui;text-align:center';
-    card.innerHTML = `<b>${b.name}</b><br>$${b.price}<br><small>${b.ingredients.slice(0,3).join(', ')}...</small>`;
-    zone.appendChild(card);
-  });
-  document.body.appendChild(zone);
-}
+
 /* ======================= Recompensas (config) ======================= */
 // % ponderados (deben sumar ~1.0). Ajustables.
 const REWARDS = {
