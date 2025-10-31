@@ -10,6 +10,11 @@
 // + Sistema de temas festivos mexicanos (local/global) — requiere /shared/theme.js y /shared/db.js
 // + Lealtad: registro sencillo + tarjeta coleccionable con chance Dorado (cupón -30%)
 // DEBUG MINIMO EN V2 (puedes borrarlo después)
+// 🔧 Forzar prefijo y ruta del menú (GitHub Pages)
+const __parts = location.pathname.split('/').filter(Boolean);   // ["prueba","v2","kiosk", ...]
+const __first = __parts[0] ? `/${__parts[0]}/` : '/';           // "/prueba/" o "/"
+export const DATA_MENU_URL = `${__first}data/menu.json`;        // ✅ /prueba/data/menu.json
+console.info('[kiosk] DATA_MENU_URL =', DATA_MENU_URL);
 console.log('[v2] app.js cargado');
 const el = document.getElementById('app');
 if (el) el.textContent = 'App.js cargado — iniciando módulos…';
