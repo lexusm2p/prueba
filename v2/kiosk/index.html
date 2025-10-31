@@ -1,81 +1,173 @@
-<!-- KIOSKO V2 · Markup mínimo requerido por app.js -->
-<header class="topbar">
-  <button id="brandTap" class="logo-btn" aria-label="Abrir panel PIN">SEVEN</button>
-  <div id="hhPill" class="hh-pill"><span id="hhText">HH OFF</span></div>
-  <div class="eta">⏱ ETA: <span id="etaTime" data-eta-text>7–10 min</span></div>
-</header>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Seven — Kiosko V2 (test)</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="stylesheet" href="../shared/styles.css" />
+  <link rel="stylesheet" href="../shared/styles.legacy.css" />
 
-<nav id="tabsBar" class="tabs">
-  <button id="btnMinis" class="tab is-active" aria-selected="true">Minis</button>
-  <button id="btnBig" class="tab" aria-selected="false">Big</button>
-  <!-- El botón "Combos" lo agrega app.js si hay combos -->
-</nav>
+  <style>
+    body {
+      background: #0f1422;
+      color: #fff8e6;
+      font-family: system-ui, Arial, sans-serif;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    #app {
+      padding: 16px;
+      font-size: 20px;
+    }
+    .err {
+      position: fixed;
+      left: 8px;
+      bottom: 8px;
+      background: #000a;
+      color: #ffb;
+      padding: 8px;
+      border: 1px solid #834;
+      max-width: 92vw;
+      white-space: pre-wrap;
+      z-index: 99999;
+    }
+    .badge {
+      position: fixed;
+      right: 8px;
+      bottom: 8px;
+      background: #111a;
+      border: 1px solid #345;
+      color: #9fe;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font: 12px/1.2 system-ui;
+      z-index: 9999;
+    }
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      padding: 32px;
+      max-width: 1200px;
+      margin: 80px auto;
+    }
+    .burger-card {
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid var(--accent, #ff7a00);
+      border-radius: 16px;
+      padding: 18px;
+      text-align: center;
+      color: var(--text, #fff);
+      font-family: var(--font-display, 'Press Start 2P');
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      cursor: pointer;
+    }
+    .burger-card:hover {
+      transform: scale(1.06);
+    }
+    #tabsBar {
+      display: flex;
+      justify-content: center;
+      margin-top: 60px;
+      gap: 10px;
+    }
+    .tab {
+      background: var(--panel1, #111);
+      border: 2px solid var(--accent, #ff7a00);
+      border-radius: 10px;
+      color: var(--text, #fff);
+      font-family: var(--font-display, 'Press Start 2P');
+      padding: 10px 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .tab.is-active {
+      background: var(--accent, #ff7a00);
+      color: #000;
+    }
+  </style>
+</head>
+<body data-theme="base">
+  <div id="app">Cargando Kiosko V2…</div>
 
-<main class="layout">
-  <!-- Columna principal -->
-  <section class="main">
-    <div id="cards" class="cards-grid"></div>
-  </section>
+  <div id="tabsBar" class="tabs">
+    <button id="btnMinis" class="tab is-active">Minis</button>
+    <button id="btnBig" class="tab">Big</button>
+  </div>
 
-  <!-- Laterales (opcionales pero recomendados) -->
-  <aside class="side">
-    <h4>Promos</h4>
-    <ul id="promoList" class="list"></ul>
+  <div id="cards" class="cards-grid"></div>
 
-    <h4 style="margin-top:10px">Upsell rápido</h4>
-    <ul id="upsellList" class="list"></ul>
+  <div id="cartBar" style="display:none">
+    <button id="openCart">
+      <span id="cartCount">0</span> · <span id="cartBarTotal">$0</span>
+    </button>
+  </div>
 
-    <h4 style="margin-top:10px">Más vendidos hoy</h4>
-    <ul id="rankToday" class="list"></ul>
-
-    <h4 style="margin-top:10px">Listos 🛎</h4>
-    <ul id="readyFeed" class="list"></ul>
-  </aside>
-</main>
-
-<!-- Barra de carrito -->
-<div id="cartBar" class="cartbar" style="display:none">
-  <button id="openCart" class="cartbtn">
-    <span id="cartCount">0 productos</span> · <span id="cartBarTotal">$0</span>
-  </button>
-</div>
-
-<!-- Modal producto -->
-<div id="modal" class="modal">
-  <div class="modal-card">
-    <div class="modal-head">
-      <h3 id="mTitle">Producto</h3>
-      <button id="mClose" class="btn ghost" aria-label="Cerrar">✕</button>
-    </div>
+  <div id="modal" class="modal">
     <div id="mBody"></div>
-    <div class="row" style="justify-content:space-between;margin-top:10px">
-      <div id="mTotal" class="price">$0</div>
-      <button id="mAdd" class="btn">Agregar</button>
-    </div>
+    <button id="mAdd"></button>
+    <span id="mTotal"></span>
+    <button id="mClose">×</button>
   </div>
-</div>
 
-<!-- Modal carrito -->
-<div id="cartModal" class="modal">
-  <div class="modal-card">
-    <div class="modal-head">
-      <h3>Tu pedido</h3>
-      <button id="cartClose" class="btn ghost" aria-label="Cerrar">✕</button>
-    </div>
+  <div id="cartModal" class="modal">
     <div id="cartBody"></div>
-    <div class="row" style="justify-content:space-between;margin-top:10px">
-      <div id="cartTotal" class="price">$0</div>
-      <button id="cartConfirm" class="btn">Confirmar pedido</button>
-    </div>
+    <div id="cartTotal"></div>
+    <button id="cartConfirm">Confirmar pedido</button>
+    <button id="cartClose">×</button>
   </div>
-</div>
 
-<!-- Info móvil compacta -->
-<section id="mobileInfo" class="mobile-info">
-  <div class="row">
-    <div id="miHHPill" class="hh-pill small"><span id="miHHText">OFF</span></div>
-    <div>ETA: <span id="miEta" data-eta-text>7–10 min</span></div>
-  </div>
-  <ul id="miPromos" class="list compact"></ul>
-  <div id="miTop" class="chips"></div>
-</section>
+  <script>
+    // 🔒 Protección temprana
+    if (typeof window !== 'undefined' && !window._freezeSettings) {
+      window._freezeSettings = (s) => Object.freeze({ ...(s || {}) });
+    }
+  </script>
+
+  <script>
+    // 🧩 Flags globales
+    const qs = new URLSearchParams(location.search);
+    const mode = (qs.get('mode') || 'online').toLowerCase();
+    window.MODE = {
+      OFFLINE: mode === 'offline',
+      READONLY: qs.get('ro') === '1',
+      LEGACY: qs.get('legacy') === '1'
+    };
+    // insignia
+    const badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.textContent = `mode=${mode}${window.MODE.READONLY ? ' · RO' : ''}${window.MODE.LEGACY ? ' · LEGACY' : ''}`;
+    document.body.appendChild(badge);
+  </script>
+
+  <script type="module" src="../shared/theme-guard.js"></script>
+
+  <script type="module">
+    // 🧱 Overlay de errores
+    const showErr = (label, val) => {
+      const b = document.createElement('div');
+      b.className = 'err';
+      let msg = val && typeof val === 'object' ? (val.message || JSON.stringify(val)) : String(val);
+      b.textContent = `[${label}] ${msg}`;
+      document.body.appendChild(b);
+    };
+    window.addEventListener('error', (e) => showErr('Error', e.message || e.error));
+    window.addEventListener('unhandledrejection', (e) =>
+      showErr('Promise', (e.reason && e.reason.message) || e.reason)
+    );
+
+    document.getElementById('app').textContent = 'Kiosko V2 base OK — cargando módulos…';
+
+    // Cargar configuración y app principal
+    import './config.js';
+    try {
+      await import('./legacy.js');
+    } catch (_) {}
+
+    await import('../shared/firebase.js');
+    await import('./app.js');
+  </script>
+</body>
+</html>
