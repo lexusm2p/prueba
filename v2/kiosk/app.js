@@ -391,6 +391,7 @@ async function init(){
   try { await ensureAuth(); } catch (e) { console.warn('anon auth fail', e); }
   // Intenta Firestore/DB; si falla, usa el JSON local de /data
   state.menu = await fetchCatalogWithFallback();
+  renderCards();
 
   startThemeWatcher();
   ensureDrinkPrices();
