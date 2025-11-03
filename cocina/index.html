@@ -7,10 +7,21 @@
   <title>Cocina — Seven de Burgers</title>
   <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../shared/styles.css">
+
+  <!-- Parche anti “saltos” de scroll -->
+  <style>
+    html, body { height: 100%; overscroll-behavior-y: contain; }
+    /* Cada columna actúa como límite de layout/paint y evita reflujo global */
+    .k-col { contain: layout paint; }
+    /* (opcional) altura mínima para que siempre haya área de scroll usable */
+    .k-col { min-height: 40vh; }
+    /* (opcional) el contenedor principal no cambia de tamaño por errores de layout */
+    .k-columns { contain: layout; }
+  </style>
 </head>
 <body class="shell">
 
-  <div class="container" role="main">
+  <div class="container" role="main" id="appRoot">
     <div class="row" style="margin-bottom:10px">
       <a class="badge" href="../kiosk/">Kiosko</a>
       <div class="right badge" aria-current="page">Cocina</div>
@@ -19,10 +30,22 @@
     <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
 
     <div class="k-columns">
-      <div class="card"><h2>Pendientes</h2><div id="col-pending"  class="col" aria-label="Órdenes pendientes"></div></div>
-      <div class="card"><h2>En preparación</h2><div id="col-progress" class="col" aria-label="Órdenes en preparación"></div></div>
-      <div class="card"><h2>Listos</h2><div id="col-ready"    class="col" aria-label="Órdenes listas para entregar"></div></div>
-      <div class="card"><h2>Por cobrar</h2><div id="col-bill"     class="col" aria-label="Órdenes por cobrar"></div></div>
+      <div class="card">
+        <h2>Pendientes</h2>
+        <div id="col-pending"  class="col k-col" aria-label="Órdenes pendientes"></div>
+      </div>
+      <div class="card">
+        <h2>En preparación</h2>
+        <div id="col-progress" class="col k-col" aria-label="Órdenes en preparación"></div>
+      </div>
+      <div class="card">
+        <h2>Listos</h2>
+        <div id="col-ready" class="col k-col" aria-label="Órdenes listas para entregar"></div>
+      </div>
+      <div class="card">
+        <h2>Por cobrar</h2>
+        <div id="col-bill" class="col k-col" aria-label="Órdenes por cobrar"></div>
+      </div>
     </div>
   </div>
 
