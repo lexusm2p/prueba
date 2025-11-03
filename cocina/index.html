@@ -2,23 +2,61 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"/>
   <meta name="theme-color" content="#0b1220"/>
   <title>Cocina — Seven de Burgers</title>
   <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../shared/styles.css">
 
-  <!-- Parche anti “saltos” de scroll -->
+  <!-- Parche anti “saltos” de scroll y viewport inestable -->
   <style>
-    html, body { height: 100%; overscroll-behavior-y: contain; }
+    /* Viewport estable (fija alto real del navegador móvil) */
+    html, body {
+      height: 100%;
+      overscroll-behavior-y: contain;
+      scroll-behavior: auto !important;
+    }
+
+    :root {
+      --vh: 1vh;
+    }
+
+    .shell, .container {
+      min-height: calc(var(--vh, 1vh) * 100);
+    }
+
     /* Cada columna actúa como límite de layout/paint y evita reflujo global */
-    .k-col { contain: layout paint; }
-    /* (opcional) altura mínima para que siempre haya área de scroll usable */
-    .k-col { min-height: 40vh; }
-    /* (opcional) el contenedor principal no cambia de tamaño por errores de layout */
-    .k-columns { contain: layout; }
+    .k-col {
+      contain: layout paint;
+      overflow-anchor: none;
+      will-change: contents;
+      min-height: 40vh;
+    }
+
+    /* El contenedor principal no cambia de tamaño por errores de layout */
+    .k-columns {
+      contain: layout;
+    }
+
+    /* Tarjetas contenidas, evita repintado global */
+    .k-card {
+      contain: content;
+    }
   </style>
+
+  <script>
+    // Fija --vh al alto real visible (para evitar saltos en móviles)
+    function setVH() {
+      const h = (window.visualViewport?.height || window.innerHeight) * 0.01;
+      document.documentElement.style.setProperty('--vh', h + 'px');
+    }
+    setVH();
+    window.addEventListener('resize', setVH, { passive: true });
+    window.addEventListener('orientationchange', setVH, { passive: true });
+  </script>
 </head>
+
 <body class="shell">
 
   <div class="container" role="main" id="appRoot">
@@ -32,16 +70,19 @@
     <div class="k-columns">
       <div class="card">
         <h2>Pendientes</h2>
-        <div id="col-pending"  class="col k-col" aria-label="Órdenes pendientes"></div>
+        <div id="col-pending" class="col k-col" aria-label="Órdenes pendientes"></div>
       </div>
+
       <div class="card">
         <h2>En preparación</h2>
         <div id="col-progress" class="col k-col" aria-label="Órdenes en preparación"></div>
       </div>
+
       <div class="card">
         <h2>Listos</h2>
         <div id="col-ready" class="col k-col" aria-label="Órdenes listas para entregar"></div>
       </div>
+
       <div class="card">
         <h2>Por cobrar</h2>
         <div id="col-bill" class="col k-col" aria-label="Órdenes por cobrar"></div>
@@ -57,24 +98,42 @@
   <script nomodule src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
   <script nomodule src="https://cdn.jsdelivr.net/npm/whatwg-fetch@3/dist/fetch.umd.js"></script>
   <script nomodule>
-  // console seguro
-  (function(){ if(!window.console){window.console={};['log','warn','error','info'].forEach(function(m){console[m]=function(){}});} })();
-  // Element.closest
-  if (!Element.prototype.closest) {
-    Element.prototype.closest = function(s) {
-      var el = this; if(!document.documentElement.contains(el)) return null;
-      do { if(el.matches && el.matches(s)) return el; el = el.parentElement || el.parentNode; } while (el !== null && el.nodeType === 1);
-      return null;
+    // console seguro
+    (function(){
+      if(!window.console){
+        window.console = {};
+        ['log','warn','error','info'].forEach(function(m){console[m]=function(){}});
+      }
+    })();
+
+    // Element.closest
+    if (!Element.prototype.closest) {
+      Element.prototype.closest = function(s) {
+        var el = this; if(!document.documentElement.contains(el)) return null;
+        do { if(el.matches && el.matches(s)) return el; el = el.parentElement || el.parentNode; }
+        while (el !== null && el.nodeType === 1);
+        return null;
+      };
+    }
+
+    // NodeList.forEach
+    if (window.NodeList && !NodeList.prototype.forEach) {
+      NodeList.prototype.forEach = Array.prototype.forEach;
+    }
+
+    // Object.assign
+    if (!Object.assign) Object.assign = function(t){
+      for(var i=1;i<arguments.length;i++){
+        var s=arguments[i]||{};
+        for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) t[k]=s[k]; }
+      }
+      return t;
     };
-  }
-  // NodeList.forEach
-  if (window.NodeList && !NodeList.prototype.forEach) {
-    NodeList.prototype.forEach = Array.prototype.forEach;
-  }
-  // Object.assign
-  if (!Object.assign) Object.assign = function(t){ for(var i=1;i<arguments.length;i++){ var s=arguments[i]||{}; for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) t[k]=s[k]; } } return t; };
-  // String.includes
-  if (!String.prototype.includes) { String.prototype.includes = function(s, i){ return this.indexOf(s, i||0) !== -1; }; }
+
+    // String.includes
+    if (!String.prototype.includes) {
+      String.prototype.includes = function(s, i){ return this.indexOf(s, i||0) !== -1; };
+    }
   </script>
 
   <!-- Libs/DB en modo legacy -->
