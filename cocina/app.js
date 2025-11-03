@@ -1,4 +1,4 @@
-// Cocina — tablero de preparación
+// Cocina — tablero de preparación (anti-salto de scroll + ticker de timers)
 // Suscribe pedidos (preferente: DB.subscribeKitchenOrders).
 // Acciones optimistas: tomar, listo, entregar, cobrar, editar, cancelar.
 // Modo PRUEBA: no escribe en Firestore.
@@ -87,12 +87,6 @@ const toMs = (t)=> {
 };
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
-const fmtMMSS = (ms)=>{
-  const s = Math.max(0, Math.floor(ms/1000));
-  const m = Math.floor(s/60);
-  const ss = s % 60;
-  return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-};
 function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -145,21 +139,44 @@ function extractTimestamps(patch){
   return t;
 }
 
+/* ================== Render control (anti-salto scroll) ================== */
+let RENDER_PENDING = false;
+let USER_SCROLLING = false;
+let SCROLL_RESTORE = 0;
+const docEl = document.scrollingElement || document.documentElement;
+
+function preserveScrollStart(){ SCROLL_RESTORE = docEl.scrollTop; }
+function preserveScrollEnd(){ if (!USER_SCROLLING) docEl.scrollTo({ top: SCROLL_RESTORE, behavior:'auto' }); }
+
+['touchstart','mousedown','wheel'].forEach(e=>{
+  document.addEventListener(e, ()=>{ USER_SCROLLING = true; }, {passive:true});
+});
+['touchend','mouseup','mouseleave','blur'].forEach(e=>{
+  document.addEventListener(e, ()=> setTimeout(()=>{ USER_SCROLLING=false; }, 250));
+});
+
+function scheduleRender(){
+  if (USER_SCROLLING) return;
+  if (RENDER_PENDING) return;
+  RENDER_PENDING = true;
+  requestAnimationFrame(()=>{
+    RENDER_PENDING = false;
+    preserveScrollStart();
+    try { render(CURRENT_LIST); }
+    finally { preserveScrollEnd(); }
+  });
+}
+
 /* ================== Data stream (auth + subscribe) ================== */
-let __streamLocked = false;
 let unsub = null;
 
 async function initKitchen(){
   try { await ensureAuth(); } catch(e){ console.warn('[cocina] anon auth fail', e); }
+  let tickerStarted = false;
   unsub = subscribeKitchenShim((orders = [])=>{
-    if (__streamLocked) return;
-    __streamLocked = true;
-    try {
-      CURRENT_LIST = mergeByNewest(orders);
-      render(CURRENT_LIST);
-    } finally {
-      queueMicrotask(()=>{ __streamLocked = false; });
-    }
+    CURRENT_LIST = mergeByNewest(orders);
+    scheduleRender();
+    if (!tickerStarted){ startTicker(); tickerStarted = true; }
   });
 }
 
@@ -196,7 +213,7 @@ function render(list){
   setCol('col-bill',     bill);
 }
 
-// 🧠 Perf: pintado por lotes para evitar bloqueos largos cuando hay 10–20+ tarjetas
+// Pintado por lotes
 function setCol(id, arr){
   const el = document.getElementById(id);
   if (!el) return;
@@ -206,7 +223,6 @@ function setCol(id, arr){
 
 /* ================== Card ================== */
 function renderCard(o = {}) {
-  // ===== Items normalizados (compatible con órdenes antiguas) =====
   const items = Array.isArray(o.items) && o.items.length
     ? o.items
     : (o.item ? [{
@@ -216,13 +232,11 @@ function renderCard(o = {}) {
         lineTotal: (o.item?.price || 0) * (o.qty || 1)
       }] : []);
 
-  // ===== Meta (pickup/mesa) =====
   let meta = '—';
   if (o.orderType === 'dinein') meta = `Mesa: <b>${escapeHtml(o.table || '?')}</b>`;
   else if (o.orderType === 'pickup') meta = 'Pickup';
   else if (o.orderType) meta = escapeHtml(o.orderType);
 
-  // ===== Totales (subtotal ya trae descuento combo si existe) =====
   const sub = (typeof o.subtotal === 'number')
     ? Number(o.subtotal || 0)
     : items.reduce((s, it) => s + (typeof it.lineTotal === 'number'
@@ -230,52 +244,40 @@ function renderCard(o = {}) {
         : (Number(it.unitPrice || 0) * Number(it.qty || 1))), 0);
   const total = sub + Number(o.tip || 0);
 
-  // ===== Datos contacto =====
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
-  // ===== Tiempos (evita Date() costosa de más) =====
-  const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
-  const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
-  const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
-  const tNow     = Date.now();
-  const totalRunMs  = (tReady || tNow) - (tCreated || tNow);
-  const inKitchenMs = (tReady || tNow) - (tStarted || tNow);
+  // Tiempos con data-attrs para ticker
+  const tCreated = toMs(o.createdAt || o.timestamps?.createdAt) || Date.now();
+  const tStarted = toMs(o.startedAt || o.timestamps?.startedAt) || 0;
+  const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt)   || 0;
 
   const timerHtml = `
     <div class="muted small mono" style="margin-top:6px">
-      ⏱️ Total: <b>${fmtMMSS(totalRunMs)}</b>
-      ${tStarted ? ` · 👩‍🍳 En cocina: <b>${fmtMMSS(inKitchenMs)}</b>` : ''}
+      ⏱️ Total: <b><span class="t-total" data-t0="${tCreated}" data-t1="${tReady||''}">00:00</span></b>
+      ${tStarted ? ` · 👩‍🍳 En cocina: <b><span class="t-kitchen" data-t0="${tStarted}" data-t1="${tReady||''}">00:00</span></b>` : ''}
     </div>
   `;
 
-  // ===== Resumen Happy Hour =====
   const hh = o.hh || {};
   const hhSummary = (hh.enabled && Number(hh.totalDiscount || 0) > 0)
     ? `<span class="k-badge">HH -${Number(hh.discountPercent || 0)}% · ahorro ${money(hh.totalDiscount)}</span>`
     : '';
 
-  // ===== Resumen Recompensas (combo minis / mini dog) =====
   const rw = o.rewards || {};
   const rwDiscount = (rw.type === 'discount' && Number(rw.discount || 0) > 0)
-    ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount || 0))}</span>`
-    : '';
+    ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount || 0))}</span>` : '';
   const rwMiniDog = (rw.type === 'miniDog' && rw.miniDog)
-    ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>`
-    : '';
+    ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>` : '';
   const rewardsSummary = `${rwDiscount} ${rwMiniDog}`.trim();
 
-  // ===== Items HTML =====
   const itemsHtml = items.map(it => {
     const ingrBadges = (it.baseIngredients || [])
       .map(i => `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
 
-    // Aliases + compat (adds/removes/surprise)
     const extraAdds = (it.adds || it.extras?.adds || it.extras?.ingredients || []);
     const extraRems = (it.removes || it.extras?.removes || []);
-    const surprise  = it.extras?.surpriseSauce
-      ? [`Sorpresa 🎁: ${it.extras.surpriseSauce}`]
-      : [];
+    const surprise  = it.extras?.surpriseSauce ? [`Sorpresa 🎁: ${it.extras.surpriseSauce}`] : [];
 
     const extrasBadges = [
       ...surprise.map(s => `<div class="k-badge">${escapeHtml(s)}</div>`),
@@ -298,7 +300,6 @@ function renderCard(o = {}) {
       </div>`;
   }).join('');
 
-  // ===== Acciones disponibles =====
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
@@ -311,7 +312,6 @@ function renderCard(o = {}) {
       ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
 
-  // ===== Cabecera (total + badges HH/Recompensas + pago) =====
   const paidBadge = o.paid ? '· <span class="k-badge ok">Pagado</span>' : '';
   const payMethodBadge = (o.paid && o.payMethod)
     ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>`
@@ -342,7 +342,6 @@ document.addEventListener('click', async (e)=>{
   const OPTS = { training: TRAIN };
 
   btn.disabled = true;
-  // 🛡️ Failsafe por si render/stream tarda y el botón queda “muerto”
   const reenable = ()=> { try{ btn.disabled = false; }catch{} };
   const fsId = setTimeout(reenable, 1200);
 
@@ -354,9 +353,8 @@ document.addEventListener('click', async (e)=>{
       const order = CURRENT_LIST.find(x=>x.id===id);
       if(!TRAIN && order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
 
-      // Optimista
       patchLocal(id, { status: Status.IN_PROGRESS, startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
-      render(CURRENT_LIST);
+      scheduleRender();
 
       if (!TRAIN) {
         await setStatusShim(id, Status.IN_PROGRESS, OPTS);
@@ -368,7 +366,7 @@ document.addEventListener('click', async (e)=>{
 
     if (a==='ready'){
       patchLocal(id, { status: Status.READY, readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
-      render(CURRENT_LIST);
+      scheduleRender();
       if (!TRAIN) {
         await setStatusShim(id, Status.READY, OPTS);
         await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
@@ -379,7 +377,7 @@ document.addEventListener('click', async (e)=>{
 
     if (a==='deliver'){
       patchLocal(id, { status: Status.DELIVERED, deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
-      render(CURRENT_LIST);
+      scheduleRender();
       if (!TRAIN) {
         await setStatusShim(id, Status.DELIVERED, OPTS);
         await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
@@ -396,7 +394,7 @@ document.addEventListener('click', async (e)=>{
       const payMethod = String(method||'efectivo').toLowerCase();
 
       patchLocal(id, { paid: true, paidAt: now(), payMethod, totalCharged: Number(total), updatedAt: now(), 'timestamps.updatedAt': now() });
-      render(CURRENT_LIST);
+      scheduleRender();
 
       if (!TRAIN) {
         await updateOrderShim(id, {
@@ -419,7 +417,7 @@ document.addEventListener('click', async (e)=>{
       const notes = prompt('Editar notas generales para cocina:', order.notes||'');
       if (notes!==null){
         patchLocal(id, { notes, updatedAt: now(), 'timestamps.updatedAt': now() });
-        render(CURRENT_LIST);
+        scheduleRender();
         if (!TRAIN) {
           await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
         }
@@ -438,7 +436,7 @@ document.addEventListener('click', async (e)=>{
       if (!trimmed) { alert('Por favor escribe un motivo.'); return; }
 
       patchLocal(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now(), updatedAt: now(), 'timestamps.updatedAt': now() });
-      render(CURRENT_LIST);
+      scheduleRender();
 
       if (!TRAIN) {
         await updateOrderShim(id, {
@@ -466,11 +464,33 @@ document.addEventListener('click', async (e)=>{
   }
 });
 
-/* ========== Refresco ligero de timers ========== */
-setInterval(()=>{
-  if (!CURRENT_LIST.length) return;
-  render(CURRENT_LIST);
-}, 20000); // 20s: reduce trabajo cuando hay muchas tarjetas
+/* ================== Ticker ligero (actualiza ⏱️ sin re-render) ================== */
+let __T = null;
+function startTicker(){
+  if (__T) return;
+  const fmt = (ms)=>{
+    const s = Math.max(0, Math.floor(ms/1000));
+    const m = Math.floor(s/60), ss = s%60;
+    return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  };
+  const tick = ()=>{
+    const now = Date.now();
+
+    document.querySelectorAll('.t-total[data-t0]').forEach(el=>{
+      const t0 = Number(el.dataset.t0||0);
+      const t1 = Number(el.dataset.t1||0);
+      el.textContent = fmt((t1 && t1>t0) ? (t1 - t0) : (now - t0));
+    });
+
+    document.querySelectorAll('.t-kitchen[data-t0]').forEach(el=>{
+      const t0 = Number(el.dataset.t0||0);
+      const t1 = Number(el.dataset.t1||0);
+      el.textContent = fmt((t1 && t1>t0) ? (t1 - t0) : (now - t0));
+    });
+  };
+  tick();
+  __T = setInterval(tick, 1000);
+}
 
 /* ========== Limpieza ========== */
 window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} });
