@@ -1,4 +1,7 @@
-// /cocina/app.js — Kitchen board (anti-salto + diff render + timers ligeros)
+// Cocina — tablero de preparación
+// Suscribe pedidos (preferente: DB.subscribeKitchenOrders).
+// Acciones optimistas: tomar, listo, entregar, cobrar, editar, cancelar.
+// Modo PRUEBA: no escribe en Firestore.
 
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
@@ -18,7 +21,10 @@ function paintTrainingBadge(){
     b = document.createElement('button');
     b.id = 'kitchenTrainingBadge';
     b.className = 'btn tiny';
-    Object.assign(b.style, { position:'fixed', left:'14px', bottom:'14px', zIndex:9999, borderRadius:'999px', opacity:.92 });
+    Object.assign(b.style, {
+      position:'fixed', left:'14px', bottom:'14px', zIndex:9999,
+      borderRadius:'999px', opacity:.92
+    });
     b.addEventListener('click', ()=> setTraining(!isTraining()));
     document.body.appendChild(b);
   }
@@ -45,6 +51,7 @@ async function setStatusShim(id, status, opts){
 async function updateOrderShim(id, patch, opts){
   if (typeof DB.updateOrder === 'function')  return DB.updateOrder(id, patch, opts);
   if (typeof DB.upsertOrder === 'function')  return DB.upsertOrder({ id, ...patch }, opts);
+  console.warn('[cocina] updateOrder no disponible; patch ignorado:', patch);
 }
 async function archiveDeliveredShim(id, finalStatus='DONE', opts){
   if (typeof DB.archiveDelivered === 'function') return DB.archiveDelivered(id, opts);
@@ -57,7 +64,15 @@ async function applyInventoryForOrderShim(order, opts){
 }
 
 /* ================== Constantes ================== */
-const Status = { PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY', DELIVERED:'DELIVERED', CANCELLED:'CANCELLED', DONE:'DONE', PAID:'PAID' };
+const Status = {
+  PENDING: 'PENDING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  READY: 'READY',
+  DELIVERED: 'DELIVERED',
+  CANCELLED: 'CANCELLED',
+  DONE: 'DONE',
+  PAID: 'PAID'
+};
 
 let CURRENT_LIST = [];
 const LOCALLY_TAKEN = new Set();
@@ -73,14 +88,29 @@ const toMs = (t)=> {
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
 const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
 const fmtMMSS = (ms)=>{
-  const s = Math.max(0, Math.floor(ms/1000)); const m = Math.floor(s/60); const ss = s % 60;
+  const s = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(s/60);
+  const ss = s % 60;
   return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
 };
-function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeHtml(s=''){
+  return String(s).replace(/[&<>"']/g, m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
 
 /* ================== Dedupe & merge ================== */
 function updatedAtMs(o){
-  return toMs(o.updatedAt || o.timestamps?.updatedAt || o.readyAt || o.timestamps?.readyAt || o.startedAt || o.timestamps?.startedAt || o.createdAt || o.timestamps?.createdAt);
+  return toMs(
+    o.updatedAt
+    || o.timestamps?.updatedAt
+    || o.readyAt
+    || o.timestamps?.readyAt
+    || o.startedAt
+    || o.timestamps?.startedAt
+    || o.createdAt
+    || o.timestamps?.createdAt
+  );
 }
 function mergeByNewest(list){
   const byId = new Map();
@@ -100,10 +130,19 @@ function patchLocal(id, patch){
     changed = true;
     return { ...o, ...patch, timestamps: { ...(o.timestamps||{}), ...extractTimestamps(patch) } };
   });
-  if (!changed) CURRENT_LIST.push({ id, ...patch, timestamps: extractTimestamps(patch) });
+  if (!changed) {
+    CURRENT_LIST.push({ id, ...patch, timestamps: extractTimestamps(patch) });
+  }
 }
 function extractTimestamps(patch){
-  const t = {}; for (const k of Object.keys(patch||{})){ if (k.startsWith('timestamps.')) t[k.split('.').slice(1).join('.')] = patch[k]; } return t;
+  const t = {};
+  for (const k of Object.keys(patch||{})){
+    if (k.startsWith('timestamps.')){
+      const sub = k.split('.').slice(1).join('.');
+      t[sub] = patch[k];
+    }
+  }
+  return t;
 }
 
 /* ================== Data stream (auth + subscribe) ================== */
@@ -129,7 +168,9 @@ document.addEventListener('DOMContentLoaded', initKitchen);
 function calcSubtotal(o={}){
   const items = Array.isArray(o.items) ? o.items : [];
   return items.reduce((s,it)=>{
-    const line = (typeof it.lineTotal === 'number') ? Number(it.lineTotal||0) : (Number(it.unitPrice||0) * Number(it.qty||1));
+    const line = (typeof it.lineTotal === 'number')
+      ? Number(it.lineTotal||0)
+      : (Number(it.unitPrice||0) * Number(it.qty||1));
     return s + line;
   },0);
 }
@@ -139,130 +180,162 @@ function calcTotal(o={}){
   return sub + tip;
 }
 
-/* ================== Render sin saltos ================== */
-const COL_IDS = { PENDING:'col-pending', IN_PROGRESS:'col-progress', READY:'col-ready', BILL:'col-bill' };
-const RENDER_CACHE = { 'col-pending': new Map(), 'col-progress': new Map(), 'col-ready': new Map(), 'col-bill': new Map() };
-const SCROLL_STATE = { }; // id -> {top, t}
+/* ========== Render estable (sin saltos) ========== */
 
-function render(list){
-  // Split por estado
-  const by = (list||[]).reduce((acc,o)=>{
+// Utilidad: convierte HTML string a Element sin tocar innerHTML del contenedor
+function htmlToElement(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+// Hash barato para detectar cambios visuales en una tarjeta
+function djb2(str) {
+  let h = 5381, i = str.length;
+  while (i) h = (h * 33) ^ str.charCodeAt(--i);
+  return (h >>> 0).toString(36);
+}
+
+function isNearBottom(el, px = 80) {
+  return (el.scrollHeight - el.clientHeight - el.scrollTop) <= px;
+}
+
+function attachScrollGuards(el) {
+  if (!el || el.__guards) return;
+  el.__guards = true;
+  let t;
+  const onScrollStart = () => {
+    el.dataset.userScrolling = '1';
+    clearTimeout(t);
+    t = setTimeout(() => { el.dataset.userScrolling = '0'; }, 900);
+  };
+  ['wheel','touchstart','touchmove','pointerdown','scroll'].forEach(ev =>
+    el.addEventListener(ev, onScrollStart, { passive: true })
+  );
+  el.style.overflowAnchor = 'none';
+  el.style.scrollBehavior = 'auto';
+}
+
+function keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop) {
+  const afterHeight = el.scrollHeight;
+  if (wasNearBottom) {
+    el.scrollTop = Math.max(0, afterHeight - el.clientHeight);
+  } else {
+    const delta = afterHeight - beforeHeight;
+    el.scrollTop = Math.max(0, beforeTop + delta);
+  }
+}
+
+// Parcha columna sin reemplazar todo el DOM
+function patchCol(id, list) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  attachScrollGuards(el);
+
+  const beforeTop = el.scrollTop;
+  const beforeHeight = el.scrollHeight;
+  const wasNearBottom = isNearBottom(el);
+
+  const currentChildren = Array.from(el.children).filter(n => n.matches && n.matches('.k-card, .empty'));
+  const byId = new Map();
+  currentChildren.forEach((node) => {
+    const nid = node.dataset?.id || null;
+    if (nid) byId.set(nid, { node });
+  });
+
+  if (!list.length) {
+    if (!(currentChildren.length === 1 && currentChildren[0].classList.contains('empty'))) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = '—';
+      el.replaceChildren(empty);
+    }
+    return;
+  }
+
+  const desiredNodes = [];
+
+  for (let i = 0; i < list.length; i++) {
+    const o = list[i];
+    const id = o.id;
+    const html = renderCard(o);
+    const hash = djb2(html);
+
+    const found = byId.get(id);
+    if (found) {
+      const n = found.node;
+      if (n.dataset.hash !== hash) {
+        const fresh = htmlToElement(html);
+        fresh.dataset.hash = hash;
+        n.replaceWith(fresh);
+        desiredNodes.push(fresh);
+        byId.set(id, { node: fresh }); // actualizar referencia
+      } else {
+        desiredNodes.push(n);
+      }
+      byId.delete(id);
+    } else {
+      const n = htmlToElement(html);
+      n.dataset.hash = hash;
+      desiredNodes.push(n);
+    }
+  }
+
+  // elimina sobrantes
+  for (const { node } of byId.values()) {
+    if (node && node.parentNode === el) node.remove();
+  }
+
+  // reordenar solo si es necesario
+  const currentOrder = Array.from(el.children);
+  const needReorder =
+    desiredNodes.length !== currentOrder.length ||
+    desiredNodes.some((n, i) => n !== currentOrder[i]);
+
+  if (needReorder) {
+    const frag = document.createDocumentFragment();
+    desiredNodes.forEach(n => frag.appendChild(n));
+    el.replaceChildren(frag);
+  }
+
+  keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop);
+}
+
+// Render que usa patchCol (sin innerHTML masivo)
+function render(list) {
+  const by = (list || []).reduce((acc, o) => {
     const s = (o?.status || Status.PENDING).toUpperCase();
     (acc[s] ||= []).push(o);
     return acc;
-  },{});
-  const bill = (by.DELIVERED||[]).filter(o => !o.paid);
+  }, {});
 
-  patchCol(COL_IDS.PENDING,   by.PENDING||[]);
-  patchCol(COL_IDS.IN_PROGRESS, by.IN_PROGRESS||[]);
-  patchCol(COL_IDS.READY,     by.READY||[]);
-  patchCol(COL_IDS.BILL,      bill);
-
-  // tras parchear, solo actualizamos timers en vivo
-  tickTimers();
-}
-
-/** Render “diff” por columna sin vaciar toda la lista. */
-function patchCol(colId, arr){
-  const el = document.getElementById(colId);
-  if (!el) return;
-  const cache = RENDER_CACHE[colId];
-  const nowTs = Date.now();
-
-  // Guardamos scroll y desactivamos anclado durante parcheo
-  const prevTop = el.scrollTop;
-  const prevBehavior = el.style.scrollBehavior;
-  el.style.scrollBehavior = 'auto';
-  el.style.overflowAnchor = 'none';
-
-  // Índice actual en DOM
-  const existing = new Map();
-  Array.from(el.children).forEach(node=>{
-    const id = node?.dataset?.id;
-    if (id) existing.set(id, node);
-  });
-
-  // Clave: orden final
-  const nextOrderIds = arr.map(o=>o.id);
-
-  // 1) Remover los que ya no están
-  existing.forEach((node, id)=>{
-    if (!cache.has(id) || !nextOrderIds.includes(id)) {
-      node.remove();
-      cache.delete(id);
-    }
-  });
-
-  // 2) Insertar/actualizar en orden
-  let anchor = null;
-  for (const o of arr){
-    const id = o.id;
-    let card = existing.get(id);
-    const html = renderCard(o);
-
-    if (!card){
-      card = htmlToNode(html);
-      // insertar en posición
-      if (anchor) anchor.after(card); else el.prepend(card);
-    }else{
-      // Solo actualiza si cambió algo “importante”
-      const prevSig = cache.get(id);
-      const nextSig = signature(o);
-      if (prevSig !== nextSig){
-        // Reemplaza contenido interno pero conserva el mismo nodo (evita reset scroll)
-        card.innerHTML = htmlToNode(html).innerHTML;
-      }
-      // Reordenar si es necesario
-      if (anchor && anchor.nextSibling !== card){
-        anchor.after(card);
-      }
-    }
-    cache.set(id, signature(o));
-    anchor = card;
-  }
-
-  // restaurar scroll
-  if (Math.abs(el.scrollTop - prevTop) > 1) el.scrollTop = prevTop;
-  el.style.scrollBehavior = prevBehavior || '';
-  el.style.overflowAnchor = '';
-  // Guardar estado para heurística anti-repintado mientras el usuario hace scroll
-  SCROLL_STATE[colId] = { top: el.scrollTop, t: nowTs };
-}
-
-function htmlToNode(html){
-  const tpl = document.createElement('template');
-  tpl.innerHTML = html.trim();
-  return tpl.content.firstElementChild;
-}
-function signature(o){
-  // firma estable sin campos de tiempo para no repintar por timers
-  return JSON.stringify({
-    id:o.id, status:o.status, paid:o.paid, payMethod:o.payMethod||null,
-    subtotal:o.subtotal||calcSubtotal(o), tip:o.tip||0,
-    items:(o.items||[]).map(i=>({n:i.name,q:i.qty, ld:i.lineTotal, up:i.unitPrice, ex:i.extras, sd:i.salsaDefault, sc:i.salsaCambiada, notes:i.notes})),
-    notes:o.notes||'',
-    orderType:o.orderType||'', table:o.table||'',
-    hh:o.hh?.totalDiscount||0, hhP:o.hh?.discountPercent||0,
-    rw:o.rewards?.type||'', rwD:o.rewards?.discount||0, rwM:o.rewards?.miniDog||false
-  });
+  patchCol('col-pending',  by.PENDING || []);
+  patchCol('col-progress', by.IN_PROGRESS || []);
+  patchCol('col-ready',    by.READY || []);
+  const bill = (by.DELIVERED || []).filter(o => !o.paid);
+  patchCol('col-bill',     bill);
 }
 
 /* ================== Card ================== */
 function renderCard(o = {}) {
+  // ===== Items normalizados (compatible con órdenes antiguas) =====
   const items = Array.isArray(o.items) && o.items.length
     ? o.items
     : (o.item ? [{
-        id:o.item.id, name:o.item.name, qty:o.qty||1, unitPrice:o.item.price||0,
-        baseIngredients:o.baseIngredients||[], salsaDefault:o.salsaDefault||null,
-        salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||'',
-        lineTotal:(o.item?.price||0) * (o.qty||1)
+        id: o.item.id, name: o.item.name, qty: o.qty || 1, unitPrice: o.item.price || 0,
+        baseIngredients: o.baseIngredients || [], salsaDefault: o.salsaDefault || null,
+        salsaCambiada: o.salsaCambiada || null, extras: o.extras || {}, notes: o.notes || '',
+        lineTotal: (o.item?.price || 0) * (o.qty || 1)
       }] : []);
 
+  // ===== Meta (pickup/mesa) =====
   let meta = '—';
   if (o.orderType === 'dinein') meta = `Mesa: <b>${escapeHtml(o.table || '?')}</b>`;
   else if (o.orderType === 'pickup') meta = 'Pickup';
   else if (o.orderType) meta = escapeHtml(o.orderType);
 
+  // ===== Totales (subtotal ya trae descuento combo si existe) =====
   const sub = (typeof o.subtotal === 'number')
     ? Number(o.subtotal || 0)
     : items.reduce((s, it) => s + (typeof it.lineTotal === 'number'
@@ -270,30 +343,53 @@ function renderCard(o = {}) {
         : (Number(it.unitPrice || 0) * Number(it.qty || 1))), 0);
   const total = sub + Number(o.tip || 0);
 
+  // ===== Datos contacto =====
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
+  // ===== Tiempos (evita Date() costosa de más) =====
   const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
   const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
   const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
+  const tNow     = Date.now();
+  const totalRunMs  = (tReady || tNow) - (tCreated || tNow);
+  const inKitchenMs = (tReady || tNow) - (tStarted || tNow);
 
+  const timerHtml = `
+    <div class="muted small mono" style="margin-top:6px">
+      ⏱️ Total: <b>${fmtMMSS(totalRunMs)}</b>
+      ${tStarted ? ` · 👩‍🍳 En cocina: <b>${fmtMMSS(inKitchenMs)}</b>` : ''}
+    </div>
+  `;
+
+  // ===== Resumen Happy Hour =====
   const hh = o.hh || {};
   const hhSummary = (hh.enabled && Number(hh.totalDiscount || 0) > 0)
     ? `<span class="k-badge">HH -${Number(hh.discountPercent || 0)}% · ahorro ${money(hh.totalDiscount)}</span>`
     : '';
 
+  // ===== Resumen Recompensas (combo minis / mini dog) =====
   const rw = o.rewards || {};
   const rwDiscount = (rw.type === 'discount' && Number(rw.discount || 0) > 0)
-    ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount || 0))}</span>` : '';
+    ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount || 0))}</span>`
+    : '';
   const rwMiniDog = (rw.type === 'miniDog' && rw.miniDog)
-    ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>` : '';
+    ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>`
+    : '';
   const rewardsSummary = `${rwDiscount} ${rwMiniDog}`.trim();
 
+  // ===== Items HTML =====
   const itemsHtml = items.map(it => {
-    const ingrBadges = (it.baseIngredients || []).map(i => `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
+    const ingrBadges = (it.baseIngredients || [])
+      .map(i => `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
+
+    // Aliases + compat (adds/removes/surprise)
     const extraAdds = (it.adds || it.extras?.adds || it.extras?.ingredients || []);
     const extraRems = (it.removes || it.extras?.removes || []);
-    const surprise  = it.extras?.surpriseSauce ? [`Sorpresa 🎁: ${it.extras.surpriseSauce}`] : [];
+    const surprise  = it.extras?.surpriseSauce
+      ? [`Sorpresa 🎁: ${it.extras.surpriseSauce}`]
+      : [];
+
     const extrasBadges = [
       ...surprise.map(s => `<div class="k-badge">${escapeHtml(s)}</div>`),
       ...(it.extras?.sauces || []).map(s => `<div class="k-badge">Aderezo: ${escapeHtml(s)}</div>`),
@@ -315,6 +411,7 @@ function renderCard(o = {}) {
       </div>`;
   }).join('');
 
+  // ===== Acciones disponibles =====
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
@@ -327,8 +424,11 @@ function renderCard(o = {}) {
       ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
 
-  // data-* para timers sin repintar
-  const timers = `data-created="${tCreated||0}" data-started="${tStarted||0}" data-ready="${tReady||0}"`;
+  // ===== Cabecera (total + badges HH/Recompensas + pago) =====
+  const paidBadge = o.paid ? '· <span class="k-badge ok">Pagado</span>' : '';
+  const payMethodBadge = (o.paid && o.payMethod)
+    ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>`
+    : '';
 
   return `
 <article class="k-card" data-id="${o.id}">
@@ -336,42 +436,15 @@ function renderCard(o = {}) {
     Cliente: <b>${escapeHtml(o.customer || '-')}</b>${phoneTxt} · ${meta}
   </div>
   <div class="muted small mono" style="margin-top:4px">
-    Total por cobrar: <b>${money(total)}</b>
-    ${o.paid ? '· <span class="k-badge ok">Pagado</span>' : ''}${o.paid && o.payMethod ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>` : ''}
+    Total por cobrar: <b>${money(total)}</b> ${paidBadge}${payMethodBadge}
     ${hhSummary} ${rewardsSummary}
   </div>
-
-  <div class="muted small mono js-timers" ${timers} style="margin-top:6px">
-    ⏱️ Total: <b data-role="t-total">00:00</b>
-    ${tStarted ? ` · 👩‍🍳 En cocina: <b data-role="t-kitchen">00:00</b>` : ''}
-  </div>
-
+  ${timerHtml}
   ${itemsHtml}
   ${o.notes ? `<div class="muted small"><b>Notas generales:</b> ${escapeHtml(o.notes)}</div>` : ''}
-
   <div class="k-actions" style="margin-top:8px">${actions}</div>
 </article>`;
 }
-
-/* ================== Timers sin repintar ================== */
-function tickTimers(){
-  const nowTs = Date.now();
-  document.querySelectorAll('.js-timers').forEach(node=>{
-    const created = Number(node.getAttribute('data-created')||0);
-    const started = Number(node.getAttribute('data-started')||0);
-    const ready   = Number(node.getAttribute('data-ready')||0);
-
-    const tTotal   = (ready || nowTs) - (created || nowTs);
-    const tKitchen = started ? (ready || nowTs) - started : 0;
-
-    const totalEl = node.querySelector('[data-role="t-total"]');
-    const kitEl   = node.querySelector('[data-role="t-kitchen"]');
-    if (totalEl) totalEl.textContent = fmtMMSS(tTotal);
-    if (kitEl)   kitEl.textContent   = fmtMMSS(tKitchen);
-  });
-}
-// 1s es suficiente para timers y NO repinta tarjetas
-setInterval(()=>{ if (!document.hidden) tickTimers(); }, 1000);
 
 /* ================== Actions (optimistas + no escribe en PRUEBA) ================== */
 document.addEventListener('click', async (e)=>{
@@ -389,10 +462,14 @@ document.addEventListener('click', async (e)=>{
     if (a==='take'){
       LOCALLY_TAKEN.add(id);
       btn.textContent = 'Tomando…';
+
       const order = CURRENT_LIST.find(x=>x.id===id);
       if(!TRAIN && order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
+
+      // Optimista
       patchLocal(id, { status: Status.IN_PROGRESS, startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
+
       if (!TRAIN) {
         await setStatusShim(id, Status.IN_PROGRESS, OPTS);
         await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
@@ -434,7 +511,14 @@ document.addEventListener('click', async (e)=>{
       render(CURRENT_LIST);
 
       if (!TRAIN) {
-        await updateOrderShim(id, { paid:true, paidAt: now(), payMethod, totalCharged:Number(total), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+        await updateOrderShim(id, {
+          paid: true,
+          paidAt: now(),
+          payMethod,
+          totalCharged: Number(total),
+          updatedAt: now(), 'timestamps.updatedAt': now()
+        }, OPTS);
+
         await archiveDeliveredShim(id, Status.DONE, OPTS);
       }
       beep(); toast('Cobro registrado' + (TRAIN ? ' (PRUEBA)' : ''));
@@ -448,14 +532,18 @@ document.addEventListener('click', async (e)=>{
       if (notes!==null){
         patchLocal(id, { notes, updatedAt: now(), 'timestamps.updatedAt': now() });
         render(CURRENT_LIST);
-        if (!TRAIN) await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+        if (!TRAIN) {
+          await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+        }
         toast('Notas actualizadas' + (TRAIN ? ' (PRUEBA)' : ''));
       }
       return;
     }
 
     if (a==='cancel'){
-      if (!confirm('¿Eliminar este pedido? Pasará a CANCELLED y se archivará.')) return;
+      const confirmDelete = confirm('¿Eliminar este pedido? Pasará a CANCELLED y se archivará.');
+      if (!confirmDelete) return;
+
       const reason = prompt('Motivo de cancelación (obligatorio):', '');
       if (reason === null) return;
       const trimmed = String(reason).trim();
@@ -463,11 +551,20 @@ document.addEventListener('click', async (e)=>{
 
       patchLocal(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
+
       if (!TRAIN) {
-        await updateOrderShim(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now(), cancelledBy:'kitchen', updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
+        await updateOrderShim(id, {
+          status: Status.CANCELLED,
+          cancelReason: trimmed,
+          cancelledAt: now(),
+          cancelledBy: 'kitchen',
+          updatedAt: now(), 'timestamps.updatedAt': now()
+        }, OPTS);
+
         await archiveDeliveredShim(id, Status.DONE, OPTS);
       }
       beep(); toast('Pedido eliminado' + (TRAIN ? ' (PRUEBA)' : ''));
+      card.remove();
       return;
     }
 
@@ -481,5 +578,35 @@ document.addEventListener('click', async (e)=>{
   }
 });
 
+/* ========== Refresco ligero de timers ========== */
+setInterval(()=>{
+  if (!CURRENT_LIST.length) return;
+  render(CURRENT_LIST);
+}, 20000); // 20s: reduce trabajo cuando hay muchas tarjetas
+
 /* ========== Limpieza ========== */
 window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} });
+
+/* ========== Inicializadores anti-salto y scroll suave ========== */
+// 1) Fija altura visible del viewport (evita “brincos” por barras móviles)
+(function fixVH(){
+  const setVH = ()=>{
+    const h = (window.visualViewport?.height || window.innerHeight) * 0.01;
+    document.documentElement.style.setProperty('--vh', h + 'px');
+  };
+  setVH();
+  window.addEventListener('resize', setVH, { passive: true });
+  window.addEventListener('orientationchange', setVH, { passive: true });
+})();
+
+// 2) Marca columnas como “scroll containers” + iOS momentum
+document.addEventListener('DOMContentLoaded', ()=>{
+  ['col-pending','col-progress','col-ready','col-bill'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.overflow = 'auto';
+      el.style.webkitOverflowScrolling = 'touch';
+      attachScrollGuards(el);
+    }
+  });
+});
