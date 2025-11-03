@@ -1,7 +1,5 @@
-// Cocina — tablero de preparación
-// Suscribe pedidos (preferente: DB.subscribeKitchenOrders).
-// Acciones optimistas: tomar, listo, entregar, cobrar, editar, cancelar.
-// Modo PRUEBA: no escribe en Firestore.
+// Cocina — tablero de preparación (anti-saltos)
+// Render incremental + timers desacoplados (sin reemplazos por segundos)
 
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
@@ -21,10 +19,7 @@ function paintTrainingBadge(){
     b = document.createElement('button');
     b.id = 'kitchenTrainingBadge';
     b.className = 'btn tiny';
-    Object.assign(b.style, {
-      position:'fixed', left:'14px', bottom:'14px', zIndex:9999,
-      borderRadius:'999px', opacity:.92
-    });
+    Object.assign(b.style, { position:'fixed', left:'14px', bottom:'14px', zIndex:9999, borderRadius:'999px', opacity:.92 });
     b.addEventListener('click', ()=> setTraining(!isTraining()));
     document.body.appendChild(b);
   }
@@ -65,13 +60,8 @@ async function applyInventoryForOrderShim(order, opts){
 
 /* ================== Constantes ================== */
 const Status = {
-  PENDING: 'PENDING',
-  IN_PROGRESS: 'IN_PROGRESS',
-  READY: 'READY',
-  DELIVERED: 'DELIVERED',
-  CANCELLED: 'CANCELLED',
-  DONE: 'DONE',
-  PAID: 'PAID'
+  PENDING: 'PENDING', IN_PROGRESS: 'IN_PROGRESS', READY: 'READY',
+  DELIVERED: 'DELIVERED', CANCELLED: 'CANCELLED', DONE: 'DONE', PAID: 'PAID'
 };
 
 let CURRENT_LIST = [];
@@ -93,24 +83,12 @@ const fmtMMSS = (ms)=>{
   const ss = s % 60;
   return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
 };
-function escapeHtml(s=''){
-  return String(s).replace(/[&<>"']/g, m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[m]));
-}
+function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
 /* ================== Dedupe & merge ================== */
 function updatedAtMs(o){
-  return toMs(
-    o.updatedAt
-    || o.timestamps?.updatedAt
-    || o.readyAt
-    || o.timestamps?.readyAt
-    || o.startedAt
-    || o.timestamps?.startedAt
-    || o.createdAt
-    || o.timestamps?.createdAt
-  );
+  return toMs(o.updatedAt || o.timestamps?.updatedAt || o.readyAt || o.timestamps?.readyAt ||
+              o.startedAt || o.timestamps?.startedAt || o.createdAt || o.timestamps?.createdAt);
 }
 function mergeByNewest(list){
   const byId = new Map();
@@ -130,16 +108,13 @@ function patchLocal(id, patch){
     changed = true;
     return { ...o, ...patch, timestamps: { ...(o.timestamps||{}), ...extractTimestamps(patch) } };
   });
-  if (!changed) {
-    CURRENT_LIST.push({ id, ...patch, timestamps: extractTimestamps(patch) });
-  }
+  if (!changed) CURRENT_LIST.push({ id, ...patch, timestamps: extractTimestamps(patch) });
 }
 function extractTimestamps(patch){
   const t = {};
   for (const k of Object.keys(patch||{})){
     if (k.startsWith('timestamps.')){
-      const sub = k.split('.').slice(1).join('.');
-      t[sub] = patch[k];
+      const sub = k.split('.').slice(1).join('.'); t[sub] = patch[k];
     }
   }
   return t;
@@ -154,12 +129,8 @@ async function initKitchen(){
   unsub = subscribeKitchenShim((orders = [])=>{
     if (__streamLocked) return;
     __streamLocked = true;
-    try {
-      CURRENT_LIST = mergeByNewest(orders);
-      render(CURRENT_LIST);
-    } finally {
-      queueMicrotask(()=>{ __streamLocked = false; });
-    }
+    try { CURRENT_LIST = mergeByNewest(orders); render(CURRENT_LIST); }
+    finally { queueMicrotask(()=>{ __streamLocked = false; }); }
   });
 }
 document.addEventListener('DOMContentLoaded', initKitchen);
@@ -168,240 +139,164 @@ document.addEventListener('DOMContentLoaded', initKitchen);
 function calcSubtotal(o={}){
   const items = Array.isArray(o.items) ? o.items : [];
   return items.reduce((s,it)=>{
-    const line = (typeof it.lineTotal === 'number')
-      ? Number(it.lineTotal||0)
-      : (Number(it.unitPrice||0) * Number(it.qty||1));
+    const line = (typeof it.lineTotal === 'number') ? Number(it.lineTotal||0)
+               : (Number(it.unitPrice||0) * Number(it.qty||1));
     return s + line;
   },0);
 }
-function calcTotal(o={}){
-  const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) : calcSubtotal(o);
-  const tip = Number(o.tip||0);
-  return sub + tip;
+function calcTotal(o={}){ const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) : calcSubtotal(o); return sub + Number(o.tip||0); }
+
+/* ========== Render incremental sin saltos ========== */
+function htmlToElement(html){ const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstElementChild; }
+function djb2(str){ let h=5381,i=str.length; while(i) h=(h*33)^str.charCodeAt(--i); return (h>>>0).toString(36); }
+function isNearBottom(el, px=80){ return (el.scrollHeight - el.clientHeight - el.scrollTop) <= px; }
+function attachScrollGuards(el){
+  if (!el || el.__guards) return; el.__guards = true;
+  let t; const onScrollStart=()=>{ el.dataset.userScrolling='1'; clearTimeout(t); t=setTimeout(()=>{ el.dataset.userScrolling='0'; }, 900); };
+  ['wheel','touchstart','touchmove','pointerdown','scroll'].forEach(ev=> el.addEventListener(ev, onScrollStart, { passive:true }));
+  el.style.overflowAnchor = 'none'; el.style.scrollBehavior = 'auto';
 }
-
-/* ========== Render estable (sin saltos) ========== */
-
-// Utilidad: convierte HTML string a Element sin tocar innerHTML del contenedor
-function htmlToElement(html) {
-  const t = document.createElement('template');
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild;
-}
-
-// Hash barato para detectar cambios visuales en una tarjeta
-function djb2(str) {
-  let h = 5381, i = str.length;
-  while (i) h = (h * 33) ^ str.charCodeAt(--i);
-  return (h >>> 0).toString(36);
-}
-
-function isNearBottom(el, px = 80) {
-  return (el.scrollHeight - el.clientHeight - el.scrollTop) <= px;
-}
-
-function attachScrollGuards(el) {
-  if (!el || el.__guards) return;
-  el.__guards = true;
-  let t;
-  const onScrollStart = () => {
-    el.dataset.userScrolling = '1';
-    clearTimeout(t);
-    t = setTimeout(() => { el.dataset.userScrolling = '0'; }, 900);
-  };
-  ['wheel','touchstart','touchmove','pointerdown','scroll'].forEach(ev =>
-    el.addEventListener(ev, onScrollStart, { passive: true })
-  );
-  el.style.overflowAnchor = 'none';
-  el.style.scrollBehavior = 'auto';
-}
-
-function keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop) {
+function keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop){
   const afterHeight = el.scrollHeight;
-  if (wasNearBottom) {
-    el.scrollTop = Math.max(0, afterHeight - el.clientHeight);
-  } else {
-    const delta = afterHeight - beforeHeight;
-    el.scrollTop = Math.max(0, beforeTop + delta);
-  }
+  if (wasNearBottom) el.scrollTop = Math.max(0, afterHeight - el.clientHeight);
+  else el.scrollTop = Math.max(0, beforeTop + (afterHeight - beforeHeight));
 }
 
-// Parcha columna sin reemplazar todo el DOM
-function patchCol(id, list) {
-  const el = document.getElementById(id);
-  if (!el) return;
-
-  attachScrollGuards(el);
-
-  const beforeTop = el.scrollTop;
-  const beforeHeight = el.scrollHeight;
-  const wasNearBottom = isNearBottom(el);
-
-  const currentChildren = Array.from(el.children).filter(n => n.matches && n.matches('.k-card, .empty'));
-  const byId = new Map();
-  currentChildren.forEach((node) => {
-    const nid = node.dataset?.id || null;
-    if (nid) byId.set(nid, { node });
+// ⛔️ OJO: el hash **no** incluye los timers (así no se reemplazan por segundos)
+function stableCardHash(o){
+  // todo lo visual salvo los mm:ss
+  const core = JSON.stringify({
+    id:o.id, status:o.status, paid:o.paid, payMethod:o.payMethod, notes:o.notes,
+    orderType:o.orderType, table:o.table, customer:o.customer,
+    phone: getPhone(o), tip:o.tip, subtotal:o.subtotal,
+    hh:o.hh, rewards:o.rewards,
+    items:(o.items||o.item?[...(o.items||[]), ...(o.item?[{id:o.item.id,name:o.item.name,qty:o.qty,price:o.item.price}]:[])]:[])
   });
+  return djb2(core);
+}
 
-  if (!list.length) {
-    if (!(currentChildren.length === 1 && currentChildren[0].classList.contains('empty'))) {
-      const empty = document.createElement('div');
-      empty.className = 'empty';
-      empty.textContent = '—';
-      el.replaceChildren(empty);
+function patchCol(id, list){
+  const el = document.getElementById(id); if (!el) return;
+  attachScrollGuards(el);
+  const beforeTop = el.scrollTop, beforeHeight = el.scrollHeight, wasNearBottom = isNearBottom(el);
+  const current = Array.from(el.children).filter(n => n.matches?.('.k-card, .empty'));
+  const byId = new Map(); current.forEach(node => { const nid=node.dataset?.id||null; if(nid) byId.set(nid, node); });
+
+  if (!list.length){
+    if (!(current.length===1 && current[0].classList.contains('empty'))){
+      const empty=document.createElement('div'); empty.className='empty'; empty.textContent='—'; el.replaceChildren(empty);
     }
     return;
   }
 
-  const desiredNodes = [];
-
-  for (let i = 0; i < list.length; i++) {
-    const o = list[i];
+  const desired = [];
+  for (const o of list){
     const id = o.id;
-    const html = renderCard(o);
-    const hash = djb2(html);
-
+    const html = renderCard(o);                 // html SIN mm:ss literal (lleva <span data-timer>)
+    const hash = stableCardHash(o);             // hash estable
     const found = byId.get(id);
-    if (found) {
-      const n = found.node;
-      if (n.dataset.hash !== hash) {
+    if (found){
+      if (found.dataset.hash !== hash){
         const fresh = htmlToElement(html);
-        fresh.dataset.hash = hash;
-        n.replaceWith(fresh);
-        desiredNodes.push(fresh);
-        byId.set(id, { node: fresh }); // actualizar referencia
+        fresh.dataset.hash = hash;              // 💡 no depende de los segundos
+        found.replaceWith(fresh);
+        desired.push(fresh);
       } else {
-        desiredNodes.push(n);
+        desired.push(found);
       }
       byId.delete(id);
     } else {
       const n = htmlToElement(html);
       n.dataset.hash = hash;
-      desiredNodes.push(n);
+      desired.push(n);
     }
   }
+  // remove sobrantes
+  for (const node of byId.values()) node.remove();
 
-  // elimina sobrantes
-  for (const { node } of byId.values()) {
-    if (node && node.parentNode === el) node.remove();
-  }
-
-  // reordenar solo si es necesario
-  const currentOrder = Array.from(el.children);
-  const needReorder =
-    desiredNodes.length !== currentOrder.length ||
-    desiredNodes.some((n, i) => n !== currentOrder[i]);
-
-  if (needReorder) {
+  // reordenar si hace falta
+  const currOrder = Array.from(el.children);
+  const needReorder = desired.length !== currOrder.length || desired.some((n,i)=> n!==currOrder[i]);
+  if (needReorder){
     const frag = document.createDocumentFragment();
-    desiredNodes.forEach(n => frag.appendChild(n));
+    desired.forEach(n=> frag.appendChild(n));
     el.replaceChildren(frag);
   }
 
   keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop);
+  queueMicrotask(tickTimers); // actualiza timers sin tocar estructura
 }
 
-// Render que usa patchCol (sin innerHTML masivo)
-function render(list) {
-  const by = (list || []).reduce((acc, o) => {
-    const s = (o?.status || Status.PENDING).toUpperCase();
-    (acc[s] ||= []).push(o);
-    return acc;
-  }, {});
-
-  patchCol('col-pending',  by.PENDING || []);
-  patchCol('col-progress', by.IN_PROGRESS || []);
-  patchCol('col-ready',    by.READY || []);
-  const bill = (by.DELIVERED || []).filter(o => !o.paid);
-  patchCol('col-bill',     bill);
+// Render general
+function render(list){
+  const by = (list||[]).reduce((acc,o)=>{ const s=(o?.status||Status.PENDING).toUpperCase(); (acc[s] ||= []).push(o); return acc; },{});
+  patchCol('col-pending',  by.PENDING||[]);
+  patchCol('col-progress', by.IN_PROGRESS||[]);
+  patchCol('col-ready',    by.READY||[]);
+  const bill = (by.DELIVERED||[]).filter(o=>!o.paid);
+  patchCol('col-bill', bill);
 }
 
-/* ================== Card ================== */
+/* ================== Card (sin mm:ss incrustado) ================== */
 function renderCard(o = {}) {
-  // ===== Items normalizados (compatible con órdenes antiguas) =====
-  const items = Array.isArray(o.items) && o.items.length
-    ? o.items
-    : (o.item ? [{
-        id: o.item.id, name: o.item.name, qty: o.qty || 1, unitPrice: o.item.price || 0,
-        baseIngredients: o.baseIngredients || [], salsaDefault: o.salsaDefault || null,
-        salsaCambiada: o.salsaCambiada || null, extras: o.extras || {}, notes: o.notes || '',
-        lineTotal: (o.item?.price || 0) * (o.qty || 1)
-      }] : []);
+  // Items normalizados
+  const items = Array.isArray(o.items) && o.items.length ? o.items
+    : (o.item ? [{ id:o.item.id, name:o.item.name, qty:o.qty||1, unitPrice:o.item.price||0,
+                   baseIngredients:o.baseIngredients||[], salsaDefault:o.salsaDefault||null,
+                   salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||'',
+                   lineTotal:(o.item?.price||0)*(o.qty||1)}] : []);
 
-  // ===== Meta (pickup/mesa) =====
+  // Meta
   let meta = '—';
   if (o.orderType === 'dinein') meta = `Mesa: <b>${escapeHtml(o.table || '?')}</b>`;
   else if (o.orderType === 'pickup') meta = 'Pickup';
   else if (o.orderType) meta = escapeHtml(o.orderType);
 
-  // ===== Totales (subtotal ya trae descuento combo si existe) =====
-  const sub = (typeof o.subtotal === 'number')
-    ? Number(o.subtotal || 0)
-    : items.reduce((s, it) => s + (typeof it.lineTotal === 'number'
-        ? Number(it.lineTotal || 0)
-        : (Number(it.unitPrice || 0) * Number(it.qty || 1))), 0);
-  const total = sub + Number(o.tip || 0);
+  // Totales
+  const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0)
+            : items.reduce((s,it)=> s + (typeof it.lineTotal==='number' ? Number(it.lineTotal||0) : (Number(it.unitPrice||0)*Number(it.qty||1))), 0);
+  const total = sub + Number(o.tip||0);
 
-  // ===== Datos contacto =====
+  // Contacto
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
-  // ===== Tiempos (evita Date() costosa de más) =====
+  // Tiempos crudos (se pintan con tickTimers)
   const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
   const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
   const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
-  const tNow     = Date.now();
-  const totalRunMs  = (tReady || tNow) - (tCreated || tNow);
-  const inKitchenMs = (tReady || tNow) - (tStarted || tNow);
 
   const timerHtml = `
     <div class="muted small mono" style="margin-top:6px">
-      ⏱️ Total: <b>${fmtMMSS(totalRunMs)}</b>
-      ${tStarted ? ` · 👩‍🍳 En cocina: <b>${fmtMMSS(inKitchenMs)}</b>` : ''}
-    </div>
-  `;
+      ⏱️ Total: <b data-timer="total" data-created="${tCreated||0}" data-ready="${tReady||0}">--:--</b>
+      ${tStarted ? ` · 👩‍🍳 En cocina: <b data-timer="kitchen" data-started="${tStarted||0}" data-ready="${tReady||0}">--:--</b>` : ''}
+    </div>`;
 
-  // ===== Resumen Happy Hour =====
+  // Happy Hour
   const hh = o.hh || {};
   const hhSummary = (hh.enabled && Number(hh.totalDiscount || 0) > 0)
-    ? `<span class="k-badge">HH -${Number(hh.discountPercent || 0)}% · ahorro ${money(hh.totalDiscount)}</span>`
-    : '';
+    ? `<span class="k-badge">HH -${Number(hh.discountPercent || 0)}% · ahorro ${money(hh.totalDiscount)}</span>` : '';
 
-  // ===== Resumen Recompensas (combo minis / mini dog) =====
+  // Recompensas
   const rw = o.rewards || {};
-  const rwDiscount = (rw.type === 'discount' && Number(rw.discount || 0) > 0)
-    ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount || 0))}</span>`
-    : '';
-  const rwMiniDog = (rw.type === 'miniDog' && rw.miniDog)
-    ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>`
-    : '';
+  const rwDiscount = (rw.type==='discount' && Number(rw.discount||0)>0) ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount||0))}</span>` : '';
+  const rwMiniDog  = (rw.type==='miniDog' && rw.miniDog) ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>` : '';
   const rewardsSummary = `${rwDiscount} ${rwMiniDog}`.trim();
 
-  // ===== Items HTML =====
-  const itemsHtml = items.map(it => {
-    const ingrBadges = (it.baseIngredients || [])
-      .map(i => `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
-
-    // Aliases + compat (adds/removes/surprise)
+  // Items HTML
+  const itemsHtml = items.map(it=>{
+    const ingrBadges = (it.baseIngredients||[]).map(i=> `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
     const extraAdds = (it.adds || it.extras?.adds || it.extras?.ingredients || []);
     const extraRems = (it.removes || it.extras?.removes || []);
-    const surprise  = it.extras?.surpriseSauce
-      ? [`Sorpresa 🎁: ${it.extras.surpriseSauce}`]
-      : [];
-
+    const surprise  = it.extras?.surpriseSauce ? [`Sorpresa 🎁: ${it.extras.surpriseSauce}`] : [];
     const extrasBadges = [
-      ...surprise.map(s => `<div class="k-badge">${escapeHtml(s)}</div>`),
-      ...(it.extras?.sauces || []).map(s => `<div class="k-badge">Aderezo: ${escapeHtml(s)}</div>`),
-      ...extraAdds.map(s => `<div class="k-badge">Extra: ${escapeHtml(s)}</div>`),
-      ...extraRems.map(s => `<div class="k-badge warn">Sin: ${escapeHtml(s)}</div>`),
+      ...surprise.map(s=> `<div class="k-badge">${escapeHtml(s)}</div>`),
+      ...(it.extras?.sauces||[]).map(s=> `<div class="k-badge">Aderezo: ${escapeHtml(s)}</div>`),
+      ...extraAdds.map(s=> `<div class="k-badge">Extra: ${escapeHtml(s)}</div>`),
+      ...extraRems.map(s=> `<div class="k-badge warn">Sin: ${escapeHtml(s)}</div>`),
       (it.extras?.dlcCarne ? '<div class="k-badge">DLC carne 85g</div>' : '')
     ].join('');
-
-    const salsaInfo = it.salsaCambiada
-      ? `Salsa: <b>${escapeHtml(it.salsaCambiada)}</b> (cambio)`
-      : (it.salsaDefault ? `Salsa: ${escapeHtml(it.salsaDefault)}` : '');
-
+    const salsaInfo = it.salsaCambiada ? `Salsa: <b>${escapeHtml(it.salsaCambiada)}</b> (cambio)` : (it.salsaDefault ? `Salsa: ${escapeHtml(it.salsaDefault)}` : '');
     return `
       <div class="order-item">
         <h4>${escapeHtml(it.name || 'Producto')} · x${it.qty || 1}</h4>
@@ -411,24 +306,19 @@ function renderCard(o = {}) {
       </div>`;
   }).join('');
 
-  // ===== Acciones disponibles =====
+  // Acciones
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
     (o.status === Status.IN_PROGRESS) ? `<button class="btn ok" data-a="ready">Listo</button>` : '',
     (o.status === Status.READY) ? `<button class="btn ok" data-a="deliver">Entregar</button>` : '',
     (o.status === Status.DELIVERED && !o.paid) ? `<button class="btn" data-a="charge">Cobrar</button>` : '',
-    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status === Status.DELIVERED && !o.paid))
-      ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
-    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status === Status.DELIVERED && !o.paid))
-      ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status === Status.DELIVERED && !o.paid)) ? `<button class="btn ghost" data-a="edit">Editar</button>` : '',
+    (o.status === Status.PENDING || o.status === Status.IN_PROGRESS || (o.status === Status.DELIVERED && !o.paid)) ? `<button class="btn warn" data-a="cancel">Eliminar</button>` : ''
   ].join('');
 
-  // ===== Cabecera (total + badges HH/Recompensas + pago) =====
   const paidBadge = o.paid ? '· <span class="k-badge ok">Pagado</span>' : '';
-  const payMethodBadge = (o.paid && o.payMethod)
-    ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>`
-    : '';
+  const payMethodBadge = (o.paid && o.payMethod) ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>` : '';
 
   return `
 <article class="k-card" data-id="${o.id}">
@@ -446,7 +336,26 @@ function renderCard(o = {}) {
 </article>`;
 }
 
-/* ================== Actions (optimistas + no escribe en PRUEBA) ================== */
+/* ========== Timers desacoplados (NO tocan estructura) ========== */
+function tickTimers(){
+  const nowMs = Date.now();
+  document.querySelectorAll('[data-timer="total"]').forEach(el=>{
+    const created = Number(el.getAttribute('data-created')||0);
+    const ready   = Number(el.getAttribute('data-ready')||0);
+    const end = ready || nowMs;
+    el.textContent = fmtMMSS(end - (created||nowMs));
+  });
+  document.querySelectorAll('[data-timer="kitchen"]').forEach(el=>{
+    const started = Number(el.getAttribute('data-started')||0);
+    const ready   = Number(el.getAttribute('data-ready')||0);
+    if (!started){ el.textContent='--:--'; return; }
+    const end = ready || nowMs;
+    el.textContent = fmtMMSS(end - started);
+  });
+}
+setInterval(()=>{ if (document.hidden) return; tickTimers(); }, 1000);
+
+/* ================== Actions (optimistas) ================== */
 document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-a]'); if(!btn) return;
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
@@ -460,135 +369,80 @@ document.addEventListener('click', async (e)=>{
 
   try{
     if (a==='take'){
-      LOCALLY_TAKEN.add(id);
-      btn.textContent = 'Tomando…';
-
+      LOCALLY_TAKEN.add(id); btn.textContent = 'Tomando…';
       const order = CURRENT_LIST.find(x=>x.id===id);
       if(!TRAIN && order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
-
-      // Optimista
       patchLocal(id, { status: Status.IN_PROGRESS, startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
-
-      if (!TRAIN) {
-        await setStatusShim(id, Status.IN_PROGRESS, OPTS);
-        await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-      }
-      beep(); toast('En preparación' + (TRAIN ? ' (PRUEBA)' : ''));
-      return;
+      if (!TRAIN){ await setStatusShim(id, Status.IN_PROGRESS, OPTS);
+                   await updateOrderShim(id, { startedAt: now(), 'timestamps.startedAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS); }
+      beep(); toast('En preparación' + (TRAIN ? ' (PRUEBA)' : '')); return;
     }
-
     if (a==='ready'){
       patchLocal(id, { status: Status.READY, readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
-      if (!TRAIN) {
-        await setStatusShim(id, Status.READY, OPTS);
-        await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-      }
-      beep(); toast('Listo 🛎️' + (TRAIN ? ' (PRUEBA)' : ''));
-      return;
+      if (!TRAIN){ await setStatusShim(id, Status.READY, OPTS);
+                   await updateOrderShim(id, { readyAt: now(), 'timestamps.readyAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS); }
+      beep(); toast('Listo 🛎️' + (TRAIN ? ' (PRUEBA)' : '')); return;
     }
-
     if (a==='deliver'){
       patchLocal(id, { status: Status.DELIVERED, deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
-      if (!TRAIN) {
-        await setStatusShim(id, Status.DELIVERED, OPTS);
-        await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-      }
-      beep(); toast('Entregado ✔️ · por cobrar' + (TRAIN ? ' (PRUEBA)' : ''));
-      return;
+      if (!TRAIN){ await setStatusShim(id, Status.DELIVERED, OPTS);
+                   await updateOrderShim(id, { deliveredAt: now(), 'timestamps.deliveredAt': now(), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS); }
+      beep(); toast('Entregado ✔️ · por cobrar' + (TRAIN ? ' (PRUEBA)' : '')); return;
     }
-
     if (a==='charge'){
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const total = calcTotal(order);
       const method = prompt(`Cobrar ${money(total)}\nMétodo (efectivo / tarjeta / transferencia):`, 'efectivo');
       if (method === null) { btn.disabled=false; return; }
       const payMethod = String(method||'efectivo').toLowerCase();
-
-      patchLocal(id, { paid: true, paidAt: now(), payMethod, totalCharged: Number(total), updatedAt: now(), 'timestamps.updatedAt': now() });
+      patchLocal(id, { paid:true, paidAt: now(), payMethod, totalCharged:Number(total), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
-
-      if (!TRAIN) {
-        await updateOrderShim(id, {
-          paid: true,
-          paidAt: now(),
-          payMethod,
-          totalCharged: Number(total),
-          updatedAt: now(), 'timestamps.updatedAt': now()
-        }, OPTS);
-
+      if (!TRAIN){
+        await updateOrderShim(id, { paid:true, paidAt: now(), payMethod, totalCharged:Number(total), updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
         await archiveDeliveredShim(id, Status.DONE, OPTS);
       }
       beep(); toast('Cobro registrado' + (TRAIN ? ' (PRUEBA)' : ''));
-      card.remove();
-      return;
+      card.remove(); return;
     }
-
     if (a==='edit'){
       const order = CURRENT_LIST.find(x=>x.id===id); if(!order) return;
       const notes = prompt('Editar notas generales para cocina:', order.notes||'');
       if (notes!==null){
-        patchLocal(id, { notes, updatedAt: now(), 'timestamps.updatedAt': now() });
-        render(CURRENT_LIST);
-        if (!TRAIN) {
-          await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
-        }
+        patchLocal(id, { notes, updatedAt: now(), 'timestamps.updatedAt': now() }); render(CURRENT_LIST);
+        if (!TRAIN) await updateOrderShim(id,{ notes, updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
         toast('Notas actualizadas' + (TRAIN ? ' (PRUEBA)' : ''));
       }
       return;
     }
-
     if (a==='cancel'){
-      const confirmDelete = confirm('¿Eliminar este pedido? Pasará a CANCELLED y se archivará.');
-      if (!confirmDelete) return;
-
-      const reason = prompt('Motivo de cancelación (obligatorio):', '');
-      if (reason === null) return;
-      const trimmed = String(reason).trim();
-      if (!trimmed) { alert('Por favor escribe un motivo.'); return; }
-
+      if (!confirm('¿Eliminar este pedido? Pasará a CANCELLED y se archivará.')) return;
+      const reason = prompt('Motivo de cancelación (obligatorio):', ''); if (reason===null) return;
+      const trimmed = String(reason).trim(); if (!trimmed) { alert('Por favor escribe un motivo.'); return; }
       patchLocal(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now(), updatedAt: now(), 'timestamps.updatedAt': now() });
       render(CURRENT_LIST);
-
-      if (!TRAIN) {
-        await updateOrderShim(id, {
-          status: Status.CANCELLED,
-          cancelReason: trimmed,
-          cancelledAt: now(),
-          cancelledBy: 'kitchen',
-          updatedAt: now(), 'timestamps.updatedAt': now()
-        }, OPTS);
-
+      if (!TRAIN){
+        await updateOrderShim(id, { status: Status.CANCELLED, cancelReason: trimmed, cancelledAt: now(), cancelledBy: 'kitchen', updatedAt: now(), 'timestamps.updatedAt': now() }, OPTS);
         await archiveDeliveredShim(id, Status.DONE, OPTS);
       }
       beep(); toast('Pedido eliminado' + (TRAIN ? ' (PRUEBA)' : ''));
-      card.remove();
       return;
     }
-
   }catch(err){
-    console.error(err);
-    toast('Error al actualizar');
-    if(a==='take'){ LOCALLY_TAKEN.delete(id); }
-  }finally{
-    clearTimeout(fsId);
-    reenable();
-  }
+    console.error(err); toast('Error al actualizar'); if(a==='take'){ LOCALLY_TAKEN.delete(id); }
+  }finally{ clearTimeout(fsId); reenable(); }
 });
 
-/* ========== Refresco ligero de timers ========== */
-setInterval(()=>{
-  if (!CURRENT_LIST.length) return;
-  render(CURRENT_LIST);
-}, 20000); // 20s: reduce trabajo cuando hay muchas tarjetas
+/* ========== Refresco ligero de PR, sin tocar tarjetas ========== */
+// ya NO re-renderiza para timers (eso lo hace tickTimers cada 1s)
+setInterval(()=>{ if (!CURRENT_LIST.length) return; render(CURRENT_LIST); }, 20000);
 
 /* ========== Limpieza ========== */
 window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} });
 
-/* ========== Inicializadores anti-salto y scroll suave ========== */
-// 1) Fija altura visible del viewport (evita “brincos” por barras móviles)
+/* ========== Ajustes iOS anti-salto ========== */
 (function fixVH(){
   const setVH = ()=>{
     const h = (window.visualViewport?.height || window.innerHeight) * 0.01;
@@ -598,15 +452,9 @@ window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} })
   window.addEventListener('resize', setVH, { passive: true });
   window.addEventListener('orientationchange', setVH, { passive: true });
 })();
-
-// 2) Marca columnas como “scroll containers” + iOS momentum
 document.addEventListener('DOMContentLoaded', ()=>{
   ['col-pending','col-progress','col-ready','col-bill'].forEach(id=>{
     const el = document.getElementById(id);
-    if (el) {
-      el.style.overflow = 'auto';
-      el.style.webkitOverflowScrolling = 'touch';
-      attachScrollGuards(el);
-    }
+    if (el){ el.style.overflow='auto'; el.style.webkitOverflowScrolling='touch'; attachScrollGuards(el); }
   });
 });
