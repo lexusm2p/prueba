@@ -13,11 +13,11 @@ console.info('[kiosk] DATA_MENU_URL =', DATA_MENU_URL);
 const el = document.getElementById('app');
 if (el) el.textContent = 'App.js cargado — iniciando módulos…';
 
-/* ======================= Imports ======================= */
-import { beep, toast } from '../shared/notify.js';
-import * as DB from '../shared/db.js';
-import { ensureAuth } from '../shared/firebase.js';
-import { initThemeFromSettings } from '../shared/theme.js';
+/* ======================= Imports ======================= */// /kiosk/app.js
+import { beep, toast } from '../shared/notify.js?v=20251104a';
+import * as DB from '../shared/db.js?v=20251104a';
+import { ensureAuth } from '../shared/firebase.js?v=20251104a';
+import { initThemeFromSettings } from '../shared/theme.js?v=20251104a';
 
 /* ======================= Estado global ======================= */
 const state = {
