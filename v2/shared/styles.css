@@ -1,541 +1,573 @@
-/* ===========================
-   Seven de Burgers — UI Pixel Retro (tematizable)
-   Archivo: shared/styles.css
-   =========================== */
+// /kiosk/app.js — Seven de Burgers · Kiosko V2 (UX simplificada + gamificación suave)
+import { beep, toast } from '../shared/notify.js';
+import * as DB from '../shared/db.js';
+import { initThemeFromSettings, applyThemeLocal } from '../shared/theme.js';
 
-/* -----------------------------------------------------------
-   0) VARIABLES BASE + ALIAS (compatibles con /shared/theme.js)
-   ----------------------------------------------------------- */
-:root{
-  color-scheme: dark;
+// ===== Config & Flags ========================================================
+const qs = new URLSearchParams(location.search);
+const IS_TRAINING = qs.get('mode') === 'offline' || qs.get('mode') === 'test' || qs.get('prueba') === '1';
+const IS_LEGACY   = qs.get('legacy') === '1';
+const READONLY    = qs.get('ro') === '1';
 
-  /* Defaults (si theme.js no setea, usamos estos) */
-  --bg:#0b0f19;
-  --text:#eef4ff;
+const CURRENCY = 'MXN';
+const PRICE_ENDING = 7; // estética de precios (47, 57, 67, ...)
+const DRINK_HINT_DELAY = 2200; // ms para mostrar nudge de bebidas
+const MAX_MINIS_FOR_REWARD = 3; // gamificación (3 minis → nudge/sonido)
 
-  --panel1:#121a2a;
-  --panel2:#0f1726;
+// ===== Estado global =========================================================
+const state = {
+  catalog: [],        // productos visibles (filtrados)
+  allProducts: [],    // catálogo original (para tabs)
+  categories: [],     // ['big','mini','combos','otros']
+  selectedCat: 'big', // pestaña actual
+  cart: [],           // [{id, name, price, qty, options: {...}}]
+  hh: null,           // {active, endsAt, ...}
+  eta: null,          // {minutes, source}
+  readyFeed: [],      // ids/números de orden listos (para feed opcional)
+  nudgeTimer: null,   // timeout de bebidas
+};
 
-  --ink1: var(--text);
-  --ink2:#d7deee;
-  --muted:#b8c6d8;
+// ===== Utilidades ============================================================
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-  --primary:#ffc242; /* color “fuerte” del tema */
-  --accent:#7cc9ff;  /* color secundario del tema */
-  --ok:#2fd27d;
-  --warn:#ffd27f;
-  --danger:#ff6b6b;
+function money(n) {
+  try {
+    return n.toLocaleString('es-MX', { style: 'currency', currency: CURRENCY, maximumFractionDigits: 0 });
+  } catch {
+    return `$${Math.round(n)}`;
+  }
+}
+function roundEnding(n) {
+  // Redondea al entero más cercano que termine en 7
+  const base = Math.round(n);
+  const mod = base % 10;
+  const want = 7;
+  if (mod === want) return base;
+  const up = base + ((10 + want - mod) % 10);
+  const down = base - ((mod - want + 10) % 10);
+  // elige el más cercano; si empata, usa hacia arriba
+  return (Math.abs(up - n) <= Math.abs(down - n)) ? up : down;
+}
+function safe(fn, label='op') { try { return fn(); } catch(e){ console.warn(`[safe:${label}]`, e); } }
 
-  /* Alias de compatibilidad con estilos ya existentes */
-  --panel: var(--panel1);
-  --panel-2: var(--panel2);
-  --ink: var(--ink1);
-  --muted-2: color-mix(in srgb, var(--muted) 80%, var(--ink1) 20%);
-  --accent-2: var(--accent);
+// ===== Bootstrap de tema (no bloqueante) ====================================
+safe(()=>initThemeFromSettings({ defaultName:'Base' }), 'initTheme');
 
-  /* Fuentes (theme.js puede sobreescribir) */
-  --font-base: 'Press Start 2P', system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  --font-display: var(--font-base);
-  --font: var(--font-base);
+// ===== UI base ===============================================================
+const app = document.getElementById('app');
+app.innerHTML = `
+  <header class="header">
+    <div class="brand" id="btnHome">
+      <div class="dot"></div>
+      <div>
+        <div style="font-size:16px;font-weight:800;letter-spacing:.4px;">Seven de Burgers</div>
+        <div class="title-sub">Kiosko V2</div>
+      </div>
+    </div>
+    <div class="row" id="statusRow">
+      <span id="etaPill" class="k-badge">ETA — …</span>
+      <span id="hhPill"  class="k-badge">Happy Hour</span>
+      <button class="btn small ghost" id="btnThemeNext" title="Cambiar tema rápido">Tema</button>
+    </div>
+  </header>
 
-  /* Derivados visuales */
-  --stroke: rgba(255,255,255,.10);
-  --shadow: 0 12px 28px rgba(0,0,0,.35);
-  --r: 16px;
-  --gap: 16px;
-  --pad: 16px;
+  <main class="container">
+    <div id="tabsBar" class="tabs tabs-sticky" role="tablist" aria-label="Categorías"></div>
 
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
+    <section id="cards" class="grid" aria-live="polite"></section>
+  </main>
 
-  --decor-glow: 0 0 18px color-mix(in srgb, var(--primary) 25%, transparent);
-  --snow-alpha: 0;
+  <!-- Barra carrito -->
+  <div id="cartBar" style="
+    position:fixed;left:10px;right:10px;bottom:10px;z-index:1000;
+    display:none;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 12px;border:1px solid var(--stroke);
+    background:linear-gradient(180deg,color-mix(in srgb,var(--panel1) 90%,black 10%),color-mix(in srgb,var(--panel2) 86%,black 14%));
+    border-radius:14px; box-shadow: var(--shadow);
+  ">
+    <div class="row" id="cartSummary" style="gap:10px;min-width:0;">
+      <span class="k-badge" id="cartCount">0</span>
+      <span class="ellipsis">Carrito</span>
+    </div>
+    <div class="row">
+      <span class="total" id="cartTotal">$0</span>
+      <button class="btn ok" id="btnCheckout">Confirmar</button>
+    </div>
+  </div>
 
-  /* Gradientes automáticos de botones según --primary/ok/warn/danger */
-  --btn1: color-mix(in srgb, var(--primary) 92%, white 8%);
-  --btn2: color-mix(in srgb, var(--primary) 75%, black 25%);
-  --btnBorder: color-mix(in srgb, var(--primary) 30%, black 70%);
-  --btnShadow: color-mix(in srgb, var(--primary) 55%, black 45%);
+  <!-- Modal de personalización -->
+  <div class="modal" id="customModal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Personalizar">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong id="mTitle">Personalizar</strong>
+        <button class="btn small ghost" id="mClose">Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <div class="row" style="justify-content:space-between;align-items:center;">
+          <div class="price" id="mPrice">$0</div>
+          <div class="muted small" id="mHint">Ajusta a tu gusto</div>
+        </div>
+        <div class="hr"></div>
 
-  --btnOk1:        color-mix(in srgb, var(--ok) 90%, white 10%);
-  --btnOk2:        color-mix(in srgb, var(--ok) 78%, black 22%);
-  --btnOkBorder:   color-mix(in srgb, var(--ok) 30%, black 70%);
-  --btnOkShadow:   color-mix(in srgb, var(--ok) 55%, black 45%);
+        <div class="field">
+          <label>Extras</label>
+          <ul class="ul-clean" id="mExtras"></ul>
+        </div>
 
-  --btnWarn1:      color-mix(in srgb, var(--warn) 90%, white 10%);
-  --btnWarn2:      color-mix(in srgb, var(--warn) 70%, black 30%);
-  --btnWarnBorder: color-mix(in srgb, var(--warn) 30%, black 70%);
-  --btnWarnShadow: color-mix(in srgb, var(--warn) 55%, black 45%);
+        <div class="field">
+          <label>Aderezos</label>
+          <ul class="ul-clean" id="mSauces"></ul>
+        </div>
 
-  --btnDanger1:      color-mix(in srgb, var(--danger) 90%, white 10%);
-  --btnDanger2:      color-mix(in srgb, var(--danger) 70%, black 30%);
-  --btnDangerBorder: color-mix(in srgb, var(--danger) 30%, black 70%);
-  --btnDangerShadow: color-mix(in srgb, var(--danger) 55%, black 45%);
+        <div class="field">
+          <label>Sin / Cambios</label>
+          <textarea id="mNotes" placeholder="Sin jitomate, poco picante, etc."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Maridaje sugerido</label>
+          <div id="pairBox"></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <div class="total-bar">
+          <div class="row" style="gap:8px;">
+            <button class="btn small ghost" id="mLess">–</button>
+            <strong id="mQty" aria-live="polite">1</strong>
+            <button class="btn small" id="mMore">+</button>
+          </div>
+          <button class="btn ok" id="mAdd">Agregar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nudge de bebidas (no bloqueante) -->
+  <div id="__drinkNudge" style="
+    position:fixed; right:10px; bottom:86px; z-index:1002; display:none;
+    background:color-mix(in srgb, var(--panel1) 92%, black 8%);
+    border:1px solid var(--stroke); padding:10px 12px; border-radius:12px; box-shadow:var(--shadow);
+    max-width:70vw;
+  ">
+    <div class="row">
+      <div class="dot"></div>
+      <strong style="font-family:var(--font-display)">¿Algo para tomar?</strong>
+    </div>
+    <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+      <button class="btn tiny" data-nudge="naranja">Jugo de Naranja</button>
+      <button class="btn tiny" data-nudge="zanahoria">Jugo de Zanahoria</button>
+      <button class="btn tiny" data-nudge="refresco">Refresco</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><span id="toastMsg"></span></div>
+`;
+
+// Hook rápido para el tema (carrusel de presets locales si existen)
+$('#btnThemeNext')?.addEventListener('click', ()=>{
+  safe(async()=>{
+    const list = (await safe(()=>window.listThemes?.(), 'listThemes')) || [
+      { name:'Base' }, { name:'Pixel Art' }, { name:'Retro Arcade' }, { name:'Y2K' }, { name:'Día de Muertos' }
+    ];
+    const names = list.map(x=>x.name);
+    const current = document.body.getAttribute('data-theme-name') || 'Base';
+    const idx = (names.indexOf(current)+1) % names.length;
+    applyThemeLocal(names[idx]);
+    toast?.(`Tema: ${names[idx]}`);
+  }, 'themeNext');
+});
+
+// ===== Catálogo (demo + carga remota opcional) ===============================
+// TIP: si tienes DB.getProducts() o similar, úsalo; si no, usa el fallback.
+async function loadCatalog() {
+  let products = [];
+  await safe(async()=>{
+    if (DB?.getProducts) {
+      products = await DB.getProducts({ onlyActive:true });
+    }
+  }, 'getProducts');
+
+  if (!Array.isArray(products) || products.length === 0) {
+    // Fallback mínimo (usa tus ids reales si ya los tienes)
+    products = [
+      { id:'starter', name:'Starter Burger', price:47, category:'big', icon:'🍔' },
+      { id:'koopa',   name:'Koopa Crunch',   price:57, category:'big', icon:'🐢' },
+      { id:'fatality',name:'Fatality Flame', price:67, category:'big', icon:'🔥' },
+      { id:'hadouken',name:'Hadouken',       price:77, category:'big', icon:'⚡' },
+      { id:'final',   name:'Final Boss',     price:97, category:'big', icon:'👑' },
+
+      { id:'starter-mini', name:'Starter Mini', price:27, category:'mini', icon:'🧒' },
+      { id:'koopa-mini',   name:'Koopa Mini',   price:37, category:'mini', icon:'🧪' },
+      { id:'hadouken-mini',name:'Hadouken Mini',price:47, category:'mini', icon:'🎮' },
+
+      { id:'combo-3minis', name:'Combo 3 Minis', price:97, category:'combos', icon:'🎯' },
+    ];
+  }
+
+  // aderezos a $5 y algunos extras demo
+  const sauces = [
+    { id:'cheddar',  name:'Aderezo Cheddar',   price:5 },
+    { id:'chimi',    name:'Salsa Chimichurri', price:5 },
+    { id:'chipotle', name:'Aderezo Chipotle',  price:5 },
+  ];
+  const extras = [
+    { id:'bacon', name:'Tocino', price:12 },
+    { id:'pine',  name:'Reb. de Piña', price:8 },
+    { id:'ham',   name:'Jamón', price:10 },
+    { id:'sausage',name:'Salchicha', price:10 },
+    { id:'meat', name:'Carne extra 85g', price:22 },
+  ];
+
+  state.allProducts = products.map(p => ({ ...p, sauces, extras }));
+  state.categories = Array.from(new Set(state.allProducts.map(p=>p.category)));
+  if (!state.categories.includes(state.selectedCat)) state.selectedCat = state.categories[0] || 'big';
+  applyFilter();
+  renderTabs();
+  renderCards();
+}
+function applyFilter() {
+  state.catalog = state.allProducts.filter(p => p.category === state.selectedCat);
 }
 
-/* -----------------
-   1) FUENTES LOCALES
-   ----------------- */
-@font-face{
-  font-family:'Press Start 2P';
-  font-style:normal;
-  font-weight:400;
-  font-display:swap;
-  src:url("https://fonts.gstatic.com/s/pressstart2p/v15/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2") format("woff2");
-}
-/* Extras (compatibilidad) */
-@font-face{ font-family:'Alfa Slab One'; font-style:normal; font-weight:400; font-display:swap; src:url("https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8F2fN5-TSy3aZC-qLw.woff2") format("woff2"); }
-@font-face{ font-family:'Carter One';    font-style:normal; font-weight:400; font-display:swap; src:url("https://fonts.gstatic.com/s/carterone/v20/q5uFpOE3QqiFRDO6R9Q.woff2") format("woff2"); }
-
-/* ---- Reset / Base ---- */
-*{ box-sizing:border-box }
-html,body{ height:100% }
-html, body{ overflow-x:hidden; }
-img, svg, video, canvas{ max-width:100%; height:auto; }
-body{
-  margin:0;
-  font-family:var(--font);
-  letter-spacing:.2px;
-  color:var(--ink1);
-  background:
-    radial-gradient(120% 90% at 0% 0%,
-      color-mix(in srgb, var(--panel2) 92%, black 8%) 0%,
-      color-mix(in srgb, var(--panel2) 80%, black 20%) 40%,
-      var(--bg) 100%),
-    var(--bg);
-  -webkit-text-size-adjust:100%;
-}
-.ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.break{ word-break:break-word; overflow-wrap:anywhere }
-::selection{ background:color-mix(in srgb, var(--accent) 28%, transparent); color:#fff; }
-
-/* ---- Utils ---- */
-a{ color:var(--accent); text-decoration:none }
-a:hover{ text-decoration:underline }
-.row{ display:flex; align-items:center; gap:8px; min-width:0; }
-.right{ text-align:right } .center{ text-align:center } .nowrap{ white-space:nowrap }
-.mono{ font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace }
-.muted{ color:var(--muted) } .small{ font-size:12px }
-.visually-hidden{ position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
-
-/* ---- Header ---- */
-.header{
-  position:sticky; top:0; z-index:30; display:flex;
-  align-items:center; justify-content:space-between; gap:12px; min-width:0;
-  padding:calc(10px + var(--safe-top)) 14px 10px;
-  background:color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter:blur(6px);
-  border-bottom:1px solid var(--stroke)
-}
-.brand{ display:flex; align-items:center; gap:10px; cursor:pointer; min-width:0; }
-.brand .dot{ width:10px; height:10px; background:var(--accent); border-radius:3px; box-shadow:0 0 14px var(--accent) }
-.title-sub{ font-size:12px; color:var(--muted); }
-.brand > div > div:first-child,
-h1,h2,h3,h4,.title-sub,.tabs-admin .tab,.k-card .price{ font-family:var(--font-display); }
-
-/* ---- Container & grid ---- */
-.container{ max-width:1120px; margin:0 auto; padding:16px }
-.grid{ display:grid; gap:var(--gap); grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); min-width:0; }
-
-/* ---- Buttons ---- */
-.btn{
-  border:2px solid var(--btnBorder);
-  background:linear-gradient(var(--btn1), var(--btn2));
-  color:#1a1200;
-  font-weight:700;
-  padding:10px 14px;
-  border-radius:12px;
-  cursor:pointer;
-  box-shadow:0 6px 0 var(--btnShadow), 0 10px 18px rgba(0,0,0,.35);
-  transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease;
-  white-space:nowrap; user-select:none; touch-action:manipulation; max-width:100%;
-}
-.btn:hover{ transform:translateY(-1px) }
-.btn:active{ transform:translateY(0) }
-.btn:focus-visible{ outline:3px solid var(--accent); outline-offset:2px; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent) }
-.btn[disabled], .btn:disabled{ opacity:.55; cursor:not-allowed; transform:none; box-shadow:0 0 0 #000, 0 6px 12px rgba(0,0,0,.15); }
-.btn.small{ font-size:12px; padding:8px 12px }
-.btn.ghost{
-  border:2px solid color-mix(in srgb, var(--ink1) 25%, transparent);
-  background:var(--panel2);
-  color:var(--ink1);
-  box-shadow:none;
-}
-.btn.ok{
-  border-color:var(--btnOkBorder);
-  background:linear-gradient(var(--btnOk1), var(--btnOk2));
-  box-shadow:0 6px 0 var(--btnOkShadow), 0 10px 18px rgba(0,0,0,.35);
-  color:#031b10;
-}
-.btn.warn{
-  border-color:var(--btnWarnBorder);
-  background:linear-gradient(var(--btnWarn1), var(--btnWarn2));
-  box-shadow:0 6px 0 var(--btnWarnShadow), 0 10px 18px rgba(0,0,0,.35);
-  color:#1a1200;
-}
-.btn.danger{
-  border-color:var(--btnDangerBorder);
-  background:linear-gradient(var(--btnDanger1), var(--btnDanger2));
-  box-shadow:0 6px 0 var(--btnDangerShadow), 0 10px 18px rgba(0,0,0,.35);
+// ===== Tabs ==================================================================
+function renderTabs() {
+  const bar = $('#tabsBar');
+  bar.innerHTML = '';
+  state.categories.forEach(cat=>{
+    const btn = document.createElement('button');
+    btn.className = 'btn tab' + (cat===state.selectedCat ? ' is-active' : '');
+    btn.role = 'tab';
+    btn.ariaSelected = (cat===state.selectedCat ? 'true' : 'false');
+    btn.textContent = cat === 'big' ? 'Burgers' :
+                      cat === 'mini' ? 'Mini' :
+                      cat === 'combos' ? 'Combos' : cat;
+    btn.addEventListener('click', ()=>{
+      state.selectedCat = cat;
+      applyFilter();
+      renderTabs();
+      renderCards(true);
+      window.scrollTo({ top:0, behavior:'smooth' });
+    });
+    bar.appendChild(btn);
+  });
 }
 
-/* >>> NUEVO: tamaño extra-pequeño para chips (compat seguro) */
-.btn.tiny{
-  padding:6px 10px;
-  font-size:11px;
-  line-height:1.2;
-  border-radius:10px;
+// ===== Cards ================================================================
+function renderCards(flash=false) {
+  const wrap = $('#cards');
+  wrap.innerHTML = '';
+  state.catalog.forEach(p=>{
+    const price = money(p.price);
+    const card = document.createElement('article');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="media"><div class="icon-img" aria-hidden="true" style="display:grid;place-items:center;font-size:48px">${p.icon || '🍔'}</div></div>
+      <h3 class="ellipsis" title="${p.name}">${p.name}</h3>
+      <div class="row">
+        <span class="price">${price}</span>
+      </div>
+      <div class="row" style="gap:8px">
+        <button class="btn small" data-a="quick">Ordenar rápido</button>
+        <button class="btn small ghost" data-a="custom">Personalizar</button>
+      </div>
+    `;
+    card.querySelector('[data-a="quick"]').addEventListener('click', ()=> quickAdd(p));
+    card.querySelector('[data-a="custom"]').addEventListener('click', ()=> openCustomize(p));
+    wrap.appendChild(card);
+  });
+
+  if (flash) {
+    // pequeño feedback visual al cambiar de tab
+    wrap.animate([{opacity:.6},{opacity:1}],{duration:160,easing:'ease-out'});
+  }
 }
 
-/* ---- Tabs ---- */
-.tabs{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; min-width:0; }
-.btn.tab{
-  border:2px solid color-mix(in srgb, var(--ink1) 25%, transparent);
-  background:var(--panel2);
-  color:var(--ink1);
-  box-shadow:none; min-height:44px; line-height:1; max-width:100%;
+// ===== Carrito ==============================================================
+// Modelo: line = { id, name, priceUnit, qty, options: { extras:[...], sauces:[...], notes }, total }
+function findLineKey(line) {
+  // separa por id + hash de opciones para “mergear” iguales
+  const key = line.id + '|' + JSON.stringify(line.options||{});
+  return key;
 }
-.btn.tab .ellipsis{ max-width:100%; }
-.btn.tab.is-active{
-  border:2px solid var(--btnBorder);
-  background:linear-gradient(var(--btn1), var(--btn2));
-  color:#1a1200;
-  box-shadow:0 6px 0 var(--btnShadow), 0 10px 18px rgba(0,0,0,.35);
+function addToCart(line) {
+  if (READONLY) return;
+  // merge by key
+  const key = findLineKey(line);
+  const idx = state.cart.findIndex(l => findLineKey(l) === key);
+  if (idx >= 0) {
+    state.cart[idx].qty += line.qty;
+    state.cart[idx].total = state.cart[idx].qty * state.cart[idx].priceUnit;
+  } else {
+    state.cart.push({ ...line, total: line.qty * line.priceUnit });
+  }
+  updateCartBar();
+  gamifyMiniThree();
+  scheduleDrinkNudge();
 }
-
-/* ---- Tabs Admin ---- */
-.tabs-admin{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-start; min-width:0; }
-.tabs-admin .tab{
-  padding:10px 12px; border-radius:12px;
-  border:2px solid color-mix(in srgb, var(--ink1) 18%, transparent);
-  background:var(--panel1);
-  color:var(--ink1); cursor:pointer; max-width:100%;
+function quickAdd(p) {
+  const priceUnit = getPriceWithHH(p.price);
+  addToCart({
+    id: p.id, name: p.name, priceUnit, qty: 1, options: {}
+  });
+  beep?.(); toast?.(`${p.name} agregado`);
 }
-.tabs-admin .tab.is-active{
-  border-color:var(--accent);
-  box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent) inset;
+function updateCartBar() {
+  const count = state.cart.reduce((a,b)=>a+b.qty,0);
+  const total = state.cart.reduce((a,b)=>a+b.total,0);
+  $('#cartCount').textContent = String(count);
+  $('#cartTotal').textContent = money(total);
+  const show = count > 0;
+  $('#cartBar').style.display = show ? 'flex' : 'none';
+  document.body.classList.toggle('has-cart', show);
 }
-
-/* ---- Cards ---- */
-.card{
-  position:relative; display:flex; flex-direction:column; gap:10px; min-height:260px;
-  padding:16px 16px 88px;
-  border:2px solid var(--primary);
-  border-radius:14px;
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel2) 85%, black 15%), var(--panel1));
-  box-shadow:var(--shadow), inset 0 0 0 2px rgba(255,255,255,.06); min-width:0;
-}
-.card h3{ margin:0 0 6px; font-size:clamp(16px,2.2vw,22px); line-height:1.2; word-break:break-word; font-family:var(--font-display); }
-.price{ color:var(--primary); font-weight:900; font-size:clamp(14px,2vw,18px) }
-.icon{
-  width:72px; height:72px; image-rendering:pixelated; border-radius:10px;
-  border:2px solid rgba(255,255,255,.1);
-  background:#131d30;
+function clearCart() {
+  state.cart = [];
+  updateCartBar();
 }
 
-/* ---- Card foot ---- */
-.card-foot{
-  position:absolute; left:16px; right:16px; bottom:16px; display:flex; align-items:center; gap:12px;
-  padding-top:10px; border-top:1px solid rgba(255,255,255,.08); min-width:0;
-}
-.card-foot .actions{ margin-left:auto; display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; max-width:100%; }
-.card-foot .actions .btn{ min-width:122px }
-.card .row:last-child{
-  position:absolute; left:16px; right:16px; bottom:16px; display:flex; align-items:center; gap:12px;
-  padding-top:10px; border-top:1px solid rgba(255,255,255,.08); min-width:0;
-}
-.card .row:last-child .row{ margin-left:auto; display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; min-width:0; }
-.card .row:last-child .btn{ min-width:122px }
+$('#btnCheckout').addEventListener('click', async ()=>{
+  if (READONLY) return;
+  if (state.cart.length === 0) { toast?.('Tu carrito está vacío'); return; }
 
-/* ---- Panel ---- */
-.panel{
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel2) 85%, black 15%), var(--panel1));
-  border:1px solid var(--stroke); border-radius:16px; padding:16px; margin-bottom:16px; min-width:0;
-}
+  const payload = {
+    lines: state.cart.map(l => ({
+      id: l.id, name: l.name, qty: l.qty, price: l.priceUnit, options: l.options||{}
+    })),
+    total: state.cart.reduce((a,b)=>a+b.total,0),
+    createdAt: new Date(),
+    source: 'kiosk',
+    training: !!IS_TRAINING
+  };
 
-/* ---- Campos ---- */
-.field{ margin:10px 0; min-width:0; }
-label{ display:block; margin-bottom:6px; color:var(--muted); font-size:12px }
-input[type=text],input[type=number],input[type=date],input[type=datetime-local],input[type=url],input[type=tel],select,textarea{
-  width:100%; padding:12px; border-radius:10px; border:1px solid var(--stroke);
-  background:color-mix(in srgb, var(--panel2) 90%, black 10%);
-  color:var(--ink1);
-}
-textarea{ min-height:80px }
-.hr{ height:1px; background:var(--stroke); margin:12px 0 }
-input:-webkit-autofill{
-  -webkit-text-fill-color: var(--ink1);
-  -webkit-box-shadow: 0 0 0px 1000px color-mix(in srgb, var(--panel2) 90%, black 10%) inset;
-  box-shadow: 0 0 0px 1000px color-mix(in srgb, var(--panel2) 90%, black 10%) inset;
-}
+  try {
+    if (IS_TRAINING) {
+      beep?.(); toast?.('Modo PRUEBA: orden simulada ✅');
+      clearCart();
+      return;
+    }
+    const orderId = await DB.createOrder(payload);
+    beep?.(); toast?.(`Orden creada #${orderId}`);
+    // CTA: seguir pedido
+    openTrackCTA(orderId);
+    clearCart();
+  } catch (e) {
+    console.error(e);
+    toast?.('No se pudo crear la orden');
+  }
+});
 
-/* ---- Listas limpias ---- */
-.ul-clean{ display:grid; grid-template-columns:28px 1fr auto; gap:9px 10px; align-items:center; min-width:0; }
-.ul-clean input[type=checkbox]{ width:18px; height:18px; accent-color:var(--primary) }
-.ul-clean .tag{ font-size:12px; color:var(--muted-2) }
-
-/* ---- Modal ---- */
-.modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); z-index:70 }
-.modal.open{ display:grid }
-.modal-card{
-  width:min(680px,92vw); max-height:86vh; overflow:auto;
-  background:color-mix(in srgb, var(--panel1) 96%, black 4%);
-  border:1px solid var(--stroke); border-radius:16px; box-shadow:var(--shadow);
+// ===== Gamificación mínima ===================================================
+function gamifyMiniThree() {
+  const minis = state.cart.filter(l => (l.id||'').includes('mini')).reduce((a,b)=>a+b.qty,0);
+  if (minis >= MAX_MINIS_FOR_REWARD) {
+    safe(()=>beep?.(), 'beepMini');
+    toast?.('¡Logro! Combo 3 minis desbloqueado');
+  }
 }
-.modal-head{ padding:12px 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--stroke) }
-.modal-body{ padding:14px }
-.modal-foot{ position:sticky; bottom:0; padding:12px; background:color-mix(in srgb, var(--panel1) 96%, black 4%); border-top:1px solid var(--stroke) }
-.total-bar{ display:flex; align-items:center; gap:12px; justify-content:space-between }
-.total{ color:var(--primary); font-weight:900; font-size:18px }
-
-/* ---- Toast ---- */
-.toast{
-  position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:50;
-  display:none; align-items:center; gap:10px;
-  background:color-mix(in srgb, var(--panel1) 92%, black 8%);
-  border:1px solid var(--stroke); padding:12px 14px; border-radius:12px; box-shadow:var(--shadow);
+function scheduleDrinkNudge() {
+  const hasDrink = state.cart.some(l => /jugo|refresco|bebida/i.test(l.name));
+  if (hasDrink) return;
+  clearTimeout(state.nudgeTimer);
+  state.nudgeTimer = setTimeout(()=>{
+    const n = $('#__drinkNudge');
+    if (!n) return;
+    n.style.display = 'block';
+    n.animate([{transform:'translateY(8px)',opacity:.3},{transform:'translateY(0)',opacity:1}],{duration:180});
+  }, DRINK_HINT_DELAY);
 }
-.toast.show{ display:flex; animation:pop .18s ease-out }
-@keyframes pop{ from{ transform:translate(-50%,8px); opacity:.3 } to{ transform:translate(-50%,0); opacity:1 } }
+$('#__drinkNudge')?.addEventListener('click', (ev)=>{
+  const t = ev.target.closest('button[data-nudge]');
+  if (!t) return;
+  const map = {
+    naranja: { id:'drink-orange',  name:'Jugo de Naranja 500ml', price:25 },
+    zanahoria:{ id:'drink-carrot',  name:'Jugo de Zanahoria 500ml', price:15 },
+    refresco: { id:'drink-soda',    name:'Refresco', price:20 },
+  };
+  const p = map[t.dataset.nudge];
+  addToCart({ id:p.id, name:p.name, priceUnit: p.price, qty:1, options:{} });
+  $('#__drinkNudge').style.display = 'none';
+});
 
-/* ---- Kanban ---- */
-.k-columns{ display:grid; gap:16px; grid-template-columns:repeat(3,1fr); min-width:0; }
-.k-card{
-  border:1px solid var(--stroke); border-radius:12px; padding:12px;
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel2) 82%, black 18%), color-mix(in srgb, var(--panel1) 92%, black 8%));
-  margin-bottom:10px; min-width:0;
+// ===== Modal de personalización =============================================
+const modal = $('#customModal');
+let currentProd = null;
+let mQty = 1;
+function openCustomize(p) {
+  currentProd = p;
+  mQty = 1;
+  $('#mTitle').textContent = p.name;
+  $('#mPrice').textContent = money(getPriceWithHH(p.price) * mQty);
+  $('#mNotes').value = '';
+  renderOptions('#mExtras', p.extras||[]);
+  renderOptions('#mSauces', p.sauces||[]);
+  renderPairingChips(p);
+  openModal();
 }
-.k-head .title{ font-size:14px; margin-bottom:6px; font-family:var(--font-display); }
-.k-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-.k-badges{ display:flex; gap:6px; flex-wrap:wrap; }
-.k-badge{ background:#132b3b; border:1px solid var(--stroke); padding:2px 8px; border-radius:999px; font-size:12px; color:var(--muted) }
-.k-badge.ok{ background:#183a2a } .k-badge.warn{ background:#3a2f18 }
+function renderOptions(sel, list) {
+  const ul = $(sel);
+  ul.innerHTML = '';
+  list.forEach(opt=>{
+    const id = `${sel.slice(1)}_${opt.id}`;
+    const li = document.createElement('li');
+    li.style.display = 'contents';
+    li.innerHTML = `
+      <input type="checkbox" id="${id}" value="${opt.id}" />
+      <label for="${id}">${opt.name}</label>
+      <span class="tag">${money(opt.price)}</span>
+    `;
+    ul.appendChild(li);
+  });
+}
+function renderPairingChips(p) {
+  const box = $('#pairBox');
+  box.innerHTML = '';
+  // heurística simple por categoría
+  const suggestions = (p.category==='big' || p.category==='mini')
+    ? ['Jugo de Naranja','Refresco','Papas','Salsa Chimichurri']
+    : ['Refresco','Papas','Ketchup'];
+  suggestions.forEach(s=>{
+    const btn = document.createElement('button');
+    btn.className = 'btn tiny';
+    btn.textContent = s;
+    btn.addEventListener('click', ()=>{
+      if (/jugo/i.test(s)) {
+        addToCart({ id:'drink-orange', name:'Jugo de Naranja 500ml', priceUnit:25, qty:1, options:{} });
+      } else if (/refresco/i.test(s)) {
+        addToCart({ id:'drink-soda', name:'Refresco', priceUnit:20, qty:1, options:{} });
+      } else if (/papas/i.test(s)) {
+        addToCart({ id:'fries', name:'Papas', priceUnit:27, qty:1, options:{} });
+      } else if (/chimichurri/i.test(s)) {
+        // agrega aderezo como línea aparte (o podrías usar options)
+        addToCart({ id:'sauce-chimi', name:'Salsa Chimichurri', priceUnit:5, qty:1, options:{} });
+      }
+      toast?.(`${s} agregado`);
+    });
+    box.appendChild(btn);
+  });
+}
+function openModal(){ modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); }
+function closeModal(){ modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); }
+$('#mClose').addEventListener('click', closeModal);
+modal.addEventListener('click', (e)=> { if (e.target === modal) closeModal(); });
 
-/* ---- Tablas ---- */
-/* Contenedores con scroll horizontal */
-.table-wrap,
-.table-scroll{
-  overflow:auto;
-  -webkit-overflow-scrolling: touch;
-  border:1px solid var(--stroke);
-  border-radius:12px;
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel1) 92%, black 8%), color-mix(in srgb, var(--panel2) 86%, black 14%));
+$('#mLess').addEventListener('click', ()=>{ if (mQty>1){ mQty--; updateMPrice(); } });
+$('#mMore').addEventListener('click', ()=>{ mQty++; updateMPrice(); });
+function updateMPrice() {
+  const base = getPriceWithHH(currentProd.price);
+  const add = sumChecked('#mExtras') + sumChecked('#mSauces');
+  $('#mQty').textContent = String(mQty);
+  $('#mPrice').textContent = money((base + add) * mQty);
 }
-.table-wrap table,
-.table-scroll table{ min-width:720px; border-collapse:collapse; }
+function sumChecked(sel) {
+  let sum = 0;
+  $$(sel+' input[type=checkbox]:checked').forEach(ch=>{
+    const list = sel.endsWith('Extras') ? currentProd.extras : currentProd.sauces;
+    const opt = (list||[]).find(o=>o.id===ch.value);
+    if (opt) sum += opt.price;
+  });
+  return sum;
+}
+$('#mExtras').addEventListener('change', updateMPrice);
+$('#mSauces').addEventListener('change', updateMPrice);
 
-/* Tabla base (SIN elipsis por defecto) */
-.k-table{ width:100%; border-collapse:collapse; font-size:14px; }
-.k-table th,.k-table td{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08); vertical-align:middle; }
-.k-table th{ text-align:left; color:var(--muted); white-space:nowrap; }
-.k-table td{ white-space:nowrap; }
+$('#mAdd').addEventListener('click', ()=>{
+  if (!currentProd) return;
+  const base = getPriceWithHH(currentProd.price);
+  const selectedExtras = $$('#mExtras input[type=checkbox]:checked').map(x=>x.value);
+  const selectedSauces = $$('#mSauces input[type=checkbox]:checked').map(x=>x.value);
+  const add = sumChecked('#mExtras') + sumChecked('#mSauces');
 
-/* Modo compacto: solo si el contenedor tiene .compact */
-.compact .k-table th,
-.compact .k-table td{
-  overflow:hidden;
-  text-overflow:ellipsis;
-  max-width:0;
-}
+  const line = {
+    id: currentProd.id,
+    name: currentProd.name,
+    priceUnit: base + add,
+    qty: mQty,
+    options: {
+      extras: selectedExtras,
+      sauces: selectedSauces,
+      notes: $('#mNotes').value.trim()
+    }
+  };
+  addToCart(line);
+  closeModal();
+  toast?.(`${currentProd.name} agregado`);
+});
 
-/* ---- Responsive cards ---- */
-@media (max-width:640px){
-  .card{ padding:14px 14px 92px }
-  .card-foot,.card .row:last-child{ left:14px; right:14px; bottom:14px; gap:10px }
-  .card-foot .actions .btn,.card .row:last-child .btn{ min-width:calc(50% - 5px) }
-  .card h3{ font-size:18px; line-height:1.15 }
+// ===== Happy Hour / ETA (opt-in, no rompe si no existe) ======================
+function getPriceWithHH(price) {
+  if (state.hh?.active) {
+    // HH solo aplica al precio base (no extras)
+    const hhPrice = Math.max(1, Math.round(price * (state.hh.discount||1)));
+    return roundEnding(hhPrice);
+  }
+  return roundEnding(price);
 }
+function updateHHPill() {
+  const el = $('#hhPill');
+  if (!state.hh || !state.hh.active) {
+    el.textContent = 'Happy Hour — inactivo';
+    el.className = 'k-badge';
+    return;
+  }
+  el.textContent = 'Happy Hour — activo';
+  el.className = 'k-badge ok';
+}
+function updateETAPill() {
+  const el = $('#etaPill');
+  const m = state.eta?.minutes;
+  if (!m) { el.textContent = 'ETA — …'; return; }
+  el.textContent = `ETA — ${m} min`;
+  el.className = m <= 8 ? 'k-badge ok' : (m <= 15 ? 'k-badge warn' : 'k-badge');
+}
+safe(async()=>{
+  if (DB.subscribeHappyHour) {
+    DB.subscribeHappyHour(hh=>{
+      state.hh = hh;
+      updateHHPill();
+      // Recalcular totales existentes (solo base? aquí dejamos totales tal cual para no “mutar” carrito a mitad)
+      // UX: solo afecta nuevos agregados
+    });
+  }
+  if (DB.subscribeEta) {
+    DB.subscribeEta(eta=>{
+      state.eta = eta;
+      updateETAPill();
+    });
+  }
+}, 'subsHH_ETA');
 
-/* ---- Kiosko mobile ---- */
-@media (max-width: 520px){
-  .container{ padding:12px; }
-  .grid{ gap:12px; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); }
-  .card{ padding:12px 12px 86px; border-radius:12px; min-height: 220px; }
-  .card h3{ font-size: clamp(16px, 5.2vw, 20px); line-height: 1.15; margin: 0 0 6px; word-break: break-word; }
-  .card .row:last-child{ left:12px; right:12px; bottom:12px; gap:8px; }
-  .card .price{ font-size: clamp(16px, 4.6vw, 18px); }
-  .card .row:last-child .row{ gap:6px; flex-wrap: nowrap; justify-content: flex-end; }
-  .card .row:last-child .btn{ min-width: auto; padding: 10px 12px; }
-  .btn{ padding: 10px 12px; border-radius: 12px; }
-  .btn.small{ font-size: 12px; padding: 8px 10px; }
-}
-@media (max-width: 370px){
-  .card .row:last-child{ flex-direction: column; align-items: stretch; }
-  .card .row:last-child .row{ width: 100%; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-  .card .row:last-child .btn{ flex: 1 1 48%; }
-}
-@supports (-webkit-touch-callout: none) { .btn, .btn.tab, .btn.small, .btn.tiny{ font-size:16px; } }
-
-/* ---- Laterales ---- */
-@media (min-width:1280px){
-  body.has-sidebars main.container{ max-width:none; margin-left:320px; margin-right:320px; }
-  .side{ display:flex; }
-  #cards{ min-height:420px; }
-}
-@media (max-width:1279.98px){
-  .side{ display:none !important; }
-  body.has-sidebars main.container{ margin-left:auto; margin-right:auto; }
-}
-
-/* ---- Imagen producto ---- */
-.card .media{ display:flex; align-items:center; justify-content:center; height:140px; margin-top:4px; }
-.icon-img{
-  width:128px; height:128px; image-rendering: pixelated; border-radius:10px;
-  border:2px solid rgba(255,255,255,.08);
-  background:color-mix(in srgb, var(--panel2) 86%, black 14%);
-}
-@media (max-width:520px){ .card .media{ height:120px; } .icon-img{ width:112px; height:112px; } }
-
-/* ---- CRUD Artículos ---- */
-.k-table .btn.small.ghost{ padding:6px 8px; font-size:11px; line-height:1; }
-.k-table .btn.small.ghost[data-a="del"]{ color:var(--danger); }
-.badge-active{ background:#183a2a; color:var(--ok);   padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
-.badge-inactive{ background:#3a2f18; color:var(--warn); padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
-#artModal .modal-card{ width:min(480px,90vw); }
-#artModal .modal-body .field{ margin-bottom:12px; }
-
-/* ---- Happy Hour pill ---- */
-#panel-happy #hhCountdown{
-  display:inline-flex; align-items:center; justify-content:center; gap:8px;
-  padding:8px 12px; min-width:160px; white-space:nowrap; border-radius:999px;
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel1) 86%, black 14%), color-mix(in srgb, var(--panel2) 86%, black 14%));
-  border:1.5px solid color-mix(in srgb, var(--ink1) 18%, transparent);
-  box-shadow: 0 2px 0 rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.04);
-  color:var(--ink1); font-variant-numeric:tabular-nums; letter-spacing:.5px;
-}
-#panel-happy #hhCountdown::before{ content:""; width:10px; height:10px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 30%, transparent); }
-#panel-happy #hhCountdown.is-running{ border-color: color-mix(in srgb, var(--ok) 35%, transparent); box-shadow:0 0 0 1px color-mix(in srgb, var(--ok) 25%, transparent) inset, 0 0 16px color-mix(in srgb, var(--ok) 18%, transparent); animation:hhPulse 1.6s ease-in-out infinite; }
-#panel-happy #hhCountdown.is-warning{ border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
-#panel-happy #hhCountdown.is-warning::before{ background:var(--warn); box-shadow:0 0 0 3px color-mix(in srgb, var(--warn) 20%, transparent); }
-#panel-happy #hhCountdown.is-stopped, #panel-happy #hhCountdown.is-idle{ opacity:.75; }
-#panel-happy #hhCountdown.is-stopped::before{ background:#9aa3b2; box-shadow:0 0 0 3px rgba(255,255,255,.08); }
-@keyframes hhPulse{ 0%{transform:scale(1)} 50%{transform:scale(1.06)} 100%{transform:scale(1)} }
-#panel-happy .row [id^="btnHH"]{ border-radius:999px; padding:.45rem .7rem; }
-#panel-happy #btnHHStop{ border-color: color-mix(in srgb, var(--danger) 35%, black 65%); }
-
-/* ---- Historial ---- */
-#tblHist.k-table th, #tblHist.k-table td{ white-space:nowrap; vertical-align:middle; }
-#tblHist .btn.small.ghost{ padding:6px 8px; line-height:1; font-size:11px; }
-
-/* Sugerencias de anchuras cuando el contenedor está en modo compacto */
-.compact #tblHist th:nth-child(1), .compact #tblHist td:nth-child(1){ max-width:12ch; }
-.compact #tblHist th:nth-child(2), .compact #tblHist td:nth-child(2){ max-width:14ch; }
-.compact #tblHist th:nth-child(3), .compact #tblHist td:nth-child(3){ max-width:8ch; }
-.compact #tblHist th:nth-child(5), .compact #tblHist td:nth-child(5){ max-width:8ch; }
-
-@media (max-width: 480px){ #tblHist th:nth-child(4), #tblHist td:nth-child(4){ display:none; } }
-.modal .modal-card{ width:min(760px,94vw); max-height:86vh; }
-@media (max-width: 520px){ .modal .modal-card{ width:94vw; } }
-.k-table tbody tr:focus-within{ outline:2px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset:-2px; }
-@supports (-webkit-touch-callout: none) { #tblHist .btn.small.ghost{ font-size:14px; } }
-
-/* ---- Cocina responsive ---- */
-@media (max-width: 1100px){ .k-columns{ grid-template-columns:repeat(2,1fr); } }
-@media (max-width: 720px){
-  .k-columns{ grid-template-columns:1fr; }
-  .k-card{ padding:12px; }
-  .k-head .title{ font-size:13px; }
-  .k-badge{ font-size:11px; }
-  .k-actions{ gap:6px; }
-  .k-actions .btn.small{ padding:9px 10px; min-width:auto; }
-}
-.k-card, .k-head .title, .k-card .row, .k-badges{ min-width:0; }
-.k-card *{ word-break:break-word; }
-@media (max-width: 720px){
-  .k-columns{ max-height: calc(100vh - 180px); overflow:auto; -webkit-overflow-scrolling: touch; }
-}
-@media (max-width: 400px){
-  .k-actions{ flex-direction:row; flex-wrap:wrap; }
-  .k-actions .btn.small{ flex:1 1 48%; }
-}
-@media (max-width: 720px){
-  .k-card{ margin-bottom:8px; }
-  .k-table th,.k-table td{ padding:8px; }
-}
-@media (max-width: 720px){
-  .header{ position:sticky; top:0; }
-  body{ overscroll-behavior-y:none; }
+// ===== CTA de seguimiento tras confirmar =====================================
+function openTrackCTA(orderId) {
+  // Puedes abrir un modal de “seguir pedido ahora”
+  const url = new URL('../kiosk/track.html', location.origin);
+  url.searchParams.set('oid', orderId);
+  // Reutilizamos el toast como CTA sutil
+  toast?.('Tu pedido está en preparación. Toca aquí para seguirlo.');
+  $('#toast')?.addEventListener('click', ()=> location.href = url.toString(), { once:true });
 }
 
-/* ===== PANEL TEMAS — LISTA COMPACTA (anti-desborde) ===== */
-#panel-temas{ min-width:0; }
-#panel-temas .theme-list{ list-style:none; padding:0; margin:12px 0 0; display:flex; flex-direction:column; gap:10px; min-width:0; }
-#panel-temas .theme-item{
-  display:grid; grid-template-columns:16px 1fr auto; align-items:center; gap:10px; padding:10px 12px;
-  border:1px solid var(--stroke);
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel2) 70%, black 30%), color-mix(in srgb, var(--panel1) 85%, black 15%));
-  border-radius:12px; min-width:0;
-}
-#panel-temas .theme-item .dot{ width:12px; height:12px; border-radius:3px; background:var(--accent); box-shadow:0 0 8px var(--accent); }
-#panel-temas .theme-item .title{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#panel-temas .theme-item .btn{ justify-self:end; }
-#panel-temas .theme-item.is-active{ border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent) inset; }
-@media (max-width:420px){
-  #panel-temas .theme-item{ grid-template-columns:16px 1fr; }
-  #panel-temas .theme-item .btn{ grid-column:1/-1; justify-self:end; }
-}
+// ===== Accesibilidad básica ==================================================
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='Escape' && modal.classList.contains('open')) closeModal();
+});
 
-/* ---- Preferencias usuario, scrollbars e impresión ---- */
-@media (prefers-reduced-motion: reduce){
-  *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
-}
-*::-webkit-scrollbar{ width:10px; height:10px }
-*::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:8px; border:2px solid transparent; background-clip:padding-box }
-*::-webkit-scrollbar-track{ background:transparent }
-*{ -webkit-tap-highlight-color: rgba(255,255,255,.08); }
-@media print{
-  body{ background:#fff; color:#000; }
-  .header, .side, .toast, .modal{ display:none !important; }
-  .card{ box-shadow:none; background:#fff; border-color:#000; }
-}
+// ===== Inicio ================================================================
+await loadCatalog();
+updateCartBar();
+updateHHPill();
+updateETAPill();
 
-/* FIX de interacción en panel-temas */
-#panel-temas, #panel-temas .card { overflow: visible; }
-#panel-temas::before, #panel-temas::after,
-#panel-temas .card::before, #panel-temas .card::after { pointer-events: none !important; }
-#panel-temas select, #panel-temas button { position: relative; z-index: 5; pointer-events: auto; }
-
-/* =========================================================
-   NUEVO: Maridaje sugerido como CHIPS (solo dentro de #pairBox)
-   ========================================================= */
-#pairBox{
-  display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-  min-width:0;
+// ===== LEGACY/PRUEBA banners (solo informativo) =============================
+if (IS_TRAINING) {
+  const tag = document.createElement('div');
+  tag.className = 'badge';
+  tag.textContent = 'MODO PRUEBA';
+  document.body.appendChild(tag);
 }
-
-#pairBox .btn.tiny{
-  /* apariencia tipo chip, sin alterar otros botones */
-  border:1.5px solid color-mix(in srgb, var(--ink1) 22%, transparent);
-  background:linear-gradient(180deg, color-mix(in srgb, var(--panel2) 88%, black 12%), color-mix(in srgb, var(--panel1) 92%, black 8%));
-  color:var(--ink1);
-  border-radius:999px;
-  padding:6px 10px;
-  font-size:12px;
-  line-height:1.2;
-  box-shadow:none;
-  width:auto; max-width:100%;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-
-#pairBox .btn.tiny:hover{
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-#pairBox .btn.tiny:active{
-  transform: translateY(0); /* sin efecto “botón grande” */
-}
-
-#pairBox .btn.tiny:focus-visible{
-  outline:2px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  outline-offset:2px;
-  box-shadow:none;
-}
-
-/* iOS: respeta tamaño táctil mínimo */
-@supports (-webkit-touch-callout: none){
-  #pairBox .btn.tiny{ font-size:14px; padding:8px 10px; }
+if (IS_LEGACY) {
+  const tag = document.createElement('div');
+  tag.className = 'badge';
+  tag.textContent = 'LEGACY ON';
+  document.body.appendChild(tag);
 }
