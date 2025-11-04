@@ -528,29 +528,57 @@ function normalizeExtraIngredients(){
     .filter(obj => !isCarneGrande(obj?.name));
 }
 
-// Crea (si no existe) la barra sticky de progreso del modal
+// Crea la barra sticky del header y una mini barra junto al Total del footer.
+// Devuelve un setter (pct => ...) que sincroniza ambas.
 function ensureModalPowerBar(){
   const modal = document.getElementById('modal');
-  if (!modal) return null;
-  let bar = modal.querySelector('#mPower');
-  if (bar) return bar;
-  const head = modal.querySelector('.modal-head') || modal;
-  bar = document.createElement('div');
-  bar.id = 'mPower';
-  bar.setAttribute('aria-hidden','true');
-  bar.style.cssText = 'position:sticky;top:0;z-index:2;margin:-8px -8px 8px -8px;padding:8px;background:linear-gradient(0deg,rgba(0,0,0,.35),rgba(0,0,0,.35));backdrop-filter:blur(2px)';
-  bar.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px">
-      <div style="font-size:16px">⚡</div>
-      <div style="flex:1;height:10px;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.12)">
-        <div id="mPowerFill" style="width:0%;height:100%;background:linear-gradient(90deg,#ffd34d,#ff9f0a);transition:width .25s ease"></div>
-      </div>
-      <div id="mPowerPct" class="muted small" style="width:40px;text-align:right">0%</div>
-    </div>
-  `;
-  const mBody = document.getElementById('mBody');
-  if (mBody) mBody.prepend(bar);
-  return bar;
+  if (!modal) return (/*pct*/)=>{};
+
+  // HEADER (sticky) — fallback
+  let header = document.getElementById('mPower');
+  if (!header){
+    header = document.createElement('div');
+    header.id = 'mPower';
+    header.setAttribute('aria-hidden','true');
+    header.style.cssText = 'position:sticky;top:0;z-index:2;margin:-8px -8px 8px -8px;padding:8px;background:linear-gradient(0deg,rgba(0,0,0,.35),rgba(0,0,0,.35));backdrop-filter:blur(2px)';
+    header.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="font-size:16px">⚡</div>
+        <div style="flex:1;height:10px;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.12)">
+          <div id="mPowerFill" style="width:0%;height:100%;background:linear-gradient(90deg,#ffd34d,#ff9f0a);transition:width .25s ease"></div>
+        </div>
+        <div id="mPowerPct" class="muted small" style="width:40px;text-align:right">0%</div>
+      </div>`;
+    document.getElementById('mBody')?.prepend(header);
+  }
+
+  // FOOTER (mini) — junto a Total y antes del botón
+  const mAdd   = document.getElementById('mAdd');
+  const mTotal = document.getElementById('mTotal');
+  const foot   = mAdd ? mAdd.parentElement : null;
+  if (foot && !document.getElementById('mPowerMini')){
+    const mini = document.createElement('div');
+    mini.id = 'mPowerMini';
+    mini.setAttribute('aria-hidden','true');
+    mini.style.cssText = 'display:flex;align-items:center;gap:6px;margin:0 8px;width:96px';
+    mini.innerHTML = `
+      <div style="flex:1;height:6px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.12)">
+        <div id="mPowerMiniFill" style="width:0%;height:100%;background:linear-gradient(90deg,#ffd34d,#ff9f0a);transition:width .25s ease"></div>
+      </div>`;
+    if (mTotal) foot.insertBefore(mini, mAdd || null);
+    else foot.appendChild(mini);
+  }
+
+  // Setter unificado
+  return (pct)=>{
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    const f1 = document.getElementById('mPowerFill');
+    const p1 = document.getElementById('mPowerPct');
+    const f2 = document.getElementById('mPowerMiniFill');
+    if (f1) f1.style.width = v + '%';
+    if (p1) p1.textContent = v + '%';
+    if (f2) f2.style.width = v + '%';
+  };
 }
 
 function openItemModal(item, base, existingIndex=null){
@@ -562,15 +590,8 @@ function openItemModal(item, base, existingIndex=null){
   if(ttl) ttl.textContent = `${item.name} · ${money(item.price)}`;
   if(xBtn) xBtn.onclick = ()=> modal?.classList.remove('open');
 
-  // ----- PowerBar (sticky) -----
-  ensureModalPowerBar();
-  const setPower = (pct)=>{
-    const fill = document.getElementById('mPowerFill');
-    const pctEl= document.getElementById('mPowerPct');
-    const v = Math.max(0, Math.min(100, Math.round(pct)));
-    if (fill) fill.style.width = v + '%';
-    if (pctEl) pctEl.textContent = v + '%';
-  };
+  // ----- PowerBar (header + mini en footer, sincronizadas) -----
+  const setPower = ensureModalPowerBar();
 
   const sauces = state.menu?.extras?.sauces ?? [];
   const extrasIngr = normalizeExtraIngredients();
