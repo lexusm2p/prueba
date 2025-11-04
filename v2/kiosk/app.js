@@ -319,6 +319,18 @@ function renderCards(){
         ${iconSrc ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
                   : `<div class="icon" aria-hidden="true"></div>`}
       </div>
+      // ↓ Añade esto dentro del template de la card
+${(() => {
+  const inc = formatIngredientsFor(it, base).filter(Boolean);
+  const shown = inc.slice(0,3);
+  const extra = Math.max(0, inc.length - shown.length);
+  return `
+    <div class="k-chips" aria-label="Incluye">
+      ${shown.map(s=>`<span class="k-chip">${escapeHtml(s)}</span>`).join('')}
+      ${extra>0 ? `<span class="k-chip" data-more="${baseId}">+${extra}</span>` : ``}
+    </div>
+  `;
+})()}
       <div class="row">
         ${priceHtml}
         <div class="row" style="gap:8px">
