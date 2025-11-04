@@ -165,23 +165,6 @@ a:hover{ text-decoration:underline }
   border:2px solid color-mix(in srgb, var(--ink1) 25%, transparent);
   background:var(--panel2); color:var(--ink1); box-shadow:none;
 }
-.btn.ok{
-  border-color:var(--btnOkBorder);
-  background:linear-gradient(var(--btnOk1), var(--btnOk2));
-  box-shadow:0 6px 0 var(--btnOkShadow), 0 10px 18px rgba(0,0,0,.35);
-  color:#031b10;
-}
-.btn.warn{
-  border-color:var(--btnWarnBorder);
-  background:linear-gradient(var(--btnWarn1), var(--btnWarn2));
-  box-shadow:0 6px 0 var(--btnWarnShadow), 0 10px 18px rgba(0,0,0,.35);
-  color:#1a1200;
-}
-.btn.danger{
-  border-color:var(--btnDangerBorder);
-  background:linear-gradient(var(--btnDanger1), var(--btnDanger2));
-  box-shadow:0 6px 0 var(--btnDangerShadow), 0 10px 18px rgba(0,0,0,.35);
-}
 
 /* >>> NUEVO: tamaño extra-pequeño para chips (compat seguro) */
 .btn.tiny{ padding:6px 10px; font-size:11px; line-height:1.2; border-radius:10px; }
@@ -264,7 +247,7 @@ input:-webkit-autofill{
   box-shadow: 0 0 0px 1000px color-mix(in srgb, var(--panel2) 90%, black 10%) inset;
 }
 
-/* ---- Listas limpias ---- */
+/* ---- Listas limpias (vista general) ---- */
 .ul-clean{
   display:grid; grid-template-columns:28px 1fr auto;
   gap:9px 10px; align-items:center; min-width:0;
@@ -272,7 +255,7 @@ input:-webkit-autofill{
 .ul-clean input[type=checkbox]{ width:18px; height:18px; accent-color:var(--primary) }
 .ul-clean .tag{ font-size:12px; color:var(--muted-2) }
 
-/* ---- Modal ---- */
+/* ===== Modal ===== */
 .modal{ position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); z-index:70 }
 .modal.open{ display:grid }
 .modal-card{
@@ -288,6 +271,29 @@ input:-webkit-autofill{
 }
 .total-bar{ display:flex; align-items:center; gap:12px; justify-content:space-between }
 .total{ color:var(--primary); font-weight:900; font-size:18px }
+
+/* >>> FIX modal: scroll interno seguro en móviles y en carrito */
+#modal .modal-body,
+#cartModal #cartBody{
+  max-height: calc(100vh - 210px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* >>> FIX modal: details + listas sin solaparse (usa flex-wrap) */
+#modal details summary{ cursor:pointer; padding:6px 0; }
+#modal .ul-clean{ display:block; }
+#modal .ul-clean label{
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap; line-height:1.2;
+}
+#modal .ul-clean .tag{ margin-left:auto; white-space:nowrap; }
+
+/* >>> Chips para “Incluye” */
+.k-chips{ display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
+.k-chip{
+  font-size:.85rem; padding:4px 8px; border-radius:999px;
+  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+}
 
 /* ---- Toast ---- */
 .toast{
@@ -314,7 +320,6 @@ input:-webkit-autofill{
 .k-badge.ok{ background:#183a2a } .k-badge.warn{ background:#3a2f18 }
 
 /* ---- Tablas ---- */
-/* Contenedores con scroll horizontal */
 .table-wrap, .table-scroll{
   overflow:auto; -webkit-overflow-scrolling: touch;
   border:1px solid var(--stroke); border-radius:12px;
@@ -525,14 +530,13 @@ input:-webkit-autofill{
    ========================================================= */
 #pairBox{ display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
 #pairBox .btn.tiny{
-  /* apariencia tipo chip, sin alterar otros botones */
   border:1.5px solid color-mix(in srgb, var(--ink1) 22%, transparent);
   background:linear-gradient(180deg, color-mix(in srgb, var(--panel2) 88%, black 12%), color-mix(in srgb, var(--panel1) 92%, black 8%));
   color:var(--ink1); border-radius:999px; padding:6px 10px; font-size:12px; line-height:1.2;
   box-shadow:none; width:auto; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 #pairBox .btn.tiny:hover{ border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
-#pairBox .btn.tiny:active{ transform: translateY(0); /* sin efecto “botón grande” */ }
+#pairBox .btn.tiny:active{ transform: translateY(0); }
 #pairBox .btn.tiny:focus-visible{
   outline:2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset:2px; box-shadow:none;
 }
@@ -565,7 +569,7 @@ body.has-cart{ padding-bottom: 86px; }
   padding: 4px 8px; border-radius: 6px; font: 12px/1.2 system-ui;
 }
 
-/* ===== Barra de carrito fija (compat con /kiosk/app.js) ===== */
+/* ===== Barra de carrito fija ===== */
 #cartBar{
   position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60;
   display: none; align-items: center; gap: 10px;
@@ -578,16 +582,13 @@ body.has-cart{ padding-bottom: 86px; }
 #cartBarTotal{ color: var(--primary); font-weight: 900; }
 #openCart{ margin-left: auto; }
 
-/* ============ Packs de íconos por tema (data-* helpers) ============ */
+/* ===== Packs de íconos por tema (data-* helpers) ===== */
 [data-theme-icon]{
   width:128px; height:128px;
   background-size: contain; background-position:center; background-repeat:no-repeat;
   image-rendering: pixelated; border-radius:10px; border:2px solid rgba(255,255,255,.08);
   background:color-mix(in srgb, var(--panel2) 86%, black 14%);
 }
-[data-theme-image]{
-  background-size: cover; background-position: center; background-repeat: no-repeat;
-}
+[data-theme-image]{ background-size: cover; background-position: center; background-repeat: no-repeat; }
 /* Asegura nitidez pixel para <img> también */
 .icon-img{ image-rendering: pixelated; }
-
