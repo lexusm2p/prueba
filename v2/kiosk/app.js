@@ -3,6 +3,7 @@
 // - Nudge de bebida (2 botones) tras agregar
 // - Modales con secciones plegables (menos ruido)
 // - Mantiene HH/ETA, regalos, lealtad y seguimiento
+// - NEW: Acordeón con barra de poder + highlights por producto
 
 /* ======================= Bootstrap / rutas ======================= */
 const __parts = location.pathname.split('/').filter(Boolean); // ["prueba","v2","kiosk", ...]
@@ -68,7 +69,8 @@ async function fetchCatalogWithFallback(){
       burgers: cat?.burgers?.length||0,
       minis:   cat?.minis?.length||0,
       sides:   cat?.sides?.length||0,
-      drinks:  cat?.drinks?.length||0
+      drinks:  cat?.drinks?.length||0,
+      combos:  cat?.combos?.length||0
     });
     window.__CATALOG = cat;
     document.getElementById('__debugMenu')?.remove();
@@ -113,6 +115,114 @@ function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
+}
+
+/* ======================= Highlights (gancho por producto) ======================= */
+// Usa item.highlight si existe; si no, cae al mapa por id base.
+const HIGHLIGHTS = {
+  starter:   'La base de todo · sencilla',
+  koopa:     'Crunch dulce: piña + tocino',
+  fatality:  'Picoso extremo: habanero + cheddar + tocino',
+  mega:      'Cheddar cremoso + salchicha y bacon',
+  hadouken:  'Doble queso + chipotle · clásico SF',
+  nintendo:  'Nostalgia noventera con piña',
+  finalboss: 'La más cargada · sensación de jefe final'
+};
+function getHighlight(item, base){
+  const id = (base?.id || item?.id || '').toLowerCase();
+  return item?.highlight || HIGHLIGHTS[id] || '';
+}
+
+/* ======================= Acordeón + Barra de poder ======================= */
+function buildAccordionForItem(item, base){
+  // Combos: listar componentes + ingredientes
+  if (item?.type === 'combo' && Array.isArray(item.items) && item.items.length){
+    const subs = item.items.map(it=>{
+      const ref = findItemById(it.id);
+      const qty = it.qty && it.qty>1 ? ` ×${it.qty}` : '';
+      const inc = ref ? formatIngredientsFor(ref, baseOfItem(ref)) : [];
+      return `
+        <li>
+          <strong>${escapeHtml(ref?.name || it.id)}${qty}</strong>
+          ${inc?.length ? `<ul style="margin:4px 0 0 14px">${inc.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ul>` : ''}
+        </li>
+      `;
+    }).join('');
+    const short = item.items.slice(0,3).map(it=>{
+      const ref = findItemById(it.id);
+      const qty = it.qty && it.qty>1 ? ` ×${it.qty}` : '';
+      return `${escapeHtml(ref?.name || it.id)}${qty}`;
+    });
+    const extra = Math.max(0, item.items.length - short.length);
+
+    return `
+      <details class="ing-acc" data-acc data-id="${escapeHtml(item.id)}">
+        <summary class="ing-head">
+          <div class="k-chips">
+            ${short.map(s=>`<span class="k-chip">${s}</span>`).join('')}
+            ${extra>0 ? `<span class="k-chip chip-more" data-more>+${extra}</span>` : ``}
+          </div>
+          ${getHighlight(item, base) ? `<div class="muted small" style="margin-top:4px">${escapeHtml(getHighlight(item, base))}</div>`:''}
+          ${powerBarHtml('⭐')}
+        </summary>
+        <ul class="ing-list" style="margin:8px 0 0 18px">${subs}</ul>
+      </details>
+    `;
+  }
+
+  // Burgers/sides/drinks normales
+  const inc = formatIngredientsFor(item, base).filter(Boolean);
+  if (!inc.length) return getHighlight(item, base)
+    ? `<div class="muted small" style="margin-top:4px">${escapeHtml(getHighlight(item, base))}</div>`
+    : '';
+
+  const shown = inc.slice(0,3);
+  const extra = Math.max(0, inc.length - shown.length);
+  return `
+    <details class="ing-acc" data-acc data-id="${escapeHtml(item.id)}">
+      <summary class="ing-head">
+        <div class="k-chips" aria-label="Incluye">
+          ${shown.map(s=>`<span class="k-chip">${escapeHtml(s)}</span>`).join('')}
+          ${extra>0 ? `<span class="k-chip chip-more" data-more>+${extra}</span>` : ``}
+        </div>
+        ${getHighlight(item, base) ? `<div class="muted small" style="margin-top:4px">${escapeHtml(getHighlight(item, base))}</div>`:''}
+        ${powerBarHtml(item.mini ? '🍔' : '🍔')}
+      </summary>
+      <ul class="ing-list" style="margin:8px 0 0 18px">
+        ${inc.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}
+      </ul>
+    </details>
+  `;
+}
+function powerBarHtml(icon='🍔'){
+  return `
+    <div class="power-bar" aria-hidden="true"
+         style="display:flex;align-items:center;gap:6px;margin-top:6px">
+      <div class="power-icon" role="img" aria-label="icon"
+           style="font-size:16px;line-height:1">${icon}</div>
+      <div class="power-track" style="flex:1;height:8px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.08);">
+        <div class="power-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#ffd34d,#ff9f0a);transition:width .35s ease;"></div>
+      </div>
+    </div>
+  `;
+}
+// Animación / sonido al abrir/cerrar
+function bindAccordionBehavior(container){
+  container.addEventListener('toggle', (e)=>{
+    const d = e.target;
+    if (!d?.matches?.('details.ing-acc')) return;
+    const fill = d.querySelector('.power-fill');
+    if (!fill) return;
+    if (d.open){
+      // Al abrir: “descarga” → 0%
+      fill.style.width = '0%';
+      try{ beep(); }catch{}
+    } else {
+      // Al cerrar: “carga” → 100%
+      fill.style.width = '100%';
+      try{ beep(); }catch{}
+    }
+  });
 }
 
 /* ======================= Bebidas / Combo Drink ======================= */
@@ -316,17 +426,9 @@ function renderCards(){
         ${iconSrc ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
                   : `<div class="icon" aria-hidden="true"></div>`}
       </div>
-      ${(() => {
-        const inc = formatIngredientsFor(it, base).filter(Boolean);
-        const shown = inc.slice(0,3);
-        const extra = Math.max(0, inc.length - shown.length);
-        return `
-          <div class="k-chips" aria-label="Incluye">
-            ${shown.map(s=>`<span class="k-chip">${escapeHtml(s)}</span>`).join('')}
-            ${extra>0 ? `<span class="k-chip" data-more="${baseId}">+${extra}</span>` : ``}
-          </div>
-        `;
-      })()}
+
+      ${buildAccordionForItem(it, base)}
+
       <div class="row">
         ${priceHtml}
         <div class="row" style="gap:8px">
@@ -339,8 +441,9 @@ function renderCards(){
     `;
     grid.appendChild(card);
 
-    // Abrir modal al tocar +N de ingredientes
-    card.querySelector('[data-more]')?.addEventListener('click', () => {
+    // Abrir modal al tocar +N (dentro del acordeón también)
+    card.querySelector('[data-more]')?.addEventListener('click', (ev)=>{
+      ev.preventDefault();
       openItemModal(it, base);
     });
 
@@ -352,6 +455,8 @@ function renderCards(){
     }
   });
 
+  // Comportamiento del acordeón (barra de poder + beep)
+  bindAccordionBehavior(grid);
   enableCombosTab();
 }
 
