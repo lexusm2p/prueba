@@ -17,8 +17,7 @@ if (el) el.textContent = 'App.js cargado — iniciando módulos…';
 import { beep, toast } from '../shared/notify.js';
 import * as DB from '../shared/db.js';
 import { ensureAuth } from '../shared/firebase.js';
-import { initThemeFromSettings, applyThemeLocal, listThemes } from '../shared/theme.js';
-import { setTheme } from '../shared/theme.js';
+import { initThemeFromSettings } from '../shared/theme.js';
 
 /* ======================= Estado global ======================= */
 const state = {
@@ -36,9 +35,9 @@ const state = {
   topToday: [],
   // combos bebida
   drinkComboActive: false,
-  // recompensas (placeholder, se pueden encender desde tu JSON / reglas)
+  // recompensas (placeholder)
   rewards: { type:null, discountCents:0, miniDog:false, decided:false },
-  // regalo por umbral (mantén tu lógica si ya la usas)
+  // regalo por umbral
   gift: {
     threshold: 117,
     productId: 'powerdog-mini',
@@ -48,7 +47,7 @@ const state = {
   },
   // tema
   themeName: '',
-  // id de última orden para seguimiento
+  // id de última orden
   lastOrderId: null,
   // flags
   isSubmittingOrder: false,
@@ -73,28 +72,8 @@ async function fetchCatalogWithFallback(){
     });
     window.__CATALOG = cat;
 
-    // === DEBUG OVERLAY SOLO SI SE PIDE ===
-    const showDebug =
-      new URLSearchParams(location.search).get('debug') === '1' ||
-      sessionStorage.getItem('__debugMenu') === '1';
-
-    const prev = document.getElementById('__debugMenu');
-    if (!showDebug && prev) prev.remove();
-
-    if (showDebug && !prev) {
-      const box = document.createElement('div');
-      box.id = '__debugMenu';
-      box.style.cssText = 'position:fixed;right:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;padding:10px 12px;border-radius:10px;font:14px/1.2 system-ui;z-index:10000;max-width:40vw';
-      box.innerHTML = `
-        <div style="opacity:.8">DEBUG menú</div>
-        <div>Burgers: <b>${cat?.burgers?.length||0}</b></div>
-        <div>Minis: <b>${cat?.minis?.length||0}</b></div>
-        <div>Sides: <b>${cat?.sides?.length||0}</b></div>
-        <div>Drinks: <b>${cat?.drinks?.length||0}</b></div>
-        <hr style="border:none;border-top:1px solid rgba(255,255,255,.2);margin:6px 0">
-        <div>${(cat?.burgers||[]).map(b=>`• ${b.name} — $${b.price}`).join('<br>')}</div>`;
-      document.body.appendChild(box);
-    }
+    // 🔕 Eliminar cualquier overlay viejo de debug, y NO crear ninguno nuevo
+    document.getElementById('__debugMenu')?.remove();
 
     return cat;
   }catch(e){
@@ -124,6 +103,7 @@ function baseOfItem(item){
 }
 function formatIngredientsFor(item, base){
   const meatDefaultBig  = Number(state.menu?.appSettings?.meatGrams ?? 85);
+  the meatDefaultMini
   const meatDefaultMini = Number(state.menu?.appSettings?.miniMeatGrams ?? 45);
   const grams = Number(item?.meatGrams ?? (item?.mini ? meatDefaultMini : meatDefaultBig));
   const src = (Array.isArray(item?.ingredients) && item.ingredients.length)
@@ -404,7 +384,7 @@ function smartDrinkNudge(){
   setTimeout(()=>{ try{ box.remove(); }catch{} }, 5000);
 }
 
-/* ======================= Combos (añade laterales, etc. si los tienes en menú) ======================= */
+/* ======================= Combos ======================= */
 function addComboToCart(combo){
   try{
     (combo.items||[]).filter(i=>i.kind==='burger').forEach(i=>{
@@ -423,7 +403,6 @@ function addComboToCart(combo){
         hhDisc: d*(i.qty||1)
       });
     });
-    // (opcional: papas/bebidas incluidos) …
     ensureDrinkPrices();
     updateCartBar(); beep(); toast(`${combo.name} agregado`);
   } catch(e){
@@ -432,7 +411,7 @@ function addComboToCart(combo){
   }
 }
 
-/* ======================= Modal Personalizar (acordiones) ======================= */
+/* ======================= Modal Personalizar ======================= */
 function normalizeExtraIngredients(){
   const raw = state.menu?.extras?.ingredients ?? [];
   const defaultPrice = Number(state.menu?.extras?.ingredientPrice ?? 0);
@@ -592,15 +571,31 @@ function openItemModal(item, base, existingIndex=null){
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
-// Helpers de recálculo/total del modal
+// Recalcular líneas
 function recomputeAllLines() {
   ensureDrinkPrices();
   state.cart.forEach(l => { if (l?.type !== 'drink') recomputeLine(l); });
 }
-function paintCartTotal() {
-  const totalEl = document.getElementById('cartTotal');
-  const total = state.cart.reduce((a, l) => a + Number(l.lineTotal || 0), 0);
-  if (totalEl) { totalEl.style.display=''; totalEl.textContent = money(total); }
+
+// ⚖️ Desglose: Subtotal (antes de HH), Descuento HH, Total (ya con HH)
+function computeBreakdown() {
+  let total = 0;
+  let hh = 0;
+  for (const l of state.cart) {
+    total += Number(l.lineTotal || 0);
+    hh    += Number(l.hhDisc    || 0); // bebidas traen 0
+  }
+  const subtotal = total + hh; // previo a descuento HH
+  return { subtotal, hh, total };
+}
+function paintBreakdown() {
+  const { subtotal, hh, total } = computeBreakdown();
+  const subEl = document.getElementById('cartSub');
+  const hhEl  = document.getElementById('cartHH');
+  const totEl = document.getElementById('cartTotal');
+  if (subEl) subEl.textContent = money(subtotal);
+  if (hhEl)  hhEl.textContent  = (hh>0?'-':'') + money(hh);
+  if (totEl) totEl.textContent = money(total);
 }
 
 function updateCartBar(){
@@ -611,8 +606,7 @@ function updateCartBar(){
   if (countEl) countEl.textContent = `${count} producto${count!==1?'s':''}`;
   if (totalEl) totalEl.textContent = money(total);
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
-  document.body.classList.toggle('has-cart', count>0); // para padding-bottom en mobile
-  // regalo por umbral (si lo usas)
+  document.body.classList.toggle('has-cart', count>0);
   checkGiftUnlock(!state.gift.shownThisSession);
 }
 
@@ -699,16 +693,13 @@ function openCartModal(){
   if(m) m.style.display='grid';
 
   const confirmBtn = document.getElementById('cartConfirm');
-  const totalEl    = document.getElementById('cartTotal');
 
   if(state.cart.length===0){
     if(body) body.innerHTML = '<div class="muted">Tu carrito está vacío.</div>';
     if (confirmBtn) confirmBtn.style.display = 'none';
-    if (totalEl) totalEl.style.display = 'none';
     return;
   }
   if (confirmBtn) confirmBtn.style.display = '';
-  if (totalEl) totalEl.style.display = '';
 
   if (body) body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
@@ -766,6 +757,23 @@ function openCartModal(){
             <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
           </div>
         </div>`;}).join('')}
+    </div>
+
+    <div class="hr"></div>
+    <!-- 🧾 Bloque de desglose -->
+    <div id="cartSummary" class="field">
+      <div class="row" style="justify-content:space-between">
+        <span class="muted">Subtotal</span>
+        <strong id="cartSub">$0</strong>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <span class="muted">Descuento Happy Hour</span>
+        <strong id="cartHH">-$0</strong>
+      </div>
+      <div class="row" style="justify-content:space-between;margin-top:6px">
+        <span>Total</span>
+        <strong id="cartTotal">$0</strong>
+      </div>
     </div>`;
 
   const typeSel    = document.getElementById('orderType');
@@ -834,9 +842,9 @@ function openCartModal(){
     }
   };
 
-  // recálculo inicial y total pintado
+  // recálculo inicial y pintado del desglose
   recomputeAllLines();
-  paintCartTotal();
+  paintBreakdown();
 
   // confirmar
   if (confirmBtn){
@@ -847,7 +855,7 @@ function openCartModal(){
 
       ensureDrinkPrices();
       state.cart.forEach(recomputeLine);
-      paintCartTotal();
+      paintBreakdown();
 
       const prevLabel = confirmBtn.textContent;
       confirmBtn.disabled = true; confirmBtn.setAttribute('aria-busy','true');
@@ -880,25 +888,15 @@ function openCartModal(){
           salsaDefault: l.salsaDefault, salsaCambiada: l.salsaCambiada,
           extras: l.extras, notes: l.notes || null, lineTotal: l.lineTotal, hhDisc: Number(l.hhDisc || 0),
           isGift: !!l.isGift
-        })).filter(l => !l.isGift); // no enviamos regalo de umbral como línea formal
+        })).filter(l => !l.isGift);
 
         const subtotalBase = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
         const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
         const subtotal = Math.max(0, subtotalBase);
-
         const hh = state.menu?.happyHour || { enabled:false, discountPercent:0, applyEligibleOnly:true };
-        const hhSummary = {
-          enabled: !!hh.enabled,
-          discountPercent: Number(hh.discountPercent || 0),
-          applyEligibleOnly: hh.applyEligibleOnly !== false,
-          totalDiscount: Number(hhTotalDiscount || 0)
-        };
-
-        const clientId = `c_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
-        const provisionalId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
         const orderBase = {
-          clientId,
+          clientId: `c_${Date.now()}_${Math.floor(Math.random()*1e6)}`,
           customer: state.customerName,
           orderType: state.orderMeta.type,
           table: state.orderMeta.type === 'dinein' ? state.orderMeta.table : null,
@@ -907,7 +905,12 @@ function openCartModal(){
           items: itemsForDB,
           subtotal,
           notes: null,
-          hh: hhSummary,
+          hh: {
+            enabled: !!hh.enabled,
+            discountPercent: Number(hh.discountPercent || 0),
+            applyEligibleOnly: hh.applyEligibleOnly !== false,
+            totalDiscount: Number(hhTotalDiscount || 0)
+          },
           rewards: { type:null, discount:0, discountCents:0, miniDog:false, decided:false },
           createdAt: Date.now()
         };
@@ -919,10 +922,9 @@ function openCartModal(){
         } catch (e) {
           console.warn('createOrder error, usando provisional:', e);
         }
-        if (!orderId) orderId = provisionalId;
+        if (!orderId) orderId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
         state.lastOrderId = orderId;
 
-        // WhatsApp + cliente (best-effort)
         if (orderBase.phone) {
           await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId }).catch(()=>{});
           await DB.attachLastOrderRef?.(orderBase.phone, orderId).catch(()=>{});
@@ -946,7 +948,6 @@ function openCartModal(){
         updateCartBar();
         const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
 
-        // abre seguimiento directo (menos pasos)
         setTimeout(()=>{
           const u = new URL('./track.html', location.href);
           if (orderBase.phone) u.searchParams.set('phone', orderBase.phone);
@@ -1086,10 +1087,8 @@ async function init(){
   if (state.unsubTheme) { try{ state.unsubTheme(); }catch{} state.unsubTheme = null; }
   state.unsubTheme = initThemeFromSettings({ defaultName: 'Base' });
 
-  // Modo admin (PIN ya lo tienes si usas tu panel); aquí sólo soportamos panel flotante simple si quisieras
   if (sessionStorage.getItem('kioskAdmin') === '1') {
     state.adminMode = true;
-    // mountThemePanel(); // opcional, si lo necesitas
   }
 }
 
