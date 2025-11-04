@@ -1,172 +1,163 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Seven — Kiosko V2 (test)</title>
-  <meta name="robots" content="noindex,nofollow" />
-  <link rel="stylesheet" href="../shared/styles.css" />
-  <link rel="stylesheet" href="../shared/styles.legacy.css" />
+  <meta name="robots" content="noindex,nofollow"/>
+
+  <!-- Solo el stylesheet nuevo -->
+  <link rel="stylesheet" href="../shared/styles.css"/>
 
   <style>
-    body {
-      background: #0f1422;
-      color: #fff8e6;
-      font-family: system-ui, Arial, sans-serif;
-      margin: 0;
-      overflow-x: hidden;
+    body{ background:#0f1422; color:#fff8e6; font-family:system-ui, Arial, sans-serif; margin:0; overflow-x:hidden; }
+    #app{ padding:16px; font-size:20px; }
+    .err{ position:fixed; left:8px; bottom:8px; background:#000a; color:#ffb; padding:8px; border:1px solid #834; max-width:92vw; white-space:pre-wrap; z-index:99999; }
+    .badge{ position:fixed; right:8px; bottom:8px; background:#111a; border:1px solid #345; color:#9fe; padding:4px 8px; border-radius:6px; font:12px/1.2 system-ui; z-index:9999; }
+
+    /* Layout principal */
+    header.header { position:sticky; top:0; z-index:30; }
+    main.container { padding-top:8px; padding-bottom:96px; } /* deja espacio para la barra del carrito */
+
+    /* Tabs compactas centradas */
+    #tabsBar{ display:flex; justify-content:center; gap:10px; margin-top:6px; flex-wrap:wrap; }
+    .tab{ background:var(--panel1,#111); border:2px solid var(--accent,#ff7a00); border-radius:10px; color:var(--text,#fff);
+          font-family:var(--font-display,'Press Start 2P'); padding:10px 14px; cursor:pointer; }
+    .tab.is-active{ background:var(--accent,#ff7a00); color:#000; }
+
+    /* Grid de cards */
+    #cards.grid{ display:grid; gap:var(--gap,16px); grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
+
+    /* Barra de carrito fija */
+    #cartBar{
+      position:fixed; left:0; right:0; bottom:0; z-index:40;
+      display:none; align-items:center; justify-content:center; gap:12px;
+      padding:10px 12px;
+      background:color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(6px);
+      border-top:1px solid var(--stroke, rgba(255,255,255,.1));
     }
-    #app {
-      padding: 16px;
-      font-size: 20px;
-    }
-    .err {
-      position: fixed;
-      left: 8px;
-      bottom: 8px;
-      background: #000a;
-      color: #ffb;
-      padding: 8px;
-      border: 1px solid #834;
-      max-width: 92vw;
-      white-space: pre-wrap;
-      z-index: 99999;
-    }
-    .badge {
-      position: fixed;
-      right: 8px;
-      bottom: 8px;
-      background: #111a;
-      border: 1px solid #345;
-      color: #9fe;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font: 12px/1.2 system-ui;
-      z-index: 9999;
-    }
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      padding: 32px;
-      max-width: 1200px;
-      margin: 80px auto;
-    }
-    .burger-card {
-      background: rgba(0, 0, 0, 0.6);
-      border: 2px solid var(--accent, #ff7a00);
-      border-radius: 16px;
-      padding: 18px;
-      text-align: center;
-      color: var(--text, #fff);
-      font-family: var(--font-display, 'Press Start 2P');
-      box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      cursor: pointer;
-    }
-    .burger-card:hover {
-      transform: scale(1.06);
-    }
-    #tabsBar {
-      display: flex;
-      justify-content: center;
-      margin-top: 60px;
-      gap: 10px;
-    }
-    .tab {
-      background: var(--panel1, #111);
-      border: 2px solid var(--accent, #ff7a00);
-      border-radius: 10px;
-      color: var(--text, #fff);
-      font-family: var(--font-display, 'Press Start 2P');
-      padding: 10px 16px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .tab.is-active {
-      background: var(--accent, #ff7a00);
-      color: #000;
-    }
+    #openCart.btn{ border-radius:999px; }
   </style>
 </head>
 <body data-theme="base">
-  <div id="app">Cargando Kiosko V2…</div>
-
-  <div id="tabsBar" class="tabs">
-    <button id="btnMinis" class="tab is-active">Minis</button>
-    <button id="btnBig" class="tab">Big</button>
-  </div>
-
-  <div id="cards" class="cards-grid"></div>
-
-  <div id="cartBar" style="display:none">
-    <button id="openCart">
-      <span id="cartCount">0</span> · <span id="cartBarTotal">$0</span>
-    </button>
-  </div>
-
-  <div id="modal" class="modal">
-    <div id="mBody"></div>
-    <button id="mAdd"></button>
-    <span id="mTotal"></span>
-    <button id="mClose">×</button>
-  </div>
-
-  <div id="cartModal" class="modal">
-    <div id="cartBody"></div>
-    <div id="cartTotal"></div>
-    <button id="cartConfirm">Confirmar pedido</button>
-    <button id="cartClose">×</button>
-  </div>
-
+  <!-- Guard para _freezeSettings muy temprano -->
   <script>
-    // 🔒 Protección temprana
     if (typeof window !== 'undefined' && !window._freezeSettings) {
-      window._freezeSettings = (s) => Object.freeze({ ...(s || {}) });
+      window._freezeSettings = (s) => Object.freeze({ ...(s||{}) });
     }
   </script>
 
+  <!-- Encabezado / marca -->
+  <header class="header">
+    <div class="brand" onclick="location.reload()">
+      <div class="dot"></div>
+      <div>
+        <div>Seven de Burgers</div>
+        <div class="title-sub">Kiosko V2 (test)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav id="tabsBar" class="tabs">
+    <button id="btnMinis" class="btn tab is-active">Minis</button>
+    <button id="btnBig" class="btn tab">Big</button>
+  </nav>
+
+  <!-- Contenido -->
+  <main class="container">
+    <div id="app" class="muted">App.js cargado — iniciando módulos…</div>
+    <section id="cards" class="grid" aria-live="polite"></section>
+  </main>
+
+  <!-- Barra de carrito fija -->
+  <div id="cartBar">
+    <button id="openCart" class="btn ok small">
+      <span id="cartCount">0</span> artículos · <span id="cartBarTotal">$0</span> — Ver carrito
+    </button>
+  </div>
+
+  <!-- Modal de personalización (estructura estándar del stylesheet) -->
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+      <div class="modal-head">
+        <strong id="mTitle">Personalizar</strong>
+        <button id="mClose" class="btn small ghost" aria-label="Cerrar">×</button>
+      </div>
+      <div id="mBody" class="modal-body"></div>
+      <div class="modal-foot">
+        <div class="total-bar">
+          <span class="muted">Total</span>
+          <strong id="mTotal" class="total">$0</strong>
+          <div class="row">
+            <button id="mAdd" class="btn ok">Agregar al carrito</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de carrito -->
+  <div id="cartModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+      <div class="modal-head">
+        <strong id="cTitle">Tu pedido</strong>
+        <button id="cartClose" class="btn small ghost" aria-label="Cerrar">×</button>
+      </div>
+      <div id="cartBody" class="modal-body"></div>
+      <div class="modal-foot">
+        <div class="total-bar">
+          <span class="muted">Total</span>
+          <strong id="cartTotal" class="total">$0</strong>
+          <div class="row">
+            <button id="cartConfirm" class="btn ok">Confirmar pedido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Insignia de modo -->
   <script>
-    // 🧩 Flags globales
     const qs = new URLSearchParams(location.search);
     const mode = (qs.get('mode') || 'online').toLowerCase();
-    window.MODE = {
-      OFFLINE: mode === 'offline',
-      READONLY: qs.get('ro') === '1',
-      LEGACY: qs.get('legacy') === '1'
-    };
-    // insignia
+    window.MODE = { OFFLINE: mode === 'offline', READONLY: qs.get('ro') === '1', LEGACY: qs.get('legacy') === '1' };
     const badge = document.createElement('div');
     badge.className = 'badge';
-    badge.textContent = `mode=${mode}${window.MODE.READONLY ? ' · RO' : ''}${window.MODE.LEGACY ? ' · LEGACY' : ''}`;
+    badge.textContent = `mode=${mode}${window.MODE.READONLY?' · RO':''}${window.MODE.LEGACY?' · LEGACY':''}`;
     document.body.appendChild(badge);
   </script>
 
+  <!-- Guard del tema -->
   <script type="module" src="../shared/theme-guard.js"></script>
 
+  <!-- App -->
   <script type="module">
-    // 🧱 Overlay de errores
+    // Overlay de errores
     const showErr = (label, val) => {
-      const b = document.createElement('div');
-      b.className = 'err';
-      let msg = val && typeof val === 'object' ? (val.message || JSON.stringify(val)) : String(val);
-      b.textContent = `[${label}] ${msg}`;
-      document.body.appendChild(b);
+      const b = document.createElement('div'); b.className='err';
+      const msg = (val && typeof val==='object') ? (val.message || JSON.stringify(val)) : String(val);
+      b.textContent = `[${label}] ${msg}`; document.body.appendChild(b);
     };
-    window.addEventListener('error', (e) => showErr('Error', e.message || e.error));
-    window.addEventListener('unhandledrejection', (e) =>
-      showErr('Promise', (e.reason && e.reason.message) || e.reason)
-    );
+    window.addEventListener('error', (e)=>showErr('Error', e.message || e.error));
+    window.addEventListener('unhandledrejection', (e)=>showErr('Promise', (e.reason && e.reason.message) || e.reason));
 
-    document.getElementById('app').textContent = 'Kiosko V2 base OK — cargando módulos…';
-
-    // Cargar configuración y app principal
+    // Carga progresiva
     import './config.js';
-    try {
-      await import('./legacy.js');
-    } catch (_) {}
+    try { await import('./legacy.js'); } catch(_) {}
 
+    // Firebase (si db.js ya lo importa, no pasa nada)
     await import('../shared/firebase.js');
+
+    // Higiene: elimina restos legacy si algún HTML viejo los trae
+    (() => {
+      ['#filters','#optionsPane','#preferences','#legacy','.legacy',
+       '.kiosk-form','#formOptions','#formExtras','.right-panel','.left-panel'
+      ].forEach(sel => document.querySelectorAll(sel).forEach(n=>n.remove()));
+    })();
+
+    // App real
     await import('./app.js');
   </script>
 </body>
