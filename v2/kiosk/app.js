@@ -5,6 +5,7 @@
 // - Acordeón con barra de poder + highlights por producto
 // - Modal con Barra de Poder (sticky) por pasos de personalización
 // - COMPAT: único Total visible (footer). Sin Subtotal/HH en cuerpo.
+// - 2025-11-04b: ensureDrinkPrices() tras +/-/remove, y al pintar el carrito.
 
 const __parts = location.pathname.split('/').filter(Boolean);
 const __first = __parts[0] ? `/${__parts[0]}/` : '/';
@@ -201,10 +202,10 @@ function bindAccordionBehavior(container){
     const fill = d.querySelector('.power-fill');
     if (!fill) return;
     if (d.open){
-      fill.style.width = '100%';   // al abrir, llena (feedback inmediato)
+      fill.style.width = '100%';
       try{ beep(); }catch{}
     } else {
-      fill.style.width = '0%';     // al cerrar, resetea
+      fill.style.width = '0%';
       try{ beep(); }catch{}
     }
   });
@@ -260,6 +261,7 @@ function addDrinkToCart(drink){
     notes:'', lineTotal: price, hhDisc: 0,
     meta:{ pricingMode: comboOn ? 'combo' : 'solo' }
   });
+  ensureDrinkPrices();
   updateCartBar(); beep(); toast(`${drink.name} agregado`);
 }
 function addDrinkByKey(key){
@@ -770,6 +772,7 @@ function openItemModal(item, base, existingIndex=null){
         toast('Agregado al pedido');
       }
       setTimeout(()=>{ document.getElementById('modal')?.classList.remove('open'); }, 120);
+      ensureDrinkPrices();
       updateCartBar(); beep();
     };
   }
@@ -795,6 +798,7 @@ function computeBreakdown() {
   return { subtotal, hh, total };
 }
 function paintBreakdown() {
+  ensureDrinkPrices(); // asegura precio combo si aplica
   const { subtotal, hh, total } = computeBreakdown();
   // Footer único (preferido)
   const totFooter = document.getElementById('cartTotalFooter');
@@ -809,6 +813,7 @@ function paintBreakdown() {
 }
 
 function updateCartBar(){
+  ensureDrinkPrices();
   const count = state.cart.reduce((a,l)=>a + (l.qty||1), 0);
   const total = state.cart.reduce((a,l)=>a + (l.lineTotal||0), 0);
   const countEl = document.getElementById('cartCount');
@@ -1006,6 +1011,7 @@ function openCartModal(){
     if (act === 'remove') {
       state.cart.splice(i, 1);
       recomputeAllLines();
+      ensureDrinkPrices();
       updateCartBar();
       openCartModal(); // re-render
       return;
@@ -1014,6 +1020,7 @@ function openCartModal(){
       line.qty = Math.min(99, (line.qty || 1) + 1);
       if (line?.type !== 'drink') recomputeLine(line);
       recomputeAllLines();
+      ensureDrinkPrices();
       updateCartBar();
       openCartModal();
       return;
@@ -1022,6 +1029,7 @@ function openCartModal(){
       line.qty = Math.max(1, (line.qty || 1) - 1);
       if (line?.type !== 'drink') recomputeLine(line);
       recomputeAllLines();
+      ensureDrinkPrices();
       updateCartBar();
       openCartModal();
       return;
