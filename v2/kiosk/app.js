@@ -72,11 +72,19 @@ async function fetchCatalogWithFallback(){
       drinks:  cat?.drinks?.length||0
     });
     window.__CATALOG = cat;
-    // debug cuadro pequeño
-    if (!document.querySelector('#__debugMenu')) {
+
+    // === DEBUG OVERLAY SOLO SI SE PIDE ===
+    const showDebug =
+      new URLSearchParams(location.search).get('debug') === '1' ||
+      sessionStorage.getItem('__debugMenu') === '1';
+
+    const prev = document.getElementById('__debugMenu');
+    if (!showDebug && prev) prev.remove();
+
+    if (showDebug && !prev) {
       const box = document.createElement('div');
       box.id = '__debugMenu';
-      box.style.cssText = 'position:fixed;right:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;padding:10px 12px;border-radius:10px;font:14px/1.2 system-ui;z-index:99999;max-width:40vw';
+      box.style.cssText = 'position:fixed;right:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;padding:10px 12px;border-radius:10px;font:14px/1.2 system-ui;z-index:10000;max-width:40vw';
       box.innerHTML = `
         <div style="opacity:.8">DEBUG menú</div>
         <div>Burgers: <b>${cat?.burgers?.length||0}</b></div>
@@ -87,11 +95,13 @@ async function fetchCatalogWithFallback(){
         <div>${(cat?.burgers||[]).map(b=>`• ${b.name} — $${b.price}`).join('<br>')}</div>`;
       document.body.appendChild(box);
     }
+
     return cat;
   }catch(e){
     console.error('[kiosk] error catálogo', e);
     const fallback = { burgers:[{id:'starter',name:'Starter Burger',price:47}], minis:[], drinks:[], sides:[] };
     window.__CATALOG = fallback;
+    document.getElementById('__debugMenu')?.remove();
     return fallback;
   }
 }
@@ -538,7 +548,7 @@ function openItemModal(item, base, existingIndex=null){
   inputs.forEach(i=> i.addEventListener('change', calc)); calc();
 
   if(addBtn){
-    addBtn.textContent = editing ? 'Guardar cambios' : 'Agregar al pedido';
+    addBtn.textContent = (existingIndex!==null) ? 'Guardar cambios' : 'Agregar al pedido';
     addBtn.onclick = ()=>{
       const name = (document.getElementById('cName')?.value||'').trim();
       if(!name){ alert('Por favor escribe tu nombre.'); return; }
@@ -582,6 +592,17 @@ function openItemModal(item, base, existingIndex=null){
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
+// Helpers de recálculo/total del modal
+function recomputeAllLines() {
+  ensureDrinkPrices();
+  state.cart.forEach(l => { if (l?.type !== 'drink') recomputeLine(l); });
+}
+function paintCartTotal() {
+  const totalEl = document.getElementById('cartTotal');
+  const total = state.cart.reduce((a, l) => a + Number(l.lineTotal || 0), 0);
+  if (totalEl) { totalEl.style.display=''; totalEl.textContent = money(total); }
+}
+
 function updateCartBar(){
   const count = state.cart.reduce((a,l)=>a + (l.qty||1), 0);
   const total = state.cart.reduce((a,l)=>a + (l.lineTotal||0), 0);
@@ -590,6 +611,7 @@ function updateCartBar(){
   if (countEl) countEl.textContent = `${count} producto${count!==1?'s':''}`;
   if (totalEl) totalEl.textContent = money(total);
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
+  document.body.classList.toggle('has-cart', count>0); // para padding-bottom en mobile
   // regalo por umbral (si lo usas)
   checkGiftUnlock(!state.gift.shownThisSession);
 }
@@ -782,19 +804,26 @@ function openCartModal(){
 
     if (act === 'remove') {
       state.cart.splice(i, 1);
-      ensureDrinkPrices();
-      updateCartBar(); openCartModal();
+      recomputeAllLines();
+      updateCartBar();
+      openCartModal(); // re-render
       return;
     }
     if (act === 'more') {
       line.qty = Math.min(99, (line.qty || 1) + 1);
       if (line?.type !== 'drink') recomputeLine(line);
-      ensureDrinkPrices(); updateCartBar(); openCartModal(); return;
+      recomputeAllLines();
+      updateCartBar();
+      openCartModal();
+      return;
     }
     if (act === 'less') {
       line.qty = Math.max(1, (line.qty || 1) - 1);
       if (line?.type !== 'drink') recomputeLine(line);
-      ensureDrinkPrices(); updateCartBar(); openCartModal(); return;
+      recomputeAllLines();
+      updateCartBar();
+      openCartModal();
+      return;
     }
     if (act === 'edit') {
       const item = findItemById(line.id);
@@ -805,6 +834,10 @@ function openCartModal(){
     }
   };
 
+  // recálculo inicial y total pintado
+  recomputeAllLines();
+  paintCartTotal();
+
   // confirmar
   if (confirmBtn){
     confirmBtn.onclick = null;
@@ -813,6 +846,9 @@ function openCartModal(){
       state.isSubmittingOrder = true;
 
       ensureDrinkPrices();
+      state.cart.forEach(recomputeLine);
+      paintCartTotal();
+
       const prevLabel = confirmBtn.textContent;
       confirmBtn.disabled = true; confirmBtn.setAttribute('aria-busy','true');
       confirmBtn.textContent = 'Enviando…';
