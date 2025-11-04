@@ -590,3 +590,47 @@ body.has-cart{ padding-bottom: 86px; }
 }
 /* Asegura nitidez pixel para <img> también */
 .icon-img{ image-rendering: pixelated; }
+
+/* ===== Modal Kiosko V2 — mobile friendly ===== */
+
+/* el contenedor del modal debe poder scrollear */
+#modal .modal-body,
+#cartModal #cartBody {
+  max-height: calc(100vh - 210px);
+  overflow: auto;
+}
+
+/* inputs y selects a 100% */
+#modal .field input[type="text"],
+#modal .field input[type="number"],
+#modal .field select,
+#modal .field textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* listas de opciones con checkbox: permiten salto de línea */
+.ul-clean label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  line-height: 1.2;
+  flex-wrap: wrap;           /* <- evita que se pisen */
+}
+
+/* el chip de precio se ancla a la derecha y no se parte */
+.ul-clean label .tag {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* títulos/separadores más compactos */
+#modal details summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+/* chips de ingredientes incluidos */
+.k-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.k-chip  { font-size:.85rem; padding:4px 8px; border-radius:999px;
+           background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);}
