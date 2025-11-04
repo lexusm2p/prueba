@@ -6,6 +6,7 @@
 // - Modal con Barra de Poder (sticky) por pasos de personalización
 // - COMPAT: único Total visible (footer). Sin Subtotal/HH en cuerpo.
 // - 2025-11-04b: ensureDrinkPrices() tras +/-/remove, y al pintar el carrito.
+// - 2025-11-04c: Cards muestran “×N en pedido” y dejan la power bar llena; renderCards() tras cambios de carrito.
 
 const __parts = location.pathname.split('/').filter(Boolean);
 const __first = __parts[0] ? `/${__parts[0]}/` : '/';
@@ -107,6 +108,13 @@ function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
+}
+
+// === NUEVO: cantidad en carrito para una id ===
+function qtyInCart(id){
+  return state.cart
+    .filter(l => l && l.id === id && !l.isGift)
+    .reduce((a,l)=> a + (l.qty||1), 0);
 }
 
 /* ======================= Highlights ======================= */
@@ -402,9 +410,14 @@ function renderCards(){
 
     const disc = hhDiscountPerUnit(it);
     const eff  = Math.max(0, Number(it.price || 0) - disc);
+
+    // === NUEVO: badge ×N en pedido
+    const qSel = qtyInCart(it.id);
+    const selectedBadge = qSel > 0 ? `<span class="tag" data-sel>×${qSel} en pedido</span>` : '';
+
     const priceHtml = disc > 0
-      ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span></div>`
-      : `<div class="price">${money(it.price)}</div>`;
+      ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span> ${selectedBadge}</div>`
+      : `<div class="price">${money(it.price)} ${selectedBadge}</div>`;
 
     const isCombo = it.type === 'combo';
     card.innerHTML = `
@@ -427,6 +440,14 @@ function renderCards(){
       </div>
     `;
     grid.appendChild(card);
+
+    // === NUEVO: si ya está en carrito, dejar power bar llena
+    if (qSel > 0) {
+      const det  = card.querySelector('details.ing-acc');
+      const fill = card.querySelector('.power-fill');
+      if (det) det.setAttribute('data-selected','1');
+      if (fill) fill.style.width = '100%';
+    }
 
     card.querySelector('[data-more]')?.addEventListener('click', (ev)=>{
       ev.preventDefault();
@@ -823,6 +844,9 @@ function updateCartBar(){
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
   document.body.classList.toggle('has-cart', count>0);
   checkGiftUnlock(!state.gift.shownThisSession);
+
+  // === NUEVO: refrescar cards para mostrar barra llena y badge ×N
+  renderCards();
 }
 
 function checkGiftUnlock(autoOpen=true){
@@ -1297,3 +1321,4 @@ async function init(){
 window.addEventListener('beforeunload', ()=>{
   try{ state.unsubHH?.(); state.unsubETA?.(); state.unsubTheme?.(); state.unsubReady?.(); state.unsubAnalytics?.(); }catch{}
 });
+```0
