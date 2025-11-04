@@ -103,13 +103,14 @@ function baseOfItem(item){
 }
 function formatIngredientsFor(item, base){
   const meatDefaultBig  = Number(state.menu?.appSettings?.meatGrams ?? 85);
-  the meatDefaultMini
   const meatDefaultMini = Number(state.menu?.appSettings?.miniMeatGrams ?? 45);
   const grams = Number(item?.meatGrams ?? (item?.mini ? meatDefaultMini : meatDefaultBig));
   const src = (Array.isArray(item?.ingredients) && item.ingredients.length)
     ? item.ingredients
     : (base?.ingredients || []);
-  return src.map(s => /^Carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s);
+  return src.map(s =>
+    /^Carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s
+  );
 }
 function escapeHtml(s=''){
   return String(s).replace(/[&<>"']/g, m=>({
