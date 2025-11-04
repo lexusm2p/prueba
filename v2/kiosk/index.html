@@ -38,6 +38,10 @@
       border-top:1px solid var(--stroke, rgba(255,255,255,.1));
     }
     #openCart.btn{ border-radius:999px; }
+
+    /* Fallback por si tu CSS no define .modal.open */
+    .modal{ display:none; }
+    .modal.open{ display:grid; }
   </style>
 </head>
 <body data-theme="base">
@@ -78,7 +82,7 @@
     </button>
   </div>
 
-  <!-- Modal de personalización (estructura estándar del stylesheet) -->
+  <!-- Modal de personalización -->
   <div id="modal" class="modal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
       <div class="modal-head">
@@ -132,7 +136,7 @@
   <!-- Guard del tema -->
   <script type="module" src="../shared/theme-guard.js"></script>
 
-  <!-- App -->
+  <!-- App (loader progresivo único) -->
   <script type="module">
     // Overlay de errores
     const showErr = (label, val) => {
@@ -147,8 +151,8 @@
     import './config.js';
     try { await import('./legacy.js'); } catch(_) {}
 
-    // Firebase (si db.js ya lo importa, no pasa nada)
-    await import('../shared/firebase.js');
+    // ⚠️ Firebase: lo importa internamente app.js (evitamos doble init)
+    // await import('../shared/firebase.js');  // intencionalmente omitido
 
     // Higiene: elimina restos legacy si algún HTML viejo los trae
     (() => {
@@ -157,10 +161,8 @@
       ].forEach(sel => document.querySelectorAll(sel).forEach(n=>n.remove()));
     })();
 
-    // App real
-    await import('./app.js');
+    // App real (usa misma versión que tus imports internos)
+    await import('./app.js?v=20251104a');
   </script>
-  <!-- HTML (kiosk/index.html) -->
-<script type="module" src="./app.js?v=20251104a"></script>
 </body>
 </html>
