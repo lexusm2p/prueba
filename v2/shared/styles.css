@@ -592,3 +592,134 @@ body.has-cart{ padding-bottom: 86px; }
 [data-theme-image]{ background-size: cover; background-position: center; background-repeat: no-repeat; }
 /* Asegura nitidez pixel para <img> también */
 .icon-img{ image-rendering: pixelated; }
+/* =========================================================
+   COMPAT PATCH · Seven de Burgers — estilos seguros
+   Añádelo al final de shared/styles.css
+   ========================================================= */
+
+/* 1) Fallback global si el motor NO soporta color-mix() */
+@supports not (color: color-mix(in srgb, black 50%, white 50%)) {
+  :root{
+    /* Usa colores planos razonables cuando no haya color-mix */
+    --btn1: var(--primary);
+    --btn2: #ad7c00; /* tono más oscuro del primary */
+    --btnBorder: #5a3b00;
+    --btnShadow: #7a5200;
+
+    --btnOk1: var(--ok);
+    --btnOk2: #1e9659;
+    --btnOkBorder: #0f5533;
+    --btnOkShadow: #177447;
+
+    --btnWarn1: var(--warn);
+    --btnWarn2: #bb8e2a;
+    --btnWarnBorder: #6a5010;
+    --btnWarnShadow: #8a6a20;
+
+    --btnDanger1: var(--danger);
+    --btnDanger2: #b13a3a;
+    --btnDangerBorder: #6b1f1f;
+    --btnDangerShadow: #8a2c2c;
+
+    /* Fondos/etiquetas que usaban color-mix en reglas */
+    --_panelMix1: #121a2a;
+    --_panelMix2: #0f1726;
+    --_chipBg: #132b3b;
+  }
+
+  /* Sustituye algunos usos directos frecuentes de color-mix */
+  .panel{
+    background: linear-gradient(180deg, var(--_panelMix2), var(--_panelMix1));
+  }
+  .tag, .k-badge { background: var(--_chipBg); }
+  .toast, .modal-foot, .modal-card, #cartBar {
+    background: var(--panel1);
+  }
+}
+
+/* 2) iOS: evita zoom al enfocar inputs (min 16px) */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* 3) Modal sólido en iOS/Android: scroll interno estable */
+.modal{
+  overscroll-behavior: contain;
+  contain: layout paint;
+}
+.modal-card{
+  contain: layout paint;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 4) Evita “brincos” en header/tabs pegajosos y cartBar */
+.header, .tabs-sticky, #cartBar{
+  will-change: transform;
+  contain: layout paint;
+}
+
+/* 5) Focus-visible consistente (teclado/lector pantalla) */
+:where(button, [role="button"], .btn, a, input, select, textarea):focus-visible{
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.06);
+}
+
+/* 6) Chips muy pequeños: aumenta área táctil sin cambiar layout */
+.btn.tiny, #pairBox .btn.tiny, .k-chip{
+  min-height: 34px;
+  align-items: center;
+  display: inline-flex;
+}
+
+/* 7) Menos costo de sombras cuando el dispositivo pide menos motion */
+@media (prefers-reduced-motion: reduce){
+  .btn{
+    box-shadow: 0 6px 0 var(--btnShadow), 0 6px 12px rgba(0,0,0,.25);
+  }
+  #cartBar{
+    box-shadow: 0 10px 18px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.04);
+  }
+}
+
+/* 8) WebViews antiguos: fallback para image-rendering */
+.icon-img, [data-theme-icon]{
+  image-rendering: -moz-crisp-edges;     /* Firefox legacy */
+  image-rendering: crisp-edges;
+}
+
+/* 9) Safe-area en dispositivos sin notch (no afecta al resto) */
+@supports not (top: env(safe-area-inset-top)){
+  :root{
+    --safe-top: 0px; --safe-right: 0px; --safe-bottom: 0px; --safe-left: 0px;
+  }
+}
+
+/* 10) Scroll suave en listas largas dentro del modal carrito */
+#cartModal .modal-body{
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+
+/* 11) Asegura visibilidad de la barra de totales del modal en pantallas chicas */
+.modal-foot .total-bar{
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+/* 12) Evita desbordes de texto en botones/titulares estrechos */
+.btn, .card h3, .k-head .title{
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* 13) Compat Safari iOS viejo: sticky dentro de main */
+@supports not (position: sticky){
+  .header{ position: static; }
+  .tabs-sticky{ position: static; }
+}
+
+/* 14) Hover seguro en pantallas táctiles (no cambia layout) */
+@media (hover: none){
+  .btn:hover{ transform: none; }
+}
