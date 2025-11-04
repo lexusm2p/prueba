@@ -342,7 +342,9 @@ ${(() => {
       </div>
     `;
     grid.appendChild(card);
-
+card.querySelector('[data-more]')?.addEventListener('click', () => {
+  openItemModal(it, base);
+});
     if (isCombo){
       card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> addComboToCart(it));
     } else {
