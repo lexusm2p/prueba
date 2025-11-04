@@ -723,3 +723,123 @@ input, select, textarea {
 @media (hover: none){
   .btn:hover{ transform: none; }
 }
+/* =========================================================
+   PATCH COMPAT · Kiosko V2 LEAN (app.js 20251104a)
+   Añadir al final de shared/styles.css
+   ========================================================= */
+
+/* 0) Normaliza tamaños base y tipografía de sistema */
+:root{
+  --tap: 44px; /* blanco táctil mínimo */
+}
+html { -webkit-text-size-adjust: 100%; }
+body { text-size-adjust: 100%; }
+
+/* 1) Happy Hour + ETA (si existen en el DOM) */
+#hhPill{
+  display:inline-flex; gap:8px; align-items:center;
+  padding:6px 10px; border-radius:999px;
+  background:color-mix(in srgb,var(--panel1) 88%, black 12%);
+  border:1px solid var(--stroke);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+}
+#hhPill.on{ border-color: color-mix(in srgb, var(--ok) 40%, black 60%); }
+#hhText{ font-weight:800; letter-spacing:.2px; }
+#hhMsg{ color:var(--muted); }
+[data-eta-text]{ font-variant-numeric: tabular-nums; }
+
+/* 2) Acordeón de ingredientes + barra de poder */
+details.ing-acc{ border:1px solid var(--stroke); border-radius:12px; padding:8px; background:color-mix(in srgb,var(--panel2) 86%, black 14%); }
+details.ing-acc + details.ing-acc{ margin-top:8px; }
+details.ing-acc summary{
+  display:block; cursor:pointer; list-style:none; outline:none;
+}
+details.ing-acc summary::-webkit-details-marker{ display:none; }
+details.ing-acc .ing-list{ margin:8px 0 0 6px; padding-left:12px; color:var(--muted); }
+details.ing-acc .k-chips{ margin:2px 0 0; }
+
+.power-bar{ display:flex; align-items:center; gap:6px; margin-top:6px; }
+.power-icon{ font-size:16px; line-height:1; }
+.power-track{ flex:1; height:8px; border-radius:8px; overflow:hidden; background:rgba(255,255,255,.08); }
+.power-fill{ width:0%; height:100%; background:linear-gradient(90deg, var(--primary), color-mix(in srgb,var(--primary) 60%, #ff9f0a 40%)); transition:width .28s ease; }
+
+/* 3) Chips y contador “+x” compacto */
+.k-chip.chip-more{ background:#2a2330; border-color:rgba(255,255,255,.10); color:#f1d1ff; }
+
+/* 4) Cards: pie con acciones fijo + media */
+.card .media{ display:flex; align-items:center; justify-content:center; height:140px; border-radius:12px;
+  background:linear-gradient(180deg, color-mix(in srgb, var(--panel2) 70%, black 30%), color-mix(in srgb, var(--panel1) 85%, black 15%));
+  border:1px solid var(--stroke);
+}
+.card .icon-img{ max-width:180px; max-height:130px; image-rendering: pixelated; }
+@media (max-width:520px){
+  .card .media{ height:120px; }
+  .card .icon-img{ max-width:160px; max-height:112px; }
+}
+
+/* 5) Botones mínimos seguros para táctil */
+.btn, .btn.small, .btn.tiny{ min-height: var(--tap); }
+.btn.tiny{ padding:6px 10px; font-size:12px; } /* respeta tus tamaños */
+
+/* 6) Modal: compat iOS (scroll interno + fondo estable) */
+.modal{
+  display:none; position:fixed; inset:0; place-items:center;
+  background:rgba(0,0,0,.55); z-index:70;
+  overscroll-behavior:contain; contain:layout paint;
+}
+.modal.open{ display:grid; }
+.modal-card{
+  width:min(760px,94vw); max-height:86vh; overflow:auto;
+  background:color-mix(in srgb, var(--panel1) 96%, black 4%);
+  border:1px solid var(--stroke); border-radius:16px; box-shadow:var(--shadow);
+  -webkit-overflow-scrolling:touch;
+}
+#modal .modal-body, #cartModal #cartBody{
+  max-height: calc(100vh - 210px);
+  overflow:auto;
+}
+
+/* 7) Barra de carrito flotante (seguridad visual) */
+#cartBar{
+  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60;
+  display: none; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel1) 92%, black 8%), color-mix(in srgb, var(--panel2) 90%, black 10%));
+  border: 1px solid var(--stroke);
+  box-shadow: 0 12px 28px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
+}
+body.has-cart{ padding-bottom: 86px; }
+#cartBarTotal{ color:var(--primary); font-weight:900; }
+
+/* 8) Accesibilidad: foco y entradas sin zoom */
+input, select, textarea { font-size:16px; }
+:where(button, [role="button"], .btn, a, input, select, textarea):focus-visible{
+  outline:3px solid var(--accent);
+  outline-offset:2px;
+  box-shadow:0 0 0 3px rgba(255,255,255,.06);
+}
+
+/* 9) Fallback si color-mix no existe (extiende tu bloque anterior) */
+@supports not (color: color-mix(in srgb, black 50%, white 50%)) {
+  /* Reusa variables de tu fallback y asegura fondos clave */
+  details.ing-acc{ background: var(--panel1); }
+  .power-track{ background: rgba(255,255,255,.10); }
+  .power-fill{ background: linear-gradient(90deg, var(--primary), #cc7a00); }
+  #hhPill{ background: var(--panel1); }
+  .modal-card, .toast, #cartBar{ background: var(--panel1); }
+}
+
+/* 10) Micro-ajustes de rendimiento visual */
+.header, .tabs-sticky, #cartBar{ will-change: transform; contain: layout paint; }
+@media (prefers-reduced-motion: reduce){
+  .power-fill{ transition:none; }
+  .btn{ box-shadow: 0 6px 0 var(--btnShadow), 0 6px 12px rgba(0,0,0,.25); }
+}
+
+/* 11) Previene “saltos” por imágenes lentas */
+img.icon-img{ display:block; }
+
+/* 12) Helpers para packs por tema (si theme.js inyecta assets) */
+[data-theme-icon]{ background-size: contain; background-position:center; background-repeat:no-repeat; }
+[data-theme-image]{ background-size: cover; background-position: center; background-repeat: no-repeat; }
+
