@@ -109,16 +109,20 @@
         <strong id="cTitle">Tu pedido</strong>
         <button id="cartClose" class="btn small ghost" aria-label="Cerrar">×</button>
       </div>
-   <div id="cartBody" class="modal-body"></div>
-<div class="modal-foot">
-  <div class="total-bar">
-    <span class="muted">Total</span>
-    <strong id="cartTotal" class="total">$0</strong>
-    <div class="row">
-      <button id="cartConfirm" class="btn ok">Confirmar pedido</button>
-    </div>
-  </div>
-</div>
+
+      <!-- Cuerpo dinámico del carrito (lo llena app.js) -->
+      <div id="cartBody" class="modal-body"></div>
+
+      <!-- Único total: footer -->
+      <div class="modal-foot">
+        <div class="total-bar">
+          <span class="muted">Total</span>
+          <strong id="cartTotalFooter" class="total">$0</strong>
+          <div class="row">
+            <button id="cartConfirm" class="btn ok">Confirmar pedido</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -152,7 +156,7 @@
     try { await import('./legacy.js'); } catch(_) {}
 
     // ⚠️ Firebase: lo importa internamente app.js (evitamos doble init)
-    // await import('../shared/firebase.js');  // intencionalmente omitido
+    // await import('../shared/firebase.js');
 
     // Higiene: elimina restos legacy si algún HTML viejo los trae
     (() => {
