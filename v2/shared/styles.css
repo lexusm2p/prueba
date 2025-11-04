@@ -207,6 +207,12 @@ a:hover{ text-decoration:underline }
   margin:0 0 6px; font-size:clamp(16px,2.2vw,22px); line-height:1.2; word-break:break-word; font-family:var(--font-display);
 }
 .price{ color:var(--primary); font-weight:900; font-size:clamp(14px,2vw,18px) }
+.card .price s{ opacity:.6; margin-right:6px; }
+.card .price .tag{
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  color: var(--primary);
+}
 .icon{ width:72px; height:72px; image-rendering:pixelated; border-radius:10px; border:2px solid rgba(255,255,255,.1); background:#131d30; }
 
 /* ---- Card foot ---- */
@@ -592,6 +598,7 @@ body.has-cart{ padding-bottom: 86px; }
 [data-theme-image]{ background-size: cover; background-position: center; background-repeat: no-repeat; }
 /* Asegura nitidez pixel para <img> también */
 .icon-img{ image-rendering: pixelated; }
+
 /* =========================================================
    COMPAT PATCH · Seven de Burgers — estilos seguros
    Añádelo al final de shared/styles.css
@@ -723,15 +730,14 @@ input, select, textarea {
 @media (hover: none){
   .btn:hover{ transform: none; }
 }
+
 /* =========================================================
    PATCH COMPAT · Kiosko V2 LEAN (app.js 20251104a)
    Añadir al final de shared/styles.css
    ========================================================= */
 
 /* 0) Normaliza tamaños base y tipografía de sistema */
-:root{
-  --tap: 44px; /* blanco táctil mínimo */
-}
+:root{ --tap: 44px; } /* blanco táctil mínimo */
 html { -webkit-text-size-adjust: 100%; }
 body { text-size-adjust: 100%; }
 
@@ -755,6 +761,11 @@ details.ing-acc summary{
   display:block; cursor:pointer; list-style:none; outline:none;
 }
 details.ing-acc summary::-webkit-details-marker{ display:none; }
+details.ing-acc summary:focus-visible{
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
 details.ing-acc .ing-list{ margin:8px 0 0 6px; padding-left:12px; color:var(--muted); }
 details.ing-acc .k-chips{ margin:2px 0 0; }
 
@@ -842,4 +853,3 @@ img.icon-img{ display:block; }
 /* 12) Helpers para packs por tema (si theme.js inyecta assets) */
 [data-theme-icon]{ background-size: contain; background-position:center; background-repeat:no-repeat; }
 [data-theme-image]{ background-size: cover; background-position: center; background-repeat: no-repeat; }
-
