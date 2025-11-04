@@ -1,12 +1,11 @@
-// /kiosk/app.js — V2 LEAN (menos pasos, misma gamificación)
+// /kiosk/app.js — V2 LEAN (compat + optimización)
 // - Ordenar rápido (sin modal) + personalizar opcional
 // - Nudge de bebida (2 botones) tras agregar
-// - Modales con secciones plegables (menos ruido)
 // - Mantiene HH/ETA, regalos, lealtad y seguimiento
-// - NEW: Acordeón con barra de poder + highlights por producto
+// - Acordeón con barra de poder + highlights por producto
+// - COMPAT: único Total visible (footer). Sin Subtotal/HH en cuerpo.
 
-/* ======================= Bootstrap / rutas ======================= */
-const __parts = location.pathname.split('/').filter(Boolean); // ["prueba","v2","kiosk", ...]
+const __parts = location.pathname.split('/').filter(Boolean);
 const __first = __parts[0] ? `/${__parts[0]}/` : '/';
 export const DATA_MENU_URL = `${__first}data/menu.json`;
 console.info('[kiosk] DATA_MENU_URL =', DATA_MENU_URL);
@@ -27,18 +26,13 @@ const state = {
   cart: [],
   customerName: '',
   orderMeta: { type:'pickup', table:'', phone:'', payMethodPref:'efectivo' },
-  // subs
   unsubHH:null, unsubETA:null, unsubTheme:null, unsubReady:null, unsubAnalytics:null,
-  // ui
   etaText: '7–10 min',
   etaSource: 'fallback',
   hhLeftText: '',
   topToday: [],
-  // combos bebida
   drinkComboActive: false,
-  // recompensas (placeholder)
   rewards: { type:null, discountCents:0, miniDog:false, decided:false },
-  // regalo por umbral
   gift: {
     threshold: 117,
     productId: 'powerdog-mini',
@@ -46,11 +40,8 @@ const state = {
     autoPrompt: true,
     shownThisSession: false
   },
-  // tema
   themeName: '',
-  // id de última orden
   lastOrderId: null,
-  // flags
   isSubmittingOrder: false,
   adminMode: false,
   loyaltyEnabled: true,
@@ -89,7 +80,6 @@ function slug(s){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 }
-
 function findItemById(id){
   return state.menu?.burgers?.find?.(b=>b.id===id)
       || state.menu?.minis?.find?.(m=>m.id===id)
@@ -117,8 +107,7 @@ function escapeHtml(s=''){
   }[m]));
 }
 
-/* ======================= Highlights (gancho por producto) ======================= */
-// Usa item.highlight si existe; si no, cae al mapa por id base.
+/* ======================= Highlights ======================= */
 const HIGHLIGHTS = {
   starter:   'La base de todo · sencilla',
   koopa:     'Crunch dulce: piña + tocino',
@@ -134,8 +123,19 @@ function getHighlight(item, base){
 }
 
 /* ======================= Acordeón + Barra de poder ======================= */
+function powerBarHtml(icon='🍔'){
+  return `
+    <div class="power-bar" aria-hidden="true"
+         style="display:flex;align-items:center;gap:6px;margin-top:6px">
+      <div class="power-icon" role="img" aria-label="icon"
+           style="font-size:16px;line-height:1">${icon}</div>
+      <div class="power-track" style="flex:1;height:8px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.08);">
+        <div class="power-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#ffd34d,#ff9f0a);transition:width .35s ease;"></div>
+      </div>
+    </div>
+  `;
+}
 function buildAccordionForItem(item, base){
-  // Combos: listar componentes + ingredientes
   if (item?.type === 'combo' && Array.isArray(item.items) && item.items.length){
     const subs = item.items.map(it=>{
       const ref = findItemById(it.id);
@@ -170,7 +170,6 @@ function buildAccordionForItem(item, base){
     `;
   }
 
-  // Burgers/sides/drinks normales
   const inc = formatIngredientsFor(item, base).filter(Boolean);
   if (!inc.length) return getHighlight(item, base)
     ? `<div class="muted small" style="margin-top:4px">${escapeHtml(getHighlight(item, base))}</div>`
@@ -186,7 +185,7 @@ function buildAccordionForItem(item, base){
           ${extra>0 ? `<span class="k-chip chip-more" data-more>+${extra}</span>` : ``}
         </div>
         ${getHighlight(item, base) ? `<div class="muted small" style="margin-top:4px">${escapeHtml(getHighlight(item, base))}</div>`:''}
-        ${powerBarHtml(item.mini ? '🍔' : '🍔')}
+        ${powerBarHtml('🍔')}
       </summary>
       <ul class="ing-list" style="margin:8px 0 0 18px">
         ${inc.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}
@@ -194,19 +193,6 @@ function buildAccordionForItem(item, base){
     </details>
   `;
 }
-function powerBarHtml(icon='🍔'){
-  return `
-    <div class="power-bar" aria-hidden="true"
-         style="display:flex;align-items:center;gap:6px;margin-top:6px">
-      <div class="power-icon" role="img" aria-label="icon"
-           style="font-size:16px;line-height:1">${icon}</div>
-      <div class="power-track" style="flex:1;height:8px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.08);">
-        <div class="power-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#ffd34d,#ff9f0a);transition:width .35s ease;"></div>
-      </div>
-    </div>
-  `;
-}
-// Animación / sonido al abrir/cerrar
 function bindAccordionBehavior(container){
   container.addEventListener('toggle', (e)=>{
     const d = e.target;
@@ -214,11 +200,9 @@ function bindAccordionBehavior(container){
     const fill = d.querySelector('.power-fill');
     if (!fill) return;
     if (d.open){
-      // Al abrir: “descarga” → 0%
       fill.style.width = '0%';
       try{ beep(); }catch{}
     } else {
-      // Al cerrar: “carga” → 100%
       fill.style.width = '100%';
       try{ beep(); }catch{}
     }
@@ -283,7 +267,7 @@ function addDrinkByKey(key){
   addDrinkToCart(d);
 }
 
-/* ======================= Happy Hour & descuentos por ítem ======================= */
+/* ======================= Happy Hour ======================= */
 function hhInfo(){
   const hh = state.menu?.happyHour || {};
   const enabled = !!hh.enabled;
@@ -300,7 +284,7 @@ function hhDiscountPerUnit(item){
   return unit * pct;
 }
 
-/* ======================= Iconos base (fallback si no hay pack del tema) ======================= */
+/* ======================= Iconos base (fallback) ======================= */
 const ICONS = {
   starter:   "../shared/img/burgers/starter.png",
   koopa:     "../shared/img/burgers/koopa.png",
@@ -378,7 +362,7 @@ function setActiveTab(mode=state.mode){
   else if (mode==='combos') on(btnCombos);
 }
 
-/* ======================= Render tarjetas (Ordenar rápido + Personalizar) ======================= */
+/* ======================= Render tarjetas ======================= */
 function enableCombosTab(){
   const hasCombos = Array.isArray(state.menu?.combos) && state.menu.combos.length > 0;
   if (!hasCombos) return;
@@ -441,7 +425,6 @@ function renderCards(){
     `;
     grid.appendChild(card);
 
-    // Abrir modal al tocar +N (dentro del acordeón también)
     card.querySelector('[data-more]')?.addEventListener('click', (ev)=>{
       ev.preventDefault();
       openItemModal(it, base);
@@ -455,7 +438,6 @@ function renderCards(){
     }
   });
 
-  // Comportamiento del acordeón (barra de poder + beep)
   bindAccordionBehavior(grid);
   enableCombosTab();
 }
@@ -484,13 +466,14 @@ function addQuickItem(item, base){
   smartDrinkNudge();
 }
 function smartDrinkNudge(){
+  const priceTxt = isDrinkComboUnlocked()?DRINK_PRICE.combo:DRINK_PRICE.solo;
   const box = document.getElementById('__drinkNudge') || document.createElement('div');
   box.id='__drinkNudge';
   box.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:1000;background:#0f182a;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px;display:flex;gap:8px;align-items:center';
   box.innerHTML = `
     <span class="muted small" style="white-space:nowrap">¿Bebida?</span>
-    <button class="btn tiny" data-k="7up">7up $${isDrinkComboUnlocked()?DRINK_PRICE.combo:DRINK_PRICE.solo}</button>
-    <button class="btn tiny" data-k="pepsi">Pepsi $${isDrinkComboUnlocked()?DRINK_PRICE.combo:DRINK_PRICE.solo}</button>
+    <button class="btn tiny" data-k="7up">7up $${priceTxt}</button>
+    <button class="btn tiny" data-k="pepsi">Pepsi $${priceTxt}</button>
     <button class="btn ghost tiny" data-k="x">No</button>
   `;
   document.body.appendChild(box);
@@ -568,7 +551,6 @@ function openItemModal(item, base, existingIndex=null){
   const swapVal  = editing ? (line?.salsaCambiada||'') : '';
 
   if (!body) return;
-  // Lista de ingredientes incluidos (chips)
   const includeList = formatIngredientsFor(item, base).filter(Boolean);
 
   body.innerHTML = `
@@ -683,11 +665,9 @@ function openItemModal(item, base, existingIndex=null){
 
       if (existingIndex!==null){
         state.cart[existingIndex] = newLine;
-        ensureDrinkPrices();
         toast('Línea actualizada');
       } else {
         state.cart.push(newLine);
-        ensureDrinkPrices();
         toast('Agregado al pedido');
       }
       document.getElementById('modal')?.classList.remove('open');
@@ -700,25 +680,27 @@ function openItemModal(item, base, existingIndex=null){
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
-// Recalcular líneas
 function recomputeAllLines() {
-  ensureDrinkPrices();
   state.cart.forEach(l => { if (l?.type !== 'drink') recomputeLine(l); });
 }
 
-// ⚖️ Desglose: Subtotal (antes de HH), Descuento HH, Total (ya con HH)
+// Desglose lógico (para Total del footer)
 function computeBreakdown() {
   let total = 0;
   let hh = 0;
   for (const l of state.cart) {
     total += Number(l.lineTotal || 0);
-    hh    += Number(l.hhDisc    || 0); // bebidas traen 0
+    hh    += Number(l.hhDisc    || 0);
   }
-  const subtotal = total + hh; // previo a descuento HH
+  const subtotal = total + hh; // previo a HH
   return { subtotal, hh, total };
 }
 function paintBreakdown() {
   const { subtotal, hh, total } = computeBreakdown();
+  // Footer único (preferido)
+  const totFooter = document.getElementById('cartTotalFooter');
+  if (totFooter) totFooter.textContent = money(total);
+  // Compat opcional si existen:
   const subEl = document.getElementById('cartSub');
   const hhEl  = document.getElementById('cartHH');
   const totEl = document.getElementById('cartTotal');
@@ -732,7 +714,7 @@ function updateCartBar(){
   const total = state.cart.reduce((a,l)=>a + (l.lineTotal||0), 0);
   const countEl = document.getElementById('cartCount');
   const totalEl = document.getElementById('cartBarTotal');
-  if (countEl) countEl.textContent = `${count} producto${count!==1?'s':''}`;
+  if (countEl) countEl.textContent = String(count); // sólo número (el HTML ya dice "artículos")
   if (totalEl) totalEl.textContent = money(total);
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
   document.body.classList.toggle('has-cart', count>0);
@@ -814,7 +796,6 @@ function recomputeLine(line){
 }
 
 function openCartModal(){
-  ensureDrinkPrices();
   const m = document.getElementById('cartModal');
   const body = document.getElementById('cartBody');
   const close = ()=> { if(m) m.style.display='none'; };
@@ -830,6 +811,7 @@ function openCartModal(){
   }
   if (confirmBtn) confirmBtn.style.display = '';
 
+  // Cuerpo del modal (SIN Subtotal/HH; el total va solo en el footer)
   if (body) body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
       <input id="cartName" type="text" required value="${state.customerName||localStorage.getItem('kiosk:name')||''}" /></div>
@@ -886,23 +868,6 @@ function openCartModal(){
             <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
           </div>
         </div>`;}).join('')}
-    </div>
-
-    <div class="hr"></div>
-    <!-- 🧾 Bloque de desglose -->
-    <div id="cartSummary" class="field">
-      <div class="row" style="justify-content:space-between">
-        <span class="muted">Subtotal</span>
-        <strong id="cartSub">$0</strong>
-      </div>
-      <div class="row" style="justify-content:space-between">
-        <span class="muted">Descuento Happy Hour</span>
-        <strong id="cartHH">-$0</strong>
-      </div>
-      <div class="row" style="justify-content:space-between;margin-top:6px">
-        <span>Total</span>
-        <strong id="cartTotal">$0</strong>
-      </div>
     </div>`;
 
   const typeSel    = document.getElementById('orderType');
@@ -971,25 +936,23 @@ function openCartModal(){
     }
   };
 
-  // recálculo inicial y pintado del desglose
+  // Recalcula y pinta SOLO el footer
   recomputeAllLines();
   paintBreakdown();
 
   // confirmar
-  const confirmBtn2 = confirmBtn;
-  if (confirmBtn2){
-    confirmBtn2.onclick = null;
-    confirmBtn2.onclick = async ()=>{
+  if (confirmBtn){
+    confirmBtn.onclick = null;
+    confirmBtn.onclick = async ()=>{
       if (state.isSubmittingOrder) return;
       state.isSubmittingOrder = true;
 
-      ensureDrinkPrices();
-      state.cart.forEach(recomputeLine);
+      recomputeAllLines();
       paintBreakdown();
 
-      const prevLabel = confirmBtn2.textContent;
-      confirmBtn2.disabled = true; confirmBtn2.setAttribute('aria-busy','true');
-      confirmBtn2.textContent = 'Enviando…';
+      const prevLabel = confirmBtn.textContent;
+      confirmBtn.disabled = true; confirmBtn.setAttribute('aria-busy','true');
+      confirmBtn.textContent = 'Enviando…';
 
       try {
         const name = (document.getElementById('cartName')?.value||'').trim();
@@ -1011,14 +974,15 @@ function openCartModal(){
           state.orderMeta.phone = norm; state.orderMeta.table = '';
         }
 
-        // líneas para DB
-        const itemsForDB = state.cart.map(l => ({
-          id: l.id, name: l.name, mini: l.mini, qty: l.qty, unitPrice: l.unitPrice,
-          baseIngredients: l.baseIngredients, ingredients: l.ingredients || l.baseIngredients || [],
-          salsaDefault: l.salsaDefault, salsaCambiada: l.salsaCambiada,
-          extras: l.extras, notes: l.notes || null, lineTotal: l.lineTotal, hhDisc: Number(l.hhDisc || 0),
-          isGift: !!l.isGift
-        })).filter(l => !l.isGift);
+        const itemsForDB = state.cart
+          .map(l => ({
+            id: l.id, name: l.name, mini: l.mini, qty: l.qty, unitPrice: l.unitPrice,
+            baseIngredients: l.baseIngredients, ingredients: l.ingredients || l.baseIngredients || [],
+            salsaDefault: l.salsaDefault, salsaCambiada: l.salsaCambiada,
+            extras: l.extras, notes: l.notes || null, lineTotal: l.lineTotal, hhDisc: Number(l.hhDisc || 0),
+            isGift: !!l.isGift
+          }))
+          .filter(l => !l.isGift);
 
         const subtotalBase = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
         const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
@@ -1047,10 +1011,10 @@ function openCartModal(){
 
         let orderId = null;
         try {
-          const created = await DB.createOrder(orderBase);
+          const created = await DB.createOrder?.(orderBase);
           orderId = (typeof created === 'string') ? created : created?.id;
         } catch (e) {
-          console.warn('createOrder error, usando provisional:', e);
+          console.warn('createOrder error', e);
         }
         if (!orderId) orderId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
         state.lastOrderId = orderId;
@@ -1088,15 +1052,15 @@ function openCartModal(){
         }, 250);
       } finally {
         state.isSubmittingOrder = false;
-        confirmBtn2.disabled = false;
-        confirmBtn2.removeAttribute('aria-busy');
-        confirmBtn2.textContent = prevLabel;
+        confirmBtn.disabled = false;
+        confirmBtn.removeAttribute('aria-busy');
+        confirmBtn.textContent = prevLabel;
       }
     };
   }
 }
 
-/* ======================= HH y ETA (suscripciones si existen) ======================= */
+/* ======================= HH y ETA ======================= */
 let hhTimer = null;
 const HH_REFRESH_GUARD_KEY = 'hhRefreshGuard-app';
 const fmtMMSS = (ms)=>{
