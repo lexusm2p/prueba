@@ -201,10 +201,10 @@ function bindAccordionBehavior(container){
     const fill = d.querySelector('.power-fill');
     if (!fill) return;
     if (d.open){
-      fill.style.width = '0%';
+      fill.style.width = '100%';   // al abrir, llena (feedback inmediato)
       try{ beep(); }catch{}
     } else {
-      fill.style.width = '100%';
+      fill.style.width = '0%';     // al cerrar, resetea
       try{ beep(); }catch{}
     }
   });
@@ -534,7 +534,7 @@ function ensureModalPowerBar(){
   if (!modal) return null;
   let bar = modal.querySelector('#mPower');
   if (bar) return bar;
-  const head = modal.querySelector('.modal-head') || modal; // contenedor seguro
+  const head = modal.querySelector('.modal-head') || modal;
   bar = document.createElement('div');
   bar.id = 'mPower';
   bar.setAttribute('aria-hidden','true');
@@ -548,7 +548,6 @@ function ensureModalPowerBar(){
       <div id="mPowerPct" class="muted small" style="width:40px;text-align:right">0%</div>
     </div>
   `;
-  // Inserta justo al inicio del cuerpo del modal para que sea visible siempre
   const mBody = document.getElementById('mBody');
   if (mBody) mBody.prepend(bar);
   return bar;
@@ -688,8 +687,8 @@ function openItemModal(item, base, existingIndex=null){
   nameEl?.addEventListener('input', ()=>{ if ((nameEl.value||'').trim().length>0) mark('name'); });
   swapSel?.addEventListener('focus', ()=> mark('sauce'));
   swapSel?.addEventListener('change', ()=> mark('sauce'));
-  detSau?.addEventListener('toggle', (e)=>{ if (detSau.open) mark('saucesSec'); });
-  detIng?.addEventListener('toggle', (e)=>{ if (detIng.open) mark('ingSec'); });
+  detSau?.addEventListener('toggle', ()=>{ if (detSau.open) mark('saucesSec'); });
+  detIng?.addEventListener('toggle', ()=>{ if (detIng.open) mark('ingSec'); });
   qtyEl?.addEventListener('change', ()=>{ if (Number(qtyEl.value||1)!==1) mark('qty'); });
   notesEl?.addEventListener('input', ()=>{ if ((notesEl.value||'').trim().length>0) mark('notes'); });
 
