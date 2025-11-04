@@ -4,7 +4,6 @@
 import { db, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from './firebase.js';
 
 /* ------------ Prefijo de despliegue (GitHub Pages / subcarpetas) ------------ */
-// Queremos que los assets queden en /prueba/themes/... (primer segmento del path)
 const BASE_PREFIX = (() => {
   try {
     const parts = location.pathname.split('/').filter(Boolean);
@@ -29,7 +28,7 @@ const THEMES_BUILTIN = {
       base:'Inter, system-ui, Arial',
       display:'"Bungee", cursive'
     },
-    bg:{ image:'', overlay:'rgba(0,0,0,0)', size:'cover', position:'center', blur:0 },
+    bg:{ image:'', overlay:'rgba(0,0,0,0)', size:'cover', position:'center', repeat:'no-repeat', attachment:'scroll', blur:0 },
     images:{}, icons:{}, packBaseUrl:''
   },
 
@@ -54,9 +53,11 @@ const THEMES_BUILTIN = {
         tablet:'images/hero.jpg',
         desktop:'images/hero.jpg'
       },
-      overlay:'rgba(0,0,0,.35)',
+      overlay:'rgba(0,0,0,.45)',   // un poco más oscuro para mejor contraste
       size:'cover',
       position:'center',
+      repeat:'no-repeat',
+      attachment:'fixed',
       blur:0
     },
     images:{ hero:'images/hero.jpg', logo:'images/logo.svg' },
@@ -202,9 +203,19 @@ function applyBackground(bg = {}) {
     body.style.backgroundImage = parts;
     body.style.backgroundSize = bg.size || 'cover';
     body.style.backgroundPosition = bg.position || 'center';
-    body.style.backgroundRepeat = 'no-repeat';
+    body.style.backgroundRepeat = bg.repeat || 'no-repeat';
+    body.style.backgroundAttachment = bg.attachment || 'scroll';
   } else {
     body.style.backgroundImage = 'none';
+  }
+
+  // expone overlay alfa (opcional) para CSS externo
+  if (bg.overlay) {
+    try {
+      const m = String(bg.overlay).match(/rgba?\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*([\d.]+)\s*\)/i);
+      const alpha = m ? m[1] : '0.45';
+      document.documentElement.style.setProperty('--theme-overlay', alpha);
+    } catch {}
   }
 
   if (chosen) preloadImages([ chosen ]);
