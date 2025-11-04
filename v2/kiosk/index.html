@@ -6,42 +6,84 @@
   <title>Seven — Kiosko V2 (test)</title>
   <meta name="robots" content="noindex,nofollow"/>
 
-  <!-- Solo el stylesheet nuevo -->
+  <!-- Hoja de estilos principal -->
   <link rel="stylesheet" href="../shared/styles.css"/>
 
+  <!-- Respaldo ligero por si faltan algunas utilidades en styles.css -->
   <style>
-    body{ background:#0f1422; color:#fff8e6; font-family:system-ui, Arial, sans-serif; margin:0; overflow-x:hidden; }
-    #app{ padding:16px; font-size:20px; }
-    .err{ position:fixed; left:8px; bottom:8px; background:#000a; color:#ffb; padding:8px; border:1px solid #834; max-width:92vw; white-space:pre-wrap; z-index:99999; }
-    .badge{ position:fixed; right:8px; bottom:8px; background:#111a; border:1px solid #345; color:#9fe; padding:4px 8px; border-radius:6px; font:12px/1.2 system-ui; z-index:9999; }
+    :root{
+      --bg:#0f1422; --panel:#131b2d; --panel1:#10182b; --accent:#ff9f0a; --text:#fff8e6;
+      --stroke:rgba(255,255,255,.12); --muted:#a9b8d3;
+    }
+    body{ background:var(--bg); color:var(--text); font-family:system-ui, Arial, sans-serif; margin:0; overflow-x:hidden; }
+    .muted{ color:var(--muted); }
+    .row{ display:flex; align-items:center; gap:8px; }
+    .btn{ cursor:pointer; border:2px solid var(--accent); background:transparent; color:var(--text); padding:10px 14px; border-radius:10px; }
+    .btn.ok{ background:var(--accent); color:#000; }
+    .btn.ghost{ border-color:var(--stroke); color:var(--text); }
+    .btn.small{ padding:8px 12px; font-size:14px; }
+    .btn.tiny{ padding:6px 10px; font-size:12px; }
+    .danger{ border-color:#ff5858; color:#ff9b9b; }
 
     /* Layout principal */
-    header.header { position:sticky; top:0; z-index:30; }
-    main.container { padding-top:8px; padding-bottom:96px; } /* deja espacio para la barra del carrito */
+    header.header { position:sticky; top:0; z-index:30; background:color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter:blur(6px); }
+    header .brand{ display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; }
+    header .brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--accent); }
+    main.container { padding:8px 14px 96px; } /* deja espacio para la barra del carrito */
+
+    /* Banda superior con HH + ETA (opcional) */
+    .topbar{ display:flex; align-items:center; gap:10px; padding:6px 12px; flex-wrap:wrap; }
+    #hhPill{ display:flex; align-items:center; gap:8px; border:1px solid var(--stroke);
+             background:color-mix(in srgb,var(--panel) 80%, transparent); padding:6px 10px; border-radius:999px; }
+    #hhPill.on{ border-color:var(--accent); }
+    #hhText{ font-weight:700; }
+    .eta{ margin-left:auto; white-space:nowrap; }
+    .eta .chip{ border:1px solid var(--stroke); padding:6px 10px; border-radius:999px; }
 
     /* Tabs compactas centradas */
-    #tabsBar{ display:flex; justify-content:center; gap:10px; margin-top:6px; flex-wrap:wrap; }
-    .tab{ background:var(--panel1,#111); border:2px solid var(--accent,#ff7a00); border-radius:10px; color:var(--text,#fff);
+    #tabsBar{ display:flex; justify-content:center; gap:10px; margin:8px 0 6px; flex-wrap:wrap; }
+    .tab{ background:var(--panel1); border:2px solid var(--accent); border-radius:10px; color:var(--text);
           font-family:var(--font-display,'Press Start 2P'); padding:10px 14px; cursor:pointer; }
-    .tab.is-active{ background:var(--accent,#ff7a00); color:#000; }
+    .tab.is-active{ background:var(--accent); color:#000; }
 
     /* Grid de cards */
-    #cards.grid{ display:grid; gap:var(--gap,16px); grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
+    #cards.grid{ display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
+    .card{ background:var(--panel); border:1px solid var(--stroke); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .card .media{ display:grid; place-items:center; min-height:140px; background:color-mix(in srgb, var(--panel1) 60%, transparent); border-radius:12px; }
+    .card .icon-img{ max-width:180px; max-height:130px; display:block; }
+
+    /* Chips y acordeón */
+    .k-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+    .k-chip{ border:1px solid var(--stroke); border-radius:999px; padding:4px 8px; font-size:12px; }
+    details.ing-acc summary{ cursor:pointer; list-style:none; }
+    details.ing-acc summary::-webkit-details-marker{ display:none; }
+
+    /* Modal base (fallback por si el CSS global no lo define) */
+    .modal{ display:none; position:fixed; inset:0; z-index:1000; place-items:center; background:rgba(0,0,0,.4); backdrop-filter:blur(2px); padding:12px; }
+    .modal.open, .modal[style*="display: grid"]{ display:grid; }
+    .modal-card{ width:min(880px, 100%); max-height:90dvh; display:flex; flex-direction:column;
+                 background:var(--panel); border:1px solid var(--stroke); border-radius:14px; }
+    .modal-head, .modal-foot{ padding:10px 12px; border-bottom:1px solid var(--stroke); }
+    .modal-foot{ border-bottom:none; border-top:1px solid var(--stroke); }
+    .modal-body{ padding:10px 12px; overflow:auto; }
+    .field{ margin:8px 0; display:block; }
+    .field > label{ display:block; font-weight:600; margin-bottom:6px; }
+    .total-bar{ display:flex; align-items:center; gap:10px; justify-content:flex-end; }
+    .total{ font-size:20px; }
 
     /* Barra de carrito fija */
     #cartBar{
       position:fixed; left:0; right:0; bottom:0; z-index:40;
       display:none; align-items:center; justify-content:center; gap:12px;
-      padding:10px 12px;
-      background:color-mix(in srgb, var(--bg) 88%, transparent);
-      backdrop-filter: blur(6px);
-      border-top:1px solid var(--stroke, rgba(255,255,255,.1));
+      padding:10px 12px; background:color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(6px); border-top:1px solid var(--stroke);
     }
     #openCart.btn{ border-radius:999px; }
 
-    /* Fallback por si tu CSS no define .modal.open */
-    .modal{ display:none; }
-    .modal.open{ display:grid; }
+    /* Pequeños utilitarios */
+    #app{ padding:8px 14px; font-size:14px; }
+    .err{ position:fixed; left:8px; bottom:8px; background:#000a; color:#ffb; padding:8px; border:1px solid #834; max-width:92vw; white-space:pre-wrap; z-index:99999; }
+    .badge{ position:fixed; right:8px; bottom:8px; background:#111a; border:1px solid #345; color:#9fe; padding:4px 8px; border-radius:6px; font:12px/1.2 system-ui; z-index:9999; }
   </style>
 </head>
 <body data-theme="base">
@@ -61,12 +103,24 @@
         <div class="title-sub">Kiosko V2 (test)</div>
       </div>
     </div>
+
+    <!-- Barra superior (opcional) con HH + ETA -->
+    <div class="topbar">
+      <div id="hhPill" class="">
+        <span id="hhText" class="small">HH OFF</span>
+        <span id="hhMsg" class="muted small"></span>
+      </div>
+      <div class="eta">
+        <span class="chip">ETA: <b data-eta-text>7–10 min</b></span>
+      </div>
+    </div>
   </header>
 
   <!-- Tabs -->
   <nav id="tabsBar" class="tabs">
     <button id="btnMinis" class="btn tab is-active">Minis</button>
     <button id="btnBig" class="btn tab">Big</button>
+    <!-- El botón de Combos lo crea app.js si hay combos -->
   </nav>
 
   <!-- Contenido -->
@@ -137,9 +191,6 @@
     document.body.appendChild(badge);
   </script>
 
-  <!-- Guard del tema -->
-  <script type="module" src="../shared/theme-guard.js"></script>
-
   <!-- App (loader progresivo único) -->
   <script type="module">
     // Overlay de errores
@@ -151,12 +202,12 @@
     window.addEventListener('error', (e)=>showErr('Error', e.message || e.error));
     window.addEventListener('unhandledrejection', (e)=>showErr('Promise', (e.reason && e.reason.message) || e.reason));
 
+    // Intento de cargar guard de tema (si no existe, no truena)
+    try { await import('../shared/theme-guard.js'); } catch(_) {}
+
     // Carga progresiva
     import './config.js';
     try { await import('./legacy.js'); } catch(_) {}
-
-    // ⚠️ Firebase: lo importa internamente app.js (evitamos doble init)
-    // await import('../shared/firebase.js');
 
     // Higiene: elimina restos legacy si algún HTML viejo los trae
     (() => {
