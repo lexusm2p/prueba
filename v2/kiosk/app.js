@@ -1,8 +1,9 @@
-// /kiosk/app.js — V2 LEAN (compat + optimización)
+// /kiosk/app.js — V2 LEAN (compat + optimización + Power Bar en modal)
 // - Ordenar rápido (sin modal) + personalizar opcional
 // - Nudge de bebida (2 botones) tras agregar
 // - Mantiene HH/ETA, regalos, lealtad y seguimiento
 // - Acordeón con barra de poder + highlights por producto
+// - Modal con Barra de Poder (sticky) por pasos de personalización
 // - COMPAT: único Total visible (footer). Sin Subtotal/HH en cuerpo.
 
 const __parts = location.pathname.split('/').filter(Boolean);
@@ -527,6 +528,32 @@ function normalizeExtraIngredients(){
     .filter(obj => !isCarneGrande(obj?.name));
 }
 
+// Crea (si no existe) la barra sticky de progreso del modal
+function ensureModalPowerBar(){
+  const modal = document.getElementById('modal');
+  if (!modal) return null;
+  let bar = modal.querySelector('#mPower');
+  if (bar) return bar;
+  const head = modal.querySelector('.modal-head') || modal; // contenedor seguro
+  bar = document.createElement('div');
+  bar.id = 'mPower';
+  bar.setAttribute('aria-hidden','true');
+  bar.style.cssText = 'position:sticky;top:0;z-index:2;margin:-8px -8px 8px -8px;padding:8px;background:linear-gradient(0deg,rgba(0,0,0,.35),rgba(0,0,0,.35));backdrop-filter:blur(2px)';
+  bar.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="font-size:16px">⚡</div>
+      <div style="flex:1;height:10px;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.12)">
+        <div id="mPowerFill" style="width:0%;height:100%;background:linear-gradient(90deg,#ffd34d,#ff9f0a);transition:width .25s ease"></div>
+      </div>
+      <div id="mPowerPct" class="muted small" style="width:40px;text-align:right">0%</div>
+    </div>
+  `;
+  // Inserta justo al inicio del cuerpo del modal para que sea visible siempre
+  const mBody = document.getElementById('mBody');
+  if (mBody) mBody.prepend(bar);
+  return bar;
+}
+
 function openItemModal(item, base, existingIndex=null){
   const modal = document.getElementById('modal'); modal?.classList.add('open');
   const body  = document.getElementById('mBody');
@@ -535,6 +562,16 @@ function openItemModal(item, base, existingIndex=null){
 
   if(ttl) ttl.textContent = `${item.name} · ${money(item.price)}`;
   if(xBtn) xBtn.onclick = ()=> modal?.classList.remove('open');
+
+  // ----- PowerBar (sticky) -----
+  ensureModalPowerBar();
+  const setPower = (pct)=>{
+    const fill = document.getElementById('mPowerFill');
+    const pctEl= document.getElementById('mPowerPct');
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    if (fill) fill.style.width = v + '%';
+    if (pctEl) pctEl.textContent = v + '%';
+  };
 
   const sauces = state.menu?.extras?.sauces ?? [];
   const extrasIngr = normalizeExtraIngredients();
@@ -582,7 +619,7 @@ function openItemModal(item, base, existingIndex=null){
       </select>
     </div>
 
-    <details class="field"><summary class="muted">+ Aderezos extra</summary>
+    <details id="detSauces" class="field"><summary class="muted">+ Aderezos extra</summary>
       <div class="ul-clean" id="sauces" style="margin-top:6px">
         ${sauces.map((s,i)=>`
           <label style="display:flex;gap:6px;align-items:center">
@@ -593,7 +630,7 @@ function openItemModal(item, base, existingIndex=null){
       </div>
     </details>
 
-    <details class="field"><summary class="muted">+ Ingredientes extra</summary>
+    <details id="detIngrs" class="field"><summary class="muted">+ Ingredientes extra</summary>
       <div class="ul-clean" id="ingrs" style="margin-top:6px">
         ${extrasIngr.map((obj,i)=>`
           <label style="display:flex;gap:6px;align-items:center">
@@ -616,8 +653,47 @@ function openItemModal(item, base, existingIndex=null){
   const addBtn  = document.getElementById('mAdd');
   const totalEl = document.getElementById('mTotal');
   const qtyEl   = document.getElementById('qty');
-  const inputs  = body.querySelectorAll('input[type=checkbox], #qty, #swapSauce');
 
+  // ----- Progreso por pasos -----
+  const steps = {
+    name:false,     // escribir nombre
+    sauce:false,    // tocar/seleccionar salsa
+    saucesSec:false,// abrir sección aderezos extra
+    ingSec:false,   // abrir sección ingredientes extra
+    qty:false,      // modificar cantidad
+    notes:false     // escribir notas
+  };
+  const STEP_COUNT = Object.keys(steps).length;
+  const recomputeProgress = ()=>{
+    const done = Object.values(steps).filter(Boolean).length;
+    setPower((done/STEP_COUNT)*100);
+  };
+
+  const mark = (k)=>{ if (!steps[k]) { steps[k]=true; recomputeProgress(); } };
+
+  const inputs  = body.querySelectorAll('input[type=checkbox]');
+  const swapSel = document.getElementById('swapSauce');
+  const detSau  = document.getElementById('detSauces');
+  const detIng  = document.getElementById('detIngrs');
+  const nameEl  = document.getElementById('cName');
+  const notesEl = document.getElementById('notes');
+
+  // Inicial por edición
+  if ((nameEl?.value||'').trim().length>0) steps.name=true;
+  if ((swapSel?.value||'')!=='') steps.sauce=true;
+  if (Number(qtyEl?.value||1)!==1) steps.qty=true;
+  if ((notesEl?.value||'').trim().length>0) steps.notes=true;
+  recomputeProgress();
+
+  nameEl?.addEventListener('input', ()=>{ if ((nameEl.value||'').trim().length>0) mark('name'); });
+  swapSel?.addEventListener('focus', ()=> mark('sauce'));
+  swapSel?.addEventListener('change', ()=> mark('sauce'));
+  detSau?.addEventListener('toggle', (e)=>{ if (detSau.open) mark('saucesSec'); });
+  detIng?.addEventListener('toggle', (e)=>{ if (detIng.open) mark('ingSec'); });
+  qtyEl?.addEventListener('change', ()=>{ if (Number(qtyEl.value||1)!==1) mark('qty'); });
+  notesEl?.addEventListener('input', ()=>{ if ((notesEl.value||'').trim().length>0) mark('notes'); });
+
+  // Precio dinámico
   const calc = ()=>{
     const qty     = parseInt(qtyEl?.value||'1', 10);
     const saucesChecked = [...body.querySelectorAll('#sauces input:checked')].length;
@@ -663,6 +739,9 @@ function openItemModal(item, base, existingIndex=null){
         notes, lineTotal: subtotal, hhDisc: hhDiscTotal
       };
 
+      // efecto “100% completado” antes de cerrar
+      setPower(100);
+
       if (existingIndex!==null){
         state.cart[existingIndex] = newLine;
         toast('Línea actualizada');
@@ -670,7 +749,7 @@ function openItemModal(item, base, existingIndex=null){
         state.cart.push(newLine);
         toast('Agregado al pedido');
       }
-      document.getElementById('modal')?.classList.remove('open');
+      setTimeout(()=>{ document.getElementById('modal')?.classList.remove('open'); }, 120);
       updateCartBar(); beep();
     };
   }
@@ -714,7 +793,7 @@ function updateCartBar(){
   const total = state.cart.reduce((a,l)=>a + (l.lineTotal||0), 0);
   const countEl = document.getElementById('cartCount');
   const totalEl = document.getElementById('cartBarTotal');
-  if (countEl) countEl.textContent = String(count); // sólo número (el HTML ya dice "artículos")
+  if (countEl) countEl.textContent = String(count);
   if (totalEl) totalEl.textContent = money(total);
   if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
   document.body.classList.toggle('has-cart', count>0);
