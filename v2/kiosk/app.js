@@ -13,7 +13,7 @@ console.info('[kiosk] DATA_MENU_URL =', DATA_MENU_URL);
 const el = document.getElementById('app');
 if (el) el.textContent = 'App.js cargado — iniciando módulos…';
 
-/* ======================= Imports ======================= */// /kiosk/app.js
+/* ======================= Imports ======================= */
 import { beep, toast } from '../shared/notify.js?v=20251104a';
 import * as DB from '../shared/db.js?v=20251104a';
 import { ensureAuth } from '../shared/firebase.js?v=20251104a';
@@ -71,10 +71,7 @@ async function fetchCatalogWithFallback(){
       drinks:  cat?.drinks?.length||0
     });
     window.__CATALOG = cat;
-
-    // 🔕 Eliminar cualquier overlay viejo de debug, y NO crear ninguno nuevo
     document.getElementById('__debugMenu')?.remove();
-
     return cat;
   }catch(e){
     console.error('[kiosk] error catálogo', e);
@@ -319,18 +316,17 @@ function renderCards(){
         ${iconSrc ? `<img src="${iconSrc}" alt="${it.name}" class="icon-img" loading="lazy"/>`
                   : `<div class="icon" aria-hidden="true"></div>`}
       </div>
-      // ↓ Añade esto dentro del template de la card
-${(() => {
-  const inc = formatIngredientsFor(it, base).filter(Boolean);
-  const shown = inc.slice(0,3);
-  const extra = Math.max(0, inc.length - shown.length);
-  return `
-    <div class="k-chips" aria-label="Incluye">
-      ${shown.map(s=>`<span class="k-chip">${escapeHtml(s)}</span>`).join('')}
-      ${extra>0 ? `<span class="k-chip" data-more="${baseId}">+${extra}</span>` : ``}
-    </div>
-  `;
-})()}
+      ${(() => {
+        const inc = formatIngredientsFor(it, base).filter(Boolean);
+        const shown = inc.slice(0,3);
+        const extra = Math.max(0, inc.length - shown.length);
+        return `
+          <div class="k-chips" aria-label="Incluye">
+            ${shown.map(s=>`<span class="k-chip">${escapeHtml(s)}</span>`).join('')}
+            ${extra>0 ? `<span class="k-chip" data-more="${baseId}">+${extra}</span>` : ``}
+          </div>
+        `;
+      })()}
       <div class="row">
         ${priceHtml}
         <div class="row" style="gap:8px">
@@ -342,9 +338,12 @@ ${(() => {
       </div>
     `;
     grid.appendChild(card);
-card.querySelector('[data-more]')?.addEventListener('click', () => {
-  openItemModal(it, base);
-});
+
+    // Abrir modal al tocar +N de ingredientes
+    card.querySelector('[data-more]')?.addEventListener('click', () => {
+      openItemModal(it, base);
+    });
+
     if (isCombo){
       card.querySelector('[data-a="order"]')?.addEventListener('click', ()=> addComboToCart(it));
     } else {
@@ -464,9 +463,19 @@ function openItemModal(item, base, existingIndex=null){
   const swapVal  = editing ? (line?.salsaCambiada||'') : '';
 
   if (!body) return;
+  // Lista de ingredientes incluidos (chips)
+  const includeList = formatIngredientsFor(item, base).filter(Boolean);
+
   body.innerHTML = `
     <div class="field"><label>Tu nombre</label>
       <input id="cName" type="text" placeholder="Escribe tu nombre" required value="${state.customerName||''}"/></div>
+
+    ${ includeList.length ? `
+    <div class="field"><label>Incluye</label>
+      <div class="k-chips">
+        ${includeList.map(s=>`<span class="k-chip is-inc">${escapeHtml(s)}</span>`).join('')}
+      </div>
+    </div>` : '' }
 
     ${ item.mini && (DLC > 0) ? `
     <div class="field"><label>DLC de Carne grande</label>
@@ -862,9 +871,10 @@ function openCartModal(){
   paintBreakdown();
 
   // confirmar
-  if (confirmBtn){
-    confirmBtn.onclick = null;
-    confirmBtn.onclick = async ()=>{
+  const confirmBtn2 = confirmBtn;
+  if (confirmBtn2){
+    confirmBtn2.onclick = null;
+    confirmBtn2.onclick = async ()=>{
       if (state.isSubmittingOrder) return;
       state.isSubmittingOrder = true;
 
@@ -872,9 +882,9 @@ function openCartModal(){
       state.cart.forEach(recomputeLine);
       paintBreakdown();
 
-      const prevLabel = confirmBtn.textContent;
-      confirmBtn.disabled = true; confirmBtn.setAttribute('aria-busy','true');
-      confirmBtn.textContent = 'Enviando…';
+      const prevLabel = confirmBtn2.textContent;
+      confirmBtn2.disabled = true; confirmBtn2.setAttribute('aria-busy','true');
+      confirmBtn2.textContent = 'Enviando…';
 
       try {
         const name = (document.getElementById('cartName')?.value||'').trim();
@@ -973,9 +983,9 @@ function openCartModal(){
         }, 250);
       } finally {
         state.isSubmittingOrder = false;
-        confirmBtn.disabled = false;
-        confirmBtn.removeAttribute('aria-busy');
-        confirmBtn.textContent = prevLabel;
+        confirmBtn2.disabled = false;
+        confirmBtn2.removeAttribute('aria-busy');
+        confirmBtn2.textContent = prevLabel;
       }
     };
   }
