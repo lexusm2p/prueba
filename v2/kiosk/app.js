@@ -610,7 +610,13 @@ function openItemModal(item, base, existingIndex=null){
   if(ttl) ttl.textContent = `${item.name} · ${money(item.price)}`;
   if(xBtn) xBtn.onclick = ()=> modal?.classList.remove('open');
 
-  const setPower = ensureModalPowerBar();
+  // Limpia barras previas si el modal se reabre
+  document.getElementById('mPower')?.remove();
+  document.getElementById('mPowerMini')?.remove();
+
+  // Wrapper seguro para evitar redeclaración
+  let __setPowerFn = ensureModalPowerBar();
+  const setPower = (pct)=>{ try{ __setPowerFn?.(pct); }catch(e){ console.warn('setPower error', e); } };
 
   const sauces = state.menu?.extras?.sauces ?? [];
   const extrasIngr = normalizeExtraIngredients();
@@ -689,15 +695,12 @@ function openItemModal(item, base, existingIndex=null){
     </div>
   `;
 
-  const addBtn  = document.getElementById('mAdd');
   const totalEl = document.getElementById('mTotal');
   const qtyEl   = document.getElementById('qty');
 
-  const steps = {
-    name:false, sauce:false, saucesSec:false, ingSec:false, qty:false, notes:false
-  };
+  // Steps + progreso
+  const steps = { name:false, sauce:false, saucesSec:false, ingSec:false, qty:false, notes:false };
   const STEP_COUNT = Object.keys(steps).length;
-  const setPower = ensureModalPowerBar();
   const recomputeProgress = ()=>{
     const done = Object.values(steps).filter(Boolean).length;
     setPower((done/STEP_COUNT)*100);
