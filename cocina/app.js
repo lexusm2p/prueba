@@ -1,4 +1,6 @@
 // Cocina — tablero de preparación (anti-saltos)
+// Render incremental + timers desacoplados + filtros anti-$0
+
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 import { ensureAuth } from '../shared/firebase.js';
@@ -63,11 +65,26 @@ const LOCALLY_TAKEN = new Set();
 
 /* ================== Utils ================== */
 const now = ()=> new Date();
-const toMs = (t)=>{ if(!t) return 0; if(typeof t.toMillis==='function') return t.toMillis(); if(t.seconds!=null) return (t.seconds*1000)+Math.floor((t.nanoseconds||0)/1e6); const d=new Date(t); const ms=d.getTime(); return Number.isFinite(ms)?ms:0; };
+const toMs = (t)=>{
+  if(!t) return 0;
+  if(typeof t.toMillis==='function') return t.toMillis();
+  if(t.seconds!=null) return (t.seconds*1000)+Math.floor((t.nanoseconds||0)/1e6);
+  const d=new Date(t); const ms=d.getTime(); return Number.isFinite(ms)?ms:0;
+};
 const money = (n)=> '$'+Number(n??0).toFixed(0);
 const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
 const fmtMMSS = (ms)=>{ const s=Math.max(0,Math.floor(ms/1000)); const m=Math.floor(s/60); const ss=s%60; return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; };
 const escapeHtml = (s='')=> String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+/* ============== Filtro anti “ghost orders” ($0 vacíos) ============== */
+function isGhostOrder(o = {}){
+  const hasItems = Array.isArray(o.items) && o.items.length > 0;
+  const hasSingle = !!o.item;
+  const hasMoney = typeof o.subtotal === 'number' && o.subtotal > 0;
+  const hasNotes = !!(o.notes && String(o.notes).trim());
+  const hasCustomer = !!(o.customer && String(o.customer).trim());
+  return !(hasItems || hasSingle || hasMoney || hasNotes || hasCustomer);
+}
 
 /* ============== Dedupe & merge ============== */
 function updatedAtMs(o){
@@ -125,12 +142,19 @@ function attachScrollGuards(el){
   ['wheel','touchstart','touchmove','pointerdown','scroll'].forEach(ev=> el.addEventListener(ev, onScrollStart, { passive:true }));
   el.style.overflowAnchor='none'; el.style.scrollBehavior='auto';
 }
+// 🔧 anclaje de scroll sin salto arriba
 function keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop){
   const afterHeight = el.scrollHeight;
-  if (wasNearBottom) el.scrollTop = Math.max(0, afterHeight - el.clientHeight);
-  else el.scrollTop = Math.max(0, beforeTop + (afterHeight - beforeHeight));
+  if (wasNearBottom) {
+    el.scrollTop = Math.max(0, afterHeight - el.clientHeight);
+  } else if (beforeTop <= 1) {
+    el.scrollTop = 0;
+  } else {
+    el.scrollTop = Math.max(0, beforeTop + (afterHeight - beforeHeight));
+  }
 }
 
+// hash estable (NO incluye timers)
 function stableCardHash(o){
   const core = JSON.stringify({
     id:o.id, status:o.status, paid:o.paid, payMethod:o.payMethod, notes:o.notes,
@@ -182,8 +206,24 @@ function patchCol(id, list){
   queueMicrotask(tickTimers);
 }
 
+/* ============== Orden y render (con filtro anti-$0) ============== */
+function sortByCreated(a,b){
+  const ca = toMs(a.createdAt || a.timestamps?.createdAt);
+  const cb = toMs(b.createdAt || b.timestamps?.createdAt);
+  return (ca||0) - (cb||0);
+}
 function render(list){
-  const by = (list||[]).reduce((acc,o)=>{ const s=(o?.status||Status.PENDING).toUpperCase(); (acc[s] ||= []).push(o); return acc; },{});
+  const sane = (list||[]).filter(o => !isGhostOrder(o)); // quita fantasma/$0
+  const by = sane.reduce((acc,o)=>{
+    const s=(o?.status||Status.PENDING).toUpperCase();
+    (acc[s] ||= []).push(o);
+    return acc;
+  },{});
+  if (by.PENDING)     by.PENDING.sort(sortByCreated);
+  if (by.IN_PROGRESS) by.IN_PROGRESS.sort(sortByCreated);
+  if (by.READY)       by.READY.sort(sortByCreated);
+  if (by.DELIVERED)   by.DELIVERED.sort(sortByCreated);
+
   patchCol('col-pending',  by.PENDING||[]);
   patchCol('col-progress', by.IN_PROGRESS||[]);
   patchCol('col-ready',    by.READY||[]);
@@ -204,23 +244,33 @@ function renderCard(o = {}) {
   else if (o.orderType==='pickup') meta = 'Pickup';
   else if (o.orderType) meta = escapeHtml(o.orderType);
 
+  // Totales
   const sub = (typeof o.subtotal==='number') ? Number(o.subtotal||0)
             : items.reduce((s,it)=> s + (typeof it.lineTotal==='number' ? Number(it.lineTotal||0) : (Number(it.unitPrice||0)*Number(it.qty||1))), 0);
   const total = sub + Number(o.tip||0);
+  const showMoney = total > 0;
 
+  // Contacto
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
-  const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
-  const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
-  const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
+  // Tiempos (solo si hay createdAt válido)
+  const tCreated = toMs(o.createdAt || o.timestamps?.createdAt) || 0;
+  const tStarted = toMs(o.startedAt || o.timestamps?.startedAt) || 0;
+  const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt)   || 0;
 
-  const timerHtml = `
-    <div class="muted small mono" style="margin-top:6px">
-      ⏱️ Total: <b data-timer="total" data-created="${tCreated||0}" data-ready="${tReady||0}">00:00</b>
-      ${tStarted ? ` · 👩‍🍳 En cocina: <b data-timer="kitchen" data-started="${tStarted||0}" data-ready="${tReady||0}">00:00</b>` : ''}
-    </div>`;
+  const moneyLine = showMoney
+    ? `Total por cobrar: <b>${money(total)}</b>`
+    : `<span class="muted">Total: —</span>`;
 
+  const timerHtml = tCreated
+    ? `<div class="muted small mono" style="margin-top:6px">
+         ⏱️ Total: <b data-timer="total" data-created="${tCreated}" data-ready="${tReady}">00:00</b>
+         ${tStarted ? ` · 👩‍🍳 En cocina: <b data-timer="kitchen" data-started="${tStarted}" data-ready="${tReady}">00:00</b>` : ''}
+       </div>`
+    : '';
+
+  // Happy Hour / Recompensas
   const hh = o.hh || {};
   const hhSummary = (hh.enabled && Number(hh.totalDiscount || 0) > 0)
     ? `<span class="k-badge">HH -${Number(hh.discountPercent || 0)}% · ahorro ${money(hh.totalDiscount)}</span>` : '';
@@ -230,6 +280,7 @@ function renderCard(o = {}) {
   const rwMiniDog  = (rw.type==='miniDog' && rw.miniDog) ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>` : '';
   const rewardsSummary = `${rwDiscount} ${rwMiniDog}`.trim();
 
+  // Items
   const itemsHtml = items.map(it=>{
     const ingrBadges = (it.baseIngredients||[]).map(i=> `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
     const extraAdds = (it.adds || it.extras?.adds || it.extras?.ingredients || []);
@@ -271,7 +322,7 @@ function renderCard(o = {}) {
     Cliente: <b>${escapeHtml(o.customer || '-')}</b>${phoneTxt} · ${meta}
   </div>
   <div class="muted small mono" style="margin-top:4px">
-    Total por cobrar: <b>${money(total)}</b> ${paidBadge}${payMethodBadge}
+    ${moneyLine} ${paidBadge}${payMethodBadge}
     ${hhSummary} ${rewardsSummary}
   </div>
   ${timerHtml}
@@ -287,8 +338,9 @@ function tickTimers(){
   document.querySelectorAll('[data-timer="total"]').forEach(el=>{
     const created = Number(el.getAttribute('data-created')||0);
     const ready   = Number(el.getAttribute('data-ready')||0);
+    if (!created) { el.textContent='00:00'; return; }
     const end = ready || nowMs;
-    el.textContent = fmtMMSS(end - (created||nowMs));
+    el.textContent = fmtMMSS(end - created);
   });
   document.querySelectorAll('[data-timer="kitchen"]').forEach(el=>{
     const started = Number(el.getAttribute('data-started')||0);
@@ -379,10 +431,8 @@ document.addEventListener('click', async (e)=>{
   }finally{ clearTimeout(fsId); reenable(); }
 });
 
-/* ============== Limpieza ============== */
+/* ============== Limpieza y scrollers ============== */
 window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} });
-
-/* ============== Scrollers listos ============== */
 document.addEventListener('DOMContentLoaded', ()=>{
   ['col-pending','col-progress','col-ready','col-bill'].forEach(id=>{
     const el = document.getElementById(id);
