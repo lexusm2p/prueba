@@ -1,4 +1,5 @@
-// /cocina/app.js — V2.6 LEAN (render incremental, sin repaints masivos)
+// /cocina/app.js — V2 LEAN con render incremental (sin repaints)
+// Requiere /shared/db.js V2.8.1+
 import * as DB from '../shared/db.js';
 
 const Status = {
@@ -11,167 +12,121 @@ const Status = {
 };
 
 const els = {
-  PENDING:    document.getElementById('lP'),
-  IN_PROGRESS:document.getElementById('lI'),
-  READY:      document.getElementById('lR'),
-  DELIVERED:  document.getElementById('lD'),
-  cP:         document.getElementById('cP'),
-  cI:         document.getElementById('cI'),
-  cR:         document.getElementById('cR'),
-  cD:         document.getElementById('cD'),
-  colsWrap:   document.getElementById('cols'),
+  lP: document.getElementById('lP'),
+  lI: document.getElementById('lI'),
+  lR: document.getElementById('lR'),
+  lD: document.getElementById('lD'),
+  cP: document.getElementById('cP'),
+  cI: document.getElementById('cI'),
+  cR: document.getElementById('cR'),
+  cD: document.getElementById('cD'),
 };
 
-const money = (n)=> '$' + Number(n||0).toFixed(0);
-
-// Estado local para diff
-const cache = new Map();   // id -> {hash, status}
-const nodes = new Map();   // id -> HTMLElement
-let pageVisible = true;
-document.addEventListener('visibilitychange', ()=>{
-  pageVisible = (document.visibilityState === 'visible');
-});
-
-// Hash muy barato: cambia si cambian campos que afectan UI
-function hashRow(o){
-  const itemsSig = (o.items||[]).map(it=> `${it.name}|${it.qty||1}`).join(',');
-  return [
-    o.id, o.status, o.subtotal||0, o.orderType||'',
-    o.customer||'',
-    o.createdAt||0,
-    o.updatedAt||0,
-    itemsSig
-  ].join('~');
+function money(n){ return '$' + Number(n||0).toFixed(0); }
+function key(o){ return String(o.id); }
+function whereCol(status){
+  if (status===Status.PENDING) return els.lP;
+  if (status===Status.IN_PROGRESS) return els.lI;
+  if (status===Status.READY) return els.lR;
+  if (status===Status.DELIVERED) return els.lD;
+  return null;
 }
 
-function createCard(o){
-  const name   = o.customer || 'Cliente';
-  const items  = (o.items||[]).map(it => `${it.name} ×${it.qty||1}`).join(', ');
-  const div = document.createElement('div');
-  div.className = 'card';
-  div.dataset.id = o.id;
-  div.innerHTML = `
+/* ---- Card factory ---- */
+function cardHTML(o){
+  const itemsTxt = (o.items||[]).map(it => `${it.name} ×${it.qty||1}`).join(', ');
+  const name = o.customer || 'Cliente';
+  const type = o.orderType || '';
+  const actions =
+    o.status===Status.PENDING
+      ? `<button class="btn" data-a="take">Tomar</button>`
+      : o.status===Status.IN_PROGRESS
+      ? `<button class="btn" data-a="ready">Listo</button>`
+      : o.status===Status.READY
+      ? `<button class="btn" data-a="deliver">Entregar</button>
+         <button class="btn" data-a="paid">Cobrar</button>`
+      : o.status===Status.DELIVERED
+      ? `<button class="btn" data-a="paid">Cobrar</button>`
+      : ``;
+
+  return `
     <div class="row">
-      <b>#${String(o.id||'').slice(-5)} · ${name}</b>
-      ${o.orderType ? `<span class="badge">${o.orderType}</span>` : ''}
+      <b>#${o.id.slice(-5)} · ${name}</b>
+      ${type ? `<span class="badge">${type}</span>`:''}
       <span class="price">${money(o.subtotal)}</span>
     </div>
-    ${items ? `<div class="muted">${items}</div>` : ''}
+    ${itemsTxt ? `<div class="muted">${itemsTxt}</div>`:''}
     <div class="row" style="margin-top:8px; gap:6px">
-      ${o.status===Status.PENDING
-        ? `<button class="btn" data-a="take">Tomar</button>`
-        : ``}
-      ${o.status===Status.IN_PROGRESS
-        ? `<button class="btn" data-a="ready">Listo</button>`
-        : ``}
-      ${o.status===Status.READY
-        ? `<button class="btn" data-a="deliver">Entregar</button>
-           <button class="btn" data-a="paid">Cobrar</button>`
-        : ``}
-      ${o.status===Status.DELIVERED
-        ? `<button class="btn" data-a="paid">Cobrar</button>`
-        : ``}
+      ${actions}
       ${o.status!==Status.CANCELLED
         ? `<button class="btn danger" data-a="cancel">Cancelar</button>`
         : `<span class="badge">Cancelada</span>`}
     </div>
   `;
-  return div;
 }
 
-function ensureInColumn(el, status){
-  const col = els[status];
-  if (!col) return;
-  if (el.parentElement !== col) col.appendChild(el);
-}
+/* ---- Diff & patch por columna ---- */
+function patchColumn(container, rows){
+  // index actual por id
+  const existing = new Map();
+  container.querySelectorAll('.card').forEach(el => existing.set(el.dataset.id, el));
 
-function upsertCard(o){
-  const id = o.id;
-  const h  = hashRow(o);
-  const prev = cache.get(id);
+  // inserción/actualización en orden
+  let last = null;
+  for (const o of rows){
+    const id = key(o);
+    let el = existing.get(id);
+    const desiredHTML = cardHTML(o);
 
-  if (prev && prev.hash === h){
-    // Nada cambia; asegúrate solo de que esté en la columna correcta
-    ensureInColumn(nodes.get(id), o.status);
-    return;
-  }
-
-  const existed = !!prev;
-  cache.set(id, { hash: h, status:o.status });
-
-  if (!existed){
-    // Crear
-    const card = createCard(o);
-    nodes.set(id, card);
-    ensureInColumn(card, o.status);
-    return;
-  }
-
-  // Existía pero cambió algo: rehacer contenido y mover si es necesario
-  const card = nodes.get(id);
-  if (!card){
-    const c = createCard(o);
-    nodes.set(id, c);
-    ensureInColumn(c, o.status);
-    return;
-  }
-  // Re-render interno (reemplazar innerHTML es barato aquí; el contenedor se conserva)
-  const wasParent = card.parentElement;
-  const scTop = wasParent ? wasParent.scrollTop : 0;
-  const newCard = createCard(o);
-  card.innerHTML = newCard.innerHTML; // conserva el nodo (evita perder scroll de la lista)
-  ensureInColumn(card, o.status);
-  if (wasParent) wasParent.scrollTop = scTop;
-}
-
-function removeMissing(currentIds){
-  // Elimina cartas que ya no están en la suscripción
-  for (const id of Array.from(cache.keys())){
-    if (!currentIds.has(id)){
-      cache.delete(id);
-      const n = nodes.get(id);
-      if (n && n.parentElement) n.parentElement.removeChild(n);
-      nodes.delete(id);
+    if (!el){
+      el = document.createElement('div');
+      el.className = 'card';
+      el.dataset.id = id;
+      el.innerHTML = desiredHTML;
+      if (last) last.after(el); else container.prepend(el);
+    }else{
+      // solo actualizar si cambió algo relevante
+      const fingerprint = el.__fp || '';
+      const nextFp = `${o.status}|${o.subtotal}|${(o.items?.length||0)}`;
+      if (fingerprint !== nextFp){
+        el.innerHTML = desiredHTML;
+        el.__fp = nextFp;
+      }
+      // reordenar si es necesario (por seguridad; orden ya viene estable)
+      if (last && el.previousElementSibling !== last) {
+        last.after(el);
+      }
     }
+    el.__fp = `${o.status}|${o.subtotal}|${(o.items?.length||0)}`;
+    existing.delete(id);
+    last = el;
   }
+
+  // remove sobrantes (ya no pertenecen a esta columna)
+  existing.forEach(el => el.remove());
+
+  // contador
+  const badge = container.parentElement.querySelector('.h .badge');
+  if (badge) badge.textContent = String(rows.length);
 }
 
-function updateCounters(){
-  els.cP.textContent = String(els.PENDING.children.length);
-  els.cI.textContent = String(els.IN_PROGRESS.children.length);
-  els.cR.textContent = String(els.READY.children.length);
-  els.cD.textContent = String(els.DELIVERED.children.length);
+/* ---- Agrupar y parchear sin borrar DOM ---- */
+function groupAndPatch(all){
+  const g = { PENDING:[], IN_PROGRESS:[], READY:[], DELIVERED:[] };
+  for (const o of (all||[])){ if (g[o.status]) g[o.status].push(o); }
+  patchColumn(els.lP, g.PENDING);
+  patchColumn(els.lI, g.IN_PROGRESS);
+  patchColumn(els.lR, g.READY);
+  patchColumn(els.lD, g.DELIVERED);
 }
 
-let rafToken = 0;
-function scheduleRender(rows){
-  // Coalesce en rAF y no renderices si la página no es visible
-  if (!pageVisible) return;
-  if (rafToken) cancelAnimationFrame(rafToken);
-  rafToken = requestAnimationFrame(()=>{
-    rafToken = 0;
-    const ids = new Set();
-    rows.forEach(o=>{
-      ids.add(o.id);
-      upsertCard(o);
-    });
-    removeMissing(ids);
-    updateCounters();
-  });
-}
-
+/* ---- Acciones ---- */
 function bindActions(){
-  els.colsWrap.addEventListener('click', async (e)=>{
-    const btn = e.target.closest('button[data-a]');
-    if (!btn) return;
-    const card = btn.closest('.card'); if (!card) return;
+  document.getElementById('cols').addEventListener('click', async (e)=>{
+    const btn = e.target.closest('button[data-a]'); if(!btn) return;
+    const card = btn.closest('.card'); if(!card) return;
     const id = card.dataset.id;
     const act = btn.dataset.a;
-
-    // Deshabilitar botones de esa tarjeta hasta que termine
-    const btns = Array.from(card.querySelectorAll('button'));
-    btns.forEach(b=> b.disabled = true);
-
     try{
       if (act==='take')     await DB.updateOrderStatus(id, Status.IN_PROGRESS);
       if (act==='ready')    await DB.updateOrderStatus(id, Status.READY);
@@ -180,20 +135,18 @@ function bindActions(){
       if (act==='cancel')   await DB.updateOrderStatus(id, Status.CANCELLED);
     }catch(err){
       console.warn('[cocina] updateOrderStatus error:', err);
-      alert('No se pudo actualizar. Revisa conexión.');
-    }finally{
-      btns.forEach(b=> b.disabled = false);
+      alert('No se pudo actualizar. Revisa consola.');
     }
   });
 }
 
+/* ---- Inicio ---- */
 function start(){
   bindActions();
   const unsub = DB.subscribeKitchenOrders((rows)=>{
-    // rows ya viene filtrado + throttled desde db.js
-    scheduleRender(rows || []);
+    // render sin repaints grandes
+    window.requestAnimationFrame(()=> groupAndPatch(rows || []));
   });
   window.addEventListener('beforeunload', ()=>{ try{ unsub?.(); }catch{} });
 }
-
 start();
