@@ -1,9 +1,10 @@
-// /shared/db.js — V2.6 (SAFE + v2-aware + emisión estable + anti-rebote)
-// - Namespace de localStorage por ruta (/prueba/v2/) para evitar colisiones.
-// - Filtro cocina: HOY + estados visibles + subtotal>0 + items>0 + dedup.
+// /shared/db.js — V2.8 (SAFE + v2-aware + estable + anti-rebote + anti-resurrección persistente)
+// - Namespace de localStorage por ruta (/prueba/v2/) o forzable con window.STORAGE_NS.
+// - Filtro cocina: HOY + estados visibles + subtotal>0 + items>0 + dedup + orden estable.
 // - onSnapshot coalesced (250ms) + DISTINCT-BY-HASH (insensible a updatedAt).
-// - Anti-rollback de estado: no permite retroceder PENDING<-IN_PROGRESS<-READY<-DELIVERED<-PAID.
-// - PRUEBA (sin Firestore): polling 2s con los mismos filtros y anti-rebote.
+// - Anti-rollback (PENDING→…→PAID / CANCELLED terminal) en memoria y PERSISTENTE (por día).
+// - Anti-resurrección PERSISTENTE por día: si un ID llegó a PAID/CANCELLED hoy, no vuelve a la lista.
+// - PRUEBA (sin Firestore): polling 2s con mismos filtros y guards.
 // - Utilidades: purgeSimToday().
 
 const MODE = (typeof window !== 'undefined' && window.MODE) ? window.MODE : {
@@ -18,7 +19,10 @@ const BASE_PREFIX = (() => {
     return parts[0] ? `/${parts[0]}/` : '/';
   } catch { return '/'; }
 })();
+
+/* -------------------- Namespace (LS) estable entre páginas v2 -------------------- */
 const STORAGE_SLUG = (() => {
+  if (typeof window !== 'undefined' && window.STORAGE_NS) return String(window.STORAGE_NS);
   try {
     const parts = location.pathname.split('/').filter(Boolean);
     return (parts[0] ? parts[0] : 'root') + (parts[1] ? `-${parts[1]}` : '');
@@ -49,7 +53,6 @@ const where            = fs?.where           ?? ((...a)=>a);
 const orderBy          = fs?.orderBy         ?? ((...a)=>a);
 const limit            = fs?.limit           ?? ((...a)=>a);
 const getDocs          = fs?.getDocs         ?? (async()=>({ docs: [] }));
-
 const HAS_DB = !!db && !!fs && typeof addDoc === 'function';
 
 /* -------------------- Utils -------------------- */
@@ -57,6 +60,7 @@ async function ensureAuth(){ return true; }
 const sleep = (ms = 80) => new Promise(r => setTimeout(r, ms));
 function nowMs(){ return Date.now(); }
 function startOfToday(){ const d=new Date(); d.setHours(0,0,0,0); return d.getTime(); }
+function ymd(){ const d=new Date(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${d.getFullYear()}-${mm}-${dd}`; }
 function toMillisFlexible(raw){
   if (raw==null) return null;
   if (typeof raw === 'number') return raw;
@@ -110,10 +114,10 @@ const SHARED_MENU_URL = `${BASE_PREFIX}shared/catalog.json`;
 
 export async function fetchCatalogWithFallback(){
   try{ await ensureAuth(); }catch{}
-  try{ const r = await fetch(DATA_MENU_URL, {cache:'no-store'}); if (r.ok) return normalizeCatalog(await r.json()); }
-  catch (e){ console.warn('[catalog]', DATA_MENU_URL, e); }
+  try{ const r = await fetch(DATA_MENU_URL,  {cache:'no-store'}); if (r.ok) return normalizeCatalog(await r.json()); }
+  catch(e){ console.warn('[catalog]', DATA_MENU_URL, e); }
   try{ const r2 = await fetch(SHARED_MENU_URL, {cache:'no-store'}); if (r2.ok) return normalizeCatalog(await r2.json()); }
-  catch (e){ console.warn('[catalog]', SHARED_MENU_URL, e); }
+  catch(e){ console.warn('[catalog]', SHARED_MENU_URL, e); }
   try{ if (HAS_DB){ const d1 = await getDoc(doc(db,'settings','catalog')); if (d1?.exists()) return normalizeCatalog(d1.data()); } }
   catch(e){ console.warn('[catalog] settings/catalog', e); }
   try{ if (HAS_DB){ const d2 = await getDoc(doc(db,'catalog','public')); if (d2?.exists()) return normalizeCatalog(d2.data()); } }
@@ -125,11 +129,21 @@ export async function fetchCatalogWithFallback(){
 const LS_ORDERS = `__orders@${STORAGE_SLUG}`;
 const LS_HH     = `__happyHour@${STORAGE_SLUG}`;
 const LS_ETA    = `__eta@${STORAGE_SLUG}`;
+// Persistencia anti-rollback/resurrección por día (LOCALSTORAGE para que sobreviva recarga)
+const DAY = ymd();
+const LS_RANK_DAY  = `__rank@${STORAGE_SLUG}@${DAY}`;   // { id: rankMax }
+const LS_TOMBS_DAY = `__tombs@${STORAGE_SLUG}@${DAY}`;  // [ ids terminales ]
 
-function lsRead(k,d){ try{ const v=JSON.parse(localStorage.getItem(k)||'null'); return v??d; }catch{ return d; } }
+function lsRead(k,d){ try{ const t = localStorage.getItem(k); return t ? JSON.parse(t) : d; }catch{ return d; } }
 function lsWrite(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+
 function simListAll(){ return lsRead(LS_ORDERS, []); }
-function simUpsertOrder(row){ const rows=simListAll(); const i=rows.findIndex(o=>o.id===row.id); if(i>=0) rows[i]=row; else rows.push(row); lsWrite(LS_ORDERS, rows); }
+function simUpsertOrder(row){
+  const rows = simListAll();
+  const i = rows.findIndex(o=>o.id===row.id);
+  if(i>=0) rows[i]=row; else rows.push(row);
+  lsWrite(LS_ORDERS, rows);
+}
 function simGetOrderById(id){ return simListAll().find(o=>o.id===id)||null; }
 function simListActiveToday(){
   const start=startOfToday();
@@ -140,6 +154,8 @@ export function purgeSimToday(){
   const start=startOfToday();
   const keep=simListAll().filter(o=> (o.createdAt||0) < start);
   lsWrite(LS_ORDERS, keep);
+  lsWrite(LS_RANK_DAY, {});
+  lsWrite(LS_TOMBS_DAY, []);
 }
 
 /* -------------------- Órdenes -------------------- */
@@ -152,23 +168,42 @@ export async function createOrder(payload){
   }, ()=>{ const id=`SIM-${now}-${Math.floor(Math.random()*1000)}`; simUpsertOrder({...base,id}); return id; });
 }
 
+/* Anti-rollback (servidor simulado) */
+const ORDER_RANK = { PENDING:1, IN_PROGRESS:2, READY:3, DELIVERED:4, PAID:5, CANCELLED:99 };
+
 export async function updateOrderStatus(orderId, status){
   const valid=['PENDING','IN_PROGRESS','READY','DELIVERED','PAID','CANCELLED'];
   if (!valid.includes(status)) throw new Error('status inválido');
   return guardWrite(false, async ()=>{
     await updateDoc(doc(db,'orders', orderId), { status, updatedAt: serverTimestamp() });
     return true;
-  }, ()=>{ const row=simGetOrderById(orderId); if(!row) return {ok:false, reason:'not_found'};
-          row.status=status; row.updatedAt=nowMs(); simUpsertOrder(row); return {ok:true,_training:true}; });
+  }, ()=>{ 
+    const row=simGetOrderById(orderId);
+    if(!row) return {ok:false, reason:'not_found'};
+    const curr = ORDER_RANK[row.status] ?? 0;
+    const next = ORDER_RANK[status] ?? 0;
+    if (next < curr) return { ok:false, reason:'rollback_blocked', from:row.status, to:status };
+    row.status=status; row.updatedAt=nowMs(); simUpsertOrder(row);
+    // Persistir rank y tombs si terminal
+    const rankMap = lsRead(LS_RANK_DAY, {});
+    rankMap[orderId] = Math.max(rankMap[orderId]||0, next);
+    lsWrite(LS_RANK_DAY, rankMap);
+    if (status==='PAID' || status==='CANCELLED') {
+      const tombs = new Set(lsRead(LS_TOMBS_DAY, [])); tombs.add(orderId); lsWrite(LS_TOMBS_DAY, Array.from(tombs));
+    }
+    return {ok:true,_training:true};
+  });
 }
 
 /* -------------------- Filtros + hash -------------------- */
 function filterForKitchen(rows){
   const start = startOfToday();
-  const okStatus = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
+  const okStatus = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']); // PAID/CANCELLED no
+  const tombs = new Set(lsRead(LS_TOMBS_DAY, []));
   const m = new Map();
   for (const raw of (rows||[])){
     if (!raw || !raw.id) continue;
+    if (tombs.has(raw.id)) continue; // anti-resurrección persistente (día actual)
     const o = { ...raw };
     o.createdAt = toMillisFlexible(o.createdAt);
     o.updatedAt = toMillisFlexible(o.updatedAt);
@@ -185,21 +220,32 @@ function filterForKitchen(rows){
   });
 }
 function hashForKitchen(rows){
-  // Hash “insensible” a updatedAt para reducir repaints por metadatos
+  // Hash “insensible” a updatedAt para evitar repaints por metadatos de servidor
   const pack = rows.map(o=>[o.id, o.status, Number(o.subtotal||0), (o.items?.length||0), (o.createdAt||0)]);
   try { return JSON.stringify(pack); } catch { return String(Math.random()); }
 }
 
-/* -------------------- Anti-rollback de estado -------------------- */
-const RANK = { PENDING:1, IN_PROGRESS:2, READY:3, DELIVERED:4, PAID:5, CANCELLED:99 };
+/* -------------------- Anti-rollback (cliente persistente) -------------------- */
+const RANK = ORDER_RANK;
 function applyMonotonicGuard(rows, lastMap){
-  // lastMap: id -> rank ya visto; devolvemos nueva lista sin retrocesos
+  const persisted = lsRead(LS_RANK_DAY, {});
   const out = [];
   for (const o of rows){
     const r = RANK[o.status] ?? 0;
-    const prev = lastMap.get(o.id) ?? 0;
-    if (r >= prev) { lastMap.set(o.id, r); out.push(o); }
-    // si r < prev, ignoramos este doc (snapshot atrasado)
+    const prevInMem = lastMap.get(o.id) ?? 0;
+    const prevPersist = persisted[o.id] ?? 0;
+    const prev = Math.max(prevInMem, prevPersist);
+    if (r >= prev) {
+      lastMap.set(o.id, r);
+      // Si estado terminal, registrar tumba persistente
+      if (o.status==='PAID' || o.status==='CANCELLED') {
+        const t = new Set(lsRead(LS_TOMBS_DAY, [])); t.add(o.id); lsWrite(LS_TOMBS_DAY, Array.from(t));
+      }
+      // Actualizar persistencia de rank
+      const rm = lsRead(LS_RANK_DAY, {}); rm[o.id] = Math.max(rm[o.id]||0, r); lsWrite(LS_RANK_DAY, rm);
+      out.push(o);
+    }
+    // Si r < prev, ignoramos snapshot atrasado (evita “saltos”)
   }
   return out;
 }
@@ -215,7 +261,7 @@ export function subscribeKitchenOrders(cb){
     const filtered = filterForKitchen(rows);
     const monotone = applyMonotonicGuard(filtered, lastRankMap);
     const h = hashForKitchen(monotone);
-    if (h === lastHash) return;
+    if (h === lastHash) return; // sin cambios visibles
     lastHash = h;
     cb(monotone);
   };
@@ -223,6 +269,7 @@ export function subscribeKitchenOrders(cb){
   const schedule = (rows)=>{
     pending = rows;
     clearTimeout(t);
+    // Coalesce 250ms: si llegan ráfagas de snapshots, solo pintamos 1 vez
     t = setTimeout(()=>{ const p = pending; pending = null; emitOnce(p||[]); }, 250);
   };
 
@@ -235,7 +282,7 @@ export function subscribeKitchenOrders(cb){
     return ()=>{ try{ unsub?.(); }catch{} clearTimeout(t); };
   }
 
-  // PRUEBA: polling 2s sin ráfagas (aplica el mismo guard)
+  // PRUEBA: polling 2s sin ráfagas (usa los mismos filtros + guard)
   let alive = true;
   (function tick(){
     if (!alive) return;
