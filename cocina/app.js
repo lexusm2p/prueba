@@ -1,6 +1,4 @@
 // Cocina — tablero de preparación (anti-saltos)
-// Render incremental + timers desacoplados (sin reemplazos por segundos)
-
 import * as DB from '../shared/db.js';
 import { toast, beep } from '../shared/notify.js';
 import { ensureAuth } from '../shared/firebase.js';
@@ -59,40 +57,26 @@ async function applyInventoryForOrderShim(order, opts){
 }
 
 /* ================== Constantes ================== */
-const Status = {
-  PENDING: 'PENDING', IN_PROGRESS: 'IN_PROGRESS', READY: 'READY',
-  DELIVERED: 'DELIVERED', CANCELLED: 'CANCELLED', DONE: 'DONE', PAID: 'PAID'
-};
-
+const Status = { PENDING:'PENDING', IN_PROGRESS:'IN_PROGRESS', READY:'READY', DELIVERED:'DELIVERED', CANCELLED:'CANCELLED', DONE:'DONE', PAID:'PAID' };
 let CURRENT_LIST = [];
 const LOCALLY_TAKEN = new Set();
 
-/* ================== Time & utils ================== */
+/* ================== Utils ================== */
 const now = ()=> new Date();
-const toMs = (t)=> {
-  if (!t) return 0;
-  if (typeof t.toMillis === 'function') return t.toMillis();
-  if (t.seconds != null) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
-  const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
-};
-const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
+const toMs = (t)=>{ if(!t) return 0; if(typeof t.toMillis==='function') return t.toMillis(); if(t.seconds!=null) return (t.seconds*1000)+Math.floor((t.nanoseconds||0)/1e6); const d=new Date(t); const ms=d.getTime(); return Number.isFinite(ms)?ms:0; };
+const money = (n)=> '$'+Number(n??0).toFixed(0);
 const getPhone = (o)=> (o?.phone ?? o?.meta?.phone ?? o?.customer?.phone ?? '').toString().trim();
-const fmtMMSS = (ms)=>{
-  const s = Math.max(0, Math.floor(ms/1000));
-  const m = Math.floor(s/60);
-  const ss = s % 60;
-  return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
-};
-function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+const fmtMMSS = (ms)=>{ const s=Math.max(0,Math.floor(ms/1000)); const m=Math.floor(s/60); const ss=s%60; return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; };
+const escapeHtml = (s='')=> String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-/* ================== Dedupe & merge ================== */
+/* ============== Dedupe & merge ============== */
 function updatedAtMs(o){
   return toMs(o.updatedAt || o.timestamps?.updatedAt || o.readyAt || o.timestamps?.readyAt ||
               o.startedAt || o.timestamps?.startedAt || o.createdAt || o.timestamps?.createdAt);
 }
 function mergeByNewest(list){
   const byId = new Map();
-  for (const raw of (Array.isArray(list) ? list : [])) {
+  for (const raw of (Array.isArray(list)?list:[])){
     if (!raw?.id) continue;
     const o = { ...raw };
     if (!o.createdAt) o.createdAt = o.timestamps?.createdAt || new Date();
@@ -102,31 +86,23 @@ function mergeByNewest(list){
   return Array.from(byId.values());
 }
 function patchLocal(id, patch){
-  let changed = false;
+  let changed=false;
   CURRENT_LIST = CURRENT_LIST.map(o=>{
-    if (o.id !== id) return o;
-    changed = true;
-    return { ...o, ...patch, timestamps: { ...(o.timestamps||{}), ...extractTimestamps(patch) } };
+    if (o.id!==id) return o;
+    changed=true;
+    return { ...o, ...patch, timestamps:{ ...(o.timestamps||{}), ...extractTimestamps(patch) } };
   });
   if (!changed) CURRENT_LIST.push({ id, ...patch, timestamps: extractTimestamps(patch) });
 }
 function extractTimestamps(patch){
-  const t = {};
-  for (const k of Object.keys(patch||{})){
-    if (k.startsWith('timestamps.')){
-      const sub = k.split('.').slice(1).join('.'); t[sub] = patch[k];
-    }
-  }
-  return t;
+  const t={}; for (const k of Object.keys(patch||{})){ if(k.startsWith('timestamps.')){ const sub=k.split('.').slice(1).join('.'); t[sub]=patch[k]; } } return t;
 }
 
-/* ================== Data stream (auth + subscribe) ================== */
-let __streamLocked = false;
-let unsub = null;
-
+/* ============== Data stream ============== */
+let __streamLocked=false, unsub=null;
 async function initKitchen(){
   try { await ensureAuth(); } catch(e){ console.warn('[cocina] anon auth fail', e); }
-  unsub = subscribeKitchenShim((orders = [])=>{
+  unsub = subscribeKitchenShim((orders=[])=>{
     if (__streamLocked) return;
     __streamLocked = true;
     try { CURRENT_LIST = mergeByNewest(orders); render(CURRENT_LIST); }
@@ -135,26 +111,19 @@ async function initKitchen(){
 }
 document.addEventListener('DOMContentLoaded', initKitchen);
 
-/* ================== Totales ================== */
-function calcSubtotal(o={}){
-  const items = Array.isArray(o.items) ? o.items : [];
-  return items.reduce((s,it)=>{
-    const line = (typeof it.lineTotal === 'number') ? Number(it.lineTotal||0)
-               : (Number(it.unitPrice||0) * Number(it.qty||1));
-    return s + line;
-  },0);
-}
-function calcTotal(o={}){ const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0) : calcSubtotal(o); return sub + Number(o.tip||0); }
+/* ============== Totales ============== */
+function calcSubtotal(o={}){ const items=Array.isArray(o.items)?o.items:[]; return items.reduce((s,it)=> s + (typeof it.lineTotal==='number'? Number(it.lineTotal||0) : (Number(it.unitPrice||0)*Number(it.qty||1))), 0); }
+function calcTotal(o={}){ const sub=(typeof o.subtotal==='number')?Number(o.subtotal||0):calcSubtotal(o); return sub + Number(o.tip||0); }
 
-/* ========== Render incremental sin saltos ========== */
+/* ============== Render incremental ============== */
 function htmlToElement(html){ const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstElementChild; }
 function djb2(str){ let h=5381,i=str.length; while(i) h=(h*33)^str.charCodeAt(--i); return (h>>>0).toString(36); }
 function isNearBottom(el, px=80){ return (el.scrollHeight - el.clientHeight - el.scrollTop) <= px; }
 function attachScrollGuards(el){
-  if (!el || el.__guards) return; el.__guards = true;
+  if(!el || el.__guards) return; el.__guards=true;
   let t; const onScrollStart=()=>{ el.dataset.userScrolling='1'; clearTimeout(t); t=setTimeout(()=>{ el.dataset.userScrolling='0'; }, 900); };
   ['wheel','touchstart','touchmove','pointerdown','scroll'].forEach(ev=> el.addEventListener(ev, onScrollStart, { passive:true }));
-  el.style.overflowAnchor = 'none'; el.style.scrollBehavior = 'auto';
+  el.style.overflowAnchor='none'; el.style.scrollBehavior='auto';
 }
 function keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop){
   const afterHeight = el.scrollHeight;
@@ -162,21 +131,18 @@ function keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop){
   else el.scrollTop = Math.max(0, beforeTop + (afterHeight - beforeHeight));
 }
 
-// ⛔️ OJO: el hash **no** incluye los timers (así no se reemplazan por segundos)
 function stableCardHash(o){
-  // todo lo visual salvo los mm:ss
   const core = JSON.stringify({
     id:o.id, status:o.status, paid:o.paid, payMethod:o.payMethod, notes:o.notes,
-    orderType:o.orderType, table:o.table, customer:o.customer,
-    phone: getPhone(o), tip:o.tip, subtotal:o.subtotal,
-    hh:o.hh, rewards:o.rewards,
+    orderType:o.orderType, table:o.table, customer:o.customer, phone:getPhone(o),
+    tip:o.tip, subtotal:o.subtotal, hh:o.hh, rewards:o.rewards,
     items:(o.items||o.item?[...(o.items||[]), ...(o.item?[{id:o.item.id,name:o.item.name,qty:o.qty,price:o.item.price}]:[])]:[])
   });
   return djb2(core);
 }
 
 function patchCol(id, list){
-  const el = document.getElementById(id); if (!el) return;
+  const el = document.getElementById(id); if(!el) return;
   attachScrollGuards(el);
   const beforeTop = el.scrollTop, beforeHeight = el.scrollHeight, wasNearBottom = isNearBottom(el);
   const current = Array.from(el.children).filter(n => n.matches?.('.k-card, .empty'));
@@ -189,45 +155,33 @@ function patchCol(id, list){
     return;
   }
 
-  const desired = [];
+  const desired=[];
   for (const o of list){
     const id = o.id;
-    const html = renderCard(o);                 // html SIN mm:ss literal (lleva <span data-timer>)
-    const hash = stableCardHash(o);             // hash estable
+    const html = renderCard(o);
+    const hash = stableCardHash(o);
     const found = byId.get(id);
     if (found){
       if (found.dataset.hash !== hash){
-        const fresh = htmlToElement(html);
-        fresh.dataset.hash = hash;              // 💡 no depende de los segundos
-        found.replaceWith(fresh);
-        desired.push(fresh);
-      } else {
-        desired.push(found);
-      }
+        const fresh = htmlToElement(html); fresh.dataset.hash = hash; found.replaceWith(fresh); desired.push(fresh);
+      } else { desired.push(found); }
       byId.delete(id);
     } else {
-      const n = htmlToElement(html);
-      n.dataset.hash = hash;
-      desired.push(n);
+      const n = htmlToElement(html); n.dataset.hash = hash; desired.push(n);
     }
   }
-  // remove sobrantes
   for (const node of byId.values()) node.remove();
 
-  // reordenar si hace falta
   const currOrder = Array.from(el.children);
   const needReorder = desired.length !== currOrder.length || desired.some((n,i)=> n!==currOrder[i]);
   if (needReorder){
-    const frag = document.createDocumentFragment();
-    desired.forEach(n=> frag.appendChild(n));
-    el.replaceChildren(frag);
+    const frag=document.createDocumentFragment(); desired.forEach(n=> frag.appendChild(n)); el.replaceChildren(frag);
   }
 
   keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop);
-  queueMicrotask(tickTimers); // actualiza timers sin tocar estructura
+  queueMicrotask(tickTimers);
 }
 
-// Render general
 function render(list){
   const by = (list||[]).reduce((acc,o)=>{ const s=(o?.status||Status.PENDING).toUpperCase(); (acc[s] ||= []).push(o); return acc; },{});
   patchCol('col-pending',  by.PENDING||[]);
@@ -237,53 +191,45 @@ function render(list){
   patchCol('col-bill', bill);
 }
 
-/* ================== Card (sin mm:ss incrustado) ================== */
+/* ============== Card ============== */
 function renderCard(o = {}) {
-  // Items normalizados
   const items = Array.isArray(o.items) && o.items.length ? o.items
     : (o.item ? [{ id:o.item.id, name:o.item.name, qty:o.qty||1, unitPrice:o.item.price||0,
                    baseIngredients:o.baseIngredients||[], salsaDefault:o.salsaDefault||null,
                    salsaCambiada:o.salsaCambiada||null, extras:o.extras||{}, notes:o.notes||'',
                    lineTotal:(o.item?.price||0)*(o.qty||1)}] : []);
 
-  // Meta
-  let meta = '—';
-  if (o.orderType === 'dinein') meta = `Mesa: <b>${escapeHtml(o.table || '?')}</b>`;
-  else if (o.orderType === 'pickup') meta = 'Pickup';
+  let meta='—';
+  if (o.orderType==='dinein') meta = `Mesa: <b>${escapeHtml(o.table || '?')}</b>`;
+  else if (o.orderType==='pickup') meta = 'Pickup';
   else if (o.orderType) meta = escapeHtml(o.orderType);
 
-  // Totales
-  const sub = (typeof o.subtotal === 'number') ? Number(o.subtotal||0)
+  const sub = (typeof o.subtotal==='number') ? Number(o.subtotal||0)
             : items.reduce((s,it)=> s + (typeof it.lineTotal==='number' ? Number(it.lineTotal||0) : (Number(it.unitPrice||0)*Number(it.qty||1))), 0);
   const total = sub + Number(o.tip||0);
 
-  // Contacto
   const phone = getPhone(o);
   const phoneTxt = phone ? ` · Tel: <b>${escapeHtml(String(phone))}</b>` : '';
 
-  // Tiempos crudos (se pintan con tickTimers)
   const tCreated = toMs(o.createdAt || o.timestamps?.createdAt);
   const tStarted = toMs(o.startedAt || o.timestamps?.startedAt);
   const tReady   = toMs(o.readyAt   || o.timestamps?.readyAt);
 
   const timerHtml = `
     <div class="muted small mono" style="margin-top:6px">
-      ⏱️ Total: <b data-timer="total" data-created="${tCreated||0}" data-ready="${tReady||0}">--:--</b>
-      ${tStarted ? ` · 👩‍🍳 En cocina: <b data-timer="kitchen" data-started="${tStarted||0}" data-ready="${tReady||0}">--:--</b>` : ''}
+      ⏱️ Total: <b data-timer="total" data-created="${tCreated||0}" data-ready="${tReady||0}">00:00</b>
+      ${tStarted ? ` · 👩‍🍳 En cocina: <b data-timer="kitchen" data-started="${tStarted||0}" data-ready="${tReady||0}">00:00</b>` : ''}
     </div>`;
 
-  // Happy Hour
   const hh = o.hh || {};
   const hhSummary = (hh.enabled && Number(hh.totalDiscount || 0) > 0)
     ? `<span class="k-badge">HH -${Number(hh.discountPercent || 0)}% · ahorro ${money(hh.totalDiscount)}</span>` : '';
 
-  // Recompensas
   const rw = o.rewards || {};
   const rwDiscount = (rw.type==='discount' && Number(rw.discount||0)>0) ? `<span class="k-badge">🎁 Combo minis: -${money(Number(rw.discount||0))}</span>` : '';
   const rwMiniDog  = (rw.type==='miniDog' && rw.miniDog) ? `<span class="k-badge">🌭 Mini Dog (cortesía)</span>` : '';
   const rewardsSummary = `${rwDiscount} ${rwMiniDog}`.trim();
 
-  // Items HTML
   const itemsHtml = items.map(it=>{
     const ingrBadges = (it.baseIngredients||[]).map(i=> `<div class="k-badge">${escapeHtml(i)}</div>`).join('');
     const extraAdds = (it.adds || it.extras?.adds || it.extras?.ingredients || []);
@@ -306,7 +252,6 @@ function renderCard(o = {}) {
       </div>`;
   }).join('');
 
-  // Acciones
   const canShowTake = (o.status === Status.PENDING) && !LOCALLY_TAKEN.has(o.id);
   const actions = [
     canShowTake ? `<button class="btn" data-a="take">Tomar</button>` : '',
@@ -336,7 +281,7 @@ function renderCard(o = {}) {
 </article>`;
 }
 
-/* ========== Timers desacoplados (NO tocan estructura) ========== */
+/* ============== Timers desacoplados ============== */
 function tickTimers(){
   const nowMs = Date.now();
   document.querySelectorAll('[data-timer="total"]').forEach(el=>{
@@ -348,20 +293,19 @@ function tickTimers(){
   document.querySelectorAll('[data-timer="kitchen"]').forEach(el=>{
     const started = Number(el.getAttribute('data-started')||0);
     const ready   = Number(el.getAttribute('data-ready')||0);
-    if (!started){ el.textContent='--:--'; return; }
+    if (!started){ el.textContent='00:00'; return; }
     const end = ready || nowMs;
     el.textContent = fmtMMSS(end - started);
   });
 }
-setInterval(()=>{ if (document.hidden) return; tickTimers(); }, 1000);
+setInterval(()=>{ if (!document.hidden) tickTimers(); }, 1000);
 
-/* ================== Actions (optimistas) ================== */
+/* ============== Actions (optimistas) ============== */
 document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-a]'); if(!btn) return;
   const card = btn.closest('[data-id]'); const id = card?.dataset?.id; if(!id) return;
   const a = btn.dataset.a;
-  const TRAIN = isTraining();
-  const OPTS = { training: TRAIN };
+  const TRAIN = isTraining(); const OPTS = { training: TRAIN };
 
   btn.disabled = true;
   const reenable = ()=> { try{ btn.disabled = false; }catch{} };
@@ -435,23 +379,10 @@ document.addEventListener('click', async (e)=>{
   }finally{ clearTimeout(fsId); reenable(); }
 });
 
-/* ========== Refresco ligero de PR, sin tocar tarjetas ========== */
-// ya NO re-renderiza para timers (eso lo hace tickTimers cada 1s)
-setInterval(()=>{ if (!CURRENT_LIST.length) return; render(CURRENT_LIST); }, 20000);
-
-/* ========== Limpieza ========== */
+/* ============== Limpieza ============== */
 window.addEventListener('beforeunload', ()=>{ try{ unsub && unsub(); }catch{} });
 
-/* ========== Ajustes iOS anti-salto ========== */
-(function fixVH(){
-  const setVH = ()=>{
-    const h = (window.visualViewport?.height || window.innerHeight) * 0.01;
-    document.documentElement.style.setProperty('--vh', h + 'px');
-  };
-  setVH();
-  window.addEventListener('resize', setVH, { passive: true });
-  window.addEventListener('orientationchange', setVH, { passive: true });
-})();
+/* ============== Scrollers listos ============== */
 document.addEventListener('DOMContentLoaded', ()=>{
   ['col-pending','col-progress','col-ready','col-bill'].forEach(id=>{
     const el = document.getElementById(id);
