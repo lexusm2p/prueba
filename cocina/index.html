@@ -12,75 +12,64 @@
   <style>
     :root{ --vh: 1vh; }
 
-    /* 🔒 Fija el root para que el scroll SOLO viva en las columnas */
-    html, body{ height:100%; }
+    /* 🔒 El body NO scrollea. Solo scrollean las columnas. */
+    html, body { height:100%; }
     body.shell.fixed-root{
       position: fixed; inset: 0; overflow: hidden;
       touch-action: manipulation;
       -webkit-overflow-scrolling: auto;
       background: var(--bg, #0b1220);
-      /* ✅ evita empujón cuando aparece/desaparece la barra (PC/Android) */
+      /* ✅ PC/Android: el gutter del scroll siempre reservado */
       scrollbar-gutter: stable both-edges;
     }
 
-    /* Contenedor principal ocupa exactamente el alto visible real */
+    /* El contenedor ocupa exactamente el alto visible real */
     .container#appRoot{
       height: calc(var(--vh) * 100);
-      display: flex; flex-direction: column;
-      overflow: hidden;  /* nada de scroll aquí */
-      min-height: 0;
+      display:flex; flex-direction:column;
+      overflow:hidden; min-height:0;
     }
 
-    /* Grid de 2 columnas (1 en móviles) con scrollers internos */
+    /* Grid principal */
     .k-columns{
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      min-height: 0;     /* clave para que los hijos scrolleen */
-      contain: layout;
+      flex:1;
+      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+      min-height:0; contain:layout;
     }
-    @media (max-width: 900px){
-      .k-columns{ grid-template-columns: 1fr; }
-    }
+    @media (max-width:900px){ .k-columns{ grid-template-columns:1fr; } }
 
-    .k-columns .card{
-      display: flex; flex-direction: column;
-      min-height: 0;
-      contain: content;
-    }
+    .k-columns .card{ display:flex; flex-direction:column; min-height:0; contain:content; }
 
-    /* Cada columna maneja su propio scroll (anclaje desactivado) */
+    /* Scrollers internos (aquí vive el scroll) */
     .k-columns .col{
-      flex: 1;
-      overflow: auto;                       /* 🔑 aquí sí hay scroll */
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;
-      overflow-anchor: none;
-      min-height: 0;
-      contain: layout paint;
-      /* ✅ reserva el gutter del scroll siempre */
-      scrollbar-gutter: stable both-edges;
+      flex:1; overflow:auto;
+      -webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain;
+      overflow-anchor:none;
+      min-height:0; contain:layout paint;
+      scrollbar-gutter: stable both-edges; /* ✅ reserva espacio de barra */
     }
 
-    /* Evita scroll suave que magnifica el “salto” visual */
-    html, body, .k-columns .col{ scroll-behavior: auto !important; }
+    /* Evita scroll suave que magnifica el “salto” */
+    html, body, .k-columns .col{ scroll-behavior:auto !important; }
 
-    /* -------- Timers con ancho fijo para no empujar el layout -------- */
+    /* ---------- Timers con ancho fijo y fuente monoespaciada ---------- */
     .mono, [data-timer]{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1, "lnum" 1;
     }
     [data-timer]{
       display:inline-block;
-      width:5.2ch;              /* mm:ss = 5 caracteres */
+      width:5.6ch;            /* mm:ss ocupa 5; reservamos un poco más */
       text-align:right;
+      line-height:1;          /* sin variaciones verticales */
       white-space:nowrap;
     }
   </style>
 
   <script>
-    // Altura de viewport real (evita saltos al cambiar barras en móvil)
+    // Altura de viewport real (móvil): evita saltos por barra del navegador
     function setVH(){
       const h = (window.visualViewport?.height || window.innerHeight) * 0.01;
       document.documentElement.style.setProperty('--vh', h + 'px');
@@ -120,24 +109,18 @@
     </div>
   </div>
 
-  <!-- ====== RUTA MODERNA (ESM) ====== -->
+  <!-- ESM -->
   <script type="module" src="./app.js"></script>
 
-  <!-- ====== LEGACY (sin módulos) ====== -->
+  <!-- LEGACY -->
   <script nomodule src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
   <script nomodule src="https://cdn.jsdelivr.net/npm/whatwg-fetch@3/dist/fetch.umd.js"></script>
   <script nomodule>
     (function(){ if(!window.console){window.console={};['log','warn','error','info'].forEach(function(m){console[m]=function(){}});} })();
-    if (!Element.prototype.closest) {
-      Element.prototype.closest = function(s) {
-        var el = this; if(!document.documentElement.contains(el)) return null;
-        do { if(el.matches && el.matches(s)) return el; el = el.parentElement || el.parentNode; } while (el && el.nodeType === 1);
-        return null;
-      };
-    }
-    if (window.NodeList && !NodeList.prototype.forEach) NodeList.prototype.forEach = Array.prototype.forEach;
-    if (!Object.assign) Object.assign = function(t){ for(var i=1;i<arguments.length;i++){ var s=arguments[i]||{}; for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) t[k]=s[k]; } } return t; };
-    if (!String.prototype.includes) String.prototype.includes = function(s, i){ return this.indexOf(s, i||0) !== -1; };
+    if(!Element.prototype.closest){ Element.prototype.closest=function(s){ var el=this; if(!document.documentElement.contains(el)) return null; do{ if(el.matches&&el.matches(s)) return el; el=el.parentElement||el.parentNode; }while(el&&el.nodeType===1); return null; }; }
+    if(window.NodeList && !NodeList.prototype.forEach) NodeList.prototype.forEach = Array.prototype.forEach;
+    if(!Object.assign) Object.assign=function(t){ for(var i=1;i<arguments.length;i++){ var s=arguments[i]||{}; for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) t[k]=s[k]; } } return t; };
+    if(!String.prototype.includes) String.prototype.includes=function(s,i){ return this.indexOf(s,i||0)!==-1; };
   </script>
 
   <script nomodule src="../shared/compat.js"></script>
