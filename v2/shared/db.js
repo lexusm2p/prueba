@@ -1,10 +1,12 @@
-// /shared/db.js — V2.3 (SAFE + compat Kiosko/Cocina)
-// - Soporta Firestore si existe; si no, simula con localStorage (modo PRUEBA).
-// - Prefijo BASE_PREFIX autodetectado (útil para GitHub Pages como /prueba/).
-// - Expone: createOrder, updateOrderStatus, subscribeKitchenOrders,
-//           subscribeHappyHour, subscribeETA, subscribeOrders (shim),
-//           sendWhatsAppMessage, upsertCustomerFromOrder, attachLastOrderRef,
-//           fetchCatalogWithFallback, y helpers Firestore.
+// /shared/db.js — V2.4 (SAFE + compat Kiosko/Cocina/Admin)
+// - Firestore si existe; si no, simula con localStorage (modo PRUEBA).
+// - BASE_PREFIX para rutas en GitHub Pages (/prueba/…).
+// - Anti-duplicados y anti-parpadeo en suscripciones (singleton + debounce + hash).
+// - Filtro de Cocina: solo estados activos de HOY (PENDING/IN_PROGRESS/READY/DELIVERED).
+// - Exports: createOrder, updateOrderStatus, subscribeKitchenOrders, subscribeOrders,
+//            subscribeHappyHour, subscribeETA, sendWhatsAppMessage,
+//            upsertCustomerFromOrder, attachLastOrderRef, fetchCatalogWithFallback,
+//            y helpers de Firestore.
 
 const MODE = (typeof window !== 'undefined' && window.MODE) ? window.MODE : {
   OFFLINE: false,   // Fuerza simulación sin Firestore
@@ -63,6 +65,8 @@ const HAS_DB = !!db && !!fs && typeof addDoc === 'function';
 /* -------------------- Utils base -------------------- */
 async function ensureAuth(){ return true; }
 const sleep = (ms = 80) => new Promise(r => setTimeout(r, ms));
+function nowMs(){ return Date.now(); }
+function startOfToday(){ const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
 
 function toMillisFlexible(raw) {
   if (raw == null) return null;
@@ -72,15 +76,13 @@ function toMillisFlexible(raw) {
   const ms = new Date(raw).getTime();
   return Number.isFinite(ms) ? ms : null;
 }
-function startOfToday() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
-function nowMs(){ return Date.now(); }
 
 /* -------------------- Guard writes -------------------- */
 async function guardWrite(training, realWriteFn, fakeValue=null){
   const forceSim = MODE.OFFLINE || MODE.READONLY || training || !HAS_DB;
   if (!forceSim) return realWriteFn();
   await sleep(60);
-  return (fakeValue ?? { ok:true, _training:true });
+  return (typeof fakeValue === 'function') ? fakeValue() : (fakeValue ?? { ok:true, _training:true });
 }
 
 /* -------------------- Catálogo (local/FS) -------------------- */
@@ -152,7 +154,7 @@ export async function fetchCatalogWithFallback() {
   return normalizeCatalog({});
 }
 
-/* -------------------- Backend PRUEBA (localStorage) -------------------- */
+/* -------------------- PRUEBA (localStorage) -------------------- */
 const LS_ORDERS  = '__orders';
 const LS_HH      = '__happyHour';
 const LS_ETA     = '__eta';
@@ -164,12 +166,12 @@ function lsWrite(key, val){
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-function simListActiveOrders() {
+function simListActiveOrders(){
   const rows = lsRead(LS_ORDERS, []);
-  // solo hoy
   const start = startOfToday();
-  return rows.filter(o => (o.createdAt||0) >= start)
-             .sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
+  return rows
+    .filter(o => (o.createdAt||0) >= start)
+    .sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
 }
 function simGetOrderById(id){
   const rows = lsRead(LS_ORDERS, []);
@@ -182,17 +184,10 @@ function simUpsertOrder(row){
   lsWrite(LS_ORDERS, rows);
 }
 
-/* -------------------- Órdenes: crear / actualizar / subscribir -------------------- */
+/* -------------------- Órdenes: crear / actualizar -------------------- */
 export async function createOrder(payload){
-  // Normaliza
   const now = nowMs();
-  const base = {
-    id: null,
-    status: 'PENDING',
-    createdAt: now,
-    updatedAt: now,
-    ...payload
-  };
+  const base = { id:null, status:'PENDING', createdAt:now, updatedAt:now, ...payload };
 
   return guardWrite(false, async ()=>{
     const ref = await addDoc(collection(db, 'orders'), {
@@ -201,11 +196,11 @@ export async function createOrder(payload){
       updatedAt: serverTimestamp()
     });
     return ref?.id;
-  }, (()=>{ // fake
+  }, ()=>{ // fake
     const id = `SIM-${now}-${Math.floor(Math.random()*1000)}`;
     simUpsertOrder({ ...base, id });
     return id;
-  })());
+  });
 }
 
 export async function updateOrderStatus(orderId, status){
@@ -213,28 +208,68 @@ export async function updateOrderStatus(orderId, status){
   if (!valid.includes(status)) throw new Error('status inválido');
 
   return guardWrite(false, async ()=>{
-    await updateDoc(doc(db, 'orders', orderId), {
-      status, updatedAt: serverTimestamp()
-    });
-    return true;
-  }, (()=>{ // fake
+    await updateDoc(doc(db, 'orders', orderId), { status, updatedAt: serverTimestamp() });
+    return { ok:true };
+  }, ()=>{ // fake
     const row = simGetOrderById(orderId);
     if (!row) return { ok:false, reason:'not_found' };
     row.status = status;
     row.updatedAt = nowMs();
     simUpsertOrder(row);
     return { ok:true, _training:true };
-  })());
+  });
 }
 
-// Suscripción para Cocina: en Firestore escucha en vivo; en PRUEBA usa polling 2s.
+/* -------------------- Filtros/anti-duplicados para Cocina/Admin -------------------- */
+function stableHash(rows){
+  try {
+    const key = rows.map(r=>[
+      r.id, r.status, Number(r.updatedAt||0), Number(r.createdAt||0)
+    ].join('|')).join('||');
+    let h=0; for(let i=0;i<key.length;i++){ h=(h*31 + key.charCodeAt(i))|0; }
+    return String(h);
+  } catch { return String(Math.random()); }
+}
+function onlyTodayActive(rows){
+  const start = startOfToday();
+  const now   = nowMs();
+  const THIRTY_MIN = 30*60*1000;
+  const ACTIVE = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
+  const out = [];
+  const seen = new Set();
+  for (const r of rows||[]){
+    if (!r || seen.has(r.id)) continue;
+    seen.add(r.id);
+    const ct = Number(r.createdAt||0);
+    const ut = Number(r.updatedAt||ct||0);
+    if (!(ct >= start)) continue;             // solo HOY
+    if (!ACTIVE.has(r.status)) continue;      // fuera PAID/CANCELLED
+    if (r.status==='DELIVERED' && (now - ut) > THIRTY_MIN) continue; // entregadas viejas
+    out.push(r);
+  }
+  out.sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
+  return out;
+}
+
+/* -------------------- Suscripción: Cocina (singleton + debounce) -------------------- */
+let __kitchenUnsub = null;
 export function subscribeKitchenOrders(cb){
-  if (HAS_DB) {
-    const qRef = query(
-      collection(db, 'orders'),
-      orderBy('createdAt','desc'),
-      limit(120)
-    );
+  // corta previa si existía (singleton)
+  if (__kitchenUnsub){ try{ __kitchenUnsub(); }catch{} __kitchenUnsub = null; }
+
+  let lastHash = '';
+  let timer = null;
+  const push = (rows)=>{
+    const clean = onlyTodayActive(rows);
+    const h = stableHash(clean);
+    if (h === lastHash) return; // sin cambios reales
+    lastHash = h;
+    clearTimeout(timer);
+    timer = setTimeout(()=>{ try{ cb(clean); }catch(e){ console.warn('kitchen cb error', e); } }, 60);
+  };
+
+  if (HAS_DB){
+    const qRef = query(collection(db,'orders'), orderBy('createdAt','desc'), limit(150));
     const unsub = onSnapshot(qRef, snap=>{
       const rows = snap.docs.map(d=>{
         const data = d.data() || {};
@@ -244,65 +279,69 @@ export function subscribeKitchenOrders(cb){
           createdAt: toMillisFlexible(data.createdAt),
           updatedAt: toMillisFlexible(data.updatedAt)
         };
-      }).filter(o=>{
-        // Cocina muestra estas 4 columnas; PAID/CANCELLED se pueden ocultar
-        return ['PENDING','IN_PROGRESS','READY','DELIVERED'].includes(o.status);
-      }).sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
-      try{ cb(rows); }catch(e){ console.warn('cb kitchen error', e); }
-    }, err=>{
-      console.warn('[subscribeKitchenOrders] onSnapshot error:', err);
-    });
-    return unsub;
+      });
+      push(rows);
+    }, err=> console.warn('[subscribeKitchenOrders] onSnapshot error:', err));
+    __kitchenUnsub = ()=>{ clearTimeout(timer); unsub(); };
+    return __kitchenUnsub;
   }
 
   // PRUEBA: polling
   let alive = true;
   const tick = ()=>{
     if (!alive) return;
-    try{
-      const rows = simListActiveOrders()
-        .filter(o => ['PENDING','IN_PROGRESS','READY','DELIVERED'].includes(o.status));
-      cb(rows);
-    }catch(e){ console.warn('poll kitchen cb fail', e); }
-    setTimeout(tick, 2000);
+    try { push(simListActiveOrders()); } catch(e){ console.warn('poll kitchen fail', e); }
+    __kitchenUnsub = setTimeout(tick, 1200);
   };
   tick();
-  return ()=>{ alive = false; };
+  return ()=>{ alive = false; clearTimeout(__kitchenUnsub); __kitchenUnsub = null; };
 }
 
-// Suscripción genérica (kiosko/admin)
+/* -------------------- Suscripción genérica (kiosko/admin) -------------------- */
+let __ordersUnsub = null;
 export function subscribeOrders(cb){
+  if (__ordersUnsub){ try{ __ordersUnsub(); }catch{} __ordersUnsub = null; }
+
+  let lastHash = '';
+  const push = (rows)=>{
+    const clean = onlyTodayActive(rows);
+    const h = stableHash(clean);
+    if (h === lastHash) return;
+    lastHash = h;
+    try{ cb(clean); }catch{}
+  };
+
   if (HAS_DB){
-    const qRef = query(
-      collection(db,'orders'),
-      orderBy('createdAt','desc'),
-      limit(120)
-    );
-    return onSnapshot(qRef, snap=>{
+    const qRef = query(collection(db,'orders'), orderBy('createdAt','desc'), limit(150));
+    const unsub = onSnapshot(qRef, snap=>{
       const rows = snap.docs.map(d=>{
         const data = d.data()||{};
-        return { id:d.id, ...data,
+        return {
+          id: d.id,
+          ...data,
           createdAt: toMillisFlexible(data.createdAt),
           updatedAt: toMillisFlexible(data.updatedAt)
         };
       });
-      cb(rows);
+      push(rows);
     });
+    __ordersUnsub = unsub;
+    return ()=>{ unsub(); __ordersUnsub = null; };
   }
-  // PRUEBA
+
+  // PRUEBA: polling
   let alive = true;
   const tick = ()=>{
     if (!alive) return;
-    try{ cb(simListActiveOrders()); }catch{}
-    setTimeout(tick, 2500);
+    try { push(simListActiveOrders()); } catch {}
+    __ordersUnsub = setTimeout(tick, 1800);
   };
   tick();
-  return ()=>{ alive=false; };
+  return ()=>{ alive=false; clearTimeout(__ordersUnsub); __ordersUnsub=null; };
 }
 
 /* -------------------- HH y ETA -------------------- */
 export function subscribeHappyHour(cb){
-  // Firestore: settings/happyHour
   if (HAS_DB){
     const ref = doc(db,'settings','happyHour');
     return onSnapshot(ref, snap=>{
@@ -316,7 +355,7 @@ export function subscribeHappyHour(cb){
       });
     }, err=> console.warn('[subscribeHappyHour] error', err));
   }
-  // PRUEBA: localStorage
+  // PRUEBA
   let alive = true;
   const tick = ()=>{
     if (!alive) return;
@@ -378,7 +417,6 @@ export async function attachLastOrderRef(phone, orderId){
 }
 
 export async function sendWhatsAppMessage({ to, text }){
-  // Stub seguro: no envía nada en PRUEBA
   console.info('[WA] pretend send to', to, '\n', text);
   return { ok:true, simulated:true };
 }
