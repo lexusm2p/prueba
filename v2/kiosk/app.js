@@ -1,13 +1,12 @@
-// /kiosk/app.js — V2 LEAN (compat + optimización + Power Bar en modal)
-// - Ordenar rápido (sin modal) + personalizar opcional
-// - Nudge de bebida (2 botones) tras agregar
-// - Mantiene HH/ETA, regalos, lealtad y seguimiento
+// /kiosk/app.js — V2.1 LEAN (no auto-redirect a track, modal de seguimiento)
+// - Ordenar rápido + personalizar
+// - Nudge de bebida y Combo Drink dinámico
+// - HH/ETA, regalos, lealtad y seguimiento
 // - Acordeón con barra de poder + highlights por producto
 // - Modal con Barra de Poder (sticky) por pasos de personalización
-// - COMPAT: único Total visible (footer). Sin Subtotal/HH en cuerpo.
-// - 2025-11-04b: ensureDrinkPrices() tras +/-/remove, y al pintar el carrito.
-// - 2025-11-04c: Cards muestran “×N en pedido” y barra llena si ya está en carrito;
-//                 renderCards() se llama tras cambios de carrito; watcher de tema.
+// - Único Total visible (footer). Sin Subtotal/HH en cuerpo.
+// - 2025-11-04b/c integrados (ensureDrinkPrices tras +/-/remove y refresco de cards)
+// - 2025-11-05: **Eliminado auto-redirect a track**. Nuevo modal “Seguir pedido” + botón flotante.
 
 const __parts = location.pathname.split('/').filter(Boolean);
 const __first = __parts[0] ? `/${__parts[0]}/` : '/';
@@ -46,6 +45,7 @@ const state = {
   },
   themeName: '',
   lastOrderId: null,
+  lastTrackUrl: '',
   isSubmittingOrder: false,
   adminMode: false,
   loyaltyEnabled: true,
@@ -550,8 +550,7 @@ function normalizeExtraIngredients(){
     .filter(obj => !isCarneGrande(obj?.name));
 }
 
-// Crea la barra sticky del header y una mini barra junto al Total del footer.
-// Devuelve un setter (pct => ...) que sincroniza ambas.
+// Power bar en modal (header sticky + mini en footer)
 function ensureModalPowerBar(){
   const modal = document.getElementById('modal');
   if (!modal) return (/*pct*/)=>{};
@@ -574,7 +573,7 @@ function ensureModalPowerBar(){
     document.getElementById('mBody')?.prepend(header);
   }
 
-  // FOOTER (mini) — junto a Total y antes del botón
+  // FOOTER (mini)
   const mAdd   = document.getElementById('mAdd');
   const mTotal = document.getElementById('mTotal');
   const foot   = mAdd ? mAdd.parentElement : null;
@@ -591,7 +590,6 @@ function ensureModalPowerBar(){
     else foot.appendChild(mini);
   }
 
-  // Setter unificado
   return (pct)=>{
     const v = Math.max(0, Math.min(100, Math.round(pct)));
     const f1 = document.getElementById('mPowerFill');
@@ -612,7 +610,6 @@ function openItemModal(item, base, existingIndex=null){
   if(ttl) ttl.textContent = `${item.name} · ${money(item.price)}`;
   if(xBtn) xBtn.onclick = ()=> modal?.classList.remove('open');
 
-  // ----- PowerBar (header + mini en footer, sincronizadas) -----
   const setPower = ensureModalPowerBar();
 
   const sauces = state.menu?.extras?.sauces ?? [];
@@ -696,21 +693,15 @@ function openItemModal(item, base, existingIndex=null){
   const totalEl = document.getElementById('mTotal');
   const qtyEl   = document.getElementById('qty');
 
-  // ----- Progreso por pasos -----
   const steps = {
-    name:false,     // escribir nombre
-    sauce:false,    // tocar/seleccionar salsa
-    saucesSec:false,// abrir sección aderezos extra
-    ingSec:false,   // abrir sección ingredientes extra
-    qty:false,      // modificar cantidad
-    notes:false     // escribir notas
+    name:false, sauce:false, saucesSec:false, ingSec:false, qty:false, notes:false
   };
   const STEP_COUNT = Object.keys(steps).length;
+  const setPower = ensureModalPowerBar();
   const recomputeProgress = ()=>{
     const done = Object.values(steps).filter(Boolean).length;
     setPower((done/STEP_COUNT)*100);
   };
-
   const mark = (k)=>{ if (!steps[k]) { steps[k]=true; recomputeProgress(); } };
 
   const inputs  = body.querySelectorAll('input[type=checkbox]');
@@ -720,7 +711,6 @@ function openItemModal(item, base, existingIndex=null){
   const nameEl  = document.getElementById('cName');
   const notesEl = document.getElementById('notes');
 
-  // Inicial por edición
   if ((nameEl?.value||'').trim().length>0) steps.name=true;
   if ((swapSel?.value||'')!=='') steps.sauce=true;
   if (Number(qtyEl?.value||1)!==1) steps.qty=true;
@@ -735,7 +725,6 @@ function openItemModal(item, base, existingIndex=null){
   qtyEl?.addEventListener('change', ()=>{ if (Number(qtyEl.value||1)!==1) mark('qty'); });
   notesEl?.addEventListener('input', ()=>{ if ((notesEl.value||'').trim().length>0) mark('notes'); });
 
-  // Precio dinámico
   const calc = ()=>{
     const qty     = parseInt(qtyEl?.value||'1', 10);
     const saucesChecked = [...body.querySelectorAll('#sauces input:checked')].length;
@@ -755,9 +744,10 @@ function openItemModal(item, base, existingIndex=null){
   };
   inputs.forEach(i=> i.addEventListener('change', calc)); calc();
 
-  if(addBtn){
-    addBtn.textContent = (existingIndex!==null) ? 'Guardar cambios' : 'Agregar al pedido';
-    addBtn.onclick = ()=>{
+  const addBtnEl = document.getElementById('mAdd');
+  if(addBtnEl){
+    addBtnEl.textContent = (existingIndex!==null) ? 'Guardar cambios' : 'Agregar al pedido';
+    addBtnEl.onclick = ()=>{
       const name = (document.getElementById('cName')?.value||'').trim();
       if(!name){ alert('Por favor escribe tu nombre.'); return; }
       state.customerName = name;
@@ -781,7 +771,6 @@ function openItemModal(item, base, existingIndex=null){
         notes, lineTotal: subtotal, hhDisc: hhDiscTotal
       };
 
-      // efecto “100% completado” antes de cerrar
       setPower(100);
 
       if (existingIndex!==null){
@@ -820,10 +809,8 @@ function computeBreakdown() {
 function paintBreakdown() {
   ensureDrinkPrices(); // asegura precio combo si aplica
   const { subtotal, hh, total } = computeBreakdown();
-  // Footer único (preferido)
   const totFooter = document.getElementById('cartTotalFooter');
   if (totFooter) totFooter.textContent = money(total);
-  // Compat opcional si existen:
   const subEl = document.getElementById('cartSub');
   const hhEl  = document.getElementById('cartHH');
   const totEl = document.getElementById('cartTotal');
@@ -922,6 +909,84 @@ function recomputeLine(line){
   line.hhDisc = hhDiscPerUnit * (line.qty||1);
 }
 
+/* ======================= Modal SEGUIMIENTO (nuevo) ======================= */
+// No redirigir: preguntar primero.
+function buildTrackUrl({ orderId, phone }) {
+  const u = new URL('./track.html', location.href);
+  if (orderId) u.searchParams.set('oid', orderId);
+  if (phone)   u.searchParams.set('phone', phone);
+  u.searchParams.set('gamify', '1');
+  u.searchParams.set('autostart', '1');
+  return u.toString();
+}
+function ensureTrackPrompt(){
+  if (document.getElementById('trackPrompt')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'trackPrompt';
+  wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:10002;place-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)';
+  wrap.innerHTML = `
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="tpTtl"
+         style="max-width:560px;width:calc(100% - 24px);background:#0f182a;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:16px">
+      <div class="modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h3 id="tpTtl" style="margin:0">🔔 Seguir tu pedido</h3>
+        <button class="btn ghost" id="tpClose" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="muted" id="tpMsg" style="margin:6px 0 10px">
+        Te avisaremos cuando esté listo. Si quieres, puedes abrir el seguimiento en otra pestaña.
+      </p>
+      <div class="k-card" style="padding:10px">
+        <div class="small" style="opacity:.85">Link</div>
+        <div class="mono" id="tpLink" style="word-break:break-all;margin-top:4px"></div>
+      </div>
+      <div class="row" style="gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn ghost" id="tpCopy">Copiar link</button>
+        <a class="btn" id="tpOpen" target="_blank" rel="noopener">Seguir ahora</a>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = ()=> wrap.style.display = 'none';
+  wrap.addEventListener('click', (e)=>{ if (e.target === wrap) close(); });
+  wrap.querySelector('#tpClose')?.addEventListener('click', close);
+
+  // Botón flotante para reabrir luego
+  if (!document.getElementById('trackFloating')){
+    const flo = document.createElement('button');
+    flo.id = 'trackFloating';
+    flo.className = 'btn';
+    flo.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:10001;display:none';
+    flo.textContent = '🔔 Seguir pedido';
+    flo.onclick = ()=> { try{ openTrackPrompt(state.lastTrackUrl); }catch{} };
+    document.body.appendChild(flo);
+  }
+}
+function openTrackPrompt(url){
+  ensureTrackPrompt();
+  state.lastTrackUrl = url || state.lastTrackUrl || '';
+  const w = document.getElementById('trackPrompt'); if (!w) return;
+  const linkEl = w.querySelector('#tpLink');
+  const aOpen  = w.querySelector('#tpOpen');
+  const btnCpy = w.querySelector('#tpCopy');
+
+  if (linkEl) linkEl.textContent = state.lastTrackUrl || '(sin link)';
+  if (aOpen)  aOpen.href = state.lastTrackUrl || '#';
+  if (btnCpy){
+    btnCpy.onclick = async ()=>{
+      try{
+        await navigator.clipboard.writeText(state.lastTrackUrl || '');
+        toast('Link copiado');
+      }catch{
+        toast('No se pudo copiar');
+      }
+    };
+  }
+  w.style.display = 'grid';
+
+  // muestra botón flotante para abrir después
+  const flo = document.getElementById('trackFloating');
+  if (flo){ flo.style.display = 'inline-flex'; }
+}
+
+/* ======================= Carrito (modal + confirmar) ======================= */
 function openCartModal(){
   const m = document.getElementById('cartModal');
   const body = document.getElementById('cartBody');
@@ -938,7 +1003,6 @@ function openCartModal(){
   }
   if (confirmBtn) confirmBtn.style.display = '';
 
-  // Cuerpo del modal (SIN Subtotal/HH; el total va solo en el footer)
   if (body) body.innerHTML = `
     <div class="field"><label>Nombre del cliente</label>
       <input id="cartName" type="text" required value="${state.customerName||localStorage.getItem('kiosk:name')||''}" /></div>
@@ -1023,7 +1087,6 @@ function openCartModal(){
     state.orderMeta.payMethodPref = (paySel?.value || 'efectivo');
   });
 
-  // acciones en líneas
   body.onclick = (e)=>{
     const btn = e.target.closest('button[data-a]'); if (!btn) return;
     const card = btn.closest('[data-i]'); if (!card) return;
@@ -1036,7 +1099,7 @@ function openCartModal(){
       recomputeAllLines();
       ensureDrinkPrices();
       updateCartBar();
-      openCartModal(); // re-render
+      openCartModal();
       return;
     }
     if (act === 'more') {
@@ -1149,37 +1212,35 @@ function openCartModal(){
         if (!orderId) orderId = `O-${Date.now()}-${Math.floor(Math.random()*1000)}`;
         state.lastOrderId = orderId;
 
+        // Construir link de track (no navegar)
+        const trackPhone = orderBase.phone ? '52'+orderBase.phone : '';
+        const trackUrl = buildTrackUrl({ orderId, phone: trackPhone || '' });
+        state.lastTrackUrl = trackUrl;
+
+        // Guardar cliente/último pedido y WhatsApp (pickup)
         if (orderBase.phone) {
           await DB.upsertCustomerFromOrder?.({ ...orderBase, id: orderId }).catch(()=>{});
           await DB.attachLastOrderRef?.(orderBase.phone, orderId).catch(()=>{});
-          const trackUrl = new URL('./track.html', location.href);
-          trackUrl.searchParams.set('phone', '52'+orderBase.phone);
-          trackUrl.searchParams.set('autostart','1');
-          trackUrl.searchParams.set('gamify','1');
           const etaLine = state.etaText ? `ETA: ${state.etaText}\n` : '';
           const text =
             `¡Hola ${orderBase.customer || ''}! Recibimos tu pedido en Seven de Burgers 🍔.\n` +
             etaLine +
             `Total estimado: $${Number(orderBase.subtotal||0).toFixed(0)}\n` +
-            `Sigue tu pedido aquí: ${trackUrl.toString()}`;
+            `Sigue tu pedido aquí: ${trackUrl}`;
           await DB.sendWhatsAppMessage?.({ to: `52${orderBase.phone}`, text, meta:{kind:'order_created', orderId} }).catch(()=>{});
         }
 
         beep();
         toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
 
+        // Limpiar carrito y cerrar modal
         state.cart = [];
         updateCartBar();
         const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
 
-        setTimeout(()=>{
-          const u = new URL('./track.html', location.href);
-          if (orderBase.phone) u.searchParams.set('phone', orderBase.phone);
-          u.searchParams.set('oid', orderId);
-          u.searchParams.set('autostart','1');
-          u.searchParams.set('gamify','1');
-          window.location.href = u.toString();
-        }, 250);
+        // MOSTRAR MODAL DE SEGUIMIENTO (nuevo) — sin redirigir automáticamente
+        openTrackPrompt(state.lastTrackUrl);
+
       } finally {
         state.isSubmittingOrder = false;
         confirmBtn.disabled = false;
@@ -1283,7 +1344,7 @@ function subscribeOrdersShim(cb){
 function startOrdersAnalytics(){
   if (state.unsubAnalytics){ state.unsubAnalytics(); state.unsubAnalytics=null; }
   state.unsubAnalytics = subscribeOrdersShim(()=>{
-    // aquí podrías calcular topToday/ETA con tus utilidades existentes
+    // analytics mínimos (placeholder)
   });
 }
 
@@ -1310,6 +1371,10 @@ async function init(){
 
   if (state.unsubTheme) { try{ state.unsubTheme(); }catch{} state.unsubTheme = null; }
   state.unsubTheme = initThemeFromSettings({ defaultName: 'Base' });
+
+  // Prepara modal (lazy) para seguimiento y regalo
+  ensureTrackPrompt();
+  ensureGiftModal();
 
   if (sessionStorage.getItem('kioskAdmin') === '1') {
     state.adminMode = true;
