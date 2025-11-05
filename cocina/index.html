@@ -9,56 +9,74 @@
   <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../shared/styles.css">
 
-  <!-- Parche anti “saltos” de scroll y viewport inestable -->
   <style>
-    /* Viewport estable (fija alto real del navegador móvil) */
-    html, body {
-      height: 100%;
-      overscroll-behavior-y: contain;
-      scroll-behavior: auto !important;
+    :root{ --vh: 1vh; }
+
+    /* 🔒 NO dejes que el body scrollee (Safari cambia su alto y “salta”) */
+    body.shell.fixed-root{
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      touch-action: manipulation;
+      -webkit-overflow-scrolling: auto;
+      background: var(--bg, #0b1220);
     }
 
-    :root {
-      --vh: 1vh;
+    /* Contenedor principal ocupa 100% del alto visible real */
+    .container#appRoot{
+      height: calc(var(--vh) * 100);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden; /* nada de scroll aquí */
     }
 
-    .shell, .container {
-      min-height: calc(var(--vh, 1vh) * 100);
-    }
-
-    /* Cada columna actúa como límite de layout/paint y evita reflujo global */
-    .k-col {
-      contain: layout paint;
-      overflow-anchor: none;
-      will-change: contents;
-      min-height: 40vh;
-    }
-
-    /* El contenedor principal no cambia de tamaño por errores de layout */
-    .k-columns {
+    /* Grid de columnas con scrollers internos */
+    .k-columns{
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      min-height: 0;    /* clave para que los hijos puedan scrollear */
       contain: layout;
     }
+    @media (max-width: 900px){
+      .k-columns{ grid-template-columns: 1fr; }
+    }
 
-    /* Tarjetas contenidas, evita repintado global */
-    .k-card {
+    .k-columns .card{
+      display: flex;
+      flex-direction: column;
+      min-height: 0;    /* permite que .col calcule altura */
       contain: content;
     }
+
+    .k-columns .col{
+      flex: 1;
+      overflow: auto;                   /* 🔑 aquí sí hay scroll */
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;     /* no “tira” el scroll al body */
+      overflow-anchor: none;            /* evita anclajes automáticos */
+      min-height: 0;
+      contain: layout paint;
+    }
+
+    /* Evita scroll suave que acentúa el efecto */
+    html, body, .k-columns .col{ scroll-behavior: auto !important; }
   </style>
 
   <script>
-    // Fija --vh al alto real visible (para evitar saltos en móviles)
-    function setVH() {
+    // Altura de viewport real para móviles (evita saltos al aparecer la barra)
+    function setVH(){
       const h = (window.visualViewport?.height || window.innerHeight) * 0.01;
       document.documentElement.style.setProperty('--vh', h + 'px');
     }
     setVH();
-    window.addEventListener('resize', setVH, { passive: true });
-    window.addEventListener('orientationchange', setVH, { passive: true });
+    window.addEventListener('resize', setVH, { passive:true });
+    window.addEventListener('orientationchange', setVH, { passive:true });
   </script>
 </head>
 
-<body class="shell">
-
+<body class="shell fixed-root">
   <div class="container" role="main" id="appRoot">
     <div class="row" style="margin-bottom:10px">
       <a class="badge" href="../kiosk/">Kiosko</a>
@@ -70,22 +88,19 @@
     <div class="k-columns">
       <div class="card">
         <h2>Pendientes</h2>
-        <div id="col-pending" class="col k-col" aria-label="Órdenes pendientes"></div>
+        <div id="col-pending" class="col" aria-label="Órdenes pendientes"></div>
       </div>
-
       <div class="card">
         <h2>En preparación</h2>
-        <div id="col-progress" class="col k-col" aria-label="Órdenes en preparación"></div>
+        <div id="col-progress" class="col" aria-label="Órdenes en preparación"></div>
       </div>
-
       <div class="card">
         <h2>Listos</h2>
-        <div id="col-ready" class="col k-col" aria-label="Órdenes listas para entregar"></div>
+        <div id="col-ready" class="col" aria-label="Órdenes listas para entregar"></div>
       </div>
-
       <div class="card">
         <h2>Por cobrar</h2>
-        <div id="col-bill" class="col k-col" aria-label="Órdenes por cobrar"></div>
+        <div id="col-bill" class="col" aria-label="Órdenes por cobrar"></div>
       </div>
     </div>
   </div>
@@ -94,49 +109,22 @@
   <script type="module" src="./app.js"></script>
 
   <!-- ====== LEGACY (sin módulos) ====== -->
-  <!-- Polyfills mínimos para iOS viejito -->
   <script nomodule src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
   <script nomodule src="https://cdn.jsdelivr.net/npm/whatwg-fetch@3/dist/fetch.umd.js"></script>
   <script nomodule>
-    // console seguro
-    (function(){
-      if(!window.console){
-        window.console = {};
-        ['log','warn','error','info'].forEach(function(m){console[m]=function(){}});
-      }
-    })();
-
-    // Element.closest
+    (function(){ if(!window.console){window.console={};['log','warn','error','info'].forEach(function(m){console[m]=function(){}});} })();
     if (!Element.prototype.closest) {
       Element.prototype.closest = function(s) {
         var el = this; if(!document.documentElement.contains(el)) return null;
-        do { if(el.matches && el.matches(s)) return el; el = el.parentElement || el.parentNode; }
-        while (el !== null && el.nodeType === 1);
+        do { if(el.matches && el.matches(s)) return el; el = el.parentElement || el.parentNode; } while (el && el.nodeType === 1);
         return null;
       };
     }
-
-    // NodeList.forEach
-    if (window.NodeList && !NodeList.prototype.forEach) {
-      NodeList.prototype.forEach = Array.prototype.forEach;
-    }
-
-    // Object.assign
-    if (!Object.assign) Object.assign = function(t){
-      for(var i=1;i<arguments.length;i++){
-        var s=arguments[i]||{};
-        for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) t[k]=s[k]; }
-      }
-      return t;
-    };
-
-    // String.includes
-    if (!String.prototype.includes) {
-      String.prototype.includes = function(s, i){ return this.indexOf(s, i||0) !== -1; };
-    }
+    if (window.NodeList && !NodeList.prototype.forEach) NodeList.prototype.forEach = Array.prototype.forEach;
+    if (!Object.assign) Object.assign = function(t){ for(var i=1;i<arguments.length;i++){ var s=arguments[i]||{}; for(var k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) t[k]=s[k]; } } return t; };
+    if (!String.prototype.includes) String.prototype.includes = function(s, i){ return this.indexOf(s, i||0) !== -1; };
   </script>
 
-  <!-- Libs/DB en modo legacy -->
   <script nomodule src="../shared/compat.js"></script>
   <script nomodule src="../shared/notify.legacy.js"></script>
   <script nomodule src="../shared/db.legacy.js"></script>
