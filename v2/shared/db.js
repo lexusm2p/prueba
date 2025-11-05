@@ -1,281 +1,393 @@
-// /shared/db.js — V2.2 (SAFE + GitHub Pages prefix + Cocina/Kiosko compatibles)
-// - Prefijo automático para /prueba/ u otros repos de GitHub Pages
-// - Catálogo con fallback (json local -> Firestore -> vacío normalizado)
-// - Suscripciones y acciones de ÓRDENES para Cocina/Kiosko
-// - Happy Hour y ETA en tiempo real (+ fallback)
-// - Guard writes simulados si OFFLINE/READONLY (modo PRUEBA seguro)
+// /shared/db.js — V2.3 (SAFE + compat Kiosko/Cocina)
+// - Soporta Firestore si existe; si no, simula con localStorage (modo PRUEBA).
+// - Prefijo BASE_PREFIX autodetectado (útil para GitHub Pages como /prueba/).
+// - Expone: createOrder, updateOrderStatus, subscribeKitchenOrders,
+//           subscribeHappyHour, subscribeETA, subscribeOrders (shim),
+//           sendWhatsAppMessage, upsertCustomerFromOrder, attachLastOrderRef,
+//           fetchCatalogWithFallback, y helpers Firestore.
 
-const MODE = (typeof window !== 'undefined' && window.MODE)
-  ? window.MODE
-  : { OFFLINE:false, READONLY:false, LEGACY:false };
+const MODE = (typeof window !== 'undefined' && window.MODE) ? window.MODE : {
+  OFFLINE: false,   // Fuerza simulación sin Firestore
+  READONLY: false,  // Evita escrituras reales
+  LEGACY:  false
+};
 
-/* ------------ Prefijo para archivos estáticos (GitHub Pages) ------------ */
-export const BASE_PREFIX = (() => {
+/* -------------------- Prefijo (GitHub Pages) -------------------- */
+const BASE_PREFIX = (() => {
   try {
-    const first = (location.pathname.split('/').filter(Boolean)[0]) || '';
+    const parts = location.pathname.split('/').filter(Boolean);
+    const first = parts[0];
     return first ? `/${first}/` : '/';
   } catch { return '/'; }
 })();
 
-/* ---------------------------- Firebase imports --------------------------- */
-let app = null, db = null, ensureAuth = async ()=>true;
+/* -------------------- Firestore dinámico -------------------- */
+let fs = null;
+let app = null;
+let db  = null;
+
 try {
-  const mod = await import('./firebase.js'); // tu inicialización propia
+  const mod = await import('./firebase.js');
   app = mod.app ?? null;
   db  = mod.db  ?? null;
-  ensureAuth = mod.ensureAuth || ensureAuth;
 } catch (e) {
-  console.warn('[db.js] No se pudo importar ./firebase.js (OK offline):', e);
+  console.warn('[db] No se pudo importar ./firebase.js (OK en PRUEBA):', e);
 }
 
-/* ---------------------- Firestore SDK (wrapper seguro) ------------------- */
-let fs = null;
 try {
   fs = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
 } catch (e) {
-  console.warn('[db.js] Firestore CDN no disponible (OK offline):', e);
+  console.warn('[db] Firestore CDN no disponible (OK en PRUEBA):', e);
 }
-const Timestamp       = fs?.Timestamp      ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date? d.getTime(): new Date(d).getTime()) }) };
-const serverTimestamp = fs?.serverTimestamp?? (() => ({ __localServerTimestamp: Date.now() }));
-const increment       = fs?.increment      ?? ((n)=>n);
-const doc             = fs?.doc            ?? (()=>({}));
-const getDoc          = fs?.getDoc         ?? (async()=>({ exists:()=>false, data:()=>null }));
-const setDoc          = fs?.setDoc         ?? (async()=>void 0);
-const updateDoc       = fs?.updateDoc      ?? (async()=>void 0);
-const addDoc          = fs?.addDoc         ?? (async()=>({ id:`TRAIN-${Math.random().toString(36).slice(2,8)}` }));
-const deleteDoc       = fs?.deleteDoc      ?? (async()=>void 0);
-const collection      = fs?.collection     ?? (()=>({}));
-const onSnapshot      = fs?.onSnapshot     ?? (()=>()=>{});
-const query           = fs?.query          ?? ((...a)=>a);
-const where           = fs?.where          ?? ((...a)=>a);
-const orderBy         = fs?.orderBy        ?? ((...a)=>a);
-const limit           = fs?.limit          ?? ((...a)=>a);
-const getDocs         = fs?.getDocs        ?? (async()=>({ docs: [] }));
 
-/* --------------------------------- Utils --------------------------------- */
-const sleep = (ms=60)=> new Promise(r=>setTimeout(r,ms));
-const toTs  = (d) => Timestamp.fromDate(new Date(d));
-const msAny = (raw)=>{
+/* -------------------- Shims/exports de Firestore -------------------- */
+const Timestamp        = fs?.Timestamp       ?? { fromDate: (d)=>({ toMillis: ()=> (d instanceof Date? d.getTime(): new Date(d).getTime()) }) };
+const serverTimestamp  = fs?.serverTimestamp ?? (() => ({ __localServerTimestamp: Date.now() }));
+const increment        = fs?.increment       ?? ((n)=>n);
+const doc              = fs?.doc             ?? (()=>({}));
+const getDoc           = fs?.getDoc          ?? (async()=>({ exists:()=>false, data:()=>null }));
+const setDoc           = fs?.setDoc          ?? (async()=>void 0);
+const updateDoc        = fs?.updateDoc       ?? (async()=>void 0);
+const addDoc           = fs?.addDoc          ?? (async()=>({ id: `TRAIN-${Math.random().toString(36).slice(2,8)}` }));
+const deleteDoc        = fs?.deleteDoc       ?? (async()=>void 0);
+const collection       = fs?.collection      ?? (()=>({}));
+const onSnapshot       = fs?.onSnapshot      ?? (()=>()=>{});
+const query            = fs?.query           ?? ((...a)=>a);
+const where            = fs?.where           ?? ((...a)=>a);
+const orderBy          = fs?.orderBy         ?? ((...a)=>a);
+const limit            = fs?.limit           ?? ((...a)=>a);
+const getDocs          = fs?.getDocs         ?? (async()=>({ docs: [] }));
+
+const HAS_DB = !!db && !!fs && typeof addDoc === 'function';
+
+/* -------------------- Utils base -------------------- */
+async function ensureAuth(){ return true; }
+const sleep = (ms = 80) => new Promise(r => setTimeout(r, ms));
+
+function toMillisFlexible(raw) {
   if (raw == null) return null;
   if (typeof raw === 'number') return raw;
   if (typeof raw?.toMillis === 'function') return raw.toMillis();
-  if (raw?.seconds != null) return raw.seconds*1000 + Math.floor((raw.nanoseconds||0)/1e6);
-  const v = new Date(raw).getTime();
-  return Number.isFinite(v) ? v : null;
-};
+  if (raw?.seconds != null) return raw.seconds * 1000 + Math.floor((raw.nanoseconds || 0) / 1e6);
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+function startOfToday() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
+function nowMs(){ return Date.now(); }
 
-// Escribe real si hay DB y no estás en modo simulado; si no, simula.
+/* -------------------- Guard writes -------------------- */
 async function guardWrite(training, realWriteFn, fakeValue=null){
-  const sim = MODE.OFFLINE || MODE.READONLY || training || !db;
-  if (!sim) return realWriteFn();
+  const forceSim = MODE.OFFLINE || MODE.READONLY || training || !HAS_DB;
+  if (!forceSim) return realWriteFn();
   await sleep(60);
   return (fakeValue ?? { ok:true, _training:true });
 }
 
-/* ================================ Catálogo =============================== */
-const DATA_MENU_URL   = `${BASE_PREFIX}data/menu.json`;      // /prueba/data/menu.json
-const SHARED_MENU_URL = `${BASE_PREFIX}shared/catalog.json`; // /prueba/shared/catalog.json
-
-function normalizeCatalog(cat = {}){
-  const A = (x)=> Array.isArray(x) ? x : (x ? [x] : []);
+/* -------------------- Catálogo (local/FS) -------------------- */
+function normalizeCatalog(cat = {}) {
+  const safeArr = (x) => Array.isArray(x) ? x : (x ? [x] : []);
+  const appSettings = {
+    miniMeatGrams: Number(cat?.appSettings?.miniMeatGrams ?? 45),
+    meatGrams: Number(cat?.appSettings?.meatGrams ?? 85),
+    defaultSuggestMlPerOrder: Number(cat?.appSettings?.defaultSuggestMlPerOrder ?? 20),
+    lowStockThreshold: Number(cat?.appSettings?.lowStockThreshold ?? 5),
+  };
   const happyHour = {
     enabled: !!cat?.happyHour?.enabled,
     discountPercent: Number(cat?.happyHour?.discountPercent ?? 0),
     bannerText: String(cat?.happyHour?.bannerText ?? ''),
     applyEligibleOnly: cat?.happyHour?.applyEligibleOnly !== false,
-    endsAt: msAny(cat?.happyHour?.endsAt ?? null),
+    endsAt: toMillisFlexible(cat?.happyHour?.endsAt ?? null),
   };
   return {
-    burgers: A(cat.burgers),
-    minis:   A(cat.minis),
-    drinks:  A(cat.drinks),
-    sides:   A(cat.sides),
+    burgers: safeArr(cat.burgers),
+    minis:   safeArr(cat.minis),
+    drinks:  safeArr(cat.drinks),
+    sides:   safeArr(cat.sides),
     extras: {
-      sauces: A(cat?.extras?.sauces ?? []),
-      ingredients: A(cat?.extras?.ingredients ?? []),
+      sauces: safeArr(cat?.extras?.sauces ?? []),
+      ingredients: safeArr(cat?.extras?.ingredients ?? []),
       ingredientPrice: Number(cat?.extras?.ingredientPrice ?? 0),
       saucePrice: Number(cat?.extras?.saucePrice ?? 0),
       dlcCarneMini: Number(cat?.extras?.dlcCarneMini ?? 0),
     },
-    appSettings:{
-      miniMeatGrams: Number(cat?.appSettings?.miniMeatGrams ?? 45),
-      meatGrams: Number(cat?.appSettings?.meatGrams ?? 85),
-      defaultSuggestMlPerOrder: Number(cat?.appSettings?.defaultSuggestMlPerOrder ?? 20),
-      lowStockThreshold: Number(cat?.appSettings?.lowStockThreshold ?? 5),
-    },
+    appSettings,
     happyHour,
   };
 }
+const DATA_MENU_URL   = `${BASE_PREFIX}data/menu.json`;
+const SHARED_MENU_URL = `${BASE_PREFIX}shared/catalog.json`;
 
-export async function fetchCatalogWithFallback(){
+export async function fetchCatalogWithFallback() {
   try { await ensureAuth(); } catch {}
-
-  // 1) JSON local (rápido y siempre disponible)
+  // 1) JSON local
   try {
     const r = await fetch(DATA_MENU_URL, { cache:'no-store' });
     if (r.ok) return normalizeCatalog(await r.json());
     console.warn('[catalog] no está', DATA_MENU_URL, r.status);
-  } catch (e) { console.warn('[catalog] fallo leyendo', DATA_MENU_URL, e); }
+  } catch (e) { console.warn('[catalog] fallo', DATA_MENU_URL, e); }
 
+  // 2) JSON compartido
   try {
     const r2 = await fetch(SHARED_MENU_URL, { cache:'no-store' });
     if (r2.ok) return normalizeCatalog(await r2.json());
     console.warn('[catalog] no está', SHARED_MENU_URL, r2.status);
-  } catch (e) { console.warn('[catalog] fallo leyendo', SHARED_MENU_URL, e); }
+  } catch (e) { console.warn('[catalog] fallo', SHARED_MENU_URL, e); }
 
-  // 2) Firestore (si existe)
+  // 3) Firestore
   try {
-    if (db) {
-      const s1 = await getDoc(doc(db,'settings','catalog'));
-      if (s1?.exists()) return normalizeCatalog(s1.data());
+    if (HAS_DB) {
+      const d1 = await getDoc(doc(db, 'settings', 'catalog'));
+      if (d1?.exists()) return normalizeCatalog(d1.data());
     }
   } catch (e) { console.warn('[catalog] settings/catalog fallo, sigo...', e); }
   try {
-    if (db) {
-      const s2 = await getDoc(doc(db,'catalog','public'));
-      if (s2?.exists()) return normalizeCatalog(s2.data());
+    if (HAS_DB) {
+      const d2 = await getDoc(doc(db, 'catalog', 'public'));
+      if (d2?.exists()) return normalizeCatalog(d2.data());
     }
   } catch (e) { console.warn('[catalog] catalog/public fallo, sigo...', e); }
 
-  // 3) Último recurso
+  // 4) vacío
   return normalizeCatalog({});
 }
 
-/* =========================== ÓRDENES (Kitchen/Kiosk) =========================== */
-// Listado puntual (por si no hay tiempo real)
-export async function listActiveOrders(limitN=80){
-  if (!(db && getDocs)) return [];
-  try{
-    const qy = query(
-      collection(db,'orders'),
-      where('status','in',['PENDING','IN_PROGRESS','READY','DELIVERED']),
-      orderBy('createdAt','desc'),
-      limit(limitN)
-    );
-    const snap = await getDocs(qy);
-    return snap.docs.map(d => ({ id:d.id, ...d.data(), createdAt: msAny(d.data()?.createdAt) }));
-  }catch(e){
-    console.warn('[db] listActiveOrders error:', e);
-    return [];
-  }
+/* -------------------- Backend PRUEBA (localStorage) -------------------- */
+const LS_ORDERS  = '__orders';
+const LS_HH      = '__happyHour';
+const LS_ETA     = '__eta';
+
+function lsRead(key, def){
+  try { const v = JSON.parse(localStorage.getItem(key) || 'null'); return v ?? def; } catch { return def; }
+}
+function lsWrite(key, val){
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-// Suscripción en vivo (con fallback a polling 5s)
-export function subscribeActiveOrders(cb){
-  if (db && onSnapshot && query && where && orderBy && limit){
-    try{
-      const qy = query(
-        collection(db,'orders'),
-        where('status','in',['PENDING','IN_PROGRESS','READY','DELIVERED']),
-        orderBy('createdAt','desc'),
-        limit(120)
-      );
-      return onSnapshot(qy, (snap)=>{
-        const rows = snap.docs.map(d => ({ id:d.id, ...d.data(), createdAt: msAny(d.data()?.createdAt) }));
-        cb(rows);
-      }, (err)=> console.warn('[db] subscribeActiveOrders snapshot err:', err));
-    }catch(e){
-      console.warn('[db] subscribeActiveOrders query err, uso polling:', e);
-    }
-  }
-  // fallback polling
-  let t=null;
-  const tick = async()=> cb(await listActiveOrders());
-  t = setInterval(tick, 5000); tick();
-  return ()=> { if(t) clearInterval(t); };
+function simListActiveOrders() {
+  const rows = lsRead(LS_ORDERS, []);
+  // solo hoy
+  const start = startOfToday();
+  return rows.filter(o => (o.createdAt||0) >= start)
+             .sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
+}
+function simGetOrderById(id){
+  const rows = lsRead(LS_ORDERS, []);
+  return rows.find(o => o.id === id) || null;
+}
+function simUpsertOrder(row){
+  const rows = lsRead(LS_ORDERS, []);
+  const i = rows.findIndex(o => o.id === row.id);
+  if (i >= 0) rows[i] = row; else rows.push(row);
+  lsWrite(LS_ORDERS, rows);
 }
 
-// Aliases tolerantes (varias UIs las usan)
-export const subscribeKitchenOrders = subscribeActiveOrders;
-export const subscribeOrders        = subscribeActiveOrders;
-export const onOrdersSnapshot       = subscribeActiveOrders;
+/* -------------------- Órdenes: crear / actualizar / subscribir -------------------- */
+export async function createOrder(payload){
+  // Normaliza
+  const now = nowMs();
+  const base = {
+    id: null,
+    status: 'PENDING',
+    createdAt: now,
+    updatedAt: now,
+    ...payload
+  };
 
-// Crear orden (Kiosko)
-export async function createOrder(orderBase={}, opts={}){
-  const run = async ()=>{
-    if (!(db && addDoc)) return { id:`TRAIN-${Date.now()}` };
-    const ref = await addDoc(collection(db,'orders'), {
-      ...orderBase,
-      status: orderBase.status || 'PENDING',
+  return guardWrite(false, async ()=>{
+    const ref = await addDoc(collection(db, 'orders'), {
+      ...base,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    return { id: ref.id };
-  };
-  return guardWrite(opts?.training, run, { id:`TRAIN-${Math.random().toString(36).slice(2,8)}` });
+    return ref?.id;
+  }, (()=>{ // fake
+    const id = `SIM-${now}-${Math.floor(Math.random()*1000)}`;
+    simUpsertOrder({ ...base, id });
+    return id;
+  })());
 }
 
-// Cambiar estado (Cocina)
-export async function updateOrderStatus(orderId, nextStatus, extras={}){
-  const run = async ()=>{
-    if (!(db && updateDoc)) return { ok:false };
-    const ref = doc(db,'orders', orderId);
-    const payload = {
-      status: String(nextStatus||'PENDING'),
-      updatedAt: serverTimestamp(),
-      ...extras
-    };
-    if (nextStatus === 'IN_PROGRESS') payload.takenAt     = serverTimestamp();
-    if (nextStatus === 'READY')       payload.readyAt     = serverTimestamp();
-    if (nextStatus === 'DELIVERED')   payload.deliveredAt = serverTimestamp();
-    if (nextStatus === 'PAID')        payload.paidAt      = serverTimestamp();
-    if (nextStatus === 'CANCELLED')   payload.cancelledAt = serverTimestamp();
-    await updateDoc(ref, payload);
-    return { ok:true, id:orderId };
-  };
-  return guardWrite(extras?.training, run, { ok:true, id:orderId, _training:true });
+export async function updateOrderStatus(orderId, status){
+  const valid = ['PENDING','IN_PROGRESS','READY','DELIVERED','PAID','CANCELLED'];
+  if (!valid.includes(status)) throw new Error('status inválido');
+
+  return guardWrite(false, async ()=>{
+    await updateDoc(doc(db, 'orders', orderId), {
+      status, updatedAt: serverTimestamp()
+    });
+    return true;
+  }, (()=>{ // fake
+    const row = simGetOrderById(orderId);
+    if (!row) return { ok:false, reason:'not_found' };
+    row.status = status;
+    row.updatedAt = nowMs();
+    simUpsertOrder(row);
+    return { ok:true, _training:true };
+  })());
 }
 
-/* ========================= SETTINGS (Happy Hour / ETA) ======================== */
+// Suscripción para Cocina: en Firestore escucha en vivo; en PRUEBA usa polling 2s.
+export function subscribeKitchenOrders(cb){
+  if (HAS_DB) {
+    const qRef = query(
+      collection(db, 'orders'),
+      orderBy('createdAt','desc'),
+      limit(120)
+    );
+    const unsub = onSnapshot(qRef, snap=>{
+      const rows = snap.docs.map(d=>{
+        const data = d.data() || {};
+        return {
+          id: d.id,
+          ...data,
+          createdAt: toMillisFlexible(data.createdAt),
+          updatedAt: toMillisFlexible(data.updatedAt)
+        };
+      }).filter(o=>{
+        // Cocina muestra estas 4 columnas; PAID/CANCELLED se pueden ocultar
+        return ['PENDING','IN_PROGRESS','READY','DELIVERED'].includes(o.status);
+      }).sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
+      try{ cb(rows); }catch(e){ console.warn('cb kitchen error', e); }
+    }, err=>{
+      console.warn('[subscribeKitchenOrders] onSnapshot error:', err);
+    });
+    return unsub;
+  }
+
+  // PRUEBA: polling
+  let alive = true;
+  const tick = ()=>{
+    if (!alive) return;
+    try{
+      const rows = simListActiveOrders()
+        .filter(o => ['PENDING','IN_PROGRESS','READY','DELIVERED'].includes(o.status));
+      cb(rows);
+    }catch(e){ console.warn('poll kitchen cb fail', e); }
+    setTimeout(tick, 2000);
+  };
+  tick();
+  return ()=>{ alive = false; };
+}
+
+// Suscripción genérica (kiosko/admin)
+export function subscribeOrders(cb){
+  if (HAS_DB){
+    const qRef = query(
+      collection(db,'orders'),
+      orderBy('createdAt','desc'),
+      limit(120)
+    );
+    return onSnapshot(qRef, snap=>{
+      const rows = snap.docs.map(d=>{
+        const data = d.data()||{};
+        return { id:d.id, ...data,
+          createdAt: toMillisFlexible(data.createdAt),
+          updatedAt: toMillisFlexible(data.updatedAt)
+        };
+      });
+      cb(rows);
+    });
+  }
+  // PRUEBA
+  let alive = true;
+  const tick = ()=>{
+    if (!alive) return;
+    try{ cb(simListActiveOrders()); }catch{}
+    setTimeout(tick, 2500);
+  };
+  tick();
+  return ()=>{ alive=false; };
+}
+
+/* -------------------- HH y ETA -------------------- */
 export function subscribeHappyHour(cb){
-  if (db && onSnapshot){
+  // Firestore: settings/happyHour
+  if (HAS_DB){
     const ref = doc(db,'settings','happyHour');
-    return onSnapshot(ref, (snap)=>{
-      const d = snap?.data?.() || {};
+    return onSnapshot(ref, snap=>{
+      const d = snap.data?.() || snap.data && snap.data() || {};
       cb({
         enabled: !!d.enabled,
         discountPercent: Number(d.discountPercent||0),
-        bannerText: String(d.bannerText||''),
-        applyEligibleOnly: d.applyEligibleOnly !== false,
-        endsAt: msAny(d.endsAt)
+        bannerText: d.bannerText || '',
+        applyEligibleOnly: d.applyEligibleOnly!==false,
+        endsAt: toMillisFlexible(d.endsAt)
       });
-    }, (err)=>{
-      console.warn('[db] subscribeHappyHour err:', err);
-      cb({ enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true, endsAt:null });
-    });
+    }, err=> console.warn('[subscribeHappyHour] error', err));
   }
-  // fallback
-  cb({ enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true, endsAt:null });
-  return ()=>{};
+  // PRUEBA: localStorage
+  let alive = true;
+  const tick = ()=>{
+    if (!alive) return;
+    const d = lsRead(LS_HH, { enabled:false, discountPercent:0, bannerText:'', applyEligibleOnly:true, endsAt:null });
+    cb(d);
+    setTimeout(tick, 5000);
+  };
+  tick();
+  return ()=>{ alive=false; };
 }
 
 export function subscribeETA(cb){
-  if (db && onSnapshot){
+  if (HAS_DB){
     const ref = doc(db,'settings','eta');
-    return onSnapshot(ref, (snap)=>{
-      const v = snap?.data?.()?.text ?? snap?.data?.()?.eta ?? null;
-      cb(v || '7–10 min');
-    }, (err)=>{
-      console.warn('[db] subscribeETA err:', err);
-      cb('7–10 min');
-    });
+    return onSnapshot(ref, snap=>{
+      const d = snap.data?.() || snap.data && snap.data() || {};
+      const txt = d?.text ?? d?.value ?? '7–10 min';
+      cb(String(txt));
+    }, err=> console.warn('[subscribeETA] error', err));
   }
-  // fallback
-  cb('7–10 min');
-  return ()=>{};
+  // PRUEBA
+  let alive = true;
+  const tick = ()=>{
+    if (!alive) return;
+    const txt = lsRead(LS_ETA, '7–10 min');
+    cb(String(txt));
+    setTimeout(tick, 5000);
+  };
+  tick();
+  return ()=>{ alive=false; };
 }
 
-/* =================== No-ops opcionales usados por Kiosko =================== */
-export async function upsertCustomerFromOrder(){ /* no-op local */ }
-export async function attachLastOrderRef(){ /* no-op local */ }
-export async function sendWhatsAppMessage(){ /* no-op local */ }
+/* -------------------- Clientes / WhatsApp (stubs seguros) -------------------- */
+export async function upsertCustomerFromOrder(order){
+  return guardWrite(false, async ()=>{
+    if (!HAS_DB) return { ok:true, _training:true };
+    const ref = doc(db,'customers', order.phone || order.clientId);
+    await setDoc(ref, {
+      name: order.customer || null,
+      phone: order.phone || null,
+      lastOrderId: order.id || null,
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp()
+    }, { merge:true });
+    return { ok:true };
+  }, { ok:true, _training:true });
+}
 
-/* ============================== Aux exports ============================== */
+export async function attachLastOrderRef(phone, orderId){
+  if (!phone) return { ok:false, reason:'no_phone' };
+  return guardWrite(false, async ()=>{
+    if (!HAS_DB) return { ok:true, _training:true };
+    await setDoc(doc(db,'customers', phone), {
+      lastOrderId: orderId,
+      updatedAt: serverTimestamp()
+    }, { merge:true });
+    return { ok:true };
+  }, { ok:true, _training:true });
+}
+
+export async function sendWhatsAppMessage({ to, text }){
+  // Stub seguro: no envía nada en PRUEBA
+  console.info('[WA] pretend send to', to, '\n', text);
+  return { ok:true, simulated:true };
+}
+
+/* -------------------- Export raw Firestore helpers -------------------- */
 export {
-  app, db,
-  collection, onSnapshot, query, where, orderBy, limit, getDocs,
+  db, collection, onSnapshot, query, where, orderBy, limit, getDocs,
   addDoc, setDoc, updateDoc, doc, getDoc, deleteDoc,
-  Timestamp, serverTimestamp, increment, ensureAuth, toTs
+  Timestamp, serverTimestamp, increment
 };
 
-console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'DATA_MENU_URL =', DATA_MENU_URL);
+console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'DATA_MENU_URL =', DATA_MENU_URL, 'HAS_DB=', HAS_DB);
