@@ -188,7 +188,6 @@ export function subscribeKitchenOrders(cb){
   let t = null;
 
   const emitOnce = (rows)=>{
-    // filtro + hash
     const filtered = filterForKitchen(rows);
     const h = hashForKitchen(filtered);
     if (h === lastHash) return;
@@ -206,7 +205,6 @@ export function subscribeKitchenOrders(cb){
   if (HAS_DB){
     const qRef = query(collection(db,'orders'), orderBy('createdAt','desc'), limit(160));
     const unsub = onSnapshot(qRef, snap=>{
-      // Tomamos TODOS los docs del snapshot, coalescemos y emitimos estable
       const rows = snap.docs.map(d=>({ id:d.id, ...d.data() }));
       schedule(rows);
     }, err=> console.warn('[subscribeKitchenOrders] onSnapshot error:', err));
