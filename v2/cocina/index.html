@@ -4,58 +4,52 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Cocina — Seven de Burgers</title>
-  <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../shared/styles.css">
   <style>
-    :root{ --bg:#0b1220; --card:#0f182a; --panel:#131f33; --muted:#a6b2c7; --chip:#192840; }
-    body{ background:var(--bg); color:#e8f0ff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-    .wrap{ max-width:1280px; margin:10px auto; padding:0 10px; }
-    .k-columns{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; contain:layout; }
-    @media (max-width:1000px){ .k-columns{ grid-template-columns:1fr; } }
-    .k-col{ background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:10px; contain:layout paint; min-height:40vh; }
-    .k-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px }
-    .k-list{ display:grid; gap:8px; }
-    .order{ background:var(--card); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; }
-    .row{ display:flex; gap:8px; align-items:center; }
-    .muted{ color:var(--muted); font-size:.9rem; }
-    .tag{ background:#1e2b45; padding:.1rem .5rem; border-radius:999px; font-size:.8rem }
-    .btn.small{ padding:.35rem .6rem; border-radius:10px }
-    .btn.danger{ background:#6b1111; }
-    .btn.ghost{ background:transparent; border:1px dashed rgba(255,255,255,.25); }
-    .price{ margin-left:auto; }
+    :root{ --bg:#0b1220; --card:#0f182a; --panel:#131f33; --muted:#a6b2c7; }
+    body{ background:var(--bg); color:#e8f0ff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .wrap{ max-width:1200px; margin:12px auto; padding:0 12px; }
+    .cols{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+    @media (max-width:1100px){ .cols{ grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width:700px){ .cols{ grid-template-columns: 1fr; } }
+    .col{ background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; }
+    .h{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .list{ display:flex; flex-direction:column; gap:8px; min-height:120px; }
+    .card{ background:var(--card); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:10px; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .price{ margin-left:auto; opacity:.85 }
+    .muted{ color:var(--muted); font-size:.9em }
+    .btn{ background:#1d2b46; border:1px solid rgba(255,255,255,.14); color:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }
+    .btn.ghost{ background:transparent; }
+    .btn.danger{ background:#5b2331; border-color:#8d2a3e; }
+    .badge{ background:#203252; border:1px solid rgba(255,255,255,.16); border-radius:999px; padding:2px 8px; font-size:.8em }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="k-head">
-      <h1 style="margin:0">Cocina</h1>
-      <div class="muted" id="statusMsg">Modo online</div>
-    </div>
+    <h1 style="margin:8px 0 12px">Cocina — Seven</h1>
 
-    <div class="k-columns">
-      <section class="k-col" id="colPENDING">
-        <div class="k-head"><h3>Pendientes</h3><span class="tag" id="cntPENDING">0</span></div>
-        <div class="k-list" id="listPENDING"></div>
-      </section>
-
-      <section class="k-col" id="colINPROGRESS">
-        <div class="k-head"><h3>En cocina</h3><span class="tag" id="cntIN_PROGRESS">0</span></div>
-        <div class="k-list" id="listIN_PROGRESS"></div>
-      </section>
-
-      <section class="k-col" id="colREADY">
-        <div class="k-head"><h3>Listos</h3><span class="tag" id="cntREADY">0</span></div>
-        <div class="k-list" id="listREADY"></div>
-      </section>
-
-      <section class="k-col" id="colDELIVERED">
-        <div class="k-head"><h3>Entregados</h3><span class="tag" id="cntDELIVERED">0</span></div>
-        <div class="k-list" id="listDELIVERED"></div>
-      </section>
+    <div class="cols" id="cols">
+      <div class="col" data-col="PENDING">
+        <div class="h"><b>Pendientes</b><span class="badge" id="cP">0</span></div>
+        <div class="list" id="lP"></div>
+      </div>
+      <div class="col" data-col="IN_PROGRESS">
+        <div class="h"><b>En progreso</b><span class="badge" id="cI">0</span></div>
+        <div class="list" id="lI"></div>
+      </div>
+      <div class="col" data-col="READY">
+        <div class="h"><b>Listos</b><span class="badge" id="cR">0</span></div>
+        <div class="list" id="lR"></div>
+      </div>
+      <div class="col" data-col="DELIVERED">
+        <div class="h"><b>Entregados</b><span class="badge" id="cD">0</span></div>
+        <div class="list" id="lD"></div>
+      </div>
     </div>
   </div>
 
-  <!-- ÚNICO script -->
-  <script type="module" src="./app.js?v=20251105"></script>
+  <!-- IMPORTANTE: solo este script. Nada de firebase.js ni db-compat extras aquí -->
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
