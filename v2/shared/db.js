@@ -1,31 +1,23 @@
-// /shared/db.js — V2.8 (SAFE + v2-aware + estable + anti-rebote + anti-resurrección persistente)
-// - Namespace de localStorage por ruta (/prueba/v2/) o forzable con window.STORAGE_NS.
-// - Filtro cocina: HOY + estados visibles + subtotal>0 + items>0 + dedup + orden estable.
-// - onSnapshot coalesced (250ms) + DISTINCT-BY-HASH (insensible a updatedAt).
-// - Anti-rollback (PENDING→…→PAID / CANCELLED terminal) en memoria y PERSISTENTE (por día).
-// - Anti-resurrección PERSISTENTE por día: si un ID llegó a PAID/CANCELLED hoy, no vuelve a la lista.
-// - PRUEBA (sin Firestore): polling 2s con mismos filtros y guards.
-// - Utilidades: purgeSimToday().
+// /shared/db.js — V2.8.1 (SAFE + v2-aware + estable + anti-rebote + anti-resurrección)
+// Cambios vs 2.8: debounce 350ms, orden estable por createdAt+id, guards idénticos.
 
 const MODE = (typeof window !== 'undefined' && window.MODE) ? window.MODE : {
   OFFLINE:false, READONLY:false, LEGACY:false
 };
 
-/* -------------------- Prefijo (GitHub Pages) -------------------- */
 const BASE_PREFIX = (() => {
   try {
-    const parts = location.pathname.split('/').filter(Boolean); // ["prueba","v2","cocina","index.html"]
+    const parts = location.pathname.split('/').filter(Boolean);
     if (parts[0] && parts[1] === 'v2') return `/${parts[0]}/v2/`;
     return parts[0] ? `/${parts[0]}/` : '/';
   } catch { return '/'; }
 })();
 
-/* -------------------- Namespace (LS) estable entre páginas v2 -------------------- */
 const STORAGE_SLUG = (() => {
   if (typeof window !== 'undefined' && window.STORAGE_NS) return String(window.STORAGE_NS);
   try {
-    const parts = location.pathname.split('/').filter(Boolean);
-    return (parts[0] ? parts[0] : 'root') + (parts[1] ? `-${parts[1]}` : '');
+    const p = location.pathname.split('/').filter(Boolean);
+    return (p[0] ? p[0] : 'root') + (p[1] ? `-${p[1]}` : '');
   } catch { return 'root'; }
 })();
 
@@ -78,7 +70,7 @@ async function guardWrite(training, realWriteFn, fakeValue=null){
 }
 
 /* -------------------- Catálogo -------------------- */
-function normalizeCatalog(cat = {}){
+function normalizeCatalog(cat = {}){ /* igual que antes */ 
   const safeArr = (x) => Array.isArray(x) ? x : (x ? [x] : []);
   const appSettings = {
     miniMeatGrams: Number(cat?.appSettings?.miniMeatGrams ?? 45),
@@ -105,14 +97,12 @@ function normalizeCatalog(cat = {}){
       saucePrice: Number(cat?.extras?.saucePrice ?? 0),
       dlcCarneMini: Number(cat?.extras?.dlcCarneMini ?? 0),
     },
-    appSettings,
-    happyHour,
+    appSettings, happyHour,
   };
 }
 const DATA_MENU_URL   = `${BASE_PREFIX}data/menu.json`;
 const SHARED_MENU_URL = `${BASE_PREFIX}shared/catalog.json`;
-
-export async function fetchCatalogWithFallback(){
+export async function fetchCatalogWithFallback(){ /* igual que 2.8 */ 
   try{ await ensureAuth(); }catch{}
   try{ const r = await fetch(DATA_MENU_URL,  {cache:'no-store'}); if (r.ok) return normalizeCatalog(await r.json()); }
   catch(e){ console.warn('[catalog]', DATA_MENU_URL, e); }
@@ -129,10 +119,9 @@ export async function fetchCatalogWithFallback(){
 const LS_ORDERS = `__orders@${STORAGE_SLUG}`;
 const LS_HH     = `__happyHour@${STORAGE_SLUG}`;
 const LS_ETA    = `__eta@${STORAGE_SLUG}`;
-// Persistencia anti-rollback/resurrección por día (LOCALSTORAGE para que sobreviva recarga)
 const DAY = ymd();
-const LS_RANK_DAY  = `__rank@${STORAGE_SLUG}@${DAY}`;   // { id: rankMax }
-const LS_TOMBS_DAY = `__tombs@${STORAGE_SLUG}@${DAY}`;  // [ ids terminales ]
+const LS_RANK_DAY  = `__rank@${STORAGE_SLUG}@${DAY}`;
+const LS_TOMBS_DAY = `__tombs@${STORAGE_SLUG}@${DAY}`;
 
 function lsRead(k,d){ try{ const t = localStorage.getItem(k); return t ? JSON.parse(t) : d; }catch{ return d; } }
 function lsWrite(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
@@ -168,9 +157,7 @@ export async function createOrder(payload){
   }, ()=>{ const id=`SIM-${now}-${Math.floor(Math.random()*1000)}`; simUpsertOrder({...base,id}); return id; });
 }
 
-/* Anti-rollback (servidor simulado) */
 const ORDER_RANK = { PENDING:1, IN_PROGRESS:2, READY:3, DELIVERED:4, PAID:5, CANCELLED:99 };
-
 export async function updateOrderStatus(orderId, status){
   const valid=['PENDING','IN_PROGRESS','READY','DELIVERED','PAID','CANCELLED'];
   if (!valid.includes(status)) throw new Error('status inválido');
@@ -184,10 +171,7 @@ export async function updateOrderStatus(orderId, status){
     const next = ORDER_RANK[status] ?? 0;
     if (next < curr) return { ok:false, reason:'rollback_blocked', from:row.status, to:status };
     row.status=status; row.updatedAt=nowMs(); simUpsertOrder(row);
-    // Persistir rank y tombs si terminal
-    const rankMap = lsRead(LS_RANK_DAY, {});
-    rankMap[orderId] = Math.max(rankMap[orderId]||0, next);
-    lsWrite(LS_RANK_DAY, rankMap);
+    const rankMap = lsRead(LS_RANK_DAY, {}); rankMap[orderId] = Math.max(rankMap[orderId]||0, next); lsWrite(LS_RANK_DAY, rankMap);
     if (status==='PAID' || status==='CANCELLED') {
       const tombs = new Set(lsRead(LS_TOMBS_DAY, [])); tombs.add(orderId); lsWrite(LS_TOMBS_DAY, Array.from(tombs));
     }
@@ -198,12 +182,12 @@ export async function updateOrderStatus(orderId, status){
 /* -------------------- Filtros + hash -------------------- */
 function filterForKitchen(rows){
   const start = startOfToday();
-  const okStatus = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']); // PAID/CANCELLED no
+  const okStatus = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
   const tombs = new Set(lsRead(LS_TOMBS_DAY, []));
   const m = new Map();
   for (const raw of (rows||[])){
     if (!raw || !raw.id) continue;
-    if (tombs.has(raw.id)) continue; // anti-resurrección persistente (día actual)
+    if (tombs.has(raw.id)) continue;
     const o = { ...raw };
     o.createdAt = toMillisFlexible(o.createdAt);
     o.updatedAt = toMillisFlexible(o.updatedAt);
@@ -211,7 +195,7 @@ function filterForKitchen(rows){
     if ((o.createdAt||0) < start) continue;
     if (!(Array.isArray(o.items) && o.items.length>0)) continue;
     if (!(Number(o.subtotal||0) > 0)) continue;
-    m.set(o.id, o); // dedup por id
+    m.set(o.id, o);
   }
   return Array.from(m.values()).sort((a,b)=>{
     const A=a.createdAt||0, B=b.createdAt||0;
@@ -220,7 +204,6 @@ function filterForKitchen(rows){
   });
 }
 function hashForKitchen(rows){
-  // Hash “insensible” a updatedAt para evitar repaints por metadatos de servidor
   const pack = rows.map(o=>[o.id, o.status, Number(o.subtotal||0), (o.items?.length||0), (o.createdAt||0)]);
   try { return JSON.stringify(pack); } catch { return String(Math.random()); }
 }
@@ -232,20 +215,15 @@ function applyMonotonicGuard(rows, lastMap){
   const out = [];
   for (const o of rows){
     const r = RANK[o.status] ?? 0;
-    const prevInMem = lastMap.get(o.id) ?? 0;
-    const prevPersist = persisted[o.id] ?? 0;
-    const prev = Math.max(prevInMem, prevPersist);
+    const prev = Math.max(lastMap.get(o.id) ?? 0, persisted[o.id] ?? 0);
     if (r >= prev) {
       lastMap.set(o.id, r);
-      // Si estado terminal, registrar tumba persistente
       if (o.status==='PAID' || o.status==='CANCELLED') {
         const t = new Set(lsRead(LS_TOMBS_DAY, [])); t.add(o.id); lsWrite(LS_TOMBS_DAY, Array.from(t));
       }
-      // Actualizar persistencia de rank
       const rm = lsRead(LS_RANK_DAY, {}); rm[o.id] = Math.max(rm[o.id]||0, r); lsWrite(LS_RANK_DAY, rm);
       out.push(o);
     }
-    // Si r < prev, ignoramos snapshot atrasado (evita “saltos”)
   }
   return out;
 }
@@ -255,13 +233,13 @@ export function subscribeKitchenOrders(cb){
   let lastHash = '';
   let pending = null;
   let t = null;
-  const lastRankMap = new Map(); // id -> rank máximo visto
+  const lastRankMap = new Map();
 
   const emitOnce = (rows)=>{
     const filtered = filterForKitchen(rows);
     const monotone = applyMonotonicGuard(filtered, lastRankMap);
     const h = hashForKitchen(monotone);
-    if (h === lastHash) return; // sin cambios visibles
+    if (h === lastHash) return;
     lastHash = h;
     cb(monotone);
   };
@@ -269,8 +247,7 @@ export function subscribeKitchenOrders(cb){
   const schedule = (rows)=>{
     pending = rows;
     clearTimeout(t);
-    // Coalesce 250ms: si llegan ráfagas de snapshots, solo pintamos 1 vez
-    t = setTimeout(()=>{ const p = pending; pending = null; emitOnce(p||[]); }, 250);
+    t = setTimeout(()=>{ const p = pending; pending = null; emitOnce(p||[]); }, 350);
   };
 
   if (HAS_DB){
@@ -282,7 +259,6 @@ export function subscribeKitchenOrders(cb){
     return ()=>{ try{ unsub?.(); }catch{} clearTimeout(t); };
   }
 
-  // PRUEBA: polling 2s sin ráfagas (usa los mismos filtros + guard)
   let alive = true;
   (function tick(){
     if (!alive) return;
@@ -292,7 +268,7 @@ export function subscribeKitchenOrders(cb){
   return ()=>{ alive = false; clearTimeout(t); };
 }
 
-/* -------------------- Suscripción genérica -------------------- */
+/* -------------------- Suscripción genérica, HH, ETA (igual que 2.8) -------------------- */
 export function subscribeOrders(cb){
   if (HAS_DB){
     const qRef = query(collection(db,'orders'), orderBy('createdAt','desc'), limit(160));
@@ -312,7 +288,6 @@ export function subscribeOrders(cb){
   return ()=>{ alive=false; };
 }
 
-/* -------------------- HH & ETA -------------------- */
 export function subscribeHappyHour(cb){
   if (HAS_DB){
     const ref = doc(db,'settings','happyHour');
