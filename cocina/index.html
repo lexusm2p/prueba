@@ -12,31 +12,32 @@
   <style>
     :root{ --vh: 1vh; }
 
-    /* 🔒 NO dejes que el body scrollee (Safari cambia su alto y “salta”) */
+    /* 🔒 Fija el root para que el scroll SOLO viva en las columnas */
+    html, body{ height:100%; }
     body.shell.fixed-root{
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
+      position: fixed; inset: 0; overflow: hidden;
       touch-action: manipulation;
       -webkit-overflow-scrolling: auto;
       background: var(--bg, #0b1220);
+      /* ✅ evita empujón cuando aparece/desaparece la barra (PC/Android) */
+      scrollbar-gutter: stable both-edges;
     }
 
-    /* Contenedor principal ocupa 100% del alto visible real */
+    /* Contenedor principal ocupa exactamente el alto visible real */
     .container#appRoot{
       height: calc(var(--vh) * 100);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden; /* nada de scroll aquí */
+      display: flex; flex-direction: column;
+      overflow: hidden;  /* nada de scroll aquí */
+      min-height: 0;
     }
 
-    /* Grid de columnas con scrollers internos */
+    /* Grid de 2 columnas (1 en móviles) con scrollers internos */
     .k-columns{
       flex: 1;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
-      min-height: 0;    /* clave para que los hijos puedan scrollear */
+      min-height: 0;     /* clave para que los hijos scrolleen */
       contain: layout;
     }
     @media (max-width: 900px){
@@ -44,35 +45,49 @@
     }
 
     .k-columns .card{
-      display: flex;
-      flex-direction: column;
-      min-height: 0;    /* permite que .col calcule altura */
+      display: flex; flex-direction: column;
+      min-height: 0;
       contain: content;
     }
 
+    /* Cada columna maneja su propio scroll (anclaje desactivado) */
     .k-columns .col{
       flex: 1;
-      overflow: auto;                   /* 🔑 aquí sí hay scroll */
+      overflow: auto;                       /* 🔑 aquí sí hay scroll */
       -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;     /* no “tira” el scroll al body */
-      overflow-anchor: none;            /* evita anclajes automáticos */
+      overscroll-behavior: contain;
+      overflow-anchor: none;
       min-height: 0;
       contain: layout paint;
+      /* ✅ reserva el gutter del scroll siempre */
+      scrollbar-gutter: stable both-edges;
     }
 
-    /* Evita scroll suave que acentúa el efecto */
+    /* Evita scroll suave que magnifica el “salto” visual */
     html, body, .k-columns .col{ scroll-behavior: auto !important; }
+
+    /* -------- Timers con ancho fijo para no empujar el layout -------- */
+    .mono, [data-timer]{
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1, "lnum" 1;
+    }
+    [data-timer]{
+      display:inline-block;
+      width:5.2ch;              /* mm:ss = 5 caracteres */
+      text-align:right;
+      white-space:nowrap;
+    }
   </style>
 
   <script>
-    // Altura de viewport real para móviles (evita saltos al aparecer la barra)
+    // Altura de viewport real (evita saltos al cambiar barras en móvil)
     function setVH(){
       const h = (window.visualViewport?.height || window.innerHeight) * 0.01;
       document.documentElement.style.setProperty('--vh', h + 'px');
     }
     setVH();
-    window.addEventListener('resize', setVH, { passive:true });
-    window.addEventListener('orientationchange', setVH, { passive:true });
+    addEventListener('resize', setVH, { passive:true });
+    addEventListener('orientationchange', setVH, { passive:true });
   </script>
 </head>
 
