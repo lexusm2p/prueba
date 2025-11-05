@@ -72,7 +72,7 @@ const now = ()=> new Date();
 const toMs = (t)=> {
   if (!t) return 0;
   if (typeof t.toMillis === 'function') return t.toMillis();
-  if (t.seconds != null) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
+  if (t && t.seconds != null) return (t.seconds*1000) + Math.floor((t.nanoseconds||0)/1e6);
   const d = new Date(t); const ms = d.getTime(); return Number.isFinite(ms) ? ms : 0;
 };
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
@@ -84,6 +84,69 @@ const fmtMMSS = (ms)=>{
   return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
 };
 function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ================== Normalización de órdenes ================== */
+function normBool(v){ return !(v === false || v === 'false' || v === 0 || v === '0'); }
+function normStatus(s){
+  const x = String(s || 'PENDING').trim().toUpperCase();
+  return (Status[x] ? x : Status.PENDING);
+}
+function asOrder(obj){
+  if (!obj) return null;
+  // Firestore doc shape: { id, data(){...} }  |  { id, data:{...} }  |  plano
+  const raw = (obj.data && typeof obj.data === 'function') ? { id: obj.id, ...obj.data() }
+            : (obj.data && typeof obj.data === 'object')    ? { id: obj.id || obj.data.id, ...obj.data }
+            : obj;
+
+  const id = String(raw.id || raw.orderId || '').trim();
+  if (!id) return null;
+
+  const status = normStatus(raw.status);
+  const isActive = normBool(raw.isActive ?? true);
+
+  const createdAt = raw.createdAt || raw.timestamps?.createdAt || raw._createdAt;
+  const startedAt = raw.startedAt || raw.timestamps?.startedAt || raw._startedAt;
+  const readyAt   = raw.readyAt   || raw.timestamps?.readyAt   || raw._readyAt;
+  const updatedAt = raw.updatedAt || raw.timestamps?.updatedAt || raw._updatedAt;
+
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  const phone = (raw.phone ?? raw.meta?.phone ?? raw.customer?.phone ?? '').toString();
+
+  return {
+    id,
+    status,
+    isActive,
+    orderType: raw.orderType || raw.type || 'pickup',
+    table: raw.table || raw.tableNum || null,
+    customer: raw.customer || raw.client || raw.name || '-',
+    phone,
+    paid: !!raw.paid,
+    payMethod: raw.payMethod || raw.payMethodPref || null,
+    tip: Number(raw.tip || 0),
+    subtotal: (typeof raw.subtotal === 'number') ? raw.subtotal : undefined,
+    hh: raw.hh || {},
+    rewards: raw.rewards || {},
+    notes: raw.notes || '',
+    items,
+    createdAt, startedAt, readyAt, updatedAt,
+    timestamps: { createdAt, startedAt, readyAt, updatedAt }
+  };
+}
+function normalizeIncomingOrders(list){
+  const arr = Array.isArray(list) ? list : [];
+  const mapped = arr.map(asOrder).filter(Boolean);
+
+  const visible = mapped.filter(o=>{
+    if (!o.isActive) return false;
+    const s = o.status;
+    if (s === Status.CANCELLED || s === Status.DONE) return false;
+    if (s === Status.DELIVERED && o.paid) return false; // ya pagadas fuera de "Por cobrar"
+    return true;
+  });
+
+  visible.sort((a,b)=> updatedAtMs(b) - updatedAtMs(a));
+  return visible;
+}
 
 /* ================== Dedupe & merge ================== */
 function updatedAtMs(o){
@@ -124,13 +187,30 @@ function extractTimestamps(patch){
 let __streamLocked = false;
 let unsub = null;
 
+let __lastIds = new Set();
+function notifyNewOrders(list){
+  const ids = new Set(list.map(o=>o.id));
+  const nuevos = list.filter(o => !__lastIds.has(o.id) && o.status === Status.PENDING);
+  if (nuevos.length){
+    try{ beep(); }catch{}
+    toast(`🆕 ${nuevos.length} pedido(s) nuevo(s)`);
+  }
+  __lastIds = ids;
+}
+
 async function initKitchen(){
   try { await ensureAuth(); } catch(e){ console.warn('[cocina] anon auth fail', e); }
   unsub = subscribeKitchenShim((orders = [])=>{
     if (__streamLocked) return;
     __streamLocked = true;
-    try { CURRENT_LIST = mergeByNewest(orders); render(CURRENT_LIST); }
-    finally { queueMicrotask(()=>{ __streamLocked = false; }); }
+    try {
+      const clean = normalizeIncomingOrders(orders);
+      notifyNewOrders(clean);
+      CURRENT_LIST = mergeByNewest(clean);
+      render(CURRENT_LIST);
+    } finally {
+      queueMicrotask(()=>{ __streamLocked = false; });
+    }
   });
 }
 document.addEventListener('DOMContentLoaded', initKitchen);
@@ -164,7 +244,6 @@ function keepScrollPosition(el, beforeHeight, wasNearBottom, beforeTop){
 
 // ⛔️ OJO: el hash **no** incluye los timers (así no se reemplazan por segundos)
 function stableCardHash(o){
-  // todo lo visual salvo los mm:ss
   const core = JSON.stringify({
     id:o.id, status:o.status, paid:o.paid, payMethod:o.payMethod, notes:o.notes,
     orderType:o.orderType, table:o.table, customer:o.customer,
@@ -318,7 +397,7 @@ function renderCard(o = {}) {
   ].join('');
 
   const paidBadge = o.paid ? '· <span class="k-badge ok">Pagado</span>' : '';
-  const payMethodBadge = (o.paid && o.payMethod) ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>` : '';
+  const payMethodBadge = (o.payMethod) ? ` · <span class="k-badge">${escapeHtml(String(o.payMethod))}</span>` : '';
 
   return `
 <article class="k-card" data-id="${o.id}">
@@ -369,6 +448,7 @@ document.addEventListener('click', async (e)=>{
 
   try{
     if (a==='take'){
+      if (LOCALLY_TAKEN.has(id)) return; // anti doble clic
       LOCALLY_TAKEN.add(id); btn.textContent = 'Tomando…';
       const order = CURRENT_LIST.find(x=>x.id===id);
       if(!TRAIN && order){ await applyInventoryForOrderShim({ ...order, id }, OPTS); }
