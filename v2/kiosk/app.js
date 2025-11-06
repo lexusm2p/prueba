@@ -1,12 +1,13 @@
-// /kiosk/app.js — V2.1 LEAN (no auto-redirect a track, modal de seguimiento)
+// /kiosk/app.js — V2.2 LEAN (mejoras de rendimiento y guards)
 // - Ordenar rápido + personalizar
 // - Nudge de bebida y Combo Drink dinámico
 // - HH/ETA, regalos, lealtad y seguimiento
 // - Acordeón con barra de poder + highlights por producto
 // - Modal con Barra de Poder (sticky) por pasos de personalización
 // - Único Total visible (footer). Sin Subtotal/HH en cuerpo.
-// - 2025-11-04b/c integrados (ensureDrinkPrices tras +/-/remove y refresco de cards)
-// - 2025-11-05: **Eliminado auto-redirect a track**. Nuevo modal “Seguir pedido” + botón flotante.
+// - 2025-11-04b/c: ensureDrinkPrices tras +/-/remove y refresco de cards
+// - 2025-11-05: Eliminado auto-redirect a track. Modal “Seguir pedido” + botón flotante.
+// - 2025-11-06: Optimizado render (DocumentFragment), guards anti-duplicado y saneos suaves.
 
 const __parts = location.pathname.split('/').filter(Boolean);
 const __first = __parts[0] ? `/${__parts[0]}/` : '/';
@@ -390,6 +391,8 @@ function qtyInCart(id){
 function renderCards(){
   const grid = document.getElementById('cards');
   if (!grid) return;
+  // Evita parpadeo fuerte
+  const frag = document.createDocumentFragment();
   grid.innerHTML = '';
 
   let items;
@@ -438,7 +441,6 @@ function renderCards(){
         </div>
       </div>
     `;
-    grid.appendChild(card);
 
     // Dejar power bar llena si ya está en el carrito
     if (qSel > 0) {
@@ -459,8 +461,11 @@ function renderCards(){
       card.querySelector('[data-a="custom"]')?.addEventListener('click', ()=> openItemModal(it, base));
       card.querySelector('[data-a="quick"]')?.addEventListener('click', ()=> addQuickItem(it, base));
     }
+
+    frag.appendChild(card);
   });
 
+  grid.appendChild(frag);
   bindAccordionBehavior(grid);
   enableCombosTab();
 }
