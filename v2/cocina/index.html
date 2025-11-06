@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Cocina — Seven de Burgers</title>
+  <meta name="theme-color" content="#0b1220"/>
   <link rel="stylesheet" href="../shared/styles.css">
   <style>
     :root{ --bg:#0b1220; --card:#0f182a; --panel:#131f33; --muted:#a6b2c7; }
@@ -21,9 +22,10 @@
     .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .price{ margin-left:auto; opacity:.85 }
     .muted{ color:var(--muted); font-size:.9em }
-    .btn{ background:#1d2b46; border:1px solid rgba(255,255,255,.14); color:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }
+    /* Contraste mejorado en botones */
+    .btn{ background:#1a2a3e; border:1px solid rgba(255,255,255,.22); color:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }
     .btn.ghost{ background:transparent; }
-    .btn.danger{ background:#5b2331; border-color:#8d2a3e; }
+    .btn.danger{ background:#6d2836; border-color:#b63e54; }
     .badge{ background:#203252; border:1px solid rgba(255,255,255,.16); border-radius:999px; padding:2px 8px; font-size:.8em }
     .total{ font-weight:600; opacity:.9; }
   </style>
@@ -35,15 +37,15 @@
     <div class="cols" id="cols">
       <div class="col" data-col="PENDING">
         <div class="h"><b>Pendientes</b><span class="badge" id="cP">0</span></div>
-        <div class="list" id="lP"></div>
+        <div class="list" id="lP" aria-live="polite"></div>
       </div>
       <div class="col" data-col="IN_PROGRESS">
         <div class="h"><b>En progreso</b><span class="badge" id="cI">0</span></div>
-        <div class="list" id="lI"></div>
+        <div class="list" id="lI" aria-live="polite"></div>
       </div>
       <div class="col" data-col="READY">
         <div class="h"><b>Listos</b><span class="badge" id="cR">0</span></div>
-        <div class="list" id="lR"></div>
+        <div class="list" id="lR" aria-live="polite"></div>
       </div>
       <div class="col" data-col="AR">
         <div class="h">
@@ -52,11 +54,11 @@
           <span class="muted">Total:</span>
           <span class="total" id="tA">$0</span>
         </div>
-        <div class="list" id="lA"></div>
+        <div class="list" id="lA" aria-live="polite"></div>
       </div>
       <div class="col" data-col="DELIVERED">
         <div class="h"><b>Entregados</b><span class="badge" id="cD">0</span></div>
-        <div class="list" id="lD"></div>
+        <div class="list" id="lD" aria-live="polite"></div>
       </div>
     </div>
   </div>
