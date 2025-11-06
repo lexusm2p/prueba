@@ -211,7 +211,7 @@ function bindAccordionBehavior(container){
 }
 
 /* ======================= Bebidas / Combo Drink ======================= */
-const DRINK_PRICE = { solo: 20, combo: 17 };
+const DRINK_PRICE = { solo: 19, combo: 19 };
 
 function subtotalSinBebidas(cart = state.cart){
   return cart.reduce((a,l)=>{
