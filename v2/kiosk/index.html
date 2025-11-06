@@ -84,6 +84,22 @@
     #app{ padding:8px 14px; font-size:14px; }
     .err{ position:fixed; left:8px; bottom:8px; background:#000a; color:#ffb; padding:8px; border:1px solid #834; max-width:92vw; white-space:pre-wrap; z-index:99999; }
     .badge{ position:fixed; right:8px; bottom:8px; background:#111a; border:1px solid #345; color:#9fe; padding:4px 8px; border-radius:6px; font:12px/1.2 system-ui; z-index:9999; }
+
+    /* --- Bloque extra para tags, cards internas y monospace --- */
+    .tag{
+      display:inline-flex; align-items:center; gap:6px;
+      border:1px solid var(--stroke); border-radius:999px;
+      padding:4px 8px; font-size:12px; line-height:1;
+      background:color-mix(in srgb, var(--panel1) 75%, transparent);
+    }
+    .k-card{
+      background:color-mix(in srgb, var(--panel) 85%, transparent);
+      border:1px solid var(--stroke); border-radius:12px; padding:10px;
+    }
+    .price{ font-weight:700; }
+    .ul-clean{ list-style:none; padding:0; margin:0; }
+    .small{ font-size:12px; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
   </style>
 </head>
 <body data-theme="base">
@@ -120,7 +136,7 @@
   <nav id="tabsBar" class="tabs">
     <button id="btnMinis" class="btn tab is-active">Minis</button>
     <button id="btnBig" class="btn tab">Big</button>
-    <!-- El botón de Combos lo crea app.js si hay combos -->
+    <!-- El botón de Combos y Bebidas los crea app.js si existen en el catálogo -->
   </nav>
 
   <!-- Contenido -->
@@ -217,7 +233,7 @@
     })();
 
     // App real (usa misma versión que tus imports internos)
-    await import('./app.js?v=20251104a');
+    await import('./app.js?v=20251106b');
   </script>
 </body>
 </html>
