@@ -1,13 +1,12 @@
-// /kiosk/app.js — V2.3.1 (phone-first + reorden 1-tap + pestaña Bebidas)
+// /kiosk/app.js — V2.3.2 (phone-first + bebidas + papas con sazonador)
 // - Ordenar rápido + personalizar (acordeón con barra de poder)
-// - Nudge de bebida y Combo Drink dinámico
+// - Nudge de bebida y Combo Drink dinámico (precio 19)
+// - Modal de Papas: elegir sazonador (gratis), se guarda en extras.seasoning
 // - HH/ETA, regalos, lealtad y seguimiento (sin auto-redirect)
 // - Identificación “phone-first”: modal inicial (nombre+tel+tipo), reorden 1-tap
-// - Pestaña **Bebidas** con add directo (además del nudge)
-// - Carrito simplificado: si ya hay tel, no lo pide otra vez
-// - 2025-11-06: Integraciones completas, optimizaciones y guardas
+// - Pestaña Bebidas con add directo
 // Requiere en /kiosk/index.html:
-//   <script type="module" src="./app.js?v=20251106b"></script>
+//   <script type="module" src="./app.js?v=20251106c"></script>
 
 /* ======================= Rutas base (data/menu.json) ======================= */
 const __parts = location.pathname.split('/').filter(Boolean);
@@ -111,6 +110,33 @@ function escapeHtml(s = '') {
   return String(s).replace(/[&<>"']/g, ch => map[ch]);
 }
 
+/* ======================= Detección de sides/sazonadores ======================= */
+function isSide(item){
+  if (!item) return false;
+  if (String(item.category||'').toLowerCase()==='side') return true;
+  // por compatibilidad, checamos id y presencia de seasonings
+  return /side-|papas|gajo/i.test(String(item.id||'')) || Array.isArray(item.seasonings);
+}
+function normalizeSeasonings(item){
+  const raw = Array.isArray(item?.seasonings) ? item.seasonings : [];
+  // admite: "BBQ", {id:'bbq', name:'BBQ 🔥', kitchen:'BBQ'}
+  return raw.map(x=>{
+    if (typeof x === 'string') return { id: slug(x), name: x, kitchen: x };
+    return {
+      id: x.id || slug(x.name || x.kitchen || ''),
+      name: x.name || x.kitchen || '',
+      kitchen: x.kitchen || x.name || ''
+    };
+  }).filter(o=>o.id && o.name);
+}
+function defaultSeasoning(item){
+  const list = normalizeSeasonings(item);
+  if (!list.length) return null;
+  // si hay "Sal" o similar, úsalo; si no, primero de la lista
+  const salt = list.find(x => /sal\b/i.test(x.name) || /sal\b/i.test(x.kitchen));
+  return (salt || list[0]).kitchen;
+}
+
 /* ======================= Highlights ======================= */
 const HIGHLIGHTS = {
   starter:   'La base de todo · sencilla',
@@ -191,7 +217,7 @@ function buildAccordionForItem(item, base){
         ${extra>0 ? `<span class="k-chip">+${extra}</span>`: ``}
       </div>
       ${getHighlight(item, base) ? `<div class="muted small">${escapeHtml(getHighlight(item, base))}</div>`:''}
-      ${powerBarHtml('🍔')}
+      ${powerBarHtml(isSide(item)?'🥔':'🍔')}
     </summary>
     <ul class="ing-list" style="margin:8px 0 0 18px">
       ${inc.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}
@@ -233,7 +259,7 @@ function ensureDrinkPrices(cart = state.cart){
       try{ playAchievement(); }catch{}
       toast('🎉 ¡Combo Drink Seven! Bebidas a precio combo');
     } else {
-      toast('Combo Drink Seven desactivado — bebidas a $20');
+      toast('Combo Drink Seven desactivado — bebidas a $19');
     }
   }
   for (const l of cart){
@@ -512,6 +538,10 @@ async function addQuickItem(item, base){
   const d = hhDiscountPerUnit(item);
   const unit = Math.max(0, Number(item.price||0) - d);
 
+  // seasoning por defecto si es side
+  let seasoning = null;
+  if (isSide(item)) seasoning = defaultSeasoning(item);
+
   state.cart.push({
     id: item.id, name: item.name, mini: !!item.mini, qty: 1,
     unitPrice: Number(item.price||0),
@@ -519,9 +549,10 @@ async function addQuickItem(item, base){
     ingredients:     formatIngredientsFor(item, base),
     salsaDefault: base?.salsaDefault || base?.suggested || null,
     salsaCambiada: null,
-    extras: { sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
+    extras: { sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null, seasoning },
     notes: '',
-    lineTotal: unit, hhDisc: d
+    lineTotal: unit, hhDisc: d,
+    type: isSide(item) ? 'side' : undefined
   });
 
   ensureDrinkPrices();
@@ -667,8 +698,13 @@ async function openItemModal(item, base, existingIndex=null){
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
 
+  // sazonadores (solo sides)
+  const isSideItem = isSide(item);
+  const sazList = isSideItem ? normalizeSeasonings(item) : [];
+  const line    = (existingIndex !== null) ? state.cart[existingIndex] : null;
+  const currentSeasoning = (line?.extras?.seasoning) || (isSideItem ? defaultSeasoning(item) : null);
+
   const editing = (existingIndex !== null);
-  const line    = editing ? state.cart[existingIndex] : null;
   const hasSauce = s => editing && line?.extras?.sauces?.includes(s);
   const hasIngr  = s => editing && line?.extras?.ingredients?.includes(s);
   const dlcOn    = editing ? !!line?.extras?.dlcCarne : false;
@@ -686,6 +722,18 @@ async function openItemModal(item, base, existingIndex=null){
         ${includeList.map(s=>`<span class="k-chip is-inc">${escapeHtml(s)}</span>`).join('')}
       </div>
     </div>
+
+    ${ isSideItem && sazList.length ? `
+      <div class="field">
+        <label>Sazonador (gratis)</label>
+        <div class="ul-clean" id="seasonings" style="margin-top:6px;display:grid;gap:6px">
+          ${sazList.map((s,i)=>`
+            <label style="display:flex;gap:6px;align-items:center">
+              <input type="radio" name="sazon" id="rz${i}" value="${escapeHtml(s.kitchen)}" ${s.kitchen===currentSeasoning?'checked':''}/>
+              <span>${escapeHtml(s.name)}</span>
+            </label>`).join('')}
+        </div>
+      </div>` : '' }
 
     ${ item.mini && (DLC > 0) ? `
       <div class="field">
@@ -743,7 +791,7 @@ async function openItemModal(item, base, existingIndex=null){
   const totalEl = document.getElementById('mTotal');
   const qtyEl   = document.getElementById('qty');
 
-  const steps = { sauce:false, saucesSec:false, ingSec:false, qty:false, notes:false };
+  const steps = { sauce:false, saucesSec:false, ingSec:false, qty:false, notes:false, saz:false };
   const STEP_COUNT = Object.keys(steps).length;
   const recomputeProgress = ()=>{
     const done = Object.values(steps).filter(Boolean).length;
@@ -751,21 +799,24 @@ async function openItemModal(item, base, existingIndex=null){
   };
   const mark = (k)=>{ if (!steps[k]) { steps[k]=true; recomputeProgress(); } };
 
-  const inputs  = body.querySelectorAll('input[type=checkbox]');
+  const inputs  = body.querySelectorAll('input[type=checkbox], input[type=radio]');
   const swapSel = document.getElementById('swapSauce');
   const detSau  = document.getElementById('detSauces');
   const detIng  = document.getElementById('detIngrs');
+  const sazBox  = document.getElementById('seasonings');
   const notesEl = document.getElementById('notes');
 
   if ((swapSel?.value||'')!=='') steps.sauce=true;
   if (Number(qtyEl?.value||1)!==1) steps.qty=true;
   if ((notesEl?.value||'').trim().length>0) steps.notes=true;
+  if (sazBox && currentSeasoning) steps.saz=true;
   recomputeProgress();
 
   swapSel?.addEventListener('focus', ()=> mark('sauce'));
   swapSel?.addEventListener('change', ()=> mark('sauce'));
   detSau?.addEventListener('toggle', ()=>{ if (detSau.open) mark('saucesSec'); });
   detIng?.addEventListener('toggle', ()=>{ if (detIng.open) mark('ingSec'); });
+  sazBox?.addEventListener('change', ()=> mark('saz'));
   qtyEl?.addEventListener('change', ()=>{ if (Number(qtyEl.value||1)!==1) mark('qty'); });
   notesEl?.addEventListener('input', ()=>{ if ((notesEl.value||'').trim().length>0) mark('notes'); });
 
@@ -801,6 +852,9 @@ async function openItemModal(item, base, existingIndex=null){
       const ingrSel   = [...body.querySelectorAll('#ingrs input')].map((el,i)=> el.checked? extrasIngrN[i].name: null).filter(Boolean);
       const salsaSwap = (document.getElementById('swapSauce')?.value || '') || null;
       const notes     = (document.getElementById('notes')?.value || '').trim();
+      const sazSel    = (isSideItem && document.querySelector('#seasonings input:checked'))
+        ? document.querySelector('#seasonings input:checked').value
+        : (isSideItem ? defaultSeasoning(item) : null);
 
       const newLine = {
         id: item.id, name: item.name, mini: !!item.mini, qty,
@@ -809,8 +863,9 @@ async function openItemModal(item, base, existingIndex=null){
         ingredients: formatIngredientsFor(item, base),
         salsaDefault: base?.salsaDefault || base?.suggested || null,
         salsaCambiada: salsaSwap,
-        extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk, surpriseSauce: null },
-        notes, lineTotal: subtotal, hhDisc: hhDiscTotal
+        extras: { sauces: saucesSel, ingredients: ingrSel, dlcCarne: !!dlcChk, surpriseSauce: null, seasoning: sazSel },
+        notes, lineTotal: subtotal, hhDisc: hhDiscTotal,
+        type: isSideItem ? 'side' : undefined
       };
 
       setPower(100);
@@ -1064,6 +1119,7 @@ async function openCartModal(){
     <div class="field">
       ${state.cart.map((l,idx)=>{
         const extrasTxt = [
+          (l.extras?.seasoning ? 'Sazonador: '+escapeHtml(l.extras.seasoning) : ''),
           (l.extras?.dlcCarne ? 'DLC carne 85g' : ''),
           ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+escapeHtml(s)),
           ...(l.extras?.ingredients||[]).map(s=>'Extra: '+escapeHtml(s))
