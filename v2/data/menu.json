@@ -1,85 +1,92 @@
 {
-  "menu": [
+  "appSettings": {
+    "meatGrams": 85,
+    "miniMeatGrams": 45
+  },
+  "extras": {
+    "sauces": [
+      "Ajo habanero",
+      "Chipotle",
+      "Chimichurri (León, Gto.)",
+      "Cheddar",
+      "Mostaza dulce",
+      "Jalapeño rostizado",
+      "Curry cremoso",
+      "Salsa secreta Seven"
+    ],
+    "saucePrice": 5,
+    "ingredientPrice": 7,
+    "dlcCarneMini": 12,
+    "ingredients": [
+      { "id": "extra-tocino", "name": "Tocino extra", "price": 9 },
+      { "id": "extra-pina", "name": "Rebanada de piña", "price": 5 },
+      { "id": "extra-jamon", "name": "Jamón", "price": 7 },
+      { "id": "extra-cebolla", "name": "Cebolla blanca", "price": 3 }
+    ]
+  },
+
+  "burgers": [],
+
+  "minis": [
     {
       "id": "starter-mini",
       "name": "Starter Mini",
-      "category": "mini",
+      "mini": true,
       "price": 22,
-      "cost": 12.5,
-      "cmv": 56.8,
-      "margin": 43.2,
       "ingredients": ["Pan mini", "Carne 45g", "Queso amarillo", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup", "Mostaza"],
       "suggested": "Mostaza dulce",
-      "notes": "Excelente margen base"
+      "highlight": "Base ganadora, margen alto"
     },
     {
       "id": "koopa-mini",
       "name": "Koopa Mini",
-      "category": "mini",
+      "mini": true,
       "price": 24,
-      "cost": 14.8,
-      "cmv": 61.6,
-      "margin": 38.4,
       "ingredients": ["Pan mini", "Carne 45g", "Queso blanco", "Piña", "Tocino", "Lechuga", "Jitomate", "Cebolla", "Mayonesa", "Catsup"],
       "suggested": "Chimichurri",
-      "notes": "Tocino + piña balanceados"
+      "highlight": "Dulce + crujiente (piña + tocino)"
     },
     {
       "id": "fatality-mini",
       "name": "Fatality Mini",
-      "category": "mini",
+      "mini": true,
       "price": 23,
-      "cost": 13.6,
-      "cmv": 59.1,
-      "margin": 40.9,
       "ingredients": ["Pan mini", "Carne 45g", "Queso amarillo", "Queso blanco", "Aderezo habanero", "Lechuga", "Jitomate", "Cebolla"],
       "suggested": "Ajo habanero",
-      "notes": "Muy rentable"
+      "highlight": "Picoso balanceado"
     },
     {
       "id": "hadouken-mini",
       "name": "Hadouken Mini",
-      "category": "mini",
+      "mini": true,
       "price": 22,
-      "cost": 12.2,
-      "cmv": 55.4,
-      "margin": 44.6,
       "ingredients": ["Pan mini", "Carne 45g", "Queso amarillo", "Queso blanco", "Aderezo chipotle", "Lechuga", "Jitomate", "Cebolla", "Salchicha en tiras"],
       "suggested": "Chipotle",
-      "notes": "Gran margen, clásico"
+      "highlight": "Doble queso + chipotle"
     },
     {
       "id": "finalboss-mini",
       "name": "Final Boss Mini",
-      "category": "mini",
+      "mini": true,
       "price": 26,
-      "cost": 15.9,
-      "cmv": 61.1,
-      "margin": 38.9,
       "ingredients": ["Pan mini", "Carne 45g", "Queso amarillo", "Tocino", "Salchicha en tiras", "Jitomate", "Cebolla", "Aderezo cheddar"],
       "suggested": "Salsa secreta Seven",
-      "notes": "Premium mini"
+      "highlight": "La más cargada"
     },
     {
       "id": "nintendo-mini",
       "name": "Nintendo Nostalgia Mini",
-      "category": "mini",
+      "mini": true,
       "price": 22,
-      "cost": 12.0,
-      "cmv": 54.5,
-      "margin": 45.5,
       "ingredients": ["Pan mini", "Carne 45g", "Queso blanco", "Aderezo de mostaza dulce", "Lechuga", "Jitomate", "Cebolla"],
       "suggested": "Mostaza dulce",
-      "notes": "Ideal base"
+      "highlight": "Suave, retro"
     },
     {
       "id": "jotdog-mini",
       "name": "Jotdog Slide (Mini)",
-      "category": "mini",
-      "price": 15,
-      "cost": 10.6,
-      "cmv": 55.8,
-      "margin": 44.2,
+      "mini": true,
+      "price": 19,
       "ingredients": [
         "Pan mini",
         "½ salchicha en tiras",
@@ -89,55 +96,69 @@
         "Aderezo a elección (chipotle, ajo habanero, jalapeño rostizado)"
       ],
       "suggested": "Cheddar",
-      "notes": "Ligero y muy rentable"
-    },
-    {
-      "id": "extra-tocino",
-      "name": "Tocino extra",
-      "category": "extra",
-      "price": 9,
-      "notes": "Precio actualizado"
-    },
+      "highlight": "Ligero y muy rentable"
+    }
+  ],
+
+  "sides": [
     {
       "id": "side-papasgajo",
       "name": "Papas Gajo (150g)",
-      "category": "side",
       "price": 20,
-      "notes": "Sazonadas con especias especiales"
+      "ingredients": ["Papas gajo fritas"],
+      "highlight": "Sazonadas al momento",
+      "seasonings": ["Chile quebrado", "Ajo mantequilla", "Lemon pepper", "BBQ", "Paprika", "Sal"]
     },
     {
       "id": "side-papasgajo-cheddar",
       "name": "Papas Gajo con Cheddar",
-      "category": "side",
       "price": 27,
-      "notes": "Incluye aderezo cheddar"
-    },
-    {
-      "id": "drink-bebidas",
-      "name": "Bebidas",
-      "category": "drink",
-      "price": 19,
-      "options": ["Refresco cola", "Refresco limón", "Agua mineral", "Refresco ginger"],
-      "notes": "Precio fijo general"
-    },
-    {
-      "id": "combo-playerpack",
-      "name": "Combo Minis (Player Pack)",
-      "category": "combo",
-      "price": 69,
-      "cost": 26.5,
-      "cmv": 38,
-      "margin": 62,
-      "description": "3 minis a elegir (excepto Final Boss +$4), incluye papas gajo y bebida.",
-      "includes": ["3 minis", "Papas Gajo", "Bebida"],
-      "notes": "Perfecto equilibrio precio-rentabilidad"
+      "ingredients": ["Papas gajo fritas", "Aderezo cheddar"],
+      "highlight": "Con baño cremoso",
+      "seasonings": ["Chile quebrado", "Ajo mantequilla", "Lemon pepper", "BBQ", "Paprika", "Sal"]
     }
   ],
-  "summary": {
-    "avgCostMini": 13.1,
-    "avgPriceMini": 22.6,
-    "avgCMV": 58,
-    "avgMargin": 42,
-    "insight": "Excelente equilibrio: CMV < 60%, margen > 40%, y precios terminados en 7 o 2 mantienen coherencia con la psicología de marca."
+
+  "drinks": [
+    {
+      "id": "drink-cola",
+      "name": "Refresco de cola 355 ml",
+      "type": "drink",
+      "price": 19,
+      "brandsNote": "Disponible: Coca-Cola o Pepsi (según existencias)"
+    },
+    {
+      "id": "drink-lemon",
+      "name": "Refresco limón-lime 355 ml",
+      "type": "drink",
+      "price": 19,
+      "brandsNote": "Disponible: 7 Up o Sprite"
+    },
+    {
+      "id": "drink-mineral",
+      "name": "Agua mineral 355 ml",
+      "type": "drink",
+      "price": 19,
+      "brandsNote": "Disponible: marcas varias"
+    },
+    {
+      "id": "drink-ginger",
+      "name": "Ginger ale 355 ml",
+      "type": "drink",
+      "price": 19,
+      "brandsNote": "Disponible: Canada Dry"
+    }
+  ],
+
+  "combos": [],
+
+  "pairing": {
+    "starter-mini": "cola",
+    "koopa-mini": "ginger",
+    "fatality-mini": "lemon",
+    "hadouken-mini": "lemon",
+    "finalboss-mini": "cola",
+    "nintendo-mini": "mineral",
+    "jotdog-mini": "mineral"
   }
 }
