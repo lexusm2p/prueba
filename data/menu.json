@@ -150,7 +150,7 @@
     {
       "id": "starter_m",
       "name": "Starter Mini",
-      "price": 27,
+      "price": 22,
       "category": "mini",
       "mini": true,
       "baseOf": "starter",
@@ -171,7 +171,7 @@
     {
       "id": "koopa_m",
       "name": "Koopa Mini",
-      "price": 33,
+      "price": 24,
       "category": "mini",
       "mini": true,
       "baseOf": "koopa",
@@ -193,7 +193,7 @@
     {
       "id": "fatality_m",
       "name": "Fatality Mini",
-      "price": 37,
+      "price": 23,
       "category": "mini",
       "mini": true,
       "baseOf": "fatality",
@@ -215,7 +215,7 @@
     {
       "id": "mega_m",
       "name": "Mega Mini",
-      "price": 42,
+      "price": 22,
       "category": "mini",
       "mini": true,
       "baseOf": "mega",
@@ -237,7 +237,7 @@
     {
       "id": "hadouken_m",
       "name": "Hadouken Mini",
-      "price": 37,
+      "price": 22,
       "category": "mini",
       "mini": true,
       "baseOf": "hadouken",
@@ -257,7 +257,7 @@
     {
       "id": "nintendo_m",
       "name": "Nintendo Mini",
-      "price": 37,
+      "price": 22,
       "category": "mini",
       "mini": true,
       "baseOf": "nintendo",
@@ -279,7 +279,7 @@
     {
       "id": "final_m",
       "name": "Final Boss Mini",
-      "price": 47,
+      "price": 26,
       "category": "mini",
       "mini": true,
       "baseOf": "finalboss",
@@ -296,7 +296,7 @@
         "Salsa habanero",
         "Aderezo chipotle"
       ],
-      "suggested": "Chipotle"
+      "suggested": "Salsa secreta Seven"
     }
   ],
 
@@ -695,5 +695,5 @@
     "meatGrams": 85
   },
 
-  "_version": "2025-11-06-pairings-solo-catalogo"
+  "_version": "2025-11-06-pairings-solo-catalogo-minis-ok"
 }
