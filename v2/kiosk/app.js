@@ -1,13 +1,12 @@
-// /kiosk/app.js — V2.4.0 Seven de Burgers
-// - Compatible con nuevo catálogo (combos, bebidas genéricas, upgrades ignorados sin romper)
+// /kiosk/app.js — V2.4.1 Seven de Burgers
+// - Compatible con nuevo catálogo (combos, bebidas, minis corregidas)
 // - Phone-first + identidad cliente
 // - Tabs Minis / Big / Combos / Bebidas
 // - Nudge bebida + Combo Drink dinámico
-// - Modal Papas/Sazonador + personalización sliders
+// - Modal Papas/Sazonador + extras
 // - HH/ETA en vivo, regalos, seguimiento
+// - Upgrade opcional: papas con cheddar en combos (+$7, configurable)
 // - Render seguro (escape HTML), sin eval
-// Requiere en /kiosk/index.html:
-//   <script type="module" src="./app.js?v=20251107"></script>
 
 /* ======================= Rutas base (data/menu.json) ======================= */
 const __parts = location.pathname.split('/').filter(Boolean);
@@ -46,12 +45,17 @@ const state = {
   adminMode: false,
   loyaltyEnabled: true,
   loyaltyAskShown: false,
+  // identidad
   identified: false,
   identifiedAt: 0,
   lastKnownPhone: '',
   lastKnownName: '',
   lastOrderPreview: null
 };
+
+/* ======================= Constantes negocio ======================= */
+const DRINK_PRICE = { solo: 19, combo: 19 };           // mismo precio, pero etiquetamos modo
+const CHEDDAR_UPGRADE_BASE = 7;                        // upgrade papas con cheddar combos
 
 /* ======================= Helpers base ======================= */
 const money = (n)=> '$' + Number(n ?? 0).toFixed(0);
@@ -108,6 +112,10 @@ function escapeHtml(s = '') {
   const map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
   return String(s).replace(/[&<>"']/g, ch => map[ch]);
 }
+function getCheddarUpgradePrice(){
+  const fromMenu = Number(state.menu?.extras?.cheddarUpgradePrice);
+  return Number.isFinite(fromMenu) && fromMenu > 0 ? fromMenu : CHEDDAR_UPGRADE_BASE;
+}
 
 /* ======================= Detección de sides/sazonadores ======================= */
 function isSide(item){
@@ -160,7 +168,7 @@ function powerBarHtml(icon='🍔'){
 }
 
 function buildAccordionForItem(item, base){
-  // Combos: listar componentes si vienen definidos
+  // Combos: mostrar componentes si existen
   if (item?.type === 'combo'){
     const rawItems = Array.isArray(item.items) ? item.items : [];
     const subs = rawItems.map(it=>{
@@ -234,7 +242,6 @@ function bindAccordionBehavior(container){
 }
 
 /* ======================= Bebidas / Combo Drink ======================= */
-const DRINK_PRICE = { solo: 19, combo: 19 }; // mismo precio, etiqueta diferente
 
 function subtotalSinBebidas(cart = state.cart){
   return cart.reduce((a,l)=>{
@@ -244,7 +251,7 @@ function subtotalSinBebidas(cart = state.cart){
   }, 0);
 }
 function isDrinkComboUnlocked(cart = state.cart){
-  return subtotalSinBebidas(cart) >= 77;
+  return subtotalSinBebidas(cart) >= 77; // umbral combo drink
 }
 function ensureDrinkPrices(cart = state.cart){
   const unlocked = isDrinkComboUnlocked(cart);
@@ -281,8 +288,11 @@ function addDrinkToCart(drink){
   const comboOn = isDrinkComboUnlocked();
   const price = comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo;
   state.cart.push({
-    id: drink.id, type:'drink', name: drink.name, qty:1,
-    unitPrice: Number(drink.price||0),
+    id: drink.id,
+    name: drink.name,
+    type:'drink',
+    qty:1,
+    unitPrice: Number(drink.price||price),
     baseIngredients:[],
     extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
     notes:'',
@@ -405,14 +415,13 @@ function setActiveTab(mode=state.mode){
   else if (mode==='combos') on(btnCombos);
   else if (mode==='drinks') on(btnDrinks);
 }
-
 function enableCombosTab(){
   const hasCombos = Array.isArray(state.menu?.combos) && state.menu.combos.length > 0;
   if (!hasCombos) return;
   const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
   if (!bar || document.getElementById('btnCombos')) return;
   const btn = document.createElement('button');
-  btn.id = 'btnCombos'; btn.className = 'tab'; btn.textContent = 'Combos';
+  btn.id = 'btnCombos'; btn.className = 'btn tab'; btn.textContent = 'Combos';
   btn.addEventListener('click', ()=> setMode('combos'));
   bar.appendChild(btn);
 }
@@ -422,7 +431,7 @@ function enableDrinksTab(){
   const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
   if (!bar || document.getElementById('btnDrinks')) return;
   const btn = document.createElement('button');
-  btn.id = 'btnDrinks'; btn.className = 'tab'; btn.textContent = 'Bebidas';
+  btn.id = 'btnDrinks'; btn.className = 'btn tab'; btn.textContent = 'Bebidas';
   btn.addEventListener('click', ()=> setMode('drinks'));
   bar.appendChild(btn);
 }
@@ -469,13 +478,15 @@ function renderCards(){
     const qSel = qtyInCart(it.id);
     const selectedBadge = qSel > 0 ? `<span class="tag" data-sel>×${qSel} en pedido</span>` : '';
 
+    const showPrice = isCombo ? Number(it.price || eff) : eff;
+
     const priceHtml = (!isDrink && !isCombo && disc > 0)
       ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span> ${selectedBadge}</div>`
-      : `<div class="price">${money(isCombo ? it.price : eff)} ${selectedBadge}</div>`;
+      : `<div class="price">${money(showPrice)} ${selectedBadge}</div>`;
 
     const actionsHtml = isDrink
       ? `<button class="btn small" data-a="drinkAdd">Agregar</button>`
-      : `${isCombo ? '' : `<button class="btn ghost small" data-a="custom">Personalizar</button>`}
+      : `${isCombo ? '' : `<button class="btn small ghost" data-a="custom">Personalizar</button>`}
          <button class="btn small" data-a="${isCombo?'order':'quick'}">${isCombo ? 'Ordenar combo' : 'Ordenar rápido'}</button>`;
 
     const mediaImg = iconSrc
@@ -608,7 +619,7 @@ async function addComboToCart(combo){
         });
       }
     }
-    // Combos de 3 minis con rules (compatibilidad básica)
+    // Combos dinámicos de minis (rules) — fallback seguro
     else if (combo.rules && combo.rules.qty){
       const rules = combo.rules;
       const poolAll = (state.menu?.minis || []).map(m=>m.id);
@@ -734,9 +745,7 @@ async function openItemModal(item, base, existingIndex=null){
 
   document.getElementById('mPower')?.remove();
   document.getElementById('mPowerMini')?.remove();
-
-  let __setPowerFn = ensureModalPowerBar();
-  const setPower = (pct)=>{ try{ __setPowerFn?.(pct); }catch(e){ console.warn('setPower error', e); } };
+  const setPower = ensureModalPowerBar();
 
   const sauces = state.menu?.extras?.sauces ?? [];
   const extrasIngr = normalizeExtraIngredients();
@@ -856,7 +865,6 @@ async function openItemModal(item, base, existingIndex=null){
   if (sazBox && currentSeasoning) steps.saz=true;
   recomputeProgress();
 
-  swapSel?.addEventListener('focus', ()=> mark('sauce'));
   swapSel?.addEventListener('change', ()=> mark('sauce'));
   detSau?.addEventListener('toggle', ()=>{ if (detSau.open) mark('saucesSec'); });
   detIng?.addEventListener('toggle', ()=>{ if (detIng.open) mark('ingSec'); });
@@ -888,7 +896,7 @@ async function openItemModal(item, base, existingIndex=null){
 
   const addBtnEl = document.getElementById('mAdd');
   if(addBtnEl){
-    addBtnEl.textContent = (existingIndex!==null) ? 'Guardar cambios' : 'Agregar al pedido';
+    addBtnEl.textContent = (existingIndex!==null) ? 'Guardar cambios' : 'Agregar al carrito';
     addBtnEl.onclick = ()=>{
       const { qty, subtotal, dlcChk, hhDiscTotal } = calc();
       const saucesSel = [...body.querySelectorAll('#sauces input')].map((el,i)=> el.checked? sauces[i]: null).filter(Boolean);
@@ -913,7 +921,6 @@ async function openItemModal(item, base, existingIndex=null){
       };
 
       setPower(100);
-
       if (existingIndex!==null){
         state.cart[existingIndex] = newLine;
         toast('Línea actualizada');
@@ -935,7 +942,7 @@ const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
 function recomputeAllLines() {
-  state.cart.forEach(l => { recomputeLine(l); });
+  state.cart.forEach(l => recomputeLine(l));
 }
 function computeBreakdown() {
   let total = 0; let hh = 0;
@@ -945,12 +952,9 @@ function computeBreakdown() {
 }
 function paintBreakdown() {
   ensureDrinkPrices();
-  const { subtotal, hh, total } = computeBreakdown();
+  const { total } = computeBreakdown();
   const totFooter = document.getElementById('cartTotalFooter');
   if (totFooter) totFooter.textContent = money(total);
-  const subEl = document.getElementById('cartSub'); if (subEl) subEl.textContent = money(subtotal);
-  const hhEl  = document.getElementById('cartHH');  if (hhEl)  hhEl.textContent  = (hh>0?'-':'') + money(hh);
-  const totEl = document.getElementById('cartTotal'); if (totEl) totEl.textContent = money(total);
 }
 
 function updateCartBar(){
@@ -1012,10 +1016,17 @@ function ensureGiftModal(){
   wrap.querySelector('#giftReject')?.addEventListener('click', close);
   wrap.querySelector('#giftAccept')?.addEventListener('click', ()=>{
     state.cart.push({
-      id: state.gift.productId, name:'PowerDog Mini (Regalo)', mini:true, isGift:true, qty:1,
-      unitPrice:0, baseIngredients:[],
+      id: state.gift.productId,
+      name:'PowerDog Mini (Regalo)',
+      mini:true,
+      isGift:true,
+      qty:1,
+      unitPrice:0,
+      baseIngredients:[],
       extras:{sauces:[],ingredients:[],dlcCarne:false,surpriseSauce:null},
-      notes:'', lineTotal:0, hhDisc:0,
+      notes:'',
+      lineTotal:0,
+      hhDisc:0,
       type:'gift'
     });
     close();
@@ -1028,13 +1039,14 @@ function openGiftModal(){ ensureGiftModal(); const m=document.getElementById('gi
 function recomputeLine(line){
   if (!line) return;
   if (line.type === 'drink'){
-    // precio ajustado globalmente por ensureDrinkPrices
+    // precio ya ajustado en ensureDrinkPrices
     return;
   }
   if (line.type === 'combo'){
     const qty = line.qty || 1;
     const unit = Number(line.unitPrice || 0);
-    line.lineTotal = unit * qty;
+    const up = line.extras?.cheddarUpgrade ? getCheddarUpgradePrice() : 0;
+    line.lineTotal = unit * qty + up * qty;
     line.hhDisc = 0;
     return;
   }
@@ -1042,19 +1054,23 @@ function recomputeLine(line){
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
   const extrasIngr = normalizeExtraIngredients();
   const priceByName = new Map(extrasIngr.map(x=>[x.name, x.price]));
-  const costI = (line.extras?.ingredients||[]).reduce((sum, name)=> sum + Number(priceByName.get(name) ?? state.menu?.extras?.ingredientPrice ?? 0), 0);
+  const costI = (line.extras?.ingredients||[]).reduce(
+    (sum, name)=> sum + Number(priceByName.get(name) ?? state.menu?.extras?.ingredientPrice ?? 0),
+    0
+  );
   const costS = (line.extras?.sauces?.length || 0) * SP;
   const dlcOn = !!(line.extras?.dlcCarne);
   const extraDlc = dlcOn ? DLC : 0;
   const item = findItemById(line.id);
+  const baseUnit = Number(line.unitPrice || item?.price || 0);
   const hhDiscPerUnit = hhDiscountPerUnit(item);
-  const unitBaseAfterHH = Math.max(0, Number(line.unitPrice||item?.price||0) - hhDiscPerUnit);
+  const unitBaseAfterHH = Math.max(0, baseUnit - hhDiscPerUnit);
   const unitTotal = (unitBaseAfterHH + extraDlc) + costS + costI;
   line.lineTotal = unitTotal * (line.qty||1);
   line.hhDisc = hhDiscPerUnit * (line.qty||1);
 }
 
-/* ======================= Modal SEGUIMIENTO ======================= */
+/* ======================= Seguimiento pedido ======================= */
 function buildTrackUrl({ orderId, phone }) {
   const u = new URL('./track.html', location.href);
   if (orderId) u.searchParams.set('oid', orderId);
@@ -1189,12 +1205,22 @@ async function openCartModal(){
             }</div>`
           : '';
 
+        const cheddarHtml = (l.type === 'combo')
+          ? `<div class="muted small">
+               <label>
+                 <input type="checkbox" data-a="cheddarUp" ${l.extras?.cheddarUpgrade?'checked':''}/>
+                 Papas con cheddar (+$${getCheddarUpgradePrice()})
+               </label>
+             </div>`
+          : '';
+
         const canEdit = l.type !== 'combo';
 
         return `
           <div class="k-card" style="margin:8px 0" data-i="${idx}">
             <h4>${escapeHtml(l.name)} · x${l.qty}</h4>
             ${comboItemsTxt}
+            ${cheddarHtml}
             ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${escapeHtml(l.salsaCambiada)}</div>`:''}
             ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
             ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
@@ -1236,7 +1262,8 @@ async function openCartModal(){
     state.orderMeta.payMethodPref = (paySel?.value || 'efectivo');
   });
 
-  body.onclick = (e)=>{
+  // acciones de botones
+  body.addEventListener('click', (e)=>{
     const btn = e.target.closest('button[data-a]');
     if (!btn) return;
     const card = btn.closest('[data-i]');
@@ -1265,7 +1292,22 @@ async function openCartModal(){
       const m2 = document.getElementById('cartModal'); if(m2) m2.style.display='none';
       openItemModal(item, base, i); return;
     }
-  };
+  });
+
+  // toggle upgrade cheddar combos
+  body.addEventListener('change', (e)=>{
+    const cb = e.target.closest('input[data-a="cheddarUp"]');
+    if (!cb) return;
+    const card = cb.closest('[data-i]');
+    if (!card) return;
+    const i = parseInt(card.dataset.i, 10);
+    const line = state.cart[i];
+    if (!line || line.type !== 'combo') return;
+    line.extras = line.extras || {};
+    line.extras.cheddarUpgrade = cb.checked;
+    recomputeLine(line); ensureDrinkPrices(); updateCartBar();
+    // no reabre modal para evitar salto
+  });
 
   recomputeAllLines();
   paintBreakdown();
@@ -1303,21 +1345,24 @@ async function openCartModal(){
           state.orderMeta.phone = norm; state.orderMeta.table = '';
         }
 
-        const itemsForDB = state.cart
-          .map(l => ({
-            id: l.id, name: l.name, mini: l.mini, qty: l.qty, unitPrice: l.unitPrice,
-            baseIngredients: l.baseIngredients || [],
-            ingredients: l.ingredients || l.baseIngredients || [],
-            salsaDefault: l.salsaDefault || null,
-            salsaCambiada: l.salsaCambiada || null,
-            extras: l.extras,
-            notes: l.notes || null,
-            lineTotal: l.lineTotal,
-            hhDisc: Number(l.hhDisc || 0),
-            isGift: !!l.isGift,
-            type: l.type,
-            comboItems: (l.type === 'combo' && Array.isArray(l.items)) ? l.items : undefined
-          }));
+        const itemsForDB = state.cart.map(l => ({
+          id: l.id,
+          name: l.name,
+          mini: l.mini,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+          baseIngredients: l.baseIngredients || [],
+          ingredients: l.ingredients || l.baseIngredients || [],
+          salsaDefault: l.salsaDefault || null,
+          salsaCambiada: l.salsaCambiada || null,
+          extras: l.extras,
+          notes: l.notes || null,
+          lineTotal: l.lineTotal,
+          hhDisc: Number(l.hhDisc || 0),
+          isGift: !!l.isGift,
+          type: l.type,
+          comboItems: (l.type === 'combo' && Array.isArray(l.items)) ? l.items : undefined
+        }));
 
         const subtotalBase = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
         const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
@@ -1369,7 +1414,8 @@ async function openCartModal(){
 
         beep(); toast(`Gracias ${state.customerName}, te avisaremos cuando esté listo 🛎️`);
 
-        state.cart = []; updateCartBar();
+        state.cart = [];
+        updateCartBar();
         const mm = document.getElementById('cartModal'); if(mm) mm.style.display='none';
         openTrackPrompt(state.lastTrackUrl);
 
@@ -1458,7 +1504,7 @@ function bindETA(){
   }
 }
 
-/* ======================= Ready feed / Analytics mínimos ======================= */
+/* ======================= Analytics mínimos ======================= */
 function subscribeOrdersShim(cb){
   if (typeof DB.subscribeOrders === 'function') return DB.subscribeOrders(cb);
   if (typeof DB.onOrdersSnapshot === 'function') return DB.onOrdersSnapshot(cb);
@@ -1468,7 +1514,7 @@ function subscribeOrdersShim(cb){
 }
 function startOrdersAnalytics(){
   if (state.unsubAnalytics){ state.unsubAnalytics(); state.unsubAnalytics=null; }
-  state.unsubAnalytics = subscribeOrdersShim(()=>{ /* analytics mínimos */ });
+  state.unsubAnalytics = subscribeOrdersShim(()=>{ /* hook analytics */ });
 }
 
 /* ======================= Identidad (phone-first) ======================= */
@@ -1621,12 +1667,13 @@ async function ensureCustomerIdentified(prefillType){
   return state.identified;
 }
 function paintIdentityBadge(){
-  const b = document.getElementById('idBadge') || document.createElement('div');
+  const existing = document.getElementById('idBadge');
+  const b = existing || document.createElement('div');
   b.id = 'idBadge';
   b.className = 'tag';
   b.style.cssText = 'position:fixed;right:10px;bottom:56px;z-index:1000;display:'+(state.identified?'inline-flex':'none');
   b.textContent = 'Cliente reconocido';
-  if (!b.parentNode) document.body.appendChild(b);
+  if (!existing) document.body.appendChild(b);
 }
 
 /* ======================= Init ======================= */
