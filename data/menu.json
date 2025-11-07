@@ -1,4 +1,31 @@
 {
+  "appSettings": {
+    "meatGrams": 85,
+    "miniMeatGrams": 45
+  },
+
+  "extras": {
+    "sauces": [
+      "Ajo habanero",
+      "Chipotle",
+      "Chimichurri (León, Gto.)",
+      "Cheddar",
+      "Mostaza dulce",
+      "Jalapeño rostizado",
+      "Curry cremoso",
+      "Salsa secreta Seven"
+    ],
+    "saucePrice": 5,
+    "ingredientPrice": 7,
+    "dlcCarneMini": 12,
+    "ingredients": [
+      { "id": "extra-tocino", "name": "Tocino extra", "price": 9 },
+      { "id": "extra-pina", "name": "Rebanada de piña", "price": 5 },
+      { "id": "extra-jamon", "name": "Jamón", "price": 7 },
+      { "id": "extra-cebolla", "name": "Cebolla blanca", "price": 3 }
+    ]
+  },
+
   "burgers": [
     {
       "id": "starter",
@@ -148,17 +175,14 @@
 
   "minis": [
     {
-      "id": "starter_m",
+      "id": "starter-mini",
       "name": "Starter Mini",
-      "price": 22,
-      "category": "mini",
       "mini": true,
-      "baseOf": "starter",
+      "price": 22,
       "ingredients": [
         "Pan mini",
         "Carne 45g",
         "Queso amarillo",
-        "Queso blanco",
         "Lechuga",
         "Jitomate",
         "Cebolla",
@@ -166,15 +190,14 @@
         "Catsup",
         "Mostaza"
       ],
-      "suggested": "Mostaza dulce"
+      "suggested": "Mostaza dulce",
+      "highlight": "Base ganadora, margen alto"
     },
     {
-      "id": "koopa_m",
+      "id": "koopa-mini",
       "name": "Koopa Mini",
-      "price": 24,
-      "category": "mini",
       "mini": true,
-      "baseOf": "koopa",
+      "price": 24,
       "ingredients": [
         "Pan mini",
         "Carne 45g",
@@ -188,115 +211,129 @@
         "Catsup",
         "Mostaza"
       ],
-      "suggested": "Chimichurri"
+      "suggested": "Chimichurri",
+      "highlight": "Dulce + crujiente (piña + tocino)"
     },
     {
-      "id": "fatality_m",
+      "id": "fatality-mini",
       "name": "Fatality Mini",
+      "mini": true,
       "price": 23,
-      "category": "mini",
-      "mini": true,
-      "baseOf": "fatality",
       "ingredients": [
         "Pan mini",
         "Carne 45g",
-        "Salsa Cheddar",
-        "Tocino",
-        "Salsa habanero",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla",
-        "Mayonesa",
-        "Catsup",
-        "Mostaza"
-      ],
-      "suggested": "Ajo habanero"
-    },
-    {
-      "id": "mega_m",
-      "name": "Mega Mini",
-      "price": 22,
-      "category": "mini",
-      "mini": true,
-      "baseOf": "mega",
-      "ingredients": [
-        "Pan mini",
-        "Carne 45g",
-        "Salsa Cheddar",
-        "Queso blanco",
-        "Tocino",
-        "Salchicha",
-        "Lechuga",
-        "Jitomate",
-        "Cebolla",
-        "Mayonesa",
-        "Catsup"
-      ],
-      "suggested": "Cheddar"
-    },
-    {
-      "id": "hadouken_m",
-      "name": "Hadouken Mini",
-      "price": 22,
-      "category": "mini",
-      "mini": true,
-      "baseOf": "hadouken",
-      "ingredients": [
-        "Pan mini",
-        "Carne 45g",
-        "Queso blanco",
         "Queso amarillo",
-        "Salchicha",
-        "Aderezo chipotle",
+        "Queso blanco",
+        "Aderezo habanero",
         "Lechuga",
         "Jitomate",
         "Cebolla"
       ],
-      "suggested": "Chipotle"
+      "suggested": "Ajo habanero",
+      "highlight": "Picoso balanceado"
     },
     {
-      "id": "nintendo_m",
-      "name": "Nintendo Mini",
-      "price": 22,
-      "category": "mini",
+      "id": "hadouken-mini",
+      "name": "Hadouken Mini",
       "mini": true,
-      "baseOf": "nintendo",
+      "price": 22,
       "ingredients": [
         "Pan mini",
         "Carne 45g",
+        "Queso amarillo",
         "Queso blanco",
-        "Piña",
-        "Jamón",
+        "Aderezo chipotle",
         "Lechuga",
         "Jitomate",
         "Cebolla",
-        "Mayonesa",
-        "Catsup",
-        "Mostaza"
+        "Salchicha en tiras"
       ],
-      "suggested": "Mostaza dulce"
+      "suggested": "Chipotle",
+      "highlight": "Doble queso + chipotle"
     },
     {
-      "id": "final_m",
+      "id": "finalboss-mini",
       "name": "Final Boss Mini",
-      "price": 26,
-      "category": "mini",
       "mini": true,
-      "baseOf": "finalboss",
+      "price": 26,
       "ingredients": [
         "Pan mini",
         "Carne 45g",
-        "Salsa Cheddar",
-        "Queso blanco",
         "Queso amarillo",
         "Tocino",
-        "Jamón",
-        "Salchicha",
-        "Piña",
-        "Salsa habanero",
-        "Aderezo chipotle"
+        "Salchicha en tiras",
+        "Jitomate",
+        "Cebolla",
+        "Aderezo cheddar"
       ],
-      "suggested": "Salsa secreta Seven"
+      "suggested": "Salsa secreta Seven",
+      "highlight": "La más cargada"
+    },
+    {
+      "id": "nintendo-mini",
+      "name": "Nintendo Nostalgia Mini",
+      "mini": true,
+      "price": 22,
+      "ingredients": [
+        "Pan mini",
+        "Carne 45g",
+        "Queso blanco",
+        "Aderezo de mostaza dulce",
+        "Lechuga",
+        "Jitomate",
+        "Cebolla"
+      ],
+      "suggested": "Mostaza dulce",
+      "highlight": "Suave, retro"
+    },
+    {
+      "id": "jotdog-mini",
+      "name": "Jotdog Slide (Mini)",
+      "mini": true,
+      "price": 19,
+      "ingredients": [
+        "Pan mini",
+        "½ salchicha en tiras",
+        "1 rebanada de jitomate",
+        "Cebolla blanca ligera",
+        "Aderezo cheddar base",
+        "Aderezo a elección (chipotle, ajo habanero, jalapeño rostizado)"
+      ],
+      "suggested": "Cheddar",
+      "highlight": "Ligero y muy rentable"
+    }
+  ],
+
+  "sides": [
+    {
+      "id": "side-papasgajo",
+      "name": "Papas Gajo (150g)",
+      "price": 20,
+      "ingredients": ["Papas gajo fritas"],
+      "highlight": "Sazonadas al momento",
+      "seasonings": [
+        "Chile quebrado",
+        "Ajo mantequilla",
+        "Lemon pepper",
+        "BBQ",
+        "Paprika",
+        "Sal"
+      ]
+    },
+    {
+      "id": "side-papasgajo-cheddar",
+      "name": "Papas Gajo con Cheddar",
+      "price": 27,
+      "ingredients": ["Papas gajo fritas", "Aderezo cheddar"],
+      "highlight": "Con baño cremoso",
+      "seasonings": [
+        "Chile quebrado",
+        "Ajo mantequilla",
+        "Lemon pepper",
+        "BBQ",
+        "Paprika",
+        "Sal"
+      ]
     }
   ],
 
@@ -335,20 +372,6 @@
     }
   ],
 
-  "sides": [
-    {
-      "id": "papasgajo",
-      "name": "Papas Gajo",
-      "type": "side",
-      "price": 27,
-      "grams": 150,
-      "seasoningId": "ajo-gamer",
-      "seasoningGrams": 1.0,
-      "sauce": "Aderezo Cheddar 2oz",
-      "desc": "150 g de papas gajo crujientes con sazón Ajo-Gamer y dip Cheddar 2 oz incluido."
-    }
-  ],
-
   "seasonings": [
     {
       "id": "ajo-gamer",
@@ -372,7 +395,7 @@
       "id": "chimichurri-seco",
       "name": "Chimichurri Seco",
       "usePer100g": 1.5,
-      "notes": "Herbal-ácido, no exceder dosis"
+      "notes": "Herbal-ácido"
     },
     {
       "id": "cheddar-jalapeno",
@@ -390,7 +413,7 @@
       "id": "tricolor-ramon",
       "name": "Tricolor Ramón",
       "usePer100g": 1.5,
-      "notes": "Paprika+ajo+guajillo, edición limitada"
+      "notes": "Paprika+ajo+guajillo"
     }
   ],
 
@@ -399,263 +422,148 @@
       "id": "combo_starter",
       "type": "combo",
       "name": "Combo Starter",
-      "price": 97,
+      "price": 87,
       "items": [
         { "kind": "burger", "id": "starter", "qty": 1 },
-        {
-          "kind": "side",
-          "id": "papasgajo",
-          "qty": 1,
-          "grams": 100,
-          "seasoningId": "ajo-gamer",
-          "seasoningGrams": 0.8
-        }
+        { "kind": "side", "id": "side-papasgajo", "qty": 1 },
+        { "kind": "drink", "id": "drink-cola", "qty": 1 }
       ],
       "includesDrink": true,
       "defaultDrinkId": "drink-cola",
-      "drinkOptions": [
-        "drink-cola",
-        "drink-limon",
-        "drink-canada",
-        "drink-mineral"
-      ],
-      "pairing": "Refresco de cola o Agua mineral",
-      "desc": "Starter + Papas Gajo 100g con Ajo-Gamer. Sabor clásico, dorado y crujiente."
+      "drinkOptions": ["drink-cola", "drink-limon", "drink-canada", "drink-mineral"],
+      "pairing": "Refresco de cola",
+      "desc": "Starter + Papas Gajo 150g + bebida.",
+      "upgrades": [
+        {
+          "id": "upgrade-cheddar-fries",
+          "label": "Upgrade papas con Cheddar",
+          "priceExtra": 7,
+          "fromSideId": "side-papasgajo",
+          "toSideId": "side-papasgajo-cheddar"
+        }
+      ]
     },
     {
       "id": "combo_koopa",
       "type": "combo",
       "name": "Combo Koopa Crunch",
-      "price": 107,
+      "price": 97,
       "items": [
         { "kind": "burger", "id": "koopa", "qty": 1 },
-        {
-          "kind": "side",
-          "id": "papasgajo",
-          "qty": 1,
-          "grams": 150,
-          "seasoningId": "habanero-dulce",
-          "seasoningGrams": 1.0
-        }
+        { "kind": "side", "id": "side-papasgajo", "qty": 1 },
+        { "kind": "drink", "id": "drink-limon", "qty": 1 }
       ],
       "includesDrink": true,
       "defaultDrinkId": "drink-limon",
-      "drinkOptions": [
-        "drink-cola",
-        "drink-limon",
-        "drink-canada",
-        "drink-mineral"
-      ],
+      "drinkOptions": ["drink-cola", "drink-limon", "drink-canada", "drink-mineral"],
       "pairing": "Refresco de limón",
-      "desc": "Koopa + Papas Gajo 150g con Habanero Dulce. Dulce-picante que realza la piña."
+      "desc": "Koopa + Papas Gajo 150g + bebida.",
+      "upgrades": [
+        {
+          "id": "upgrade-cheddar-fries",
+          "label": "Upgrade papas con Cheddar",
+          "priceExtra": 7,
+          "fromSideId": "side-papasgajo",
+          "toSideId": "side-papasgajo-cheddar"
+        }
+      ]
     },
     {
       "id": "combo_fatality",
       "type": "combo",
       "name": "Combo Fatality Flame",
-      "price": 117,
+      "price": 107,
       "items": [
         { "kind": "burger", "id": "fatality", "qty": 1 },
-        {
-          "kind": "side",
-          "id": "papasgajo",
-          "qty": 1,
-          "grams": 150,
-          "seasoningId": "fatality",
-          "seasoningGrams": 1.2
-        },
-        {
-          "kind": "sauce",
-          "name": "Aderezo Chipotle",
-          "qty": 1,
-          "oz": 2,
-          "included": true
-        }
+        { "kind": "side", "id": "side-papasgajo", "qty": 1 },
+        { "kind": "drink", "id": "drink-canada", "qty": 1 }
       ],
       "includesDrink": true,
       "defaultDrinkId": "drink-canada",
-      "drinkOptions": [
-        "drink-cola",
-        "drink-limon",
-        "drink-canada",
-        "drink-mineral"
-      ],
+      "drinkOptions": ["drink-cola", "drink-limon", "drink-canada", "drink-mineral"],
       "pairing": "Canada Dry",
-      "desc": "Fatality + Papas Gajo 150g Explosión Fatality + dip chipotle 2oz."
+      "desc": "Fatality + Papas Gajo 150g + bebida.",
+      "upgrades": [
+        {
+          "id": "upgrade-cheddar-fries",
+          "label": "Upgrade papas con Cheddar",
+          "priceExtra": 7,
+          "fromSideId": "side-papasgajo",
+          "toSideId": "side-papasgajo-cheddar"
+        }
+      ]
     },
     {
       "id": "combo_finalboss",
       "type": "combo",
       "name": "Combo Final Boss",
-      "price": 137,
+      "price": 127,
       "items": [
         { "kind": "burger", "id": "finalboss", "qty": 1 },
-        {
-          "kind": "side",
-          "id": "papasgajo",
-          "qty": 1,
-          "grams": 180,
-          "seasoningId": "chimichurri-seco",
-          "seasoningGrams": 1.5
-        },
-        {
-          "kind": "sauce",
-          "name": "Aderezo Cheddar",
-          "qty": 1,
-          "oz": 2,
-          "included": true
-        }
+        { "kind": "side", "id": "side-papasgajo", "qty": 1 },
+        { "kind": "drink", "id": "drink-cola", "qty": 1 }
       ],
       "includesDrink": true,
       "defaultDrinkId": "drink-cola",
-      "drinkOptions": [
-        "drink-cola",
-        "drink-limon",
-        "drink-canada",
-        "drink-mineral"
-      ],
+      "drinkOptions": ["drink-cola", "drink-limon", "drink-canada", "drink-mineral"],
       "pairing": "Refresco de cola o Agua mineral",
-      "desc": "Final Boss + Papas Gajo 180g con chimichurri seco + dip cheddar 2oz."
+      "desc": "Final Boss + Papas Gajo 150g + bebida.",
+      "upgrades": [
+        {
+          "id": "upgrade-cheddar-fries",
+          "label": "Upgrade papas con Cheddar",
+          "priceExtra": 7,
+          "fromSideId": "side-papasgajo",
+          "toSideId": "side-papasgajo-cheddar"
+        }
+      ]
     },
     {
-      "id": "combo_hadouken",
+      "id": "combo_minis3_classic",
       "type": "combo",
-      "name": "Combo Hadouken",
-      "price": 127,
-      "items": [
-        { "kind": "burger", "id": "hadouken", "qty": 1 },
-        {
-          "kind": "side",
-          "id": "papasgajo",
-          "qty": 1,
-          "grams": 150,
-          "seasoningId": "cheddar-jalapeno",
-          "seasoningGrams": 1.0
-        },
-        {
-          "kind": "sauce",
-          "name": "Mostaza dulce",
-          "qty": 1,
-          "oz": 2,
-          "included": true
-        }
-      ],
-      "includesDrink": true,
-      "defaultDrinkId": "drink-limon",
-      "drinkOptions": [
-        "drink-cola",
-        "drink-limon",
-        "drink-canada",
-        "drink-mineral"
-      ],
-      "pairing": "Refresco de limón o Agua mineral",
-      "desc": "Hadouken + Papas Gajo 150g Cheddar+Jalapeño + dip mostaza dulce 2oz."
+      "name": "Player Pack Classic (3 Minis Iguales)",
+      "price": 65,
+      "items": [],
+      "rules": {
+        "qty": 3,
+        "sameMini": true,
+        "allowedMinis": [
+          "starter-mini",
+          "koopa-mini",
+          "fatality-mini",
+          "hadouken-mini",
+          "nintendo-mini",
+          "jotdog-mini"
+        ],
+        "allowFinalBossMini": false
+      },
+      "includesDrink": false,
+      "desc": "Elige 3 minis iguales (excepto Final Boss Mini) a precio de pack."
     },
     {
-      "id": "combo_ramon",
+      "id": "combo_minis3_mix",
       "type": "combo",
-      "name": "Combo Ramón (Edición)",
-      "price": 147,
-      "items": [
-        {
-          "kind": "burger",
-          "id": "finalboss",
-          "qty": 1,
-          "note": "Sustituir por burger especial Ramón cuando esté activa"
-        },
-        {
-          "kind": "side",
-          "id": "papasgajo",
-          "qty": 1,
-          "grams": 180,
-          "seasoningId": "tricolor-ramon",
-          "seasoningGrams": 1.5
-        },
-        {
-          "kind": "sauce",
-          "name": "Aderezo Habanero",
-          "qty": 1,
-          "oz": 2,
-          "included": true
-        }
-      ],
-      "includesDrink": true,
-      "defaultDrinkId": "drink-canada",
-      "drinkOptions": [
-        "drink-cola",
-        "drink-limon",
-        "drink-canada",
-        "drink-mineral"
-      ],
-      "pairing": "Canada Dry o Agua mineral",
-      "desc": "Tricolor umami: Papas 180g con paprika+ajo+guajillo y dip habanero."
-    },
-    {
-      "id": "combo_minipower",
-      "type": "combo",
-      "name": "Combo Mini Power",
-      "price": 77,
-      "items": [
-        { "kind": "burger", "id": "starter_m", "qty": 1 },
-        {
-          "kind": "side",
-          "id": "papasgajo",
-          "qty": 1,
-          "grams": 100,
-          "seasoningId": "dulce-pixelado",
-          "seasoningGrams": 0.8
-        }
-      ],
-      "includesDrink": true,
-      "defaultDrinkId": "drink-mineral",
-      "drinkOptions": [
-        "drink-cola",
-        "drink-limon",
-        "drink-canada",
-        "drink-mineral"
-      ],
-      "pairing": "Agua mineral o Refresco de limón",
-      "desc": "Mini Starter + Papas Gajo 100g con Dulce Pixelado."
+      "name": "Player Pack Mix (3 Minis Diferentes)",
+      "price": 67,
+      "items": [],
+      "rules": {
+        "qty": 3,
+        "sameMini": false,
+        "distinct": true,
+        "allowedMinis": [
+          "starter-mini",
+          "koopa-mini",
+          "fatality-mini",
+          "hadouken-mini",
+          "nintendo-mini",
+          "jotdog-mini"
+        ],
+        "allowFinalBossMini": false
+      },
+      "includesDrink": false,
+      "desc": "Elige 3 minis diferentes (sin Final Boss Mini). Ideal para compartir."
     }
   ],
-
-  "extras": {
-    "sauces": [
-      "Ajo habanero",
-      "Chipotle",
-      "Chimichurri (León, Gto.)",
-      "Cheddar",
-      "Mostaza dulce",
-      "Jalapeño rostizado",
-      "Curry cremoso",
-      "Salsa secreta Seven"
-    ],
-    "saucePrice": 5,
-    "ingredientPrice": 7,
-    "dlcCarneMini": 12,
-    "ingredients": [
-      {
-        "id": "extra-tocino",
-        "name": "Tocino extra",
-        "price": 9
-      },
-      {
-        "id": "extra-pina",
-        "name": "Rebanada de piña",
-        "price": 5
-      },
-      {
-        "id": "extra-jamon",
-        "name": "Jamón",
-        "price": 7
-      },
-      {
-        "id": "extra-cebolla",
-        "name": "Cebolla blanca",
-        "price": 3
-      }
-    ]
-  },
 
   "happyHour": {
     "enabled": false,
@@ -690,10 +598,5 @@
     }
   },
 
-  "appSettings": {
-    "miniMeatGrams": 45,
-    "meatGrams": 85
-  },
-
-  "_version": "2025-11-06-pairings-solo-catalogo-minis-ok"
+  "_version": "2025-11-06-playerpacks-cheddar-upgrade"
 }
