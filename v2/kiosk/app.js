@@ -1,12 +1,13 @@
-// /kiosk/app.js — V2.3.2 (phone-first + bebidas + papas con sazonador)
-// - Ordenar rápido + personalizar (acordeón con barra de poder)
-// - Nudge de bebida y Combo Drink dinámico (precio 19)
-// - Modal de Papas: elegir sazonador (gratis), se guarda en extras.seasoning
-// - HH/ETA, regalos, lealtad y seguimiento (sin auto-redirect)
-// - Identificación “phone-first”: modal inicial (nombre+tel+tipo), reorden 1-tap
-// - Pestaña Bebidas con add directo
+// /kiosk/app.js — V2.4.0 Seven de Burgers
+// - Compatible con nuevo catálogo (combos, bebidas genéricas, upgrades ignorados sin romper)
+// - Phone-first + identidad cliente
+// - Tabs Minis / Big / Combos / Bebidas
+// - Nudge bebida + Combo Drink dinámico
+// - Modal Papas/Sazonador + personalización sliders
+// - HH/ETA en vivo, regalos, seguimiento
+// - Render seguro (escape HTML), sin eval
 // Requiere en /kiosk/index.html:
-//   <script type="module" src="./app.js?v=20251106c"></script>
+//   <script type="module" src="./app.js?v=20251107"></script>
 
 /* ======================= Rutas base (data/menu.json) ======================= */
 const __parts = location.pathname.split('/').filter(Boolean);
@@ -45,12 +46,11 @@ const state = {
   adminMode: false,
   loyaltyEnabled: true,
   loyaltyAskShown: false,
-  // === Identidad cliente ===
   identified: false,
   identifiedAt: 0,
   lastKnownPhone: '',
   lastKnownName: '',
-  lastOrderPreview: null // {items:[...], total}
+  lastOrderPreview: null
 };
 
 /* ======================= Helpers base ======================= */
@@ -73,7 +73,7 @@ async function fetchCatalogWithFallback(){
     return cat;
   }catch(e){
     console.error('[kiosk] error catálogo', e);
-    const fallback = { burgers:[{id:'starter',name:'Starter Burger',price:47}], minis:[], drinks:[], sides:[] };
+    const fallback = { burgers:[{id:'starter',name:'Starter Burger',price:47}], minis:[], drinks:[], sides:[], combos:[] };
     window.__CATALOG = fallback;
     document.getElementById('__debugMenu')?.remove();
     return fallback;
@@ -104,7 +104,6 @@ function formatIngredientsFor(item, base){
     ? item.ingredients : (base?.ingredients || []);
   return src.map(s => /^Carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s );
 }
-// FIX: versión segura (evita SyntaxError)
 function escapeHtml(s = '') {
   const map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
   return String(s).replace(/[&<>"']/g, ch => map[ch]);
@@ -114,12 +113,10 @@ function escapeHtml(s = '') {
 function isSide(item){
   if (!item) return false;
   if (String(item.category||'').toLowerCase()==='side') return true;
-  // por compatibilidad, checamos id y presencia de seasonings
   return /side-|papas|gajo/i.test(String(item.id||'')) || Array.isArray(item.seasonings);
 }
 function normalizeSeasonings(item){
   const raw = Array.isArray(item?.seasonings) ? item.seasonings : [];
-  // admite: "BBQ", {id:'bbq', name:'BBQ 🔥', kitchen:'BBQ'}
   return raw.map(x=>{
     if (typeof x === 'string') return { id: slug(x), name: x, kitchen: x };
     return {
@@ -132,7 +129,6 @@ function normalizeSeasonings(item){
 function defaultSeasoning(item){
   const list = normalizeSeasonings(item);
   if (!list.length) return null;
-  // si hay "Sal" o similar, úsalo; si no, primero de la lista
   const salt = list.find(x => /sal\b/i.test(x.name) || /sal\b/i.test(x.kitchen));
   return (salt || list[0]).kitchen;
 }
@@ -164,9 +160,10 @@ function powerBarHtml(icon='🍔'){
 }
 
 function buildAccordionForItem(item, base){
-  // Combos
-  if (item?.type === 'combo' && Array.isArray(item.items) && item.items.length){
-    const subs = item.items.map(it=>{
+  // Combos: listar componentes si vienen definidos
+  if (item?.type === 'combo'){
+    const rawItems = Array.isArray(item.items) ? item.items : [];
+    const subs = rawItems.map(it=>{
       const ref = findItemById(it.id);
       const qty = it.qty && it.qty>1 ? ` ×${it.qty}` : '';
       const inc = ref ? formatIngredientsFor(ref, baseOfItem(ref)) : [];
@@ -177,12 +174,12 @@ function buildAccordionForItem(item, base){
       </li>`;
     }).join('');
 
-    const short = item.items.slice(0,3).map(it=>{
+    const short = rawItems.slice(0,3).map(it=>{
       const ref = findItemById(it.id);
       const qty = it.qty && it.qty>1 ? ` ×${it.qty}` : '';
       return `${escapeHtml(ref?.name || it.id)}${qty}`;
     });
-    const extra = Math.max(0, item.items.length - short.length);
+    const extra = Math.max(0, rawItems.length - short.length);
 
     return `
     <details class="ing-acc" data-acc data-id="${escapeHtml(item.id)}">
@@ -194,7 +191,7 @@ function buildAccordionForItem(item, base){
         ${getHighlight(item, base) ? `<div class="muted small" style="margin-top:4px">${escapeHtml(getHighlight(item, base))}</div>`:''}
         ${powerBarHtml('⭐')}
       </summary>
-      <ul class="ing-list" style="margin:8px 0 0 18px">${subs}</ul>
+      ${subs ? `<ul class="ing-list" style="margin:8px 0 0 18px">${subs}</ul>` : ``}
     </details>`;
   }
 
@@ -237,7 +234,7 @@ function bindAccordionBehavior(container){
 }
 
 /* ======================= Bebidas / Combo Drink ======================= */
-const DRINK_PRICE = { solo: 19, combo: 19 };
+const DRINK_PRICE = { solo: 19, combo: 19 }; // mismo precio, etiqueta diferente
 
 function subtotalSinBebidas(cart = state.cart){
   return cart.reduce((a,l)=>{
@@ -257,7 +254,7 @@ function ensureDrinkPrices(cart = state.cart){
     state.drinkComboActive = unlocked;
     if (unlocked) {
       try{ playAchievement(); }catch{}
-      toast('🎉 ¡Combo Drink Seven! Bebidas a precio combo');
+      toast('🎉 Combo Drink Seven activo: bebidas a precio combo');
     } else {
       toast('Combo Drink Seven desactivado — bebidas a $19');
     }
@@ -267,7 +264,7 @@ function ensureDrinkPrices(cart = state.cart){
       l.meta = l.meta || {};
       l.meta.pricingMode = unlocked ? 'combo' : 'solo';
       l.lineTotal = target * (l.qty||1);
-      l.hhDisc = 0; // HH no aplica a bebidas
+      l.hhDisc = 0;
     }
   }
 }
@@ -286,9 +283,12 @@ function addDrinkToCart(drink){
   state.cart.push({
     id: drink.id, type:'drink', name: drink.name, qty:1,
     unitPrice: Number(drink.price||0),
-    baseIngredients:[], salsaDefault:null, salsaCambiada:null,
+    baseIngredients:[],
     extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
-    notes:'', lineTotal: price, hhDisc: 0, meta:{ pricingMode: comboOn ? 'combo' : 'solo' }
+    notes:'',
+    lineTotal: price,
+    hhDisc: 0,
+    meta:{ pricingMode: comboOn ? 'combo' : 'solo' }
   });
   ensureDrinkPrices();
   updateCartBar();
@@ -311,9 +311,12 @@ function hhInfo(){
 function hhDiscountPerUnit(item){
   const { enabled, pct, eligibleOnly } = hhInfo();
   if (!enabled || pct<=0) return 0;
-  const isEligible = eligibleOnly ? (item?.hhEligible !== false) : true;
+  if (!item) return 0;
+  // No HH en combos ni bebidas
+  if (item.type === 'drink' || item.type === 'combo') return 0;
+  const isEligible = eligibleOnly ? (item.hhEligible !== false) : true;
   if (!isEligible) return 0;
-  const unit = Number(item?.price || 0);
+  const unit = Number(item.price || 0);
   return unit * pct;
 }
 
@@ -448,7 +451,9 @@ function renderCards(){
     const baseId = base?.id || it.id;
     const mxOn   = /independencia|méx|mex|patria|viva/i.test(String(state.themeName||''));
     const themedSrc = getThemeIconFor(baseId);
-    const iconSrc = themedSrc || ((mxOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
+    const iconSrc = it.icon
+      || themedSrc
+      || ((mxOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -456,31 +461,31 @@ function renderCards(){
     const isCombo = it.type === 'combo';
     const isDrink = it.type === 'drink' || (state.mode==='drinks');
 
-    const disc = !isDrink && !isCombo ? hhDiscountPerUnit(it) : 0;
-    const eff  = !isDrink && !isCombo ? Math.max(0, Number(it.price || 0) - disc)
-                                      : (it.price ?? DRINK_PRICE.solo);
+    const disc = (!isDrink && !isCombo) ? hhDiscountPerUnit(it) : 0;
+    const eff  = (!isDrink && !isCombo)
+      ? Math.max(0, Number(it.price || 0) - disc)
+      : Number(it.price ?? DRINK_PRICE.solo);
 
     const qSel = qtyInCart(it.id);
     const selectedBadge = qSel > 0 ? `<span class="tag" data-sel>×${qSel} en pedido</span>` : '';
 
-    const priceHtml = (!isDrink && disc > 0)
+    const priceHtml = (!isDrink && !isCombo && disc > 0)
       ? `<div class="price"><s style="opacity:.7">${money(it.price)}</s> <span class="tag">${money(eff)}</span> ${selectedBadge}</div>`
-      : `<div class="price">${money(eff)} ${selectedBadge}</div>`;
+      : `<div class="price">${money(isCombo ? it.price : eff)} ${selectedBadge}</div>`;
 
     const actionsHtml = isDrink
       ? `<button class="btn small" data-a="drinkAdd">Agregar</button>`
       : `${isCombo ? '' : `<button class="btn ghost small" data-a="custom">Personalizar</button>`}
          <button class="btn small" data-a="${isCombo?'order':'quick'}">${isCombo ? 'Ordenar combo' : 'Ordenar rápido'}</button>`;
 
-    const mediaImg = (isDrink && it.icon)
-      ? `<img src="${it.icon}" alt="${escapeHtml(it.name)}" class="icon-img" loading="lazy"/>`
-      : (iconSrc ? `<img src="${iconSrc}" alt="${escapeHtml(it.name)}" class="icon-img" loading="lazy"/>`
-                 : `<div class="icon" aria-hidden="true"></div>`);
+    const mediaImg = iconSrc
+      ? `<img src="${iconSrc}" alt="${escapeHtml(it.name)}" class="icon-img" loading="lazy"/>`
+      : `<div class="icon" aria-hidden="true"></div>`;
 
     card.innerHTML = `
       <h3>${escapeHtml(it.name)}</h3>
       <div class="media">${mediaImg}</div>
-      ${isDrink ? '' : buildAccordionForItem(it, base)}
+      ${buildAccordionForItem(it, base)}
       <div class="row">
         ${priceHtml}
         <div class="row" style="gap:8px">${actionsHtml}</div>
@@ -538,7 +543,6 @@ async function addQuickItem(item, base){
   const d = hhDiscountPerUnit(item);
   const unit = Math.max(0, Number(item.price||0) - d);
 
-  // seasoning por defecto si es side
   let seasoning = null;
   if (isSide(item)) seasoning = defaultSeasoning(item);
 
@@ -567,8 +571,8 @@ function smartDrinkNudge(){
   box.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:1000;background:#0f182a;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px;display:flex;gap:8px;align-items:center';
   box.innerHTML = `
     <span class="muted small" style="white-space:nowrap">¿Bebida?</span>
-    <button class="btn tiny" data-k="7up">7up $${priceTxt}</button>
-    <button class="btn tiny" data-k="pepsi">Pepsi $${priceTxt}</button>
+    <button class="btn tiny" data-k="7up">Limonada $${priceTxt}</button>
+    <button class="btn tiny" data-k="pepsi">Cola $${priceTxt}</button>
     <button class="btn ghost tiny" data-k="x">No</button>`;
   document.body.appendChild(box);
   box.onclick = (e)=>{
@@ -587,23 +591,67 @@ async function addComboToCart(combo){
   const okId = await ensureCustomerIdentified(state.orderMeta?.type||'pickup');
   if (!okId) return;
   try{
-    (combo.items||[]).filter(i=>i.kind==='burger').forEach(i=>{
-      const it = findItemById(i.id);
-      if(!it) return;
-      const base = baseOfItem(it);
-      const d = hhDiscountPerUnit(it);
-      const unit = Math.max(0, Number(it.price||0) - d);
-      state.cart.push({
-        id: it.id, name: it.name, mini: !!it.mini, qty: i.qty||1,
-        unitPrice: Number(it.price||0),
-        baseIngredients: formatIngredientsFor(it, base),
-        ingredients:     formatIngredientsFor(it, base),
-        extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null },
-        notes: '',
-        lineTotal: unit*(i.qty||1),
-        hhDisc: d*(i.qty||1)
+    const items = [];
+
+    // Combos con items explícitos
+    if (Array.isArray(combo.items) && combo.items.length){
+      for (const ci of combo.items){
+        const ref = findItemById(ci.id);
+        items.push({
+          kind: ci.kind || (ref?.mini ? 'mini' : (isSide(ref)?'side':'burger')),
+          id: ci.id,
+          qty: ci.qty || 1,
+          name: ref?.name || ci.id,
+          grams: ci.grams || null,
+          seasoning: ci.seasoningId || null,
+          sauce: ci.sauce || null
+        });
+      }
+    }
+    // Combos de 3 minis con rules (compatibilidad básica)
+    else if (combo.rules && combo.rules.qty){
+      const rules = combo.rules;
+      const poolAll = (state.menu?.minis || []).map(m=>m.id);
+      const allowedPool = (rules.allowedMinis && rules.allowedMinis.length)
+        ? rules.allowedMinis.filter(id=>poolAll.includes(id))
+        : poolAll;
+      const allowFinal = rules.allowFinalBossMini !== false;
+      const filtered = allowedPool.filter(id=>{
+        if (allowFinal) return true;
+        return !/finalboss-mini/i.test(String(id));
       });
-    });
+      const max = rules.qty;
+      if (filtered.length){
+        if (rules.distinct){
+          for (let i=0; i<max; i++){
+            const id = filtered[i % filtered.length];
+            const ref = findItemById(id);
+            items.push({ kind:'mini', id, qty:1, name: ref?.name || id });
+          }
+        } else {
+          const id = filtered[0];
+          const ref = findItemById(id);
+          items.push({ kind:'mini', id, qty:max, name: ref?.name || id });
+        }
+      }
+    }
+
+    const qty = 1;
+    const unitPrice = Number(combo.price || 0);
+    const line = {
+      id: combo.id,
+      name: combo.name,
+      type: 'combo',
+      qty,
+      unitPrice,
+      lineTotal: unitPrice * qty,
+      hhDisc: 0,
+      items,
+      extras: { cheddarUpgrade: false },
+      notes: ''
+    };
+
+    state.cart.push(line);
     ensureDrinkPrices();
     updateCartBar();
     beep(); toast(`${combo.name} agregado`);
@@ -626,12 +674,10 @@ function normalizeExtraIngredients(){
     .filter(obj => !isCarneGrande(obj?.name));
 }
 
-// Power bar en modal (header sticky + mini en footer)
 function ensureModalPowerBar(){
   const modal = document.getElementById('modal');
   if (!modal) return ()=>{};
 
-  // HEADER (sticky)
   let header = document.getElementById('mPower');
   if (!header){
     header = document.createElement('div');
@@ -649,7 +695,6 @@ function ensureModalPowerBar(){
     document.getElementById('mBody')?.prepend(header);
   }
 
-  // FOOTER (mini)
   const mAdd   = document.getElementById('mAdd');
   const mTotal = document.getElementById('mTotal');
   const foot   = mAdd ? mAdd.parentElement : null;
@@ -698,7 +743,6 @@ async function openItemModal(item, base, existingIndex=null){
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
 
-  // sazonadores (solo sides)
   const isSideItem = isSide(item);
   const sazList = isSideItem ? normalizeSeasonings(item) : [];
   const line    = (existingIndex !== null) ? state.cart[existingIndex] : null;
@@ -737,7 +781,7 @@ async function openItemModal(item, base, existingIndex=null){
 
     ${ item.mini && (DLC > 0) ? `
       <div class="field">
-        <label>DLC de Carne grande</label>
+        <label>DLC de carne grande</label>
         <label class="ul-clean" style="display:flex;gap:8px;align-items:center">
           <input type="checkbox" id="dlcCarne" ${dlcOn?'checked':''}/>
           <span>Cambia a carne 85g</span>
@@ -890,7 +934,9 @@ async function openItemModal(item, base, existingIndex=null){
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
-function recomputeAllLines() { state.cart.forEach(l => { if (l?.type !== 'drink') recomputeLine(l); }); }
+function recomputeAllLines() {
+  state.cart.forEach(l => { recomputeLine(l); });
+}
 function computeBreakdown() {
   let total = 0; let hh = 0;
   for (const l of state.cart) { total += Number(l.lineTotal || 0); hh += Number(l.hhDisc || 0); }
@@ -969,7 +1015,8 @@ function ensureGiftModal(){
       id: state.gift.productId, name:'PowerDog Mini (Regalo)', mini:true, isGift:true, qty:1,
       unitPrice:0, baseIngredients:[],
       extras:{sauces:[],ingredients:[],dlcCarne:false,surpriseSauce:null},
-      notes:'', lineTotal:0, hhDisc:0
+      notes:'', lineTotal:0, hhDisc:0,
+      type:'gift'
     });
     close();
     toast('🎁 Regalo agregado');
@@ -979,7 +1026,18 @@ function ensureGiftModal(){
 function openGiftModal(){ ensureGiftModal(); const m=document.getElementById('giftModal'); if(m) m.style.display='grid'; }
 
 function recomputeLine(line){
-  if (line?.type === 'drink') return;
+  if (!line) return;
+  if (line.type === 'drink'){
+    // precio ajustado globalmente por ensureDrinkPrices
+    return;
+  }
+  if (line.type === 'combo'){
+    const qty = line.qty || 1;
+    const unit = Number(line.unitPrice || 0);
+    line.lineTotal = unit * qty;
+    line.hhDisc = 0;
+    return;
+  }
   const DLC = Number(state.menu?.extras?.dlcCarneMini ?? 12);
   const SP  = Number(state.menu?.extras?.saucePrice ?? 0);
   const extrasIngr = normalizeExtraIngredients();
@@ -990,13 +1048,13 @@ function recomputeLine(line){
   const extraDlc = dlcOn ? DLC : 0;
   const item = findItemById(line.id);
   const hhDiscPerUnit = hhDiscountPerUnit(item);
-  const unitBaseAfterHH = Math.max(0, Number(line.unitPrice||0) - hhDiscPerUnit);
+  const unitBaseAfterHH = Math.max(0, Number(line.unitPrice||item?.price||0) - hhDiscPerUnit);
   const unitTotal = (unitBaseAfterHH + extraDlc) + costS + costI;
   line.lineTotal = unitTotal * (line.qty||1);
   line.hhDisc = hhDiscPerUnit * (line.qty||1);
 }
 
-/* ======================= Modal SEGUIMIENTO (nuevo) ======================= */
+/* ======================= Modal SEGUIMIENTO ======================= */
 function buildTrackUrl({ orderId, phone }) {
   const u = new URL('./track.html', location.href);
   if (orderId) u.searchParams.set('oid', orderId);
@@ -1124,16 +1182,26 @@ async function openCartModal(){
           ...(l.extras?.sauces||[]).map(s=>'Aderezo: '+escapeHtml(s)),
           ...(l.extras?.ingredients||[]).map(s=>'Extra: '+escapeHtml(s))
         ].filter(Boolean).join(', ');
+
+        const comboItemsTxt = (l.type === 'combo' && Array.isArray(l.items) && l.items.length)
+          ? `<div class="muted small">Incluye: ${
+              l.items.map(ci=>`${ci.qty||1}× ${escapeHtml(ci.name || ci.id)}`).join(', ')
+            }</div>`
+          : '';
+
+        const canEdit = l.type !== 'combo';
+
         return `
           <div class="k-card" style="margin:8px 0" data-i="${idx}">
             <h4>${escapeHtml(l.name)} · x${l.qty}</h4>
+            ${comboItemsTxt}
             ${l.salsaCambiada ? `<div class="muted small">Cambio de salsa: ${escapeHtml(l.salsaCambiada)}</div>`:''}
             ${extrasTxt? `<div class="muted small">${extrasTxt}</div>`:''}
             ${l.notes ? `<div class="muted small">Notas: ${escapeHtml(l.notes)}</div>`:''}
             <div class="k-actions" style="gap:6px">
               <button class="btn small ghost" data-a="less">-</button>
               <button class="btn small ghost" data-a="more">+</button>
-              <button class="btn small" data-a="edit">Editar</button>
+              ${canEdit ? `<button class="btn small" data-a="edit">Editar</button>` : ''}
               <button class="btn small danger" data-a="remove">Eliminar</button>
               <div style="margin-left:auto" class="price">${money(l.lineTotal)}</div>
             </div>
@@ -1184,15 +1252,14 @@ async function openCartModal(){
     }
     if (act === 'more') {
       line.qty = Math.min(99, (line.qty || 1) + 1);
-      if (line?.type !== 'drink') recomputeLine(line);
-      recomputeAllLines(); ensureDrinkPrices(); updateCartBar(); openCartModal(); return;
+      recomputeLine(line); ensureDrinkPrices(); updateCartBar(); openCartModal(); return;
     }
     if (act === 'less') {
       line.qty = Math.max(1, (line.qty || 1) - 1);
-      if (line?.type !== 'drink') recomputeLine(line);
-      recomputeAllLines(); ensureDrinkPrices(); updateCartBar(); openCartModal(); return;
+      recomputeLine(line); ensureDrinkPrices(); updateCartBar(); openCartModal(); return;
     }
     if (act === 'edit') {
+      if (line.type === 'combo') return;
       const item = findItemById(line.id);
       const base = baseOfItem(item);
       const m2 = document.getElementById('cartModal'); if(m2) m2.style.display='none';
@@ -1239,12 +1306,18 @@ async function openCartModal(){
         const itemsForDB = state.cart
           .map(l => ({
             id: l.id, name: l.name, mini: l.mini, qty: l.qty, unitPrice: l.unitPrice,
-            baseIngredients: l.baseIngredients, ingredients: l.ingredients || l.baseIngredients || [],
-            salsaDefault: l.salsaDefault, salsaCambiada: l.salsaCambiada,
-            extras: l.extras, notes: l.notes || null, lineTotal: l.lineTotal, hhDisc: Number(l.hhDisc || 0),
-            isGift: !!l.isGift, type: l.type || (state.menu?.drinks?.some(d=>d.id===l.id)?'drink':undefined)
-          }))
-          .filter(l => !l.isGift);
+            baseIngredients: l.baseIngredients || [],
+            ingredients: l.ingredients || l.baseIngredients || [],
+            salsaDefault: l.salsaDefault || null,
+            salsaCambiada: l.salsaCambiada || null,
+            extras: l.extras,
+            notes: l.notes || null,
+            lineTotal: l.lineTotal,
+            hhDisc: Number(l.hhDisc || 0),
+            isGift: !!l.isGift,
+            type: l.type,
+            comboItems: (l.type === 'combo' && Array.isArray(l.items)) ? l.items : undefined
+          }));
 
         const subtotalBase = itemsForDB.reduce((a, l) => a + (l.lineTotal || 0), 0);
         const hhTotalDiscount = itemsForDB.reduce((a, l) => a + Number(l.hhDisc || 0), 0);
@@ -1261,7 +1334,12 @@ async function openCartModal(){
           items: itemsForDB,
           subtotal,
           notes: null,
-          hh: { enabled: !!hh.enabled, discountPercent: Number(hh.discountPercent || 0), applyEligibleOnly: hh.applyEligibleOnly !== false, totalDiscount: Number(hhTotalDiscount || 0) },
+          hh: {
+            enabled: !!hh.enabled,
+            discountPercent: Number(hh.discountPercent || 0),
+            applyEligibleOnly: hh.applyEligibleOnly !== false,
+            totalDiscount: Number(hhTotalDiscount || 0)
+          },
           rewards: { type:null, discount:0, discountCents:0, miniDog:false, decided:false },
           createdAt: Date.now()
         };
