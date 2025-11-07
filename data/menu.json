@@ -151,6 +151,7 @@
       "id": "starter-mini",
       "name": "Starter Mini",
       "mini": true,
+      "baseOf": "starter",
       "price": 22,
       "ingredients": [
         "Pan mini",
@@ -171,6 +172,7 @@
       "id": "koopa-mini",
       "name": "Koopa Mini",
       "mini": true,
+      "baseOf": "koopa",
       "price": 24,
       "ingredients": [
         "Pan mini",
@@ -192,6 +194,7 @@
       "id": "fatality-mini",
       "name": "Fatality Mini",
       "mini": true,
+      "baseOf": "fatality",
       "price": 23,
       "ingredients": [
         "Pan mini",
@@ -211,6 +214,7 @@
       "id": "hadouken-mini",
       "name": "Hadouken Mini",
       "mini": true,
+      "baseOf": "hadouken",
       "price": 22,
       "ingredients": [
         "Pan mini",
@@ -231,6 +235,7 @@
       "id": "finalboss-mini",
       "name": "Final Boss Mini",
       "mini": true,
+      "baseOf": "finalboss",
       "price": 26,
       "ingredients": [
         "Pan mini",
@@ -250,6 +255,7 @@
       "id": "nintendo-mini",
       "name": "Nintendo Nostalgia Mini",
       "mini": true,
+      "baseOf": "nintendo",
       "price": 22,
       "ingredients": [
         "Pan mini",
@@ -289,7 +295,9 @@
       "type": "side",
       "price": 20,
       "grams": 150,
-      "ingredients": ["Papas gajo fritas"],
+      "ingredients": [
+        "Papas gajo fritas"
+      ],
       "seasonings": [
         "Chile quebrado",
         "Ajo mantequilla",
@@ -303,11 +311,14 @@
     },
     {
       "id": "papasgajo-cheddar",
-      "name": "Papas Gajo con Cheddar",
+      "name": "Papas Gajo con Cheddar (150g)",
       "type": "side",
       "price": 27,
       "grams": 150,
-      "ingredients": ["Papas gajo fritas", "Aderezo cheddar"],
+      "ingredients": [
+        "Papas gajo fritas",
+        "Aderezo cheddar"
+      ],
       "seasonings": [
         "Chile quebrado",
         "Ajo mantequilla",
@@ -370,7 +381,7 @@
       "defaultDrinkId": "drink-cola",
       "drinkOptions": ["drink-cola", "drink-limon", "drink-canada", "drink-mineral"],
       "pairing": "Refresco de cola o Agua mineral",
-      "desc": "Starter + Papas Gajo 150g + bebida. Combo de entrada con ahorro."
+      "desc": "Starter + Papas Gajo 150g + bebida."
     },
     {
       "id": "combo_koopa",
@@ -451,13 +462,21 @@
       "name": "Combo Player Pack Minis (3 distintos)",
       "price": 69,
       "rules": {
-        "minis": ["starter-mini","koopa-mini","fatality-mini","hadouken-mini","nintendo-mini","jotdog-mini","finalboss-mini"],
+        "minis": [
+          "starter-mini",
+          "koopa-mini",
+          "fatality-mini",
+          "hadouken-mini",
+          "nintendo-mini",
+          "jotdog-mini",
+          "finalboss-mini"
+        ],
         "maxFinalBoss": 1
       },
       "includesDrink": false,
       "drinkOptions": [],
       "pairing": "Combina 3 minis, máximo 1 Final Boss Mini.",
-      "desc": "Elige 3 minis diferentes. Límite 1 Final Boss Mini para cuidar costos."
+      "desc": "Elige 3 minis diferentes. (La lógica de elección se maneja en UI, este bloque documenta la regla)."
     }
   ],
 
