@@ -4,406 +4,415 @@
   <meta charset="utf-8"/>
   <meta name="viewport"
         content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <title>Cocina — Seven (Legacy iPad)</title>
+  <title>Cocina — Seven (Monitor XL)</title>
 
-  <!-- Fondo/colores base -->
   <style>
-    html,body{margin:0;padding:0;height:100%;overflow:hidden;}
-    body{
-      background:#050814;
-      color:#eef4ff;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    html, body{
+      margin:0;
+      padding:0;
+      height:100%;
+      background:#020714;
+      color:#f7f8ff;
+      font-family:-apple-system,BlinkMacSystemFont,system-ui,
+                  "Segoe UI",Roboto,Arial,sans-serif;
+      font-size:18px;
       -webkit-text-size-adjust:100%;
-      text-size-adjust:100%;
-      font-size:20px;               /* tamaño base grande */
-      line-height:1.5;
+    }
+    body{
+      overflow-y:scroll;
+      -webkit-overflow-scrolling:touch;
     }
     .wrap{
-      max-width:1400px;
-      margin:8px auto 12px;
-      padding:0 10px 8px;
-      height:100%;
-      box-sizing:border-box;
+      max-width:960px;
+      margin:8px auto 16px;
+      padding:0 10px 16px;
     }
     h1{
-      margin:0 0 6px;
-      font-size:30px;
-      letter-spacing:1px;
-      text-align:left;
-      color:#ffcc4a;
-      text-shadow:0 0 8px rgba(255,204,74,.45);
+      margin:4px 0 10px;
+      font-size:32px;
+      font-weight:900;
+      color:#ffc242;
+      text-shadow:0 2px 4px rgba(0,0,0,.6);
     }
-    .cols{
-      display:grid;
-      grid-template-columns:repeat(2,1fr);
-      gap:10px;
-      height:calc(100% - 42px);
-    }
-    @media (max-width:900px){
-      .cols{
-        grid-template-columns:1fr;
-        height:auto;
-        max-height:none;
-        overflow-y:auto;
-      }
-    }
-    .col{
-      background:#07101f;
-      border-radius:14px;
-      border:2px solid rgba(255,255,255,.14);
-      padding:8px;
-      box-sizing:border-box;
-      display:flex;
-      flex-direction:column;
-      overflow:hidden;
-    }
-    .col-title{
+    h2{
+      margin:10px 0 4px;
       font-size:22px;
-      margin:0 0 4px;
-      color:#9fbcff;
-      text-shadow:0 0 4px rgba(64,128,255,.35);
+      font-weight:800;
+      color:#cfd8ff;
     }
-    .col-body{
-      flex:1 1 auto;
-      overflow-y:auto;
-      padding-right:4px;
-    }
-
-    .ord{
-      background:#0e1a30;
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,.16);
-      padding:8px 9px 6px;
-      margin-bottom:8px;
-      box-shadow:0 3px 10px rgba(0,0,0,.45);
-      font-size:19px;
-    }
-
-    .head-line{
-      display:flex;
-      flex-wrap:wrap;
-      align-items:baseline;
-      gap:6px;
+    .section-label{
+      font-size:16px;
+      color:#8fa0c8;
       margin-bottom:4px;
     }
-    .code{
-      padding:2px 6px;
-      border-radius:6px;
-      background:#12233e;
+    .col{
+      margin-bottom:14px;
+      padding:8px;
+      border-radius:14px;
+      background:#060b18;
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:0 8px 18px rgba(0,0,0,.45) inset;
+    }
+    .ord{
+      margin-bottom:10px;
+      padding:10px 10px 8px;
+      border-radius:12px;
+      background:#0b1424;
+      border:1px solid rgba(255,255,255,.15);
+      box-shadow:0 6px 10px rgba(0,0,0,.45);
+    }
+    .ord:last-child{ margin-bottom:0; }
+
+    .ord-header{
+      font-size:18px;
+      font-weight:700;
+      color:#ffffff;
+      margin-bottom:4px;
+    }
+    .ord-meta{
       font-size:16px;
-      font-weight:700;
-      color:#7cf2ff;
-      font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color:#9fb0d8;
+      margin-bottom:4px;
     }
-    .name{
-      font-weight:700;
-      font-size:20px;
-    }
-    .meta{
-      font-size:17px;
-      color:#9fb0cc;
+    .ord-total{
+      font-size:18px;
+      font-weight:800;
+      color:#ffc242;
+      margin-bottom:6px;
     }
     .muted{
-      color:#9fb0cc;
-      font-size:17px;
-    }
-    .total{
-      font-weight:800;
-      color:#ffcc4a;
-      font-size:19px;
-      margin-top:4px;
-    }
-    .chips{
-      display:flex;
-      flex-wrap:wrap;
-      gap:4px;
-      margin:2px 0 4px;
-    }
-    .chip{
-      padding:3px 8px;
-      border-radius:999px;
-      background:#1c2f4b;
-      border:1px solid rgba(255,255,255,.18);
+      color:#9fb0d8;
       font-size:16px;
-      white-space:nowrap;
     }
-    ul.ing{
-      margin:2px 0 4px 20px;
-      padding:0;
+    .small{ font-size:15px; }
+
+    .items{
+      margin:4px 0 2px;
+      padding-left:14px;
+    }
+    .item-name{
+      font-weight:700;
+      font-size:17px;
+      color:#ffffff;
+    }
+    .item-notes{
+      font-size:15px;
+      color:#ffdd88;
+    }
+    .ingredients{
+      margin:2px 0 4px 0;
+      padding-left:16px;
       list-style:disc;
-      font-size:18px;
-    }
-    .empty{
-      color:#5f6c88;
-      font-size:18px;
-      padding:6px;
-      text-align:center;
+      color:#dfe7ff;
+      font-size:16px;
     }
 
-    /* scrollbars más visibles */
-    ::-webkit-scrollbar{width:10px;height:10px;}
-    ::-webkit-scrollbar-thumb{
-      background:rgba(255,255,255,.16);
-      border-radius:8px;
+    .pill{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.20);
+      font-size:14px;
+      color:#ffec9c;
+      margin-left:4px;
+    }
+
+    .empty{
+      padding:6px 0 2px;
+      font-size:16px;
+      color:#55648a;
+    }
+
+    @media (max-width:768px){
+      body{ font-size:19px; }
+      h1{ font-size:30px; }
+      h2{ font-size:21px; }
+      .ord-header{ font-size:18px; }
+      .ord-total{ font-size:19px; }
     }
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Cocina — Seven (Legacy)</h1>
-  <div class="cols">
-    <div class="col">
-      <div class="col-title">Pendientes</div>
-      <div class="col-body" id="col-pending"></div>
-    </div>
-    <div class="col">
-      <div class="col-title">En progreso</div>
-      <div class="col-body" id="col-progress"></div>
-    </div>
-    <div class="col">
-      <div class="col-title">Listos</div>
-      <div class="col-body" id="col-ready"></div>
-    </div>
-    <div class="col">
-      <div class="col-title">Por cobrar</div>
-      <div class="col-body" id="col-bill"></div>
-    </div>
+  <h1>Cocina — Seven (Monitor XL)</h1>
+
+  <div class="col">
+    <h2>Pendientes</h2>
+    <div class="section-label">Pedidos nuevos por preparar</div>
+    <div id="col-pending"></div>
+  </div>
+
+  <div class="col">
+    <h2>En progreso</h2>
+    <div class="section-label">Tomados por cocina</div>
+    <div id="col-progress"></div>
+  </div>
+
+  <div class="col">
+    <h2>Listos</h2>
+    <div class="section-label">Para entregar al cliente</div>
+    <div id="col-ready"></div>
+  </div>
+
+  <div class="col">
+    <h2>Por cobrar</h2>
+    <div class="section-label">Entregados sin marcar pagado</div>
+    <div id="col-bill"></div>
   </div>
 </div>
 
-<!-- Firebase 8 (máxima compatibilidad) -->
+<!-- Firebase v8: compat Safari/iPad vieja -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 <script>
 (function(){
-  // ===== Config Firebase (mismo proyecto del kiosko) =====
+  // ====== Init Firebase ======
   var firebaseConfig = {
     apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
     authDomain: "seven-de-burgers.firebaseapp.com",
+    databaseURL: "https://seven-de-burgers-default-rtdb.firebaseio.com",
     projectId: "seven-de-burgers",
     storageBucket: "seven-de-burgers.appspot.com",
     messagingSenderId: "34089845279",
     appId: "1:34089845279:web:d13440c34e6bb7fa910b2a"
   };
-  if (!firebase.apps.length){ firebase.initializeApp(firebaseConfig); }
-  var db = firebase.firestore();
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
 
-  // ===== Resolver colección igual que shared/db.js =====
+  var fs = null, rtdb = null;
+  try{ fs = firebase.firestore(); }catch(e){}
+  try{ rtdb = firebase.database(); }catch(e){}
+
+  // ====== Detectar colección como en db.js ======
   function getOrdersCollection(){
-    var path = (location.pathname || "/");
-    var parts = path.split("/");
+    var path = location.pathname.split('/');
     var clean = [];
-    for (var i=0;i<parts.length;i++){
-      if (parts[i]) clean.push(parts[i]);
+    for (var i=0;i<path.length;i++){ if (path[i]) clean.push(path[i]); }
+    var idx = -1;
+    for (var j=0;j<clean.length;j++){ if (clean[j] === 'v2'){ idx = j; break; } }
+
+    var basePrefix;
+    if (idx >= 0){
+      // ej: /prueba/v2/ => "prueba/v2/orders"
+      var slice = [];
+      for (var k=0;k<=idx;k++){ slice.push(clean[k]); }
+      basePrefix = slice.join('/'); // sin slashes
+      return basePrefix + '/orders';
     }
-    var idxV2 = -1;
-    for (var j=0;j<clean.length;j++){
-      if (clean[j] === "v2"){ idxV2 = j; break; }
-    }
-    var baseSeg = [];
-    if (idxV2 >= 0){
-      for (var k=0;k<=idxV2;k++){ baseSeg.push(clean[k]); }
-    }
-    var col = (baseSeg.length ? baseSeg.join("/") + "/" : "") + "orders";
-    return col;
+    // producción sin /prueba/v2/
+    return 'orders';
   }
   var ORDERS_COLLECTION = getOrdersCollection();
-  console.log("[legacy] usando colección:", ORDERS_COLLECTION);
 
-  // ===== Helpers =====
-  function money(n){ return "$" + Number(n || 0).toFixed(0); }
+  // ====== Helpers ======
   function esc(s){
-    return String(s || "").replace(/[&<>"']/g, function(m){
-      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m];
+    return String(s || '').replace(/[&<>"']/g, function(m){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
     });
   }
-  function normStatus(s){
-    return String(s || "").trim().toUpperCase() || "PENDING";
-  }
+  function money(n){ return '$' + Number(n || 0).toFixed(0); }
+
   function isPaid(o){
     if (!o) return false;
     var raw = (o.paid != null ? o.paid : null);
     if (raw == null && o.payment && o.payment.paid != null) raw = o.payment.paid;
     if (raw == null && o.meta && o.meta.paid != null)       raw = o.meta.paid;
     if (raw == null && o.payStatus != null)                 raw = o.payStatus;
+
     if (raw === true || raw === 1) return true;
     if (typeof raw === "string"){
-      var s = raw.trim().toLowerCase();
+      var s = raw.toLowerCase().trim();
       if (s === "true" || s === "1" || s === "paid" || s === "pagado") return true;
     }
-    var st = normStatus(o.status);
+
+    var st = String(o.status || "").toUpperCase();
     if (st === "PAID") return true;
     if (o.paidAt || (o.payment && (o.payment.paidAt || o.payment.tx || o.payment.reference))) return true;
     return false;
   }
+
   function calcTotal(o){
-    var sub = 0;
-    var items = (o && o.items && o.items.length) ? o.items : [];
+    if (!o) return 0;
+    if (typeof o.subtotal === "number"){
+      return Number(o.subtotal || 0) + Number(o.tip || 0);
+    }
+    var s = 0;
+    var items = Object.prototype.toString.call(o.items)==='[object Array]' ? o.items : [];
     for (var i=0;i<items.length;i++){
       var it = items[i] || {};
-      if (typeof it.lineTotal === "number"){
-        sub += Number(it.lineTotal || 0);
-      } else {
-        sub += Number(it.unitPrice || 0) * Number(it.qty || 1);
-      }
+      var line = (typeof it.lineTotal === "number")
+        ? Number(it.lineTotal || 0)
+        : (Number(it.unitPrice || 0) * Number(it.qty || 1));
+      s += line;
     }
-    if (typeof o.subtotal === "number") sub = Number(o.subtotal || 0);
-    return sub + Number(o.tip || 0);
+    return s + Number(o.tip || 0);
   }
 
-  // ===== Render =====
-  function setCol(id, arr){
-    var el = document.getElementById(id);
+  function put(elId, list){
+    var el = document.getElementById(elId);
     if (!el) return;
-    if (!arr || !arr.length){
+    if (!list || !list.length){
       el.innerHTML = '<div class="empty">Sin pedidos</div>';
       return;
     }
-    var html = "";
-    for (var i=0;i<arr.length;i++){
-      html += buildOrderCard(arr[i]);
+    var out = "";
+    for (var i=0;i<list.length;i++){
+      out += buildCard(list[i]);
     }
-    el.innerHTML = html;
+    el.innerHTML = out;
   }
 
-  function buildOrderCard(o){
-    o = o || {};
-    var items = (o.items && o.items.length) ? o.items : [];
+  // ====== Render ======
+  function buildCard(o){
+    var items = Object.prototype.toString.call(o.items)==='[object Array]' ? o.items : [];
     var total = calcTotal(o);
 
-    var code = o.shortId || ("#" + String(o.id || "").substr(0,4));
-    var name = o.customerName || o.customer || "";
-    var meta = (o.mode === "pickup" || o.orderType === "pickup")
-      ? "Para recoger"
-      : (o.table ? ("Mesa " + o.table) : (o.mode || o.orderType || ""));
-
-    var head =
-      '<div class="head-line">' +
-        '<span class="code">'+esc(code)+'</span>' +
-        '<span class="name">'+esc(name || "Cliente")+'</span>' +
-      '</div>' +
-      '<div class="meta">'+esc(meta || "")+'</div>';
-
-    var lines = "";
-    for (var i=0;i<items.length;i++){
-      var it = items[i] || {};
-      var qty = Number(it.qty || 1);
-      var title = esc(qty + "× " + (it.name || "Producto"));
-      var base = (Array.isArray(it.baseIngredients) && it.baseIngredients.length)
-        ? it.baseIngredients
-        : (Array.isArray(it.ingredients) ? it.ingredients : []);
-      var extras = (it.extras || {});
-      var exSauces = Array.isArray(extras.sauces) ? extras.sauces : [];
-      var exIngr   = Array.isArray(extras.ingredients) ? extras.ingredients : [];
-      var chips = [];
-
-      // chips: tipo
-      var t = (it.type || "").toLowerCase();
-      if (t === "drink") chips.push("🥤 Bebida");
-      else if (t === "side") chips.push("🍟 Papas / side");
-      else if (it.mini) chips.push("Mini");
-
-      // extras
-      for (var s=0;s<exSauces.length;s++){
-        chips.push("Aderezo: " + exSauces[s]);
-      }
-      for (var g=0;g<exIngr.length;g++){
-        chips.push("Extra: " + exIngr[g]);
-      }
-      if (extras.dlcCarne) chips.push("DLC carne 85g");
-      if (extras.seasoning) chips.push("Sazonador: " + extras.seasoning);
-
-      var ingHtml = "";
-      if (base && base.length){
-        ingHtml = '<ul class="ing">';
-        for (var b=0;b<base.length;b++){
-          ingHtml += '<li>' + esc(base[b]) + '</li>';
-        }
-        ingHtml += '</ul>';
-      }
-
-      var chipsHtml = chips.length
-        ? '<div class="chips">' +
-            chips.map(function(c){ return '<span class="chip">'+esc(c)+'</span>'; }).join("") +
-          '</div>'
-        : "";
-
-      var notesHtml = it.notes
-        ? '<div class="muted">Notas: '+esc(it.notes)+'</div>'
-        : "";
-
-      lines +=
-        '<div class="item">' +
-          '<div>'+title+'</div>' +
-          ingHtml +
-          chipsHtml +
-          notesHtml +
-        '</div>';
+    var type = String(o.orderType || o.mode || "").toLowerCase();
+    var meta = "online";
+    if (type === "dinein" || type === "mesa"){
+      meta = "Mesa " + (o.table || "?");
+    } else if (type === "pickup" || type === "local" || type === "pickup-online"){
+      meta = "Para recoger";
     }
 
-    var generalNotes = o.notes
-      ? '<div class="muted"><b>Notas generales:</b> '+esc(o.notes)+'</div>'
-      : "";
+    var header = (o.shortId ? "#" + o.shortId + " " : "") +
+                 (o.customer || o.customerName || "Cliente");
 
-    var totalHtml = '<div class="total">Total aprox: '+money(total)+'</div>';
+    var html = '<div class="ord">';
+    html += '<div class="ord-header">' + esc(header) + '</div>';
+    html += '<div class="ord-meta">' + esc(meta) + '</div>';
+    html += '<div class="ord-total">Total aprox: ' + money(total) + '</div>';
 
-    return '' +
-      '<div class="ord">' +
-        head +
-        lines +
-        generalNotes +
-        totalHtml +
-      '</div>';
+    if (o.notes){
+      html += '<div class="muted small"><b>Notas:</b> ' + esc(o.notes) + '</div>';
+    }
+
+    for (var i=0;i<items.length;i++){
+      var it = items[i] || {};
+      var name = (it.qty || 1) + '× ' + (it.name || 'Producto');
+
+      html += '<div class="items">';
+      html += '<div class="item-name">' + esc(name) + '</div>';
+
+      if (it.notes){
+        html += '<div class="item-notes">Nota: ' + esc(it.notes) + '</div>';
+      }
+
+      var ing = [];
+      if (Object.prototype.toString.call(it.baseIngredients)==='[object Array]'){
+        ing = it.baseIngredients;
+      } else if (Object.prototype.toString.call(it.ingredients)==='[object Array]'){
+        ing = it.ingredients;
+      }
+      if (ing && ing.length){
+        html += '<ul class="ingredients">';
+        for (var j=0;j<ing.length;j++){
+          html += '<li>' + esc(ing[j]) + '</li>';
+        }
+        html += '</ul>';
+      }
+
+      if (it.extras){
+        var ex = it.extras;
+        if (ex.sauces && ex.sauces.length){
+          html += '<div class="muted small">Aderezos: ' +
+                  esc(ex.sauces.join(", ")) + '</div>';
+        }
+        if (ex.ingredients && ex.ingredients.length){
+          html += '<div class="muted small">Extras: ' +
+                  esc(ex.ingredients.join(", ")) + '</div>';
+        }
+        if (ex.dlcCarne){
+          html += '<div class="muted small">+ DLC carne 85g</div>';
+        }
+        if (ex.seasoning){
+          html += '<div class="muted small">Sazonador: ' +
+                  esc(ex.seasoning) + '</div>';
+        }
+      }
+
+      html += '</div>'; // .items
+    }
+
+    html += '</div>'; // .ord
+    return html;
   }
 
   function render(list){
-    list = Array.isArray(list) ? list : [];
-    var cleaned = [];
+    list = Object.prototype.toString.call(list)==='[object Array]' ? list : [];
 
+    var active = [];
     for (var i=0;i<list.length;i++){
       var o = list[i] || {};
-      var st = normStatus(o.status);
+      var st = String(o.status || "PENDING").toUpperCase();
       var total = calcTotal(o);
       var hasItems = o.items && o.items.length > 0;
 
       if (isPaid(o)) continue;
-      if (!hasItems || total <= 0) continue;
+      if (total <= 0 || !hasItems) continue;
       if (st === "DONE" || st === "CANCELLED" || st === "PAID") continue;
 
-      cleaned.push(o);
+      active.push(o);
     }
 
     var by = { PENDING:[], IN_PROGRESS:[], READY:[], BILL:[] };
-    for (var j=0;j<cleaned.length;j++){
-      var o2 = cleaned[j];
-      var st2 = normStatus(o2.status);
-      if (st2 === "DELIVERED") by.BILL.push(o2);
-      else if (by[st2]) by[st2].push(o2);
+    for (var j=0;j<active.length;j++){
+      var o2 = active[j];
+      var s2 = String(o2.status || "PENDING").toUpperCase();
+      if (s2 === "DELIVERED") by.BILL.push(o2);
+      else if (by[s2]) by[s2].push(o2);
       else by.PENDING.push(o2);
     }
 
-    setCol("col-pending",  by.PENDING);
-    setCol("col-progress", by.IN_PROGRESS);
-    setCol("col-ready",    by.READY);
-    setCol("col-bill",     by.BILL);
+    put("col-pending",  by.PENDING);
+    put("col-progress", by.IN_PROGRESS);
+    put("col-ready",    by.READY);
+    put("col-bill",     by.BILL);
   }
 
-  // ===== Suscripción Firestore =====
-  db.collection(ORDERS_COLLECTION)
-    .orderBy("createdAt","asc")
-    .onSnapshot(function(snap){
-      var list = [];
-      snap.forEach(function(doc){
-        var d = doc.data() || {};
-        d.id = doc.id;
-        list.push(d);
-      });
-      render(list);
-    }, function(err){
-      console.error("[legacy] error snapshot", err);
-    });
+  // ====== Firestore live (principal) ======
+  if (fs){
+    try{
+      fs.collection(ORDERS_COLLECTION)
+        .onSnapshot(function(snap){
+          var list = [];
+          snap.forEach(function(doc){
+            var d = doc.data() || {};
+            d.id = doc.id;
+            list.push(d);
+          });
+          render(list);
+        }, function(err){
+          console.log("[monitor] Firestore error, uso RTDB fallback", err);
+        });
+    }catch(e){
+      console.log("[monitor] Firestore init error, uso RTDB fallback", e);
+    }
+  }
 
+  // ====== RTDB fallback ======
+  if (rtdb){
+    try{
+      var RTDB_PATH = "kitchen/orders";
+      rtdb.ref(RTDB_PATH).on("value", function(snap){
+        var val = snap.val() || {};
+        var keys = Object.keys(val);
+        var list = [];
+        for (var i=0;i<keys.length;i++){
+          var id = keys[i];
+          var o = val[id] || {};
+          if (!o.id) o.id = id;
+          list.push(o);
+        }
+        render(list);
+      });
+    }catch(e){
+      console.log("[monitor] RTDB fallback error", e);
+    }
+  }
 })();
 </script>
 </body>
