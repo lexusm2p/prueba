@@ -1,14 +1,12 @@
 // shared/db.js · Seven V2
-// ÚNICA fuente de verdad para Kiosko V2 y Cocina V2
-// - Si hay Firestore disponible -> usa colección real
-// - Si NO hay Firestore -> usa modo SIM compartido (localStorage)
-// - BASE_PREFIX atado a /v2/ para que no choque con la versión anterior
+// Fuente unificada para Kiosko, Cocina y Admin.
+// Compatible con Firestore real y con modo SIM (localStorage).
 
 /* ======================= Base prefix ======================= */
 const parts = (location.pathname || '/').split('/').filter(Boolean);
 const idxV2 = parts.indexOf('v2');
 
-// /prueba/v2/  (incluye última barra)
+// /prueba/v2/ (termina con barra)
 export const BASE_PREFIX =
   idxV2 >= 0 ? '/' + parts.slice(0, idxV2 + 1).join('/') + '/' : '/';
 
@@ -20,10 +18,9 @@ console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'LS namespace =', LS_NAMESPACE);
 /* ======================= Firestore helpers ======================= */
 
 function getDb() {
-  // adapta a cómo inicializas Firebase en firebase.js
-  // intenta varias opciones seguras:
+  // Intenta obtener la instancia activa de Firestore (según cómo la inicialices)
   return (
-    window.FIREBASE_DB ||          // recomendada
+    window.FIREBASE_DB ||
     window.firebaseDb ||
     window.db ||
     null
@@ -33,7 +30,6 @@ function getDb() {
 let _firestorePkg = null;
 async function ensureFirestorePkg() {
   if (_firestorePkg) return _firestorePkg;
-  // Si tu bundler ya incluye firebase/firestore, puedes eliminar este import dinámico
   try {
     const mod = await import(
       'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
@@ -49,7 +45,7 @@ async function ensureFirestorePkg() {
       serverTimestamp: mod.serverTimestamp || (() => Date.now())
     };
   } catch (e) {
-    console.warn('[db] No se pudo cargar firebase/firestore, usando SIM', e);
+    console.warn('[db] No se pudo cargar Firestore, usando modo SIM', e);
     _firestorePkg = null;
   }
   return _firestorePkg;
@@ -75,9 +71,7 @@ function readSimOrders() {
 function writeSimOrders(list) {
   try {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(list || []));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 function createOrderSim(order) {
@@ -99,10 +93,8 @@ function createOrderSim(order) {
 }
 
 function subscribeSim(onChange) {
-  // polling liviano compartido entre pestañas
   let last = JSON.stringify(readSimOrders());
   onChange(readSimOrders());
-
   const iv = setInterval(() => {
     const now = JSON.stringify(readSimOrders());
     if (now !== last) {
@@ -110,7 +102,6 @@ function subscribeSim(onChange) {
       onChange(readSimOrders());
     }
   }, 1500);
-
   return () => clearInterval(iv);
 }
 
@@ -130,12 +121,9 @@ function updateStatusSim(id, status, extra = {}) {
 /* ======================= API pública ======================= */
 
 /**
- * Crea un pedido.
- * - Si hay Firestore real -> escribe en `${BASE_PREFIX}orders`
- * - Si no hay -> modo SIM compartido
+ * Crear pedido (Firestore o SIM)
  */
 export async function createOrder(order) {
-  // normaliza un poco
   const base = {
     createdAt: order.createdAt || Date.now(),
     updatedAt: Date.now(),
@@ -146,13 +134,11 @@ export async function createOrder(order) {
 
   const db = getDb();
   if (!db) {
-    // SIM
     return createOrderSim(base);
   }
 
   const fs = await ensureFirestorePkg();
   if (!fs) {
-    // no firestore lib -> SIM
     return createOrderSim(base);
   }
 
@@ -172,8 +158,7 @@ export async function createOrder(order) {
 }
 
 /**
- * Suscripción de cocina:
- * Llama onChange(listaOrdenesOrdenadas)
+ * Suscripción de pedidos (para cocina/admin)
  */
 export async function subscribeOrders(onChange) {
   const db = getDb();
@@ -191,14 +176,11 @@ export async function subscribeOrders(onChange) {
     q,
     snap => {
       const items = [];
-      snap.forEach(doc => {
-        items.push({ id: doc.id, ...doc.data() });
-      });
+      snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
       onChange(items);
     },
     err => {
       console.error('[db] onSnapshot error, cambiando a SIM', err);
-      // fallback a SIM si se cae Firestore
       unsub();
       subscribeSim(onChange);
     }
@@ -208,7 +190,7 @@ export async function subscribeOrders(onChange) {
 }
 
 /**
- * Actualizar estado de un pedido (desde cocina).
+ * Actualizar estado de pedido
  */
 export async function updateOrderStatus(id, status, extra = {}) {
   const db = getDb();
@@ -231,3 +213,15 @@ export async function updateOrderStatus(id, status, extra = {}) {
     updateStatusSim(id, status, extra);
   }
 }
+
+/* ======================= Compatibilidad con módulos antiguos ======================= */
+export const db = getDb(); // <-- evita el error “does not provide an export named 'db'”
+
+// Export default opcional (útil si se importa sin llaves)
+export default {
+  createOrder,
+  subscribeOrders,
+  updateOrderStatus,
+  BASE_PREFIX,
+  db
+};
