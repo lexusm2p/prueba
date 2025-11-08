@@ -17,12 +17,9 @@ const elMsg = document.getElementById('app');
 if (elMsg) elMsg.textContent = 'App.js cargado — iniciando módulos…';
 
 // ======================= Imports =======================
-/**
- * Importante:
- * 1) Primero firebase.js (side-effect) -> deja window.FIREBASE_DB/FIREBASE_FS.
- * 2) Luego db.js (usa esos globals).
- * 3) notify/theme normal.
- */
+// 1) firebase.js (side-effect) -> window.FIREBASE_DB/FIREBASE_FS
+// 2) db.js usa esos globals
+// 3) notify/theme normal
 
 import '../shared/firebase.js?v=20251108';
 
@@ -617,7 +614,6 @@ function renderCards() {
 
     const isCombo = it.type === 'combo';
     const isDrink = it.type === 'drink' || state.mode === 'drinks';
-    const isSideItem = isSide(it);
 
     const disc = (!isDrink && !isCombo) ? hhDiscountPerUnit(it) : 0;
     const eff = (!isDrink && !isCombo)
@@ -691,14 +687,15 @@ async function addQuickItem(item, base) {
   const unit = Math.max(0, Number(item.price || 0) - d);
   let seasoning = null;
   if (isSide(item)) seasoning = defaultSeasoning(item);
+  const inc = formatIngredientsFor(item, base);
   state.cart.push({
     id: item.id,
     name: item.name,
     mini: !!item.mini,
     qty: 1,
     unitPrice: Number(item.price || 0),
-    baseIngredients: formatIngredientsFor(item, base),
-    ingredients: formatIngredientsFor(item, base),
+    baseIngredients: inc,
+    ingredients: inc,
     extras: {
       sauces: [],
       ingredients: [],
@@ -1107,7 +1104,11 @@ async function submitOrder() {
         lineTotal: l.lineTotal || 0,
         notes: l.notes || '',
         extras: l.extras || {},
-        meta: l.meta || {}
+        meta: l.meta || {},
+        // 👇 Esto es clave para que Cocina pueda mostrar el listado:
+        ingredients: Array.isArray(l.ingredients)
+          ? l.ingredients
+          : (Array.isArray(l.baseIngredients) ? l.baseIngredients : [])
       })),
       subtotal,
       hhDiscount: hh,
