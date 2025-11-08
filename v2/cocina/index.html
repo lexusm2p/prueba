@@ -154,7 +154,7 @@
       margin:2px 0 3px;
     }
 
-    /* Lista de ingredientes estandarizada debajo de cada item */
+    /* Ingredientes estandarizados debajo de cada ítem */
     .order-items ul.ing{
       margin:1px 0 2px 14px;
       padding-left:10px;
@@ -256,7 +256,7 @@
 <body>
 <header>
   <h1>Cocina — Seven</h1>
-  <div class="badge" id="modeBadge">modo: sim/local</div>
+  <div class="badge" id="modeBadge">modo: SIM/local</div>
   <div class="totals">
     <div>Pendientes + progreso</div>
     <strong id="totalPend">$0</strong>
@@ -290,9 +290,12 @@
 </main>
 
 <script type="module">
-  import { subscribeOrders, updateOrderStatus, BASE_PREFIX } from '../shared/db.js';
-  import { initThemeFromSettings } from '../shared/theme.js';
-  import { beep, toast } from '../shared/notify.js';
+  // 🔹 Garantiza que Firebase se inicialice ANTES de usar db.js
+  import '../shared/firebase.js?v=20251108';
+
+  import { subscribeOrders, updateOrderStatus, BASE_PREFIX } from '../shared/db.js?v=20251108';
+  import { initThemeFromSettings } from '../shared/theme.js?v=20251108';
+  import { beep, toast } from '../shared/notify.js?v=20251106a';
 
   const state = {
     orders: [],
@@ -319,14 +322,14 @@
     modeBadge: document.getElementById('modeBadge')
   };
 
-  // Config limpieza de "Entregados"
-  const MAX_DONE_AGE_MS = 2 * 60 * 60 * 1000; // 2 horas en pantalla
-  const MAX_DONE_COUNT  = 30;                 // máximo 30 cards en columna Entregados
+  // 🔧 Config limpieza de entregados
+  const MAX_DONE_AGE_MS = 2 * 60 * 60 * 1000; // 2 horas visibles
+  const MAX_DONE_COUNT  = 30;                 // máximo 30 en columna "Entregados"
 
-  // Init tema (si falla Firestore, usa Base local)
+  // Tema (si no hay Firestore para settings, cae en Base local)
   initThemeFromSettings({ defaultName:'Base' });
 
-  // Suscribirse a pedidos (SIM o Firestore)
+  // Suscripción a pedidos (usa Firestore o SIM según db.js)
   state.unsub = await subscribeOrders(onOrders);
 
   function onOrders(list){
@@ -376,8 +379,7 @@
       if (key === 'done') {
         const refTs = ord.updatedAt || ord.createdAt || 0;
         const age = refTs ? (now - refTs) : 0;
-        // Oculta visualmente pedidos muy viejos
-        if (age > MAX_DONE_AGE_MS) return;
+        if (age > MAX_DONE_AGE_MS) return; // ocultar muy viejos
         doneOrders.push(ord);
         return;
       }
@@ -394,7 +396,7 @@
       }
     });
 
-    // Pintar Entregados con límite
+    // Pintar "Entregados" con límites
     if (doneOrders.length){
       doneOrders.sort((a,b)=>(a.updatedAt||a.createdAt||0)-(b.updatedAt||b.createdAt||0));
       if (doneOrders.length > MAX_DONE_COUNT){
@@ -410,14 +412,14 @@
       });
     }
 
-    // Actualizar contadores
+    // Contadores y totales
     Object.entries(counts).forEach(([k,v]) => {
       if (el.count[k]) el.count[k].textContent = v;
     });
     el.totalPend.textContent = '$' + totalPend.toFixed(0);
     el.countPend.textContent = `${counts.pending + counts.progress} pedidos`;
 
-    // Mostrar modo (SIM vs real)
+    // Badge modo
     const anySim = state.orders.some(o => String(o.id).startsWith('SIM-'));
     el.modeBadge.textContent = `modo: ${anySim ? 'SIM (localStorage)' : 'Firestore'}`;
   }
@@ -431,7 +433,6 @@
     const name = ord.customerName || 'sin nombre';
     const phone = ord.phone ? `📞 ${ord.phone}` : '';
     const src = ord.source || '';
-
     const statusLabel = ord.status || 'pending';
 
     const itemsHtml = buildItemsHtml(ord.items || []);
@@ -472,7 +473,7 @@
     return div;
   }
 
-  // Desglose de productos con ingredientes estandarizados
+  // Desglose con ingredientes estándar + extras/notas
   function buildItemsHtml(items){
     if (!items.length){
       return '<li>Sin desglose (revisar ticket)</li>';
@@ -488,7 +489,6 @@
       if (it.type === 'mini')  line += ' (mini)';
       if (it.type === 'side')  line += ' 🍟';
 
-      // ingredientes que manda el kiosko v2
       const ings = Array.isArray(it.ingredients) && it.ingredients.length
         ? it.ingredients
         : (Array.isArray(it.baseIngredients) ? it.baseIngredients : []);
@@ -530,10 +530,10 @@
     const s = (ord.status || 'pending').toLowerCase();
 
     // Flujo:
-    // pending   -> [Tomar]      -> preparing
-    // preparing -> [Listo]      -> ready
-    // ready     -> [Entregado]  -> delivered (Por cobrar)
-    // delivered -> [Cobrar]     -> paid (Entregados)
+    // pending   -> Tomar      -> preparing
+    // preparing -> Listo      -> ready
+    // ready     -> Entregado  -> delivered (Por cobrar)
+    // delivered -> Cobrar     -> paid (Entregados)
     if (s === 'pending') {
       return `<button class="btn btn-primary" data-act="take">Tomar</button>`;
     }
@@ -549,7 +549,6 @@
     if (s === 'paid' || s === 'completed') {
       return `<span class="pill">Archivado</span>`;
     }
-    // fallback
     return `<button class="btn small" data-act="take">Tomar</button>`;
   }
 
@@ -557,18 +556,15 @@
     try{
       if (act === 'take') {
         await updateOrderStatus(ord.id, 'preparing');
-        beep();
-        return;
+        beep(); return;
       }
       if (act === 'ready') {
         await updateOrderStatus(ord.id, 'ready');
-        beep();
-        return;
+        beep(); return;
       }
       if (act === 'delivered') {
         await updateOrderStatus(ord.id, 'delivered');
-        beep();
-        return;
+        beep(); return;
       }
       if (act === 'paid') {
         await updateOrderStatus(ord.id, 'paid');
