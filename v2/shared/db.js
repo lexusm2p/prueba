@@ -1,39 +1,63 @@
 // shared/db.js · Seven V2
 // Fuente unificada para Kiosko, Cocina y Admin.
-// Compatible con Firestore real y con modo SIM (localStorage).
+// Compatible con Firestore real (si existe) y con modo SIM (localStorage).
 
 /* ======================= Base prefix ======================= */
-const parts = (location.pathname || '/').split('/').filter(Boolean);
+
+// Soporta /prueba/v2/... y cualquier otra ruta que tenga "v2"
+const rawPath =
+  (typeof location !== 'undefined' && location.pathname) ? location.pathname : '/';
+
+const parts = rawPath.split('/').filter(Boolean);
 const idxV2 = parts.indexOf('v2');
 
-// /prueba/v2/ (termina con barra)
+// /prueba/v2/ (termina con barra) o "/" si no encuentra v2
 export const BASE_PREFIX =
   idxV2 >= 0 ? '/' + parts.slice(0, idxV2 + 1).join('/') + '/' : '/';
 
-const LS_NAMESPACE = (BASE_PREFIX.replace(/\W+/g, '-') || 'seven') + '-orders-sim';
+// Colección Firestore (sin slash inicial, siempre termina en /orders)
+const COLLECTION_ROOT = (() => {
+  const base = BASE_PREFIX.replace(/^\/+|\/+$/g, ''); // quita / inicio/fin
+  return base ? `${base}/orders` : 'orders';
+})();
+
+// Namespace compartido para modo SIM
+const LS_NAMESPACE =
+  (BASE_PREFIX.replace(/\W+/g, '-') || 'seven') + '-orders-sim';
+
 const ORDERS_KEY = LS_NAMESPACE;
 
-console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'LS namespace =', LS_NAMESPACE);
+console.info('[db] BASE_PREFIX =', BASE_PREFIX,
+             'COLLECTION_ROOT =', COLLECTION_ROOT,
+             'LS namespace =', LS_NAMESPACE);
 
 /* ======================= Firestore helpers ======================= */
 
+/**
+ * Devuelve la instancia de Firestore si ya fue inicializada.
+ * (Firebase se inicializa en shared/firebase.js y expone window.FIREBASE_DB / window.db)
+ */
 function getDb() {
-  // Intenta obtener la instancia activa de Firestore (según cómo la inicialices)
   return (
-    window.FIREBASE_DB ||
-    window.firebaseDb ||
-    window.db ||
-    null
+    (typeof window !== 'undefined' && (
+      window.FIREBASE_DB ||
+      window.firebaseDb ||
+      window.db
+    )) || null
   );
 }
 
 let _firestorePkg = null;
+
 async function ensureFirestorePkg() {
   if (_firestorePkg) return _firestorePkg;
+
   try {
+    // Import modular Firestore 10.x
     const mod = await import(
       'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
     );
+
     _firestorePkg = {
       collection: mod.collection,
       addDoc: mod.addDoc,
@@ -48,6 +72,7 @@ async function ensureFirestorePkg() {
     console.warn('[db] No se pudo cargar Firestore, usando modo SIM', e);
     _firestorePkg = null;
   }
+
   return _firestorePkg;
 }
 
@@ -55,7 +80,7 @@ function hasRealDb() {
   return !!getDb();
 }
 
-/* ======================= SIM (localStorage compartido) ======================= */
+/* ======================= MODO SIM (localStorage) ======================= */
 
 function readSimOrders() {
   try {
@@ -71,13 +96,16 @@ function readSimOrders() {
 function writeSimOrders(list) {
   try {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(list || []));
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 function createOrderSim(order) {
   const all = readSimOrders();
   const id = `SIM-${Date.now()}-${Math.floor(Math.random() * 999)}`;
   const now = Date.now();
+
   const full = {
     id,
     ...order,
@@ -86,6 +114,7 @@ function createOrderSim(order) {
     status: order.status || 'pending',
     source: order.source || 'kiosk-v2-sim'
   };
+
   all.push(full);
   writeSimOrders(all);
   console.info('[db] order created SIM', id);
@@ -95,6 +124,7 @@ function createOrderSim(order) {
 function subscribeSim(onChange) {
   let last = JSON.stringify(readSimOrders());
   onChange(readSimOrders());
+
   const iv = setInterval(() => {
     const now = JSON.stringify(readSimOrders());
     if (now !== last) {
@@ -102,6 +132,7 @@ function subscribeSim(onChange) {
       onChange(readSimOrders());
     }
   }, 1500);
+
   return () => clearInterval(iv);
 }
 
@@ -109,19 +140,21 @@ function updateStatusSim(id, status, extra = {}) {
   const all = readSimOrders();
   const i = all.findIndex(o => o.id === id);
   if (i === -1) return;
+
   all[i] = {
     ...all[i],
     status,
     ...extra,
     updatedAt: Date.now()
   };
+
   writeSimOrders(all);
 }
 
 /* ======================= API pública ======================= */
 
 /**
- * Crear pedido (Firestore o SIM)
+ * Crear pedido (Firestore si existe, si no SIM).
  */
 export async function createOrder(order) {
   const base = {
@@ -133,17 +166,15 @@ export async function createOrder(order) {
   };
 
   const db = getDb();
-  if (!db) {
-    return createOrderSim(base);
-  }
+  const fs = db ? await ensureFirestorePkg() : null;
 
-  const fs = await ensureFirestorePkg();
-  if (!fs) {
+  // Sin Firestore → SIM
+  if (!db || !fs) {
     return createOrderSim(base);
   }
 
   try {
-    const col = fs.collection(db, `${BASE_PREFIX}orders`);
+    const col = fs.collection(db, COLLECTION_ROOT);
     const docRef = await fs.addDoc(col, {
       ...base,
       createdAt: base.createdAt,
@@ -158,7 +189,8 @@ export async function createOrder(order) {
 }
 
 /**
- * Suscripción de pedidos (para cocina/admin)
+ * Suscripción de pedidos (para Cocina/Admin).
+ * Siempre intenta Firestore primero; si falla, cae a SIM.
  */
 export async function subscribeOrders(onChange) {
   const db = getDb();
@@ -169,7 +201,7 @@ export async function subscribeOrders(onChange) {
     return subscribeSim(onChange);
   }
 
-  const col = fs.collection(db, `${BASE_PREFIX}orders`);
+  const col = fs.collection(db, COLLECTION_ROOT);
   const q = fs.query(col, fs.orderBy('createdAt', 'asc'));
 
   const unsub = fs.onSnapshot(
@@ -181,7 +213,7 @@ export async function subscribeOrders(onChange) {
     },
     err => {
       console.error('[db] onSnapshot error, cambiando a SIM', err);
-      unsub();
+      try { unsub(); } catch {}
       subscribeSim(onChange);
     }
   );
@@ -190,7 +222,7 @@ export async function subscribeOrders(onChange) {
 }
 
 /**
- * Actualizar estado de pedido
+ * Actualizar estado de pedido.
  */
 export async function updateOrderStatus(id, status, extra = {}) {
   const db = getDb();
@@ -202,7 +234,7 @@ export async function updateOrderStatus(id, status, extra = {}) {
   }
 
   try {
-    const ref = fs.doc(db, `${BASE_PREFIX}orders/${id}`);
+    const ref = fs.doc(db, `${COLLECTION_ROOT}/${id}`);
     await fs.updateDoc(ref, {
       status,
       ...extra,
@@ -214,14 +246,17 @@ export async function updateOrderStatus(id, status, extra = {}) {
   }
 }
 
-/* ======================= Compatibilidad con módulos antiguos ======================= */
-export const db = getDb(); // <-- evita el error “does not provide an export named 'db'”
+/* ======================= Compatibilidad con código viejo ======================= */
 
-// Export default opcional (útil si se importa sin llaves)
-export default {
+// Algunos módulos esperan `import { db } from './db.js'`
+export const db = getDb();
+
+// Default con helpers por si alguien hace `import DB from './db.js'`
+const defaultExport = {
   createOrder,
   subscribeOrders,
   updateOrderStatus,
   BASE_PREFIX,
   db
 };
+export default defaultExport;
