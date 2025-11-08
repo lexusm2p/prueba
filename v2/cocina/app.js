@@ -5,7 +5,7 @@
 
 /* --------- Rutas base / menú --------- */
 const __parts = location.pathname.split('/').filter(Boolean);
-// ejemplo: /prueba/v2/kiosk/index.html → BASE_PREFIX = /prueba/v2/
+// /prueba/v2/kiosk/index.html → BASE_PREFIX = /prueba/v2/
 const BASE_PREFIX = __parts.length >= 2 ? `/${__parts[0]}/${__parts[1]}/` : '/';
 const DATA_MENU_URL = `${BASE_PREFIX}data/menu.json`;
 
@@ -65,7 +65,8 @@ const state = {
   },
 
   loyaltyEnabled: true,
-  loyaltyAskShown: false
+  loyaltyAskShown: false,
+  adminMode: false
 };
 
 /* --------- Constantes negocio --------- */
@@ -73,7 +74,7 @@ const DRINK_PRICE = { solo: 19, combo: 19 };
 const CHEDDAR_UPGRADE_BASE = 7;
 
 /* =====================================================
-   Helpers básicos (cuidando NO mandar undefined)
+   Helpers básicos
    ===================================================== */
 
 const money = n => '$' + Number(n || 0).toFixed(0);
@@ -99,7 +100,46 @@ function escapeHtml(s = '') {
   return String(s).replace(/[&<>"']/g, ch => map[ch]);
 }
 
-/* --------- Carga de catálogo --------- */
+/* Deep-clean para Firestore: elimina undefined / funciones */
+function cleanForFirestore(value) {
+  // undefined y funciones: los quitamos
+  if (value === undefined || typeof value === 'function') {
+    return undefined;
+  }
+  // primitivos + null: se quedan igual
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  // arrays: limpiamos cada elemento
+  if (Array.isArray(value)) {
+    const arr = [];
+    for (const v of value) {
+      const c = cleanForFirestore(v);
+      if (c !== undefined) arr.push(c);
+    }
+    return arr;
+  }
+  // objetos planos
+  if (typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) {
+      const c = cleanForFirestore(value[k]);
+      if (c !== undefined) out[k] = c;
+    }
+    return out;
+  }
+  // cualquier otra cosa rara → null
+  return null;
+}
+
+/* =====================================================
+   Catálogo
+   ===================================================== */
 
 async function fetchCatalogWithFallback() {
   try {
@@ -336,7 +376,6 @@ function powerBarHtml(icon = '🍔') {
 }
 
 function buildAccordionForItem(item, base) {
-  // Combos: mostrar detalle de piezas
   if (item?.type === 'combo') {
     const rawItems = Array.isArray(item.items) ? item.items : [];
     const subs = rawItems
@@ -395,7 +434,6 @@ function buildAccordionForItem(item, base) {
     </details>`;
   }
 
-  // Normales
   const inc = formatIngredientsFor(item, base).filter(Boolean);
   if (!inc.length) {
     return getHighlight(item, base)
@@ -582,7 +620,8 @@ function addDrinkToCart(drink) {
     extras: { sauces: [], ingredients: [] },
     notes: '',
     hhDisc: 0,
-    meta: { pricingMode: comboOn ? 'combo' : 'solo' }
+    meta: { pricingMode: comboOn ? 'combo' : 'solo' },
+    isGift: false
   });
   ensureDrinkPrices();
   updateCartBar();
@@ -647,7 +686,6 @@ function renderCards() {
 
     const isCombo = it.type === 'combo';
     const isDrink = it.type === 'drink' || state.mode === 'drinks';
-    const isSideItem = isSide(it);
 
     const disc = !isDrink && !isCombo ? hhDiscountPerUnit(it) : 0;
     const basePrice = safeInt(it.price);
@@ -703,8 +741,6 @@ function renderCards() {
       const fill = card.querySelector('.power-fill');
       if (fill) fill.style.width = '100%';
     }
-
-    // Interacciones
 
     card.querySelector('[data-more]')?.addEventListener('click', ev => {
       ev.preventDefault();
@@ -777,7 +813,8 @@ async function addQuickItem(item, base) {
     notes: '',
     lineTotal: unit,
     hhDisc: d,
-    type: isSide(item) ? 'side' : 'burger'
+    type: isSide(item) ? 'side' : 'burger',
+    isGift: false
   });
 
   ensureDrinkPrices();
@@ -837,19 +874,19 @@ async function addComboToCart(combo) {
       });
     }
 
-    const qty = 1;
     const unitPrice = safeInt(combo.price);
     state.cart.push({
       id: safeStr(combo.id),
       name: safeStr(combo.name),
       type: 'combo',
-      qty,
+      qty: 1,
       unitPrice,
-      lineTotal: unitPrice * qty,
+      lineTotal: unitPrice,
       hhDisc: 0,
       items,
       extras: { cheddarUpgrade: false },
-      notes: ''
+      notes: '',
+      isGift: false
     });
 
     ensureDrinkPrices();
@@ -863,7 +900,7 @@ async function addComboToCart(combo) {
 }
 
 /* =====================================================
-   Modal Personalizar (versión compacta segura)
+   Modal Personalizar
    ===================================================== */
 
 function openItemModal(item, base) {
@@ -873,18 +910,17 @@ function openItemModal(item, base) {
   const btnAdd = document.getElementById('modalAdd');
   const qtyInput = document.getElementById('modalQty');
   const notesInput = document.getElementById('modalNotes');
-  const seasoningBox = document.getElementById('seasonings');
 
-  if (!modal || !body || !title || !btnAdd || !qtyInput) {
+  if (!modal || !body || !title || !btnAdd || !qtyInput || !notesInput) {
     console.warn('modal incompleto en HTML');
     return;
   }
 
   const baseItem = baseOfItem(item);
   const ingredients = formatIngredientsFor(item, baseItem);
+
   title.textContent = `${item.name} · ${money(item.price)}`;
 
-  // Ingredientes base
   let html = '';
   if (ingredients.length) {
     html += `<div class="field">
@@ -895,8 +931,7 @@ function openItemModal(item, base) {
     </div>`;
   }
 
-  // Sazonador sides
-  if (isSide(item) && seasoningBox) {
+  if (isSide(item)) {
     const seasonings = normalizeSeasonings(item);
     if (seasonings.length) {
       const def = defaultSeasoning(item);
@@ -915,13 +950,6 @@ function openItemModal(item, base) {
       html += `</div></div>`;
     }
   }
-
-  // Extras simples (placeholder: compatibles con versiones previas)
-  html += `
-    <div class="field">
-      <label>+ Ingredientes extra</label>
-      <small class="muted small">Pide al cajero agregar extras específicos.</small>
-    </div>`;
 
   body.innerHTML = html;
   qtyInput.value = '1';
@@ -946,7 +974,7 @@ function openItemModal(item, base) {
     const notes = safeStr(notesInput.value, '').trim();
 
     let seasoning = null;
-    if (isSide(item) && body.querySelector('#seasonings')) {
+    if (isSide(item)) {
       const sel = body.querySelector('#seasonings input[type=radio]:checked');
       seasoning = sel ? sel.value : null;
     }
@@ -961,7 +989,7 @@ function openItemModal(item, base) {
       qty,
       unitPrice: safeInt(item.price),
       baseIngredients: ingredients,
-      ingredients: ingredients,
+      ingredients,
       extras: {
         sauces: [],
         ingredients: [],
@@ -972,7 +1000,8 @@ function openItemModal(item, base) {
       notes,
       lineTotal: unit * qty,
       hhDisc: d * qty,
-      type: isSide(item) ? 'side' : 'burger'
+      type: isSide(item) ? 'side' : 'burger',
+      isGift: false
     });
 
     ensureDrinkPrices();
@@ -994,7 +1023,6 @@ function recomputeLine(l) {
   if (!l) return;
   const item = findItemById(l.id);
   if (l.type === 'drink') {
-    // ya se maneja en ensureDrinkPrices
     const qty = safeInt(l.qty, 1);
     const base = isDrinkComboUnlocked() ? DRINK_PRICE.combo : DRINK_PRICE.solo;
     l.unitPrice = base;
@@ -1010,8 +1038,8 @@ function recomputeLine(l) {
     l.hhDisc = d * qty;
     l.lineTotal = unit * qty;
   } else {
-    l.unitPrice = safeInt(l.unitPrice);
     const qty = safeInt(l.qty, 1);
+    l.unitPrice = safeInt(l.unitPrice);
     l.lineTotal = safeInt(l.lineTotal, l.unitPrice * qty);
     l.hhDisc = safeInt(l.hhDisc);
   }
@@ -1129,7 +1157,7 @@ function openCartModal() {
 }
 
 /* =====================================================
-   Regalo / Gift (versión segura)
+   Regalo / Gift
    ===================================================== */
 
 function checkGiftUnlock(autoOpen = false) {
@@ -1177,11 +1205,10 @@ async function playGiftSfx() {
 }
 
 /* =====================================================
-   Identidad cliente (mínimo viable)
+   Identidad cliente
    ===================================================== */
 
 async function ensureCustomerIdentified(type = 'pickup') {
-  // Usa lo guardado
   if (state.identified && state.orderMeta.phone) return true;
 
   try {
@@ -1213,9 +1240,9 @@ async function ensureCustomerIdentified(type = 'pickup') {
     state.customerName = name;
     state.orderMeta.type = type || 'pickup';
     state.orderMeta.phone = phone;
-    state.orderMeta.table = '';
+    state.orderMeta.table = safeStr(state.orderMeta.table, '');
     state.orderMeta.payMethodPref =
-      state.orderMeta.payMethodPref || 'efectivo';
+      safeStr(state.orderMeta.payMethodPref, 'efectivo');
     state.identified = true;
 
     localStorage.setItem('kiosk:name', name);
@@ -1225,12 +1252,12 @@ async function ensureCustomerIdentified(type = 'pickup') {
     return true;
   } catch (e) {
     console.warn('identity prompt blocked', e);
-    return true; // no lo rompemos, pero podrías cambiarlo
+    return true;
   }
 }
 
 /* =====================================================
-   Envío de pedido → Firebase / Cocina / Track
+   Envío de pedido → Firebase
    ===================================================== */
 
 async function submitOrderSafely() {
@@ -1239,6 +1266,7 @@ async function submitOrderSafely() {
     return;
   }
   if (state.isSubmittingOrder) return;
+
   const okId = await ensureCustomerIdentified(state.orderMeta.type);
   if (!okId) return;
 
@@ -1248,28 +1276,37 @@ async function submitOrderSafely() {
     recomputeAllLines();
     const { subtotal, hh, total } = computeBreakdown();
 
-    const items = state.cart.map(l => ({
-      id: safeStr(l.id),
-      name: safeStr(l.name),
-      type: safeStr(l.type || (isSide(findItemById(l.id)) ? 'side' : 'burger')),
-      qty: safeInt(l.qty, 1),
-      unitPrice: safeInt(l.unitPrice),
-      lineTotal: safeInt(l.lineTotal),
-      hhDisc: safeInt(l.hhDisc),
-      notes: safeStr(l.notes, ''),
-      extras: {
-        sauces: Array.isArray(l.extras?.sauces) ? l.extras.sauces : [],
-        ingredients: Array.isArray(l.extras?.ingredients)
-          ? l.extras.ingredients
-          : [],
-        dlcCarne: !!l.extras?.dlcCarne,
-        surpriseSauce: l.extras?.surpriseSauce || null,
-        seasoning: l.extras?.seasoning || null,
-        cheddarUpgrade: !!l.extras?.cheddarUpgrade
-      },
-      meta: l.meta || null,
-      isGift: !!l.isGift
-    }));
+    const items = state.cart.map(l => {
+      const extras = l.extras || {};
+      return {
+        id: safeStr(l.id),
+        name: safeStr(l.name),
+        type: safeStr(
+          l.type || (isSide(findItemById(l.id)) ? 'side' : 'burger')
+        ),
+        qty: safeInt(l.qty, 1),
+        unitPrice: safeInt(l.unitPrice),
+        lineTotal: safeInt(l.lineTotal),
+        hhDisc: safeInt(l.hhDisc),
+        notes: safeStr(l.notes, ''),
+        extras: {
+          sauces: Array.isArray(extras.sauces) ? extras.sauces : [],
+          ingredients: Array.isArray(extras.ingredients)
+            ? extras.ingredients
+            : [],
+          dlcCarne: !!extras.dlcCarne,
+          surpriseSauce:
+            extras.surpriseSauce === undefined
+              ? null
+              : extras.surpriseSauce,
+          seasoning:
+            extras.seasoning === undefined ? null : extras.seasoning,
+          cheddarUpgrade: !!extras.cheddarUpgrade
+        },
+        meta: l.meta ? cleanForFirestore(l.meta) || null : null,
+        isGift: !!l.isGift
+      };
+    });
 
     const now = Date.now();
 
@@ -1296,12 +1333,8 @@ async function submitOrderSafely() {
       }
     };
 
-    // Limpia propiedades undefined por seguridad absoluta
-    Object.keys(order).forEach(k => {
-      if (order[k] === undefined) delete order[k];
-    });
+    const cleanOrder = cleanForFirestore(order);
 
-    // === Llamada a DB.createOrder (misma firma que V1) ===
     if (!DB || typeof DB.createOrder !== 'function') {
       console.error(
         '[kiosk] DB.createOrder no disponible — revisa shared/db.js'
@@ -1311,33 +1344,29 @@ async function submitOrderSafely() {
       return;
     }
 
-    const res = await DB.createOrder(order);
+    const res = await DB.createOrder(cleanOrder);
     const orderId =
       res?.orderId || res?.id || res || `O-${String(now)}`;
 
     state.lastOrderId = orderId;
 
-    // Track URL igual que antes
     const trackUrl = new URL('./track.html', location.href);
     trackUrl.searchParams.set('oid', orderId);
     trackUrl.searchParams.set('gamify', '1');
     trackUrl.searchParams.set('autostart', '1');
-
     state.lastTrackUrl = trackUrl.toString();
 
     console.info('[kiosk] track URL =', state.lastTrackUrl);
 
-    // Limpia carrito
     state.cart = [];
     updateCartBar();
 
-    // Mostrar modal / enlace
+    // Aquí usas tu modal / UI real; dejo alerta simple + podrías mostrar overlay ya hecho
     alert(
       `Pedido enviado.\nTu número de orden: ${orderId}\n` +
         `Puedes seguirlo aquí:\n${state.lastTrackUrl}`
     );
 
-    // Opcional: abrir en nueva pestaña
     try {
       window.open(state.lastTrackUrl, '_blank');
     } catch {}
@@ -1349,13 +1378,12 @@ async function submitOrderSafely() {
     toast('No se pudo enviar el pedido. Intenta de nuevo o avisa al staff.');
   } finally {
     state.isSubmittingOrder = false;
-    const cartModal = document.getElementById('cartModal');
-    cartModal?.classList.remove('open');
+    document.getElementById('cartModal')?.classList.remove('open');
   }
 }
 
 /* =====================================================
-   Happy Hour / ETA (suscripciones si existen)
+   HH / ETA / Analytics (si existen en db.js)
    ===================================================== */
 
 function bindHappyHour() {
@@ -1397,16 +1425,9 @@ function startOrdersAnalytics() {
   }
 }
 
-/* =====================================================
-   Placeholders seguros (no rompen si no existen)
-   ===================================================== */
-
-function ensureTrackPrompt() {
-  // si tienes UI especial de seguimiento, inicialízala aquí.
-}
-function ensureGiftModal() {
-  // si tienes modal visual de regalo, puedes prepararlo aquí.
-}
+/* Hooks opcionales (no rompen si no hay UI específica) */
+function ensureTrackPrompt() {}
+function ensureGiftModal() {}
 
 /* =====================================================
    Init
@@ -1440,9 +1461,7 @@ async function init() {
   startOrdersAnalytics();
 
   if (state.unsubTheme) {
-    try {
-      state.unsubTheme();
-    } catch {}
+    try { state.unsubTheme(); } catch {}
     state.unsubTheme = null;
   }
   state.unsubTheme = initThemeFromSettings({ defaultName: 'Base' });
@@ -1457,7 +1476,7 @@ async function init() {
 }
 
 /* =====================================================
-   Limpieza antes de salir
+   Limpieza
    ===================================================== */
 
 window.addEventListener('beforeunload', () => {
