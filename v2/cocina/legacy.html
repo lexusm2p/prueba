@@ -6,128 +6,405 @@
         content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Cocina — Seven (Legacy iPad)</title>
 
-  <!-- Usa el mismo styles.css grande (con fuentes más grandes) -->
-  <link rel="stylesheet" href="../shared/styles.css?v=20251108">
-
+  <!-- Fondo/colores base -->
   <style>
+    html,body{margin:0;padding:0;height:100%;overflow:hidden;}
     body{
-      background:#0b1220;
-      color:#e8f0ff;
+      background:#050814;
+      color:#eef4ff;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      -webkit-text-size-adjust:100%;
+      text-size-adjust:100%;
+      font-size:20px;               /* tamaño base grande */
+      line-height:1.5;
     }
     .wrap{
-      max-width:1200px;
-      margin:12px auto;
-      padding:0 12px;
+      max-width:1400px;
+      margin:8px auto 12px;
+      padding:0 10px 8px;
+      height:100%;
+      box-sizing:border-box;
+    }
+    h1{
+      margin:0 0 6px;
+      font-size:30px;
+      letter-spacing:1px;
+      text-align:left;
+      color:#ffcc4a;
+      text-shadow:0 0 8px rgba(255,204,74,.45);
     }
     .cols{
       display:grid;
-      grid-template-columns:repeat(4,1fr);
+      grid-template-columns:repeat(2,1fr);
       gap:10px;
+      height:calc(100% - 42px);
     }
-    @media (max-width:1024px){
-      .cols{ grid-template-columns:repeat(2,1fr); }
+    @media (max-width:900px){
+      .cols{
+        grid-template-columns:1fr;
+        height:auto;
+        max-height:none;
+        overflow-y:auto;
+      }
     }
-    @media (max-width:768px){
-      .cols{ grid-template-columns:1fr; }
+    .col{
+      background:#07101f;
+      border-radius:14px;
+      border:2px solid rgba(255,255,255,.14);
+      padding:8px;
+      box-sizing:border-box;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
     }
-
-    .card{
-      background:#0f182a;
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:12px;
-      padding:10px;
-      font-size:15px;
+    .col-title{
+      font-size:22px;
+      margin:0 0 4px;
+      color:#9fbcff;
+      text-shadow:0 0 4px rgba(64,128,255,.35);
     }
-    h3{
-      margin:0 0 8px;
-      font-size:16px;
+    .col-body{
+      flex:1 1 auto;
+      overflow-y:auto;
+      padding-right:4px;
     }
 
     .ord{
-      background:#131f33;
-      border:1px solid rgba(255,255,255,.10);
-      border-radius:10px;
-      padding:8px;
+      background:#0e1a30;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.16);
+      padding:8px 9px 6px;
       margin-bottom:8px;
-      font-size:14px;
+      box-shadow:0 3px 10px rgba(0,0,0,.45);
+      font-size:19px;
     }
 
+    .head-line{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:baseline;
+      gap:6px;
+      margin-bottom:4px;
+    }
+    .code{
+      padding:2px 6px;
+      border-radius:6px;
+      background:#12233e;
+      font-size:16px;
+      font-weight:700;
+      color:#7cf2ff;
+      font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .name{
+      font-weight:700;
+      font-size:20px;
+    }
+    .meta{
+      font-size:17px;
+      color:#9fb0cc;
+    }
     .muted{
-      color:#a6b2c7;
-      font-size:13px;
+      color:#9fb0cc;
+      font-size:17px;
+    }
+    .total{
+      font-weight:800;
+      color:#ffcc4a;
+      font-size:19px;
+      margin-top:4px;
     }
     .chips{
       display:flex;
       flex-wrap:wrap;
       gap:4px;
-      margin-top:4px;
+      margin:2px 0 4px;
     }
     .chip{
-      background:#192840;
-      border:1px solid rgba(255,255,255,.14);
+      padding:3px 8px;
       border-radius:999px;
-      padding:4px 8px;
-      font-size:13px;
+      background:#1c2f4b;
+      border:1px solid rgba(255,255,255,.18);
+      font-size:16px;
       white-space:nowrap;
     }
-
-    .row{
-      display:flex;
-      gap:6px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:flex-end;
-      margin-top:4px;
+    ul.ing{
+      margin:2px 0 4px 20px;
+      padding:0;
+      list-style:disc;
+      font-size:18px;
     }
-    .btn{
-      background:#1a2740;
-      border:1px solid rgba(255,255,255,.18);
-      color:#e8f0ff;
-      border-radius:10px;
-      padding:6px 10px;
-      font-size:13px;
-      cursor:pointer;
-    }
-    .btn.ok{
-      background:#2fe38b;
-      color:#00150a;
-      font-weight:800;
-    }
-    .btn[disabled]{ opacity:.6; pointer-events:none; }
     .empty{
-      color:#7f8aa3;
-      padding:8px;
-      font-size:13px;
+      color:#5f6c88;
+      font-size:18px;
+      padding:6px;
+      text-align:center;
+    }
+
+    /* scrollbars más visibles */
+    ::-webkit-scrollbar{width:10px;height:10px;}
+    ::-webkit-scrollbar-thumb{
+      background:rgba(255,255,255,.16);
+      border-radius:8px;
     }
   </style>
 </head>
 <body>
 <div class="wrap">
+  <h1>Cocina — Seven (Legacy)</h1>
   <div class="cols">
-    <div class="card">
-      <h3>Pendientes</h3>
-      <div id="col-pending"></div>
+    <div class="col">
+      <div class="col-title">Pendientes</div>
+      <div class="col-body" id="col-pending"></div>
     </div>
-    <div class="card">
-      <h3>En progreso</h3>
-      <div id="col-progress"></div>
+    <div class="col">
+      <div class="col-title">En progreso</div>
+      <div class="col-body" id="col-progress"></div>
     </div>
-    <div class="card">
-      <h3>Listos</h3>
-      <div id="col-ready"></div>
+    <div class="col">
+      <div class="col-title">Listos</div>
+      <div class="col-body" id="col-ready"></div>
     </div>
-    <div class="card">
-      <h3>Por cobrar</h3>
-      <div id="col-bill"></div>
+    <div class="col">
+      <div class="col-title">Por cobrar</div>
+      <div class="col-body" id="col-bill"></div>
     </div>
   </div>
 </div>
 
-<!-- IMPORTANTE: scripts sin type="module", compatibles con Safari viejo -->
-<script src="../shared/firebase.js?v=20251108"></script>
-<script src="../shared/db.js?v=20251108"></script>
-<script src="../shared/notify.js?v=20251106a"></script>
-<script src="./app.legacy.js?v=20251108"></script>
+<!-- Firebase 8 (máxima compatibilidad) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+<script>
+(function(){
+  // ===== Config Firebase (mismo proyecto del kiosko) =====
+  var firebaseConfig = {
+    apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
+    authDomain: "seven-de-burgers.firebaseapp.com",
+    projectId: "seven-de-burgers",
+    storageBucket: "seven-de-burgers.appspot.com",
+    messagingSenderId: "34089845279",
+    appId: "1:34089845279:web:d13440c34e6bb7fa910b2a"
+  };
+  if (!firebase.apps.length){ firebase.initializeApp(firebaseConfig); }
+  var db = firebase.firestore();
+
+  // ===== Resolver colección igual que shared/db.js =====
+  function getOrdersCollection(){
+    var path = (location.pathname || "/");
+    var parts = path.split("/");
+    var clean = [];
+    for (var i=0;i<parts.length;i++){
+      if (parts[i]) clean.push(parts[i]);
+    }
+    var idxV2 = -1;
+    for (var j=0;j<clean.length;j++){
+      if (clean[j] === "v2"){ idxV2 = j; break; }
+    }
+    var baseSeg = [];
+    if (idxV2 >= 0){
+      for (var k=0;k<=idxV2;k++){ baseSeg.push(clean[k]); }
+    }
+    var col = (baseSeg.length ? baseSeg.join("/") + "/" : "") + "orders";
+    return col;
+  }
+  var ORDERS_COLLECTION = getOrdersCollection();
+  console.log("[legacy] usando colección:", ORDERS_COLLECTION);
+
+  // ===== Helpers =====
+  function money(n){ return "$" + Number(n || 0).toFixed(0); }
+  function esc(s){
+    return String(s || "").replace(/[&<>"']/g, function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m];
+    });
+  }
+  function normStatus(s){
+    return String(s || "").trim().toUpperCase() || "PENDING";
+  }
+  function isPaid(o){
+    if (!o) return false;
+    var raw = (o.paid != null ? o.paid : null);
+    if (raw == null && o.payment && o.payment.paid != null) raw = o.payment.paid;
+    if (raw == null && o.meta && o.meta.paid != null)       raw = o.meta.paid;
+    if (raw == null && o.payStatus != null)                 raw = o.payStatus;
+    if (raw === true || raw === 1) return true;
+    if (typeof raw === "string"){
+      var s = raw.trim().toLowerCase();
+      if (s === "true" || s === "1" || s === "paid" || s === "pagado") return true;
+    }
+    var st = normStatus(o.status);
+    if (st === "PAID") return true;
+    if (o.paidAt || (o.payment && (o.payment.paidAt || o.payment.tx || o.payment.reference))) return true;
+    return false;
+  }
+  function calcTotal(o){
+    var sub = 0;
+    var items = (o && o.items && o.items.length) ? o.items : [];
+    for (var i=0;i<items.length;i++){
+      var it = items[i] || {};
+      if (typeof it.lineTotal === "number"){
+        sub += Number(it.lineTotal || 0);
+      } else {
+        sub += Number(it.unitPrice || 0) * Number(it.qty || 1);
+      }
+    }
+    if (typeof o.subtotal === "number") sub = Number(o.subtotal || 0);
+    return sub + Number(o.tip || 0);
+  }
+
+  // ===== Render =====
+  function setCol(id, arr){
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (!arr || !arr.length){
+      el.innerHTML = '<div class="empty">Sin pedidos</div>';
+      return;
+    }
+    var html = "";
+    for (var i=0;i<arr.length;i++){
+      html += buildOrderCard(arr[i]);
+    }
+    el.innerHTML = html;
+  }
+
+  function buildOrderCard(o){
+    o = o || {};
+    var items = (o.items && o.items.length) ? o.items : [];
+    var total = calcTotal(o);
+
+    var code = o.shortId || ("#" + String(o.id || "").substr(0,4));
+    var name = o.customerName || o.customer || "";
+    var meta = (o.mode === "pickup" || o.orderType === "pickup")
+      ? "Para recoger"
+      : (o.table ? ("Mesa " + o.table) : (o.mode || o.orderType || ""));
+
+    var head =
+      '<div class="head-line">' +
+        '<span class="code">'+esc(code)+'</span>' +
+        '<span class="name">'+esc(name || "Cliente")+'</span>' +
+      '</div>' +
+      '<div class="meta">'+esc(meta || "")+'</div>';
+
+    var lines = "";
+    for (var i=0;i<items.length;i++){
+      var it = items[i] || {};
+      var qty = Number(it.qty || 1);
+      var title = esc(qty + "× " + (it.name || "Producto"));
+      var base = (Array.isArray(it.baseIngredients) && it.baseIngredients.length)
+        ? it.baseIngredients
+        : (Array.isArray(it.ingredients) ? it.ingredients : []);
+      var extras = (it.extras || {});
+      var exSauces = Array.isArray(extras.sauces) ? extras.sauces : [];
+      var exIngr   = Array.isArray(extras.ingredients) ? extras.ingredients : [];
+      var chips = [];
+
+      // chips: tipo
+      var t = (it.type || "").toLowerCase();
+      if (t === "drink") chips.push("🥤 Bebida");
+      else if (t === "side") chips.push("🍟 Papas / side");
+      else if (it.mini) chips.push("Mini");
+
+      // extras
+      for (var s=0;s<exSauces.length;s++){
+        chips.push("Aderezo: " + exSauces[s]);
+      }
+      for (var g=0;g<exIngr.length;g++){
+        chips.push("Extra: " + exIngr[g]);
+      }
+      if (extras.dlcCarne) chips.push("DLC carne 85g");
+      if (extras.seasoning) chips.push("Sazonador: " + extras.seasoning);
+
+      var ingHtml = "";
+      if (base && base.length){
+        ingHtml = '<ul class="ing">';
+        for (var b=0;b<base.length;b++){
+          ingHtml += '<li>' + esc(base[b]) + '</li>';
+        }
+        ingHtml += '</ul>';
+      }
+
+      var chipsHtml = chips.length
+        ? '<div class="chips">' +
+            chips.map(function(c){ return '<span class="chip">'+esc(c)+'</span>'; }).join("") +
+          '</div>'
+        : "";
+
+      var notesHtml = it.notes
+        ? '<div class="muted">Notas: '+esc(it.notes)+'</div>'
+        : "";
+
+      lines +=
+        '<div class="item">' +
+          '<div>'+title+'</div>' +
+          ingHtml +
+          chipsHtml +
+          notesHtml +
+        '</div>';
+    }
+
+    var generalNotes = o.notes
+      ? '<div class="muted"><b>Notas generales:</b> '+esc(o.notes)+'</div>'
+      : "";
+
+    var totalHtml = '<div class="total">Total aprox: '+money(total)+'</div>';
+
+    return '' +
+      '<div class="ord">' +
+        head +
+        lines +
+        generalNotes +
+        totalHtml +
+      '</div>';
+  }
+
+  function render(list){
+    list = Array.isArray(list) ? list : [];
+    var cleaned = [];
+
+    for (var i=0;i<list.length;i++){
+      var o = list[i] || {};
+      var st = normStatus(o.status);
+      var total = calcTotal(o);
+      var hasItems = o.items && o.items.length > 0;
+
+      if (isPaid(o)) continue;
+      if (!hasItems || total <= 0) continue;
+      if (st === "DONE" || st === "CANCELLED" || st === "PAID") continue;
+
+      cleaned.push(o);
+    }
+
+    var by = { PENDING:[], IN_PROGRESS:[], READY:[], BILL:[] };
+    for (var j=0;j<cleaned.length;j++){
+      var o2 = cleaned[j];
+      var st2 = normStatus(o2.status);
+      if (st2 === "DELIVERED") by.BILL.push(o2);
+      else if (by[st2]) by[st2].push(o2);
+      else by.PENDING.push(o2);
+    }
+
+    setCol("col-pending",  by.PENDING);
+    setCol("col-progress", by.IN_PROGRESS);
+    setCol("col-ready",    by.READY);
+    setCol("col-bill",     by.BILL);
+  }
+
+  // ===== Suscripción Firestore =====
+  db.collection(ORDERS_COLLECTION)
+    .orderBy("createdAt","asc")
+    .onSnapshot(function(snap){
+      var list = [];
+      snap.forEach(function(doc){
+        var d = doc.data() || {};
+        d.id = doc.id;
+        list.push(d);
+      });
+      render(list);
+    }, function(err){
+      console.error("[legacy] error snapshot", err);
+    });
+
+})();
+</script>
 </body>
 </html>
