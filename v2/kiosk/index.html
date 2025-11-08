@@ -9,7 +9,7 @@
   <!-- Hoja de estilos principal -->
   <link rel="stylesheet" href="../shared/styles.css"/>
 
-  <!-- Respaldo ligero por si faltan algunas utilidades en styles.css -->
+  <!-- Respaldo ligero local -->
   <style>
     :root{
       --bg:#0f1422;
@@ -52,7 +52,6 @@
     .btn.tiny{ padding:6px 10px; font-size:11px; }
     .danger{ border-color:#ff5858; color:#ff9b9b; }
 
-    /* Layout principal */
     header.header{
       position:sticky;
       top:0;
@@ -73,11 +72,11 @@
       border-radius:50%;
       background:var(--accent);
     }
+
     main.container{
       padding:8px 14px 96px; /* espacio para la barra del carrito */
     }
 
-    /* Barra superior HH + ETA */
     .topbar{
       display:flex;
       align-items:center;
@@ -97,14 +96,17 @@
     }
     #hhPill.on{ border-color:var(--accent); }
     #hhText{ font-weight:700; }
-    .eta{ margin-left:auto; white-space:nowrap; font-size:11px; }
+    .eta{
+      margin-left:auto;
+      white-space:nowrap;
+      font-size:11px;
+    }
     .eta .chip{
       border:1px solid var(--stroke);
       padding:6px 10px;
       border-radius:999px;
     }
 
-    /* Tabs */
     #tabsBar{
       display:flex;
       justify-content:center;
@@ -127,7 +129,6 @@
       color:#000;
     }
 
-    /* Grid de productos */
     #cards.grid{
       display:grid;
       gap:16px;
@@ -161,7 +162,6 @@
       display:block;
     }
 
-    /* Chips / acordeón ingredientes */
     .k-chips{
       display:flex;
       gap:6px;
@@ -181,7 +181,6 @@
     }
     details.ing-acc summary::-webkit-details-marker{ display:none; }
 
-    /* Modal base (fallback si el CSS global no define estilos) */
     .modal{
       display:none;
       position:fixed;
@@ -239,7 +238,6 @@
     }
     .total{ font-size:18px; }
 
-    /* Barra de carrito fija */
     #cartBar{
       position:fixed;
       left:0;
@@ -257,8 +255,8 @@
     }
     #openCart.btn{ border-radius:999px; }
 
-    /* Utilitarios */
     #app{ padding:8px 14px; font-size:13px; }
+
     .err{
       position:fixed;
       left:8px;
@@ -325,7 +323,6 @@
         <div class="title-sub small">Kiosko V2 (test)</div>
       </div>
     </div>
-
     <div class="topbar">
       <div id="hhPill">
         <span id="hhText" class="small">HH OFF</span>
@@ -341,7 +338,7 @@
   <nav id="tabsBar" class="tabs">
     <button id="btnMinis" class="btn tab is-active">Minis</button>
     <button id="btnBig" class="btn tab">Big</button>
-    <!-- Tabs de Papas / Bebidas se agregan dinámicamente desde app.js si el menú las trae -->
+    <!-- Papas / Bebidas se agregan dinámicamente desde app.js -->
   </nav>
 
   <!-- Contenido principal -->
@@ -393,7 +390,7 @@
     </div>
   </div>
 
-  <!-- Badge de modo (online/offline/legacy) -->
+  <!-- Badge de modo -->
   <script>
     (function(){
       const qs = new URLSearchParams(location.search);
@@ -413,7 +410,7 @@
     })();
   </script>
 
-  <!-- Loader progresivo único -->
+  <!-- Loader progresivo -->
   <script type="module">
     (async () => {
       const showErr = (label, val) => {
@@ -435,26 +432,38 @@
         showErr('Promise', (e.reason && e.reason.message) || e.reason || 'rejected');
       });
 
-      // Guard de tema opcional (si no existe, se ignora)
+      // 1) Firebase: solo si NO estamos en modo offline
+      try {
+        if (!window.MODE || !window.MODE.OFFLINE) {
+          await import('../shared/firebase.js?v=20251108');
+          console.info('[kiosk] firebase.js cargado (modo online)');
+        } else {
+          console.info('[kiosk] modo OFFLINE: sin firebase, usará SIM');
+        }
+      } catch (e) {
+        console.error('[kiosk] No se pudo cargar firebase.js, se usará SIM', e);
+      }
+
+      // 2) Guard de tema opcional
       try {
         await import('../shared/theme-guard.js?v=20251108');
       } catch {}
 
-      // Config opcional
+      // 3) Config opcional
       try {
         await import('./config.js?v=20251108');
       } catch (e) {
         console.warn('[kiosk] config.js no cargó (opcional)', e);
       }
 
-      // Legacy opcional (limpieza visual si hay restos viejos)
+      // 4) Legacy opcional
       try {
         await import('./legacy.js?v=20251108');
-      } catch (e) {
+      } catch {
         console.info('[kiosk] sin legacy.js (ok)');
       }
 
-      // Limpia restos legacy si algún HTML viejo los trae
+      // 5) Limpieza de restos legacy
       [
         '#filters','#optionsPane','#preferences','#legacy','.legacy',
         '.kiosk-form','#formOptions','#formExtras','.right-panel',
@@ -463,7 +472,7 @@
         document.querySelectorAll(sel).forEach(n => n.remove());
       });
 
-      // App real — asegúrate de que la versión coincida con tus imports internos
+      // 6) App real
       await import('./app.js?v=20251108');
     })();
   </script>
