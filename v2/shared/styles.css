@@ -1,7 +1,7 @@
 /* ===========================
    Seven de Burgers — UI Pixel Retro (tematizable)
    Archivo: shared/styles.css
-   Versión consolidada
+   Versión consolidada (fonts + cocina legible)
    =========================== */
 
 /* -----------------------------------------------------------
@@ -99,6 +99,8 @@ html { -webkit-text-size-adjust:100%; }
 body{
   margin:0;
   font-family:var(--font);
+  font-size:15px;                 /* 🔎 tamaño base más grande */
+  line-height:1.4;
   letter-spacing:.2px;
   color:var(--ink1);
   background:
@@ -125,10 +127,12 @@ a:hover{ text-decoration:underline }
 .row{ display:flex; align-items:center; gap:8px; min-width:0; }
 .right{ text-align:right } .center{ text-align:center } .nowrap{ white-space:nowrap }
 .mono{ font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace }
-.muted{ color:var(--muted) } .small{ font-size:12px }
+.muted{ color:var(--muted) }
+.small{ font-size:13px }                    /* 🔎 antes 12px */
 .tag{
   display:inline-flex; align-items:center; gap:6px;
-  padding:2px 8px; border-radius:999px; font-size:12px;
+  padding:2px 8px; border-radius:999px;
+  font-size:13px;                           /* 🔎 un poco más grande */
   background:#132b3b; color:var(--muted); border:1px solid var(--stroke);
 }
 .visually-hidden{
@@ -153,7 +157,7 @@ a:hover{ text-decoration:underline }
   width:10px; height:10px; background:var(--accent);
   border-radius:3px; box-shadow:0 0 14px var(--accent);
 }
-.title-sub{ font-size:12px; color:var(--muted); }
+.title-sub{ font-size:13px; color:var(--muted); }
 .brand > div > div:first-child,
 h1,h2,h3,h4,
 .title-sub,
@@ -191,7 +195,7 @@ h1,h2,h3,h4,
   opacity:.55; cursor:not-allowed; transform:none;
   box-shadow:0 0 0 #000, 0 6px 12px rgba(0,0,0,.15);
 }
-.btn.small{ font-size:12px; padding:8px 12px; min-height:var(--tap); }
+.btn.small{ font-size:13px; padding:8px 12px; min-height:var(--tap); }
 .btn.ghost{
   border:2px solid color-mix(in srgb, var(--ink1) 25%, transparent);
   background:var(--panel2); color:var(--ink1); box-shadow:none;
@@ -255,7 +259,7 @@ h1,h2,h3,h4,
 }
 .price{
   color:var(--primary); font-weight:900;
-  font-size:clamp(14px,2vw,18px);
+  font-size:clamp(15px,2vw,19px);
 }
 .card .price s{ opacity:.6; margin-right:6px; }
 .card .price .tag{
@@ -270,14 +274,12 @@ h1,h2,h3,h4,
   background:#131d30;
 }
 
-/* Card contenido extra, por si se usa .scroll-body */
+/* Card contenido extra */
 .card .scroll-body{
   max-height: calc(100% - var(--card-foot-h) - 60px);
   overflow:auto;
   -webkit-overflow-scrolling:touch;
 }
-
-/* Fallback cuando no hay .scroll-body */
 .card details,
 .card .ing-acc,
 .card .ing-list,
@@ -333,7 +335,7 @@ h1,h2,h3,h4,
 .field{ margin:10px 0; min-width:0; }
 label{
   display:block; margin-bottom:6px;
-  color:var(--muted); font-size:12px;
+  color:var(--muted); font-size:13px;
 }
 input[type=text],
 input[type=number],
@@ -357,7 +359,7 @@ input:-webkit-autofill{
   box-shadow: 0 0 0px 1000px color-mix(in srgb, var(--panel2) 90%, black 10%) inset;
 }
 
-/* ---- Listas limpias (vista general) ---- */
+/* ---- Listas limpias ---- */
 .ul-clean{
   display:grid;
   grid-template-columns:28px 1fr auto;
@@ -368,7 +370,7 @@ input:-webkit-autofill{
   accent-color:var(--primary);
 }
 .ul-clean .tag{
-  font-size:12px; color:var(--muted-2);
+  font-size:13px; color:var(--muted-2);
 }
 
 /* ===== Modal ===== */
@@ -417,10 +419,11 @@ input:-webkit-autofill{
   -webkit-overflow-scrolling:touch;
 }
 
-/* >>> Chips para “Incluye” */
+/* >>> Chips “Incluye” */
 .k-chips{ display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
 .k-chip{
-  font-size:.85rem; padding:4px 8px;
+  font-size:13px;
+  padding:4px 8px;
   border-radius:999px;
   background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.08);
@@ -442,7 +445,7 @@ input:-webkit-autofill{
   to{ transform:translate(-50%,0); opacity:1 }
 }
 
-/* ---- Kanban ---- */
+/* ---- Kanban genérico ---- */
 .k-columns{
   display:grid; gap:16px;
   grid-template-columns:repeat(3,1fr);
@@ -457,7 +460,7 @@ input:-webkit-autofill{
   margin-bottom:10px; min-width:0;
 }
 .k-head .title{
-  font-size:14px; margin-bottom:6px;
+  font-size:15px; margin-bottom:6px;
   font-family:var(--font-display);
 }
 .k-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
@@ -465,7 +468,7 @@ input:-webkit-autofill{
 .k-badge{
   background:#132b3b; border:1px solid var(--stroke);
   padding:2px 8px; border-radius:999px;
-  font-size:12px; color:var(--muted);
+  font-size:13px; color:var(--muted);
 }
 .k-badge.ok{ background:#183a2a; }
 .k-badge.warn{ background:#3a2f18; }
@@ -601,7 +604,7 @@ input:-webkit-autofill{
   );
   color:var(--ink1);
   border-radius:999px; padding:6px 10px;
-  font-size:12px; line-height:1.2;
+  font-size:13px; line-height:1.2;
   box-shadow:none; width:auto; max-width:100%;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
@@ -725,7 +728,7 @@ body.has-cart{ padding-bottom:86px; }
   }
 }
 
-/* ---- Kiosko mobile / sidebars ---- */
+/* ---- Kiosko sidebars ---- */
 @media (min-width:1280px){
   body.has-sidebars main.container{
     max-width:none;
@@ -741,26 +744,56 @@ body.has-cart{ padding-bottom:86px; }
   }
 }
 
-/* ---- Cocina responsive ---- */
+/* ---- Cocina V2 (lectura grande) ---- */
+.board{
+  display:grid;
+  gap:16px;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+}
+.col{
+  font-size:14px;
+}
+.col h2{
+  font-size:16px;
+}
+.order{
+  font-size:13px;
+}
+.order-header{
+  font-size:12px;
+}
+.order-id{
+  font-size:11px;
+}
+.order-name{
+  font-size:13px;
+}
+.order-items > li{
+  font-size:12px;
+}
+.order-items ul.ing{
+  font-size:11px;
+}
+.notes{
+  font-size:11px;
+}
+.total{
+  font-size:15px;
+}
+.order-actions .btn{
+  font-size:11px;
+  padding:6px 10px;
+}
+
+/* responsive columnas cocina */
 @media (max-width:1100px){
-  .k-columns{ grid-template-columns:repeat(2,1fr); }
+  .board{ grid-template-columns:repeat(3,minmax(0,1fr)); }
 }
 @media (max-width:720px){
-  .k-columns{ grid-template-columns:1fr; max-height:calc(100vh - 180px); overflow:auto; -webkit-overflow-scrolling:touch; }
-  .k-card{ padding:12px; margin-bottom:8px; }
-  .k-head .title{ font-size:13px; }
-  .k-badge{ font-size:11px; }
-  .k-actions{ gap:6px; }
-  .k-actions .btn.small{ padding:9px 10px; min-width:auto; }
-  .k-table th,.k-table td{ padding:8px; }
+  .board{ grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
-@media (max-width:400px){
-  .k-actions{ flex-direction:row; flex-wrap:wrap; }
-  .k-actions .btn.small{ flex:1 1 48%; }
-}
-@media (max-width:720px){
-  .header{ position:sticky; top:0; }
-  body{ overscroll-behavior-y:none; }
+@media (max-width:520px){
+  .board{ grid-template-columns:1fr; }
 }
 
 /* ===== Tabs pegajosas ===== */
@@ -845,11 +878,7 @@ body.has-cart{ padding-bottom:86px; }
   }
 }
 
-/* =========================================================
-   Sazonadores Papas Gajo UX (alineado)
-   ========================================================= */
-
-/* Contenedor: grid responsiva */
+/* ===== Sazonadores Papas Gajo UX ===== */
 #seasonings{
   display:grid !important;
   grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
@@ -857,8 +886,6 @@ body.has-cart{ padding-bottom:86px; }
   align-items:stretch;
   margin-top:6px;
 }
-
-/* Cada opción como chip clicable */
 #seasonings label{
   display:flex;
   align-items:center;
@@ -868,30 +895,24 @@ body.has-cart{ padding-bottom:86px; }
   border-radius:10px;
   background:rgba(255,255,255,.04);
   border:1px solid rgba(255,255,255,.14);
-  font-size:12px;
+  font-size:13px;
   color:var(--muted);
   cursor:pointer;
   transition:all .18s ease;
   min-height:34px;
   text-align:center;
 }
-
-/* Radio pequeño */
 #seasonings input[type="radio"]{
   width:14px;
   height:14px;
   accent-color:var(--primary);
 }
-
-/* Hover (desktop) */
 @media (hover:hover){
   #seasonings label:hover{
     border-color:color-mix(in srgb, var(--accent) 40%, transparent);
     background:rgba(255,255,255,.06);
   }
 }
-
-/* Seleccionado: dorado Seven */
 #seasonings label:has(input[type="radio"]:checked){
   background:linear-gradient(90deg,
     var(--primary),
@@ -903,8 +924,6 @@ body.has-cart{ padding-bottom:86px; }
              0 0 10px color-mix(in srgb, var(--primary) 40%, transparent);
   font-weight:700;
 }
-
-/* Fallback si :has no existe */
 @supports not (selector(:has(*))){
   #seasonings input[type="radio"]:checked + span{
     color:var(--primary);
