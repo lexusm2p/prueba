@@ -3,67 +3,538 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <title>Cocina — Seven de Burgers</title>
-  <meta name="theme-color" content="#0b1220"/>
-  <link rel="stylesheet" href="../shared/styles.css">
+  <title>Cocina — Seven V2</title>
+  <meta name="robots" content="noindex,nofollow"/>
+
+  <link rel="stylesheet" href="../shared/styles.css"/>
+
   <style>
-    :root{ --bg:#0b1220; --card:#0f182a; --panel:#131f33; --muted:#a6b2c7; }
-    body{ background:var(--bg); color:#e8f0ff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
-    .wrap{ max-width:1400px; margin:12px auto; padding:0 12px; }
-    .cols{ display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; }
-    @media (max-width:1300px){ .cols{ grid-template-columns: repeat(3, 1fr); } }
-    @media (max-width:900px){ .cols{ grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width:640px){ .cols{ grid-template-columns: 1fr; } }
-    .col{ background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; }
-    .h{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-    .h .spacer{ flex:1 }
-    .list{ display:flex; flex-direction:column; gap:8px; min-height:120px; }
-    .card{ background:var(--card); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:10px; }
-    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .price{ margin-left:auto; opacity:.85 }
-    .muted{ color:var(--muted); font-size:.9em }
-    /* Contraste mejorado en botones */
-    .btn{ background:#1a2a3e; border:1px solid rgba(255,255,255,.22); color:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; }
-    .btn.ghost{ background:transparent; }
-    .btn.danger{ background:#6d2836; border-color:#b63e54; }
-    .badge{ background:#203252; border:1px solid rgba(255,255,255,.16); border-radius:999px; padding:2px 8px; font-size:.8em }
-    .total{ font-weight:600; opacity:.9; }
+    :root{
+      --bg:#050814;
+      --panel:#0d1626;
+      --panel-soft:#131e33;
+      --accent:#ffc242;
+      --accent-soft:rgba(255,194,66,.18);
+      --muted:#93a4c4;
+      --danger:#ff5c7a;
+      --ok:#26d98c;
+      --border:rgba(255,255,255,.12);
+      --radius:14px;
+      --font-display:"Press Start 2P", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    *{ box-sizing:border-box; }
+
+    body{
+      margin:0;
+      background:var(--bg);
+      color:#f6f7ff;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      overflow-x:hidden;
+    }
+
+    header{
+      padding:12px 14px 4px;
+      display:flex;
+      align-items:flex-end;
+      gap:10px;
+      position:sticky;
+      top:0;
+      z-index:20;
+      background:linear-gradient(to bottom, #050814, rgba(5,8,20,.92) 70%, transparent);
+      backdrop-filter:blur(6px);
+    }
+    header h1{
+      margin:0;
+      font-family:var(--font-display);
+      font-size:34px;
+      letter-spacing:1px;
+    }
+    header .badge{
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      font-size:11px;
+      color:var(--muted);
+    }
+    header .totals{
+      margin-left:auto;
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:2px;
+      font-size:11px;
+      color:var(--muted);
+    }
+    header .totals strong{
+      font-size:16px;
+      color:var(--accent);
+    }
+
+    main{
+      padding:10px 10px 18px;
+    }
+
+    .board{
+      display:grid;
+      gap:10px;
+      grid-template-columns:repeat(5, minmax(0,1fr));
+    }
+
+    .col{
+      background:var(--panel);
+      border-radius:var(--radius);
+      padding:8px 6px 8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      border:1px solid var(--border);
+      min-height:160px;
+    }
+    .col h2{
+      margin:0 4px 4px;
+      font-size:13px;
+      font-family:var(--font-display);
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .col h2 span{
+      font-size:10px;
+      padding:0 6px;
+      border-radius:999px;
+      background:rgba(0,0,0,.45);
+      color:var(--accent);
+      border:1px solid rgba(255,255,255,.12);
+    }
+
+    .order{
+      background:var(--panel-soft);
+      border-radius:10px;
+      padding:6px 6px 5px;
+      border:1px solid rgba(255,255,255,.10);
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:11px;
+      box-shadow:0 4px 10px rgba(0,0,0,.35);
+    }
+    .order-header{
+      display:flex;
+      align-items:baseline;
+      gap:6px;
+      font-family:var(--font-display);
+      font-size:10px;
+    }
+    .order-id{
+      color:#9fe;
+      background:rgba(0,0,0,.6);
+      padding:2px 6px;
+      border-radius:999px;
+    }
+    .order-name{
+      font-size:11px;
+      color:#fff;
+      text-transform:lowercase;
+    }
+    .order-meta{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      color:var(--muted);
+    }
+    .order-items{
+      margin:2px 0 0;
+      padding-left:10px;
+      list-style:disc;
+      color:#d9e2ff;
+    }
+    .order-items li{
+      margin-bottom:2px;
+    }
+    .notes{
+      margin-top:2px;
+      padding:3px 4px;
+      font-size:10px;
+      color:#ffdede;
+      background:rgba(255,92,122,.06);
+      border-radius:6px;
+      border:1px solid rgba(255,92,122,.25);
+    }
+    .total{
+      margin-top:2px;
+      display:flex;
+      justify-content:flex-end;
+      gap:6px;
+      align-items:center;
+      font-weight:700;
+      color:var(--accent);
+      font-size:12px;
+    }
+    .order-actions{
+      margin-top:4px;
+      display:flex;
+      gap:4px;
+      flex-wrap:wrap;
+    }
+    .btn{
+      border:none;
+      cursor:pointer;
+      padding:3px 7px;
+      font-size:9px;
+      border-radius:7px;
+      background:var(--accent-soft);
+      color:var(--accent);
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      transition:all .16s;
+    }
+    .btn:hover{ background:rgba(255,194,66,.3); }
+    .btn.small{ font-size:8px; padding:2px 6px; }
+    .btn-primary{
+      background:var(--accent);
+      color:#111;
+      font-weight:700;
+    }
+    .btn-ok{
+      background:var(--ok);
+      color:#02040a;
+      font-weight:600;
+    }
+    .btn-danger{
+      background:var(--danger);
+      color:#fff;
+    }
+    .pill{
+      padding:1px 5px;
+      border-radius:999px;
+      font-size:8px;
+      border:1px solid rgba(255,255,255,.16);
+      color:var(--muted);
+    }
+
+    .empty{
+      font-size:9px;
+      color:var(--muted);
+      padding:4px 6px 6px;
+    }
+
+    .status-tag{
+      font-size:8px;
+      padding:1px 4px;
+      border-radius:4px;
+      background:rgba(0,0,0,.5);
+      color:var(--muted);
+      margin-left:auto;
+    }
+
+    @media (max-width:980px){
+      .board{
+        grid-template-columns:repeat(3,minmax(0,1fr));
+      }
+    }
+    @media (max-width:720px){
+      header h1{ font-size:26px; }
+      .board{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1 style="margin:8px 0 12px">Cocina — Seven</h1>
-
-    <div class="cols" id="cols">
-      <div class="col" data-col="PENDING">
-        <div class="h"><b>Pendientes</b><span class="badge" id="cP">0</span></div>
-        <div class="list" id="lP" aria-live="polite"></div>
-      </div>
-      <div class="col" data-col="IN_PROGRESS">
-        <div class="h"><b>En progreso</b><span class="badge" id="cI">0</span></div>
-        <div class="list" id="lI" aria-live="polite"></div>
-      </div>
-      <div class="col" data-col="READY">
-        <div class="h"><b>Listos</b><span class="badge" id="cR">0</span></div>
-        <div class="list" id="lR" aria-live="polite"></div>
-      </div>
-      <div class="col" data-col="AR">
-        <div class="h">
-          <b>Por cobrar</b><span class="badge" id="cA">0</span>
-          <span class="spacer"></span>
-          <span class="muted">Total:</span>
-          <span class="total" id="tA">$0</span>
-        </div>
-        <div class="list" id="lA" aria-live="polite"></div>
-      </div>
-      <div class="col" data-col="DELIVERED">
-        <div class="h"><b>Entregados</b><span class="badge" id="cD">0</span></div>
-        <div class="list" id="lD" aria-live="polite"></div>
-      </div>
-    </div>
+<header>
+  <h1>Cocina — Seven</h1>
+  <div class="badge" id="modeBadge">modo: sim/local</div>
+  <div class="totals">
+    <div>Pendientes + progreso</div>
+    <strong id="totalPend">$0</strong>
+    <div class="pill" id="countPend">0 pedidos</div>
   </div>
-<script type="module" src="./app.js?v=20251108"></script>
-  <!-- IMPORTANTE: solo este script. Nada de firebase.js ni db-compat extras aquí -->
-  <script type="module" src="./app.js"></script>
+</header>
+
+<main>
+  <section class="board">
+    <div class="col" id="col-pending">
+      <h2>Pendientes <span id="count-pending">0</span></h2>
+      <div class="empty">Aquí llegan los pedidos nuevos del kiosko.</div>
+    </div>
+    <div class="col" id="col-progress">
+      <h2>En progreso <span id="count-progress">0</span></h2>
+      <div class="empty">Pedidos que alguien ya tomó.</div>
+    </div>
+    <div class="col" id="col-ready">
+      <h2>Listos <span id="count-ready">0</span></h2>
+      <div class="empty">Listos para entregar al cliente.</div>
+    </div>
+    <div class="col" id="col-charge">
+      <h2>Por cobrar <span id="count-charge">0</span></h2>
+      <div class="empty">Pedidos entregados, falta pago.</div>
+    </div>
+    <div class="col" id="col-done">
+      <h2>Entregados <span id="count-done">0</span></h2>
+      <div class="empty">Historial reciente.</div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+  import { subscribeOrders, updateOrderStatus, BASE_PREFIX } from '../shared/db.js';
+  import { initThemeFromSettings } from '../shared/theme.js';
+  import { beep, toast } from '../shared/notify.js';
+
+  const state = {
+    orders: [],
+    unsub: null
+  };
+
+  const el = {
+    cols: {
+      pending:  document.getElementById('col-pending'),
+      progress: document.getElementById('col-progress'),
+      ready:    document.getElementById('col-ready'),
+      charge:   document.getElementById('col-charge'),
+      done:     document.getElementById('col-done')
+    },
+    count: {
+      pending:  document.getElementById('count-pending'),
+      progress: document.getElementById('count-progress'),
+      ready:    document.getElementById('count-ready'),
+      charge:   document.getElementById('count-charge'),
+      done:     document.getElementById('count-done')
+    },
+    totalPend: document.getElementById('totalPend'),
+    countPend: document.getElementById('countPend'),
+    modeBadge: document.getElementById('modeBadge')
+  };
+
+  // Init tema (no rompe si no hay Firestore)
+  initThemeFromSettings({ defaultName:'Base' });
+
+  // Suscribirse a pedidos
+  state.unsub = await subscribeOrders(onOrders);
+
+  function onOrders(list){
+    // Normalizar un poco
+    state.orders = (list || []).map(o => ({
+      ...o,
+      id: o.id || o.orderId || '',
+      customerName: (o.customerName || o.name || '').toString(),
+      phone: (o.phone || '').toString(),
+      status: (o.status || 'pending').toLowerCase(),
+      total: Number(o.total || o.lineTotal || 0),
+      items: Array.isArray(o.items) ? o.items : [],
+      source: o.source || 'kiosk-v2'
+    }));
+    render();
+  }
+
+  function pickColumnKey(ord){
+    const s = ord.status;
+    if (s === 'pending' || !s) return 'pending';
+    if (s === 'preparing' || s === 'in-progress') return 'progress';
+    if (s === 'ready') return 'ready';
+    if (s === 'delivered') return 'charge';  // Entregado al cliente, falta cobro
+    if (s === 'paid' || s === 'completed') return 'done';
+    // Desconocido → por si acaso mostrar en pendientes
+    return 'pending';
+  }
+
+  function render(){
+    // Limpia columnas
+    Object.values(el.cols).forEach(col => {
+      col.querySelectorAll('.order').forEach(n => n.remove());
+      const empty = col.querySelector('.empty');
+      if (empty) empty.style.display = 'block';
+    });
+
+    const counts = { pending:0, progress:0, ready:0, charge:0, done:0 };
+    let totalPend = 0;
+
+    state.orders.forEach(ord => {
+      const key = pickColumnKey(ord);
+      const col = el.cols[key];
+      if (!col) return;
+
+      const card = buildOrderCard(ord);
+      col.appendChild(card);
+
+      const empty = col.querySelector('.empty');
+      if (empty) empty.style.display = 'none';
+
+      counts[key]++;
+      if (key === 'pending' || key === 'progress'){
+        totalPend += ord.total || 0;
+      }
+    });
+
+    // Actualizar contadores
+    Object.entries(counts).forEach(([k,v]) => {
+      if (el.count[k]) el.count[k].textContent = v;
+    });
+    el.totalPend.textContent = '$' + totalPend.toFixed(0);
+    el.countPend.textContent = `${counts.pending + counts.progress} pedidos`;
+
+    // Mostrar modo (SIM vs real) según id generado
+    const anySim = state.orders.some(o => String(o.id).startsWith('SIM-'));
+    el.modeBadge.textContent = `modo: ${anySim ? 'SIM (localStorage)' : 'Firestore'}`;
+  }
+
+  function buildOrderCard(ord){
+    const div = document.createElement('div');
+    div.className = 'order';
+    div.dataset.id = ord.id;
+
+    const shortId = (ord.id || '').slice(-4) || '----';
+    const name = ord.customerName || 'sin nombre';
+    const phone = ord.phone ? `📞 ${ord.phone}` : '';
+    const src = ord.source || '';
+
+    // Items bonitos
+    const itemsHtml = (ord.items || []).map(it => {
+      const qty = it.qty || 1;
+      const nm  = it.name || it.id || 'item';
+      const notes = (it.notes || '').trim();
+      let line = `${qty}× ${nm}`;
+      if (it.type === 'drink') line += ' 🥤';
+      if (it.type === 'mini')  line += ' (mini)';
+      if (it.type === 'side')  line += ' 🍟';
+      const extras = it.extras || {};
+      const extraBits = [];
+
+      if (extras.seasoning) extraBits.push(`Sazonador: ${extras.seasoning}`);
+      if (Array.isArray(extras.sauces) && extras.sauces.length){
+        extraBits.push('Salsas: ' + extras.sauces.join(', '));
+      }
+      if (Array.isArray(extras.ingredients) && extras.ingredients.length){
+        extraBits.push('Extras: ' + extras.ingredients.map(e => e.name || e.id || e).join(', '));
+      }
+      if (notes) extraBits.push('Nota: ' + notes);
+
+      if (!extraBits.length) return `<li>${line}</li>`;
+      return `<li>${line}<br><span class="muted">${extraBits.join(' · ')}</span></li>`;
+    }).join('') || '<li>Sin desglose (revisar en ticket)</li>';
+
+    const orderNotes = (ord.notes || '').trim();
+
+    const statusLabel = ord.status || 'pending';
+
+    div.innerHTML = `
+      <div class="order-header">
+        <div class="order-id">#${shortId}</div>
+        <div class="order-name">${escapeHtml(name)}</div>
+        ${phone ? `<div class="pill">${escapeHtml(phone)}</div>` : ''}
+        <div class="status-tag">${escapeHtml(statusLabel)}</div>
+      </div>
+      <div class="order-meta">
+        <span class="pill">${escapeHtml(src)}</span>
+        <span class="pill">Creado: ${formatTime(ord.createdAt)}</span>
+      </div>
+      <ul class="order-items">
+        ${itemsHtml}
+      </ul>
+      ${orderNotes ? `<div class="notes">Notas: ${escapeHtml(orderNotes)}</div>` : ''}
+      <div class="total">
+        Total <span>$${(ord.total || 0).toFixed(0)}</span>
+      </div>
+      <div class="order-actions">
+        ${buildActionsHtml(ord)}
+      </div>
+    `;
+
+    // Bind actions
+    div.querySelectorAll('[data-act]').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const act = btn.dataset.act;
+        await handleAction(ord, act);
+      });
+    });
+
+    return div;
+  }
+
+  function buildActionsHtml(ord){
+    const s = (ord.status || 'pending').toLowerCase();
+
+    // Flujo:
+    // pending   -> [Tomar] (preparing)
+    // preparing -> [Listo] (ready)
+    // ready     -> [Entregado] (delivered -> Por cobrar)
+    // delivered -> [Cobrar] (paid -> Entregados)
+    // paid      -> sin acciones
+    if (s === 'pending') {
+      return `<button class="btn btn-primary" data-act="take">Tomar</button>`;
+    }
+    if (s === 'preparing' || s === 'in-progress') {
+      return `<button class="btn btn-ok" data-act="ready">Listo</button>`;
+    }
+    if (s === 'ready') {
+      return `<button class="btn btn-primary" data-act="delivered">Entregado</button>`;
+    }
+    if (s === 'delivered') {
+      return `<button class="btn btn-ok" data-act="paid">Cobrar</button>`;
+    }
+    if (s === 'paid' || s === 'completed') {
+      return `<span class="pill">Archivado</span>`;
+    }
+    // fallback
+    return `<button class="btn small" data-act="take">Tomar</button>`;
+  }
+
+  async function handleAction(ord, act){
+    try{
+      if (act === 'take') {
+        await updateOrderStatus(ord.id, 'preparing');
+        beep();
+        return;
+      }
+      if (act === 'ready') {
+        await updateOrderStatus(ord.id, 'ready');
+        beep();
+        return;
+      }
+      if (act === 'delivered') {
+        await updateOrderStatus(ord.id, 'delivered');
+        beep();
+        return;
+      }
+      if (act === 'paid') {
+        // Marca como pagado/archivado
+        await updateOrderStatus(ord.id, 'paid');
+        beep();
+        toast('Pedido cobrado y archivado');
+        return;
+      }
+    }catch(e){
+      console.error('[cocina] handleAction error', e);
+      toast('No se pudo actualizar el pedido');
+    }
+  }
+
+  function escapeHtml(str=''){
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  function formatTime(ts){
+    if (!ts) return '--:--';
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return '--:--';
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${hh}:${mm}`;
+  }
+
+  window.addEventListener('beforeunload', () => {
+    try{ state.unsub && state.unsub(); }catch{}
+  });
+
+  console.info('[cocina] usando BASE_PREFIX =', BASE_PREFIX);
+</script>
 </body>
 </html>
