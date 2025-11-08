@@ -1,531 +1,233 @@
-// /shared/db.js — V2.8.1-kitchen-safe
-// - Seguro en modo simulación (sin Firestore)
-// - Compatible con kiosko V2 y cocina V2.2
-// - Anti-resurrección de estados, debounce en suscripciones, orden estable
+// shared/db.js · Seven V2
+// ÚNICA fuente de verdad para Kiosko V2 y Cocina V2
+// - Si hay Firestore disponible -> usa colección real
+// - Si NO hay Firestore -> usa modo SIM compartido (localStorage)
+// - BASE_PREFIX atado a /v2/ para que no choque con la versión anterior
 
-const MODE = (typeof window !== 'undefined' && window.MODE) ? window.MODE : {
-  OFFLINE:false,
-  READONLY:false,
-  LEGACY:false
-};
+/* ======================= Base prefix ======================= */
+const parts = (location.pathname || '/').split('/').filter(Boolean);
+const idxV2 = parts.indexOf('v2');
 
-/* ------------ BASE PREFIX (catálogo compartido kiosk/cocina) ------------ */
-const BASE_PREFIX = (() => {
+// /prueba/v2/  (incluye última barra)
+export const BASE_PREFIX =
+  idxV2 >= 0 ? '/' + parts.slice(0, idxV2 + 1).join('/') + '/' : '/';
+
+const LS_NAMESPACE = (BASE_PREFIX.replace(/\W+/g, '-') || 'seven') + '-orders-sim';
+const ORDERS_KEY = LS_NAMESPACE;
+
+console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'LS namespace =', LS_NAMESPACE);
+
+/* ======================= Firestore helpers ======================= */
+
+function getDb() {
+  // adapta a cómo inicializas Firebase en firebase.js
+  // intenta varias opciones seguras:
+  return (
+    window.FIREBASE_DB ||          // recomendada
+    window.firebaseDb ||
+    window.db ||
+    null
+  );
+}
+
+let _firestorePkg = null;
+async function ensureFirestorePkg() {
+  if (_firestorePkg) return _firestorePkg;
+  // Si tu bundler ya incluye firebase/firestore, puedes eliminar este import dinámico
   try {
-    const parts = location.pathname.split('/').filter(Boolean);
-    // /algo/v2/... => /algo/v2/
-    if (parts[0] && parts[1] === 'v2') return `/${parts[0]}/v2/`;
-
-    // Forzar que cocina use el mismo catálogo que kiosk
-    if (parts[0] === 'kiosk')  return '/kiosk/';
-    if (parts[0] === 'cocina') return '/kiosk/';
-
-    return parts[0] ? `/${parts[0]}/` : '/';
-  } catch {
-    return '/';
+    const mod = await import(
+      'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
+    );
+    _firestorePkg = {
+      collection: mod.collection,
+      addDoc: mod.addDoc,
+      onSnapshot: mod.onSnapshot,
+      query: mod.query,
+      orderBy: mod.orderBy,
+      updateDoc: mod.updateDoc,
+      doc: mod.doc,
+      serverTimestamp: mod.serverTimestamp || (() => Date.now())
+    };
+  } catch (e) {
+    console.warn('[db] No se pudo cargar firebase/firestore, usando SIM', e);
+    _firestorePkg = null;
   }
-})();
+  return _firestorePkg;
+}
 
-/* ------------ NAMESPACE localStorage ------------ */
-const STORAGE_SLUG = (() => {
-  if (typeof window !== 'undefined' && window.STORAGE_NS) {
-    return String(window.STORAGE_NS);
-  }
+function hasRealDb() {
+  return !!getDb();
+}
+
+/* ======================= SIM (localStorage compartido) ======================= */
+
+function readSimOrders() {
   try {
-    const p = location.pathname.split('/').filter(Boolean);
-    return (p[0] ? p[0] : 'root') + (p[1] ? `-${p[1]}` : '');
+    const raw = localStorage.getItem(ORDERS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
   } catch {
-    return 'root';
+    return [];
   }
-})();
-
-/* ------------ Firestore dinámico (con fallback seguro) ------------ */
-let fs = null, app = null, db = null;
-try {
-  const mod = await import('./firebase.js');
-  app = mod.app ?? null;
-  db  = mod.db  ?? null;
-} catch (e) {
-  console.warn('[db] No ./firebase.js (OK en modo PRUEBA):', e);
 }
 
-try {
-  fs = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
-} catch (e) {
-  console.warn('[db] No Firestore CDN (OK en modo PRUEBA):', e);
-}
-
-/* ------------ Shims / helpers Firestore ------------ */
-const Timestamp       = fs?.Timestamp       ?? { fromDate: d => ({ toMillis: () => (d instanceof Date ? d.getTime() : new Date(d).getTime()) }) };
-const serverTimestamp = fs?.serverTimestamp ?? (() => ({ __localServerTimestamp: Date.now() }));
-const increment       = fs?.increment       ?? (n => n);
-
-const doc        = fs?.doc        ?? (() => ({}));
-const getDoc     = fs?.getDoc     ?? (async () => ({ exists: () => false, data: () => null }));
-const setDoc     = fs?.setDoc     ?? (async () => void 0);
-const updateDoc  = fs?.updateDoc  ?? (async () => void 0);
-const addDoc     = fs?.addDoc     ?? (async () => ({ id: `SIM-${Math.random().toString(36).slice(2,10)}` }));
-const deleteDoc  = fs?.deleteDoc  ?? (async () => void 0);
-const collection = fs?.collection ?? (() => ({}));
-const onSnapshot = fs?.onSnapshot ?? (() => () => {});
-const query      = fs?.query      ?? ((...a) => a);
-const where      = fs?.where      ?? ((...a) => a);
-const orderBy    = fs?.orderBy    ?? ((...a) => a);
-const limit      = fs?.limit      ?? ((...a) => a);
-const getDocs    = fs?.getDocs    ?? (async () => ({ docs: [] }));
-
-const HAS_DB = !!db && !!fs && typeof addDoc === 'function';
-
-/* ------------ Utils ------------ */
-export async function ensureAuth(){ return true; }
-
-const sleep = (ms = 80) => new Promise(r => setTimeout(r, ms));
-function nowMs(){ return Date.now(); }
-function startOfToday(){
-  const d = new Date(); d.setHours(0,0,0,0); return d.getTime();
-}
-function ymd(){
-  const d = new Date();
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const dd = String(d.getDate()).padStart(2,'0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-function toMillisFlexible(raw){
-  if (raw == null) return null;
-  if (typeof raw === 'number') return raw;
-  if (typeof raw?.toMillis === 'function') return raw.toMillis();
-  if (raw?.seconds != null) {
-    return raw.seconds*1000 + Math.floor((raw.nanoseconds||0)/1e6);
+function writeSimOrders(list) {
+  try {
+    localStorage.setItem(ORDERS_KEY, JSON.stringify(list || []));
+  } catch {
+    // ignore
   }
-  const ms = new Date(raw).getTime();
-  return Number.isFinite(ms) ? ms : null;
 }
 
-/* ------------ Guard de escrituras (sim vs real) ------------ */
-async function guardWrite(training, realWriteFn, fakeValue = null){
-  const forceSim = MODE.OFFLINE || MODE.READONLY || training || !HAS_DB;
-  if (!forceSim) return realWriteFn();
-  await sleep(60);
-  return (typeof fakeValue === 'function')
-    ? fakeValue()
-    : (fakeValue ?? { ok:true, _training:true });
-}
-
-/* ------------ Catálogo ------------ */
-function normalizeCatalog(cat = {}){
-  const safeArr = (x) => Array.isArray(x) ? x : (x ? [x] : []);
-
-  const appSettings = {
-    miniMeatGrams: Number(cat?.appSettings?.miniMeatGrams ?? 45),
-    meatGrams: Number(cat?.appSettings?.meatGrams ?? 85),
-    defaultSuggestMlPerOrder: Number(cat?.appSettings?.defaultSuggestMlPerOrder ?? 20),
-    lowStockThreshold: Number(cat?.appSettings?.lowStockThreshold ?? 5),
-  };
-
-  const happyHour = {
-    enabled: !!cat?.happyHour?.enabled,
-    discountPercent: Number(cat?.happyHour?.discountPercent ?? 0),
-    bannerText: String(cat?.happyHour?.bannerText ?? ''),
-    applyEligibleOnly: cat?.happyHour?.applyEligibleOnly !== false,
-    endsAt: toMillisFlexible(cat?.happyHour?.endsAt ?? null),
-  };
-
-  return {
-    burgers: safeArr(cat.burgers),
-    minis:   safeArr(cat.minis),
-    drinks:  safeArr(cat.drinks),
-    sides:   safeArr(cat.sides),
-    combos:  safeArr(cat.combos),
-    extras: {
-      sauces: safeArr(cat?.extras?.sauces ?? []),
-      ingredients: safeArr(cat?.extras?.ingredients ?? []),
-      ingredientPrice: Number(cat?.extras?.ingredientPrice ?? 0),
-      saucePrice: Number(cat?.extras?.saucePrice ?? 0),
-      dlcCarneMini: Number(cat?.extras?.dlcCarneMini ?? 0),
-    },
-    happyHour,
-    appSettings,
-    giftTemplates: cat.giftTemplates || {},
-    _version: cat._version || null
-  };
-}
-
-const DATA_MENU_URL   = `${BASE_PREFIX}data/menu.json`;
-const SHARED_MENU_URL = `${BASE_PREFIX}shared/catalog.json`;
-
-export async function fetchCatalogWithFallback(){
-  try { await ensureAuth(); } catch {}
-
-  // 1) data/menu.json (proyecto actual)
-  try{
-    const r = await fetch(DATA_MENU_URL, { cache:'no-store' });
-    if (r.ok) return normalizeCatalog(await r.json());
-  }catch(e){ console.warn('[catalog]', DATA_MENU_URL, e); }
-
-  // 2) shared/catalog.json (catálogo común)
-  try{
-    const r2 = await fetch(SHARED_MENU_URL, { cache:'no-store' });
-    if (r2.ok) return normalizeCatalog(await r2.json());
-  }catch(e){ console.warn('[catalog]', SHARED_MENU_URL, e); }
-
-  // 3) Firestore: settings/catalog
-  try{
-    if (HAS_DB){
-      const d1 = await getDoc(doc(db,'settings','catalog'));
-      if (d1?.exists()) return normalizeCatalog(d1.data());
-    }
-  }catch(e){ console.warn('[catalog] settings/catalog', e); }
-
-  // 4) Firestore: catalog/public
-  try{
-    if (HAS_DB){
-      const d2 = await getDoc(doc(db,'catalog','public'));
-      if (d2?.exists()) return normalizeCatalog(d2.data());
-    }
-  }catch(e){ console.warn('[catalog] catalog/public', e); }
-
-  // 5) Fallback vacío seguro
-  return normalizeCatalog({});
-}
-
-/* ------------ Backend sim (localStorage) ------------ */
-const LS_ORDERS    = `__orders@${STORAGE_SLUG}`;
-const LS_HH        = `__happyHour@${STORAGE_SLUG}`;
-const LS_ETA       = `__eta@${STORAGE_SLUG}`;
-const DAY          = ymd();
-const LS_RANK_DAY  = `__rank@${STORAGE_SLUG}@${DAY}`;
-const LS_TOMBS_DAY = `__tombs@${STORAGE_SLUG}@${DAY}`;
-
-function lsRead(k,d){ try{ const t = localStorage.getItem(k); return t ? JSON.parse(t) : d; }catch{ return d; } }
-function lsWrite(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
-
-function simListAll(){ return lsRead(LS_ORDERS, []); }
-function simUpsertOrder(row){
-  const rows = simListAll();
-  const i = rows.findIndex(o => o.id === row.id);
-  if (i >= 0) rows[i] = row; else rows.push(row);
-  lsWrite(LS_ORDERS, rows);
-}
-function simGetOrderById(id){ return simListAll().find(o => o.id === id) || null; }
-function simListActiveToday(){
-  const start = startOfToday();
-  return simListAll()
-    .filter(o => (o.createdAt || 0) >= start)
-    .sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
-}
-
-export function purgeSimToday(){
-  const start = startOfToday();
-  const keep  = simListAll().filter(o => (o.createdAt||0) < start);
-  lsWrite(LS_ORDERS, keep);
-  lsWrite(LS_RANK_DAY, {});
-  lsWrite(LS_TOMBS_DAY, []);
-}
-
-/* ------------ Órdenes ------------ */
-export async function createOrder(payload){
-  const now = nowMs();
-  const base = {
-    id: null,
-    status: 'PENDING',
-    createdAt: now,
+function createOrderSim(order) {
+  const all = readSimOrders();
+  const id = `SIM-${Date.now()}-${Math.floor(Math.random() * 999)}`;
+  const now = Date.now();
+  const full = {
+    id,
+    ...order,
+    createdAt: order.createdAt || now,
     updatedAt: now,
-    ...payload
+    status: order.status || 'pending',
+    source: order.source || 'kiosk-v2-sim'
+  };
+  all.push(full);
+  writeSimOrders(all);
+  console.info('[db] order created SIM', id);
+  return id;
+}
+
+function subscribeSim(onChange) {
+  // polling liviano compartido entre pestañas
+  let last = JSON.stringify(readSimOrders());
+  onChange(readSimOrders());
+
+  const iv = setInterval(() => {
+    const now = JSON.stringify(readSimOrders());
+    if (now !== last) {
+      last = now;
+      onChange(readSimOrders());
+    }
+  }, 1500);
+
+  return () => clearInterval(iv);
+}
+
+function updateStatusSim(id, status, extra = {}) {
+  const all = readSimOrders();
+  const i = all.findIndex(o => o.id === id);
+  if (i === -1) return;
+  all[i] = {
+    ...all[i],
+    status,
+    ...extra,
+    updatedAt: Date.now()
+  };
+  writeSimOrders(all);
+}
+
+/* ======================= API pública ======================= */
+
+/**
+ * Crea un pedido.
+ * - Si hay Firestore real -> escribe en `${BASE_PREFIX}orders`
+ * - Si no hay -> modo SIM compartido
+ */
+export async function createOrder(order) {
+  // normaliza un poco
+  const base = {
+    createdAt: order.createdAt || Date.now(),
+    updatedAt: Date.now(),
+    status: order.status || 'pending',
+    source: order.source || 'kiosk-v2',
+    ...order
   };
 
-  return guardWrite(false, async () => {
-    const ref = await addDoc(collection(db,'orders'), {
+  const db = getDb();
+  if (!db) {
+    // SIM
+    return createOrderSim(base);
+  }
+
+  const fs = await ensureFirestorePkg();
+  if (!fs) {
+    // no firestore lib -> SIM
+    return createOrderSim(base);
+  }
+
+  try {
+    const col = fs.collection(db, `${BASE_PREFIX}orders`);
+    const docRef = await fs.addDoc(col, {
       ...base,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      createdAt: base.createdAt,
+      updatedAt: base.updatedAt
     });
-    return ref?.id;
-  }, () => {
-    const id = `SIM-${now}-${Math.floor(Math.random()*1000)}`;
-    simUpsertOrder({ ...base, id });
-    return id;
-  });
+    console.info('[db] order created', docRef.id);
+    return docRef.id;
+  } catch (e) {
+    console.error('[db] createOrder Firestore falló, usando SIM', e);
+    return createOrderSim(base);
+  }
 }
 
-const ORDER_RANK = {
-  PENDING:1, IN_PROGRESS:2, READY:3,
-  DELIVERED:4, PAID:5, CANCELLED:99
-};
+/**
+ * Suscripción de cocina:
+ * Llama onChange(listaOrdenesOrdenadas)
+ */
+export async function subscribeOrders(onChange) {
+  const db = getDb();
+  const fs = db ? await ensureFirestorePkg() : null;
 
-export async function updateOrderStatus(orderId, status){
-  const valid = ['PENDING','IN_PROGRESS','READY','DELIVERED','PAID','CANCELLED'];
-  if (!valid.includes(status)) throw new Error('status inválido');
+  if (!db || !fs) {
+    console.warn('[db] subscribeOrders en modo SIM');
+    return subscribeSim(onChange);
+  }
 
-  return guardWrite(false, async ()=>{
-    await updateDoc(doc(db,'orders', orderId), {
+  const col = fs.collection(db, `${BASE_PREFIX}orders`);
+  const q = fs.query(col, fs.orderBy('createdAt', 'asc'));
+
+  const unsub = fs.onSnapshot(
+    q,
+    snap => {
+      const items = [];
+      snap.forEach(doc => {
+        items.push({ id: doc.id, ...doc.data() });
+      });
+      onChange(items);
+    },
+    err => {
+      console.error('[db] onSnapshot error, cambiando a SIM', err);
+      // fallback a SIM si se cae Firestore
+      unsub();
+      subscribeSim(onChange);
+    }
+  );
+
+  return unsub;
+}
+
+/**
+ * Actualizar estado de un pedido (desde cocina).
+ */
+export async function updateOrderStatus(id, status, extra = {}) {
+  const db = getDb();
+  const fs = db ? await ensureFirestorePkg() : null;
+
+  if (!db || !fs) {
+    updateStatusSim(id, status, extra);
+    return;
+  }
+
+  try {
+    const ref = fs.doc(db, `${BASE_PREFIX}orders/${id}`);
+    await fs.updateDoc(ref, {
       status,
-      updatedAt: serverTimestamp()
+      ...extra,
+      updatedAt: Date.now()
     });
-    return true;
-  }, () => {
-    const row = simGetOrderById(orderId);
-    if (!row) return { ok:false, reason:'not_found' };
-
-    const curr = ORDER_RANK[row.status] ?? 0;
-    const next = ORDER_RANK[status]     ?? 0;
-    if (next < curr) {
-      return { ok:false, reason:'rollback_blocked', from:row.status, to:status };
-    }
-
-    row.status = status;
-    row.updatedAt = nowMs();
-    simUpsertOrder(row);
-
-    const rankMap = lsRead(LS_RANK_DAY, {});
-    rankMap[orderId] = Math.max(rankMap[orderId] || 0, next);
-    lsWrite(LS_RANK_DAY, rankMap);
-
-    if (status === 'PAID' || status === 'CANCELLED') {
-      const tombs = new Set(lsRead(LS_TOMBS_DAY, []));
-      tombs.add(orderId);
-      lsWrite(LS_TOMBS_DAY, Array.from(tombs));
-    }
-
-    return { ok:true, _training:true };
-  });
-}
-
-/* ------------ Filtros para cocina ------------ */
-function filterForKitchen(rows){
-  const start = startOfToday();
-  const okStatus = new Set(['PENDING','IN_PROGRESS','READY','DELIVERED']);
-  const tombs = new Set(lsRead(LS_TOMBS_DAY, []));
-  const m = new Map();
-
-  for (const raw of (rows || [])){
-    if (!raw || !raw.id) continue;
-    if (tombs.has(raw.id)) continue;
-
-    const o = { ...raw };
-    o.createdAt = toMillisFlexible(o.createdAt);
-    o.updatedAt = toMillisFlexible(o.updatedAt);
-
-    if (!okStatus.has(o.status)) continue;
-    if ((o.createdAt || 0) < start) continue;
-    if (!(Array.isArray(o.items) && o.items.length > 0)) continue;
-    if (!(Number(o.subtotal || 0) > 0)) continue;
-
-    m.set(o.id, o);
+  } catch (e) {
+    console.error('[db] updateOrderStatus error, usando SIM', e);
+    updateStatusSim(id, status, extra);
   }
-
-  return Array.from(m.values()).sort((a,b)=>{
-    const A = a.createdAt || 0;
-    const B = b.createdAt || 0;
-    if (A !== B) return A - B;
-    return String(a.id).localeCompare(String(b.id));
-  });
 }
-
-function hashForKitchen(rows){
-  const pack = rows.map(o => [
-    o.id, o.status, Number(o.subtotal||0),
-    (o.items?.length||0), (o.createdAt||0)
-  ]);
-  try { return JSON.stringify(pack); }
-  catch { return String(Math.random()); }
-}
-
-/* ------------ Anti-rollback persistente ------------ */
-const RANK = ORDER_RANK;
-function applyMonotonicGuard(rows, lastMap){
-  const persisted = lsRead(LS_RANK_DAY, {});
-  const out = [];
-  for (const o of rows){
-    const r = RANK[o.status] ?? 0;
-    const prev = Math.max(lastMap.get(o.id) ?? 0, persisted[o.id] ?? 0);
-    if (r >= prev){
-      lastMap.set(o.id, r);
-
-      if (o.status === 'PAID' || o.status === 'CANCELLED'){
-        const t = new Set(lsRead(LS_TOMBS_DAY, []));
-        t.add(o.id);
-        lsWrite(LS_TOMBS_DAY, Array.from(t));
-      }
-
-      const rm = lsRead(LS_RANK_DAY, {});
-      rm[o.id] = Math.max(rm[o.id] || 0, r);
-      lsWrite(LS_RANK_DAY, rm);
-
-      out.push(o);
-    }
-  }
-  return out;
-}
-
-/* ------------ Suscripción Kitchen ------------ */
-export function subscribeKitchenOrders(cb){
-  let lastHash = '';
-  let pending = null;
-  let t = null;
-  const lastRankMap = new Map();
-
-  const emitOnce = (rows)=>{
-    const filtered = filterForKitchen(rows);
-    const monotone = applyMonotonicGuard(filtered, lastRankMap);
-    const h = hashForKitchen(monotone);
-    if (h === lastHash) return;
-    lastHash = h;
-    cb(monotone);
-  };
-
-  const schedule = (rows)=>{
-    pending = rows;
-    clearTimeout(t);
-    t = setTimeout(()=>{
-      const p = pending;
-      pending = null;
-      emitOnce(p || []);
-    }, 350);
-  };
-
-  if (HAS_DB){
-    const qRef = query(
-      collection(db,'orders'),
-      orderBy('createdAt','desc'),
-      limit(160)
-    );
-    const unsub = onSnapshot(qRef, snap=>{
-      const rows = snap.docs.map(d => ({ id:d.id, ...(d.data()||{}) }));
-      schedule(rows);
-    }, err => console.warn('[subscribeKitchenOrders] onSnapshot error:', err));
-    return ()=>{ try{ unsub?.(); }catch{} clearTimeout(t); };
-  }
-
-  // Modo sim: polling
-  let alive = true;
-  (function tick(){
-    if (!alive) return;
-    try { emitOnce(simListActiveToday()); } catch(e){ console.warn('poll kitchen fail', e); }
-    setTimeout(tick, 2000);
-  })();
-
-  return ()=>{ alive = false; clearTimeout(t); };
-}
-
-/* ------------ Suscripción genérica órdenes ------------ */
-export function subscribeOrders(cb){
-  if (HAS_DB){
-    const qRef = query(
-      collection(db,'orders'),
-      orderBy('createdAt','desc'),
-      limit(160)
-    );
-    return onSnapshot(qRef, snap=>{
-      const rows = snap.docs.map(d => {
-        const data = d.data() || {};
-        return {
-          id: d.id,
-          ...data,
-          createdAt: toMillisFlexible(data.createdAt),
-          updatedAt: toMillisFlexible(data.updatedAt)
-        };
-      });
-      cb(rows);
-    });
-  }
-
-  let alive = true;
-  (function tick(){
-    if (!alive) return;
-    try { cb(simListActiveToday()); } catch {}
-    setTimeout(tick, 2500);
-  })();
-  return ()=>{ alive = false; };
-}
-
-/* ------------ Happy Hour & ETA ------------ */
-export function subscribeHappyHour(cb){
-  if (HAS_DB){
-    const ref = doc(db,'settings','happyHour');
-    return onSnapshot(ref, snap=>{
-      const d = (typeof snap.data === 'function' ? snap.data() : snap.data) || {};
-      cb({
-        enabled: !!d.enabled,
-        discountPercent: Number(d.discountPercent || 0),
-        bannerText: d.bannerText || '',
-        applyEligibleOnly: d.applyEligibleOnly !== false,
-        endsAt: toMillisFlexible(d.endsAt)
-      });
-    }, err => console.warn('[subscribeHappyHour] error:', err));
-  }
-
-  let alive = true;
-  (function tick(){
-    if (!alive) return;
-    cb(lsRead(LS_HH, {
-      enabled:false,
-      discountPercent:0,
-      bannerText:'',
-      applyEligibleOnly:true,
-      endsAt:null
-    }));
-    setTimeout(tick, 5000);
-  })();
-  return ()=>{ alive = false; };
-}
-
-export function subscribeETA(cb){
-  if (HAS_DB){
-    const ref = doc(db,'settings','eta');
-    return onSnapshot(ref, snap=>{
-      const d = (typeof snap.data === 'function' ? snap.data() : snap.data) || {};
-      cb(String(d?.text ?? d?.value ?? '7–10 min'));
-    }, err => console.warn('[subscribeETA] error:', err));
-  }
-
-  let alive = true;
-  (function tick(){
-    if (!alive) return;
-    cb(String(lsRead(LS_ETA, '7–10 min')));
-    setTimeout(tick, 5000);
-  })();
-  return ()=>{ alive = false; };
-}
-
-/* ------------ Clientes / WhatsApp (stubs seguros) ------------ */
-export async function upsertCustomerFromOrder(order){
-  return guardWrite(false, async ()=>{
-    if (!HAS_DB) return { ok:true, _training:true };
-    const id = order.phone || order.clientId || order.id;
-    if (!id) return { ok:false, reason:'no_id' };
-    await setDoc(doc(db,'customers', id), {
-      name: order.customer || null,
-      phone: order.phone || null,
-      lastOrderId: order.id || null,
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp()
-    }, { merge:true });
-    return { ok:true };
-  }, { ok:true, _training:true });
-}
-
-export async function attachLastOrderRef(phone, orderId){
-  if (!phone) return { ok:false, reason:'no_phone' };
-  return guardWrite(false, async ()=>{
-    if (!HAS_DB) return { ok:true, _training:true };
-    await setDoc(doc(db,'customers', phone), {
-      lastOrderId: orderId,
-      updatedAt: serverTimestamp()
-    }, { merge:true });
-    return { ok:true };
-  }, { ok:true, _training:true });
-}
-
-export async function sendWhatsAppMessage({ to, text, meta }){
-  console.info('[WA] simulated send', { to, text, meta });
-  return { ok:true, simulated:true };
-}
-
-/* ------------ Exports crudos Firestore ------------ */
-export {
-  db, collection, onSnapshot, query, where, orderBy, limit, getDocs,
-  addDoc, setDoc, updateDoc, doc, getDoc, deleteDoc,
-  Timestamp, serverTimestamp, increment
-};
-
-console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'HAS_DB =', HAS_DB, 'LS namespace =', STORAGE_SLUG);
