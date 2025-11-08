@@ -1,21 +1,21 @@
 // Cocina — Seven de Burgers V2
-// Vista de cocina para pedidos del kiosko v2
-// Compatible con shared/db.js (subscribeKitchenOrders / updateOrder)
+// Panel de cocina para pedidos del kiosko v2
 
-/* ======================= Imports ======================= */
 import { beep, toast } from '../shared/notify.js?v=20251106a';
 import * as DB from '../shared/db.js?v=20251106a';
 import { ensureAuth } from '../shared/firebase.js?v=20251106a';
 import { initThemeFromSettings } from '../shared/theme.js?v=20251106a';
 
 /* ======================= Estado ======================= */
+
 const state = {
   orders: [],
   unsub: null,
-  lastErrorAt: 0
+  attached: false
 };
 
-/* ======================= DOM refs ======================= */
+/* ======================= DOM ======================= */
+
 const colPend       = document.getElementById('colPend');
 const colProg       = document.getElementById('colProg');
 const colListos     = document.getElementById('colListos');
@@ -27,272 +27,239 @@ const totalCobrarEl =
   document.querySelector('[data-total-cobrar]') ||
   document.getElementById('totalGlobal');
 
+function showInlineError(msg) {
+  let box = document.getElementById('__kitchenError');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = '__kitchenError';
+    box.style.cssText = 'position:fixed;left:8px;bottom:8px;right:8px;z-index:99;background:#2b1113;color:#ffd7d7;border:1px solid #ff6b6b;padding:6px 10px;border-radius:8px;font-size:11px;font-family:system-ui;';
+    document.body.appendChild(box);
+  }
+  box.textContent = msg;
+}
+
 /* ======================= Helpers ======================= */
 
 function money(n) {
-  const v = Number.isFinite(Number(n)) ? Number(n) : 0;
-  return '$' + v.toFixed(0);
+  const x = Number(n);
+  return '$' + (Number.isFinite(x) ? x.toFixed(0) : '0');
 }
 
-function safeStr(x) {
+function s(x) {
   return (x == null ? '' : String(x)).trim();
 }
 
-function getTotalFromOrder(o = {}) {
-  if (Number.isFinite(o.total)) return Number(o.total);
-  if (o.totals && Number.isFinite(o.totals.total))
-    return Number(o.totals.total);
-  if (Number.isFinite(o.amount)) return Number(o.amount);
-  if (Number.isFinite(o.totalCents)) return Number(o.totalCents) / 100;
+function getTotal(order = {}) {
+  if (Number.isFinite(order.total)) return Number(order.total);
+  if (order.totals && Number.isFinite(order.totals.total))
+    return Number(order.totals.total);
+  if (Number.isFinite(order.amount)) return Number(order.amount);
+  if (Number.isFinite(order.totalCents)) return Number(order.totalCents) / 100;
   return 0;
 }
 
-function isPaid(o = {}) {
-  if (o.paid === true) return true;
-  if (o.paidAt) return true;
-  if (o.payment && typeof o.payment === 'object') {
-    const ps = String(o.payment.status || '').toLowerCase();
-    if (ps === 'paid' || ps === 'approved' || ps === 'success') return true;
-  }
-  return false;
+function isPaid(order = {}) {
+  if (order.paid === true) return true;
+  if (order.paidAt) return true;
+  const p = order.payment || {};
+  const st = String(p.status || p.state || '').toLowerCase();
+  return st === 'paid' || st === 'approved' || st === 'success';
 }
 
 /**
- * Bucket visual según status + pago:
+ * Normaliza el status de cualquier versión → bucket de columna
  *
- * - PENDING       → Pendientes
- * - IN_PROGRESS   → En progreso
- * - READY         → Listos
- * - DELIVERED
- *      - !paid    → Por cobrar
- *      - paid     → Entregados
+ * 0 / pending / pendiente / new         → PEND
+ * 1 / in_progress / preparando / ...    → PROG
+ * 2 / ready / listo                     → LISTOS
+ * 3 / delivered / entregado             → DELIVERED (luego se separa por pago)
+ * por_cobrar / to_charge                → COBRAR
  */
-function bucketFor(order) {
-  const st = String(order.status || '').toUpperCase();
+function bucketFor(order = {}) {
+  const raw = order.status;
 
-  if (st === 'PENDING') return 'pend';
-  if (st === 'IN_PROGRESS') return 'prog';
-  if (st === 'READY') return 'listos';
-
-  if (st === 'DELIVERED') {
-    return isPaid(order) ? 'entregados' : 'cobrar';
+  // numérico
+  if (typeof raw === 'number') {
+    if (raw === 0) return 'pend';
+    if (raw === 1) return 'prog';
+    if (raw === 2) return 'listos';
+    if (raw === 3) return isPaid(order) ? 'entregados' : 'cobrar';
   }
 
-  // Otros estados quedan ocultos en la vista de cocina
+  // texto
+  const t = String(raw || '').toLowerCase();
+
+  if (!t || t === 'new' || t === 'created' || t === 'pending' || t === 'pendiente')
+    return 'pend';
+
+  if (
+    t === 'in_progress' || t === 'progress' ||
+    t === 'preparando' || t === 'en_progreso' || t === 'en progreso'
+  ) return 'prog';
+
+  if (
+    t === 'ready' || t === 'listo' || t === 'listos' ||
+    t === 'done' || t === 'terminado'
+  ) return 'listos';
+
+  if (t === 'por_cobrar' || t === 'por cobrar' || t === 'to_charge')
+    return isPaid(order) ? 'entregados' : 'cobrar';
+
+  if (t === 'delivered' || t === 'entregado' || t === 'entregada')
+    return isPaid(order) ? 'entregados' : 'cobrar';
+
+  if (t === 'cancelled' || t === 'canceled' || t === 'anulado')
+    return null;
+
+  // Desconocido: no lo mostramos para no ensuciar
   return null;
+}
+
+function shortId(id = '') {
+  const sId = String(id);
+  if (!sId) return '';
+  return sId.length <= 6 ? sId : sId.slice(-6).toUpperCase();
+}
+
+function itemsSummary(order = {}) {
+  const src = Array.isArray(order.items) ? order.items
+            : Array.isArray(order.cart) ? order.cart
+            : [];
+  const out = [];
+  for (const l of src) {
+    if (!l) continue;
+    const qty = l.qty || 1;
+    const nm = s(l.name || l.id || 'Item');
+    out.push(`${qty}× ${nm}`);
+  }
+  return out.join(' · ');
 }
 
 /* ======================= Render ======================= */
 
 function clearColumns() {
-  [colPend, colProg, colListos, colCobrar, colEntregados].forEach(col => {
-    if (col) col.innerHTML = '';
+  [colPend, colProg, colListos, colCobrar, colEntregados].forEach(c => {
+    if (c) c.innerHTML = '';
   });
 }
 
-function buildItemsSummary(order) {
-  const lines = [];
-  const cart = Array.isArray(order.items || order.cart)
-    ? (order.items || order.cart)
-    : [];
-
-  for (const l of cart) {
-    if (!l) continue;
-    const qty = l.qty || 1;
-    const name = safeStr(l.name || l.id || 'Item');
-    lines.push(`${qty}× ${name}`);
+function bucketLabel(bucket, order) {
+  switch (bucket) {
+    case 'pend':       return 'Pendiente';
+    case 'prog':       return 'En progreso';
+    case 'listos':     return 'Listo para entregar';
+    case 'cobrar':     return 'Entregado · Por cobrar';
+    case 'entregados': return isPaid(order) ? 'Entregado · Pagado' : 'Entregado';
+    default:           return s(order.status || '');
   }
-
-  return lines.join(' · ');
 }
 
-function shortId(id = '') {
-  const s = String(id);
-  if (s.length <= 6) return s;
-  return s.slice(-6).toUpperCase();
+function addAction(btnWrap, label, ghost, handler) {
+  const b = document.createElement('button');
+  b.className = 'btn small' + (ghost ? ' ghost' : '');
+  b.textContent = label;
+  b.onclick = async (ev) => {
+    ev.stopPropagation();
+    try {
+      await handler();
+      beep();
+    } catch (e) {
+      console.error('[cocina] action error', e);
+      toast('No pude actualizar el pedido');
+    }
+  };
+  btnWrap.appendChild(b);
 }
 
 function buildCard(order) {
+  const bucket = bucketFor(order);
+  const total  = getTotal(order);
+
   const card = document.createElement('div');
   card.className = 'k-card';
 
-  const bucket = bucketFor(order);
-  const total = getTotalFromOrder(order);
-
-  const name =
-    safeStr(order.customerName || order.name || order.clientName) || 'Sin nombre';
-  const code =
-    safeStr(order.shortCode || order.pickupCode || order.trackCode || '');
-
-  const itemsSummary = buildItemsSummary(order);
-
-  const created =
-    order.createdAt || order.created || order.ts || order.time || null;
-  const createdTxt = created
-    ? new Date(created.seconds ? created.seconds * 1000 : created).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    : '';
-
-  // Header
+  // Head
   const head = document.createElement('div');
   head.className = 'k-head';
 
+  const name =
+    s(order.customerName || order.name || order.clientName) || 'Sin nombre';
+  const code =
+    s(order.shortCode || order.pickupCode || order.trackCode);
+
   const title = document.createElement('div');
   title.className = 'title';
-  title.textContent = `${name}${code ? ' · #' + code : ''}`;
+  title.textContent = code ? `${name} · #${code}` : name;
 
   const meta = document.createElement('div');
   meta.className = 'muted small';
-  meta.textContent = `ID ${shortId(order.id)}${createdTxt ? ' · ' + createdTxt : ''}`;
+  meta.textContent = `ID ${shortId(order.id)}`;
 
   head.appendChild(title);
   head.appendChild(meta);
   card.appendChild(head);
 
   // Items
-  if (itemsSummary) {
-    const itemsEl = document.createElement('div');
-    itemsEl.className = 'small';
-    itemsEl.textContent = itemsSummary;
-    card.appendChild(itemsEl);
+  const sum = itemsSummary(order);
+  if (sum) {
+    const it = document.createElement('div');
+    it.className = 'small';
+    it.textContent = sum;
+    card.appendChild(it);
   }
 
   // Total
-  const totalEl = document.createElement('div');
-  totalEl.className = 'price';
-  totalEl.textContent = money(total);
-  card.appendChild(totalEl);
+  const p = document.createElement('div');
+  p.className = 'price';
+  p.textContent = money(total);
+  card.appendChild(p);
 
   // Badges
   const badges = document.createElement('div');
   badges.className = 'k-badges';
 
-  const stBadge = document.createElement('div');
-  stBadge.className = 'k-badge';
-  stBadge.textContent = bucketLabel(bucket, order);
-  badges.appendChild(stBadge);
+  const bStatus = document.createElement('div');
+  bStatus.className = 'k-badge';
+  bStatus.textContent = bucketLabel(bucket, order);
+  badges.appendChild(bStatus);
 
   if (isPaid(order)) {
-    const p = document.createElement('div');
-    p.className = 'k-badge ok';
-    p.textContent = 'Pagado';
-    badges.appendChild(p);
+    const bPaid = document.createElement('div');
+    bPaid.className = 'k-badge ok';
+    bPaid.textContent = 'Pagado';
+    badges.appendChild(bPaid);
   }
 
   card.appendChild(badges);
 
   // Actions
-  const actions = document.createElement('div');
-  actions.className = 'k-actions';
-
-  injectActionsForBucket(actions, bucket, order);
-
-  if (actions.children.length) {
-    card.appendChild(actions);
-  }
-
-  return card;
-}
-
-function bucketLabel(bucket, order) {
-  switch (bucket) {
-    case 'pend': return 'Pendiente';
-    case 'prog': return 'En progreso';
-    case 'listos': return 'Listo para entregar';
-    case 'cobrar': return 'Entregado · Por cobrar';
-    case 'entregados':
-      return isPaid(order) ? 'Entregado · Pagado' : 'Entregado';
-    default: return safeStr(order.status || '');
-  }
-}
-
-function injectActionsForBucket(container, bucket, order) {
-  const addBtn = (label, variant, handler) => {
-    const b = document.createElement('button');
-    b.className = 'btn small' + (variant === 'ghost' ? ' ghost' : '');
-    b.textContent = label;
-    b.addEventListener('click', ev => {
-      ev.stopPropagation();
-      handler().catch(err => {
-        console.error('[cocina] action error', err);
-        toast('No pude actualizar el pedido');
-      });
-    });
-    container.appendChild(b);
-  };
+  const act = document.createElement('div');
+  act.className = 'k-actions';
 
   const id = order.id;
 
-  if (!id) return;
-
-  if (bucket === 'pend') {
-    addBtn('Iniciar', null, () => setStatus(id, 'IN_PROGRESS'));
+  if (id) {
+    if (bucket === 'pend') {
+      addAction(act, 'Iniciar', false, () => setStatus(id, 'IN_PROGRESS'));
+    }
+    if (bucket === 'prog') {
+      addAction(act, 'Listo', false, () => setStatus(id, 'READY'));
+    }
+    if (bucket === 'listos') {
+      addAction(act, 'Entregar', false, () => setStatus(id, 'DELIVERED'));
+      addAction(act, 'Cancelar', true, () => setStatus(id, 'CANCELLED'));
+    }
+    if (bucket === 'cobrar' && !isPaid(order)) {
+      addAction(act, 'Marcar pagado', false, () => markPaid(id));
+    }
+    if (bucket === 'entregados') {
+      addAction(act, 'Archivar', true, () => archiveOrder(id));
+    }
   }
 
-  if (bucket === 'prog') {
-    addBtn('Listo', null, () => setStatus(id, 'READY'));
-  }
+  if (act.children.length) card.appendChild(act);
 
-  if (bucket === 'listos') {
-    addBtn('Entregar', null, () => setStatus(id, 'DELIVERED'));
-    addBtn('Cancelar', 'ghost', () => setStatus(id, 'CANCELLED'));
-  }
-
-  if (bucket === 'cobrar') {
-    addBtn('Marcar pagado', null, () => markPaid(id));
-  }
-
-  if (bucket === 'entregados') {
-    addBtn('Archivar', 'ghost', () => archiveOrder(id));
-  }
-}
-
-/* ======================= Acciones DB ======================= */
-
-async function setStatus(orderId, status) {
-  if (!orderId || !status) return;
-  await DB.updateOrder(orderId, { status });
-  beep();
-}
-
-async function markPaid(orderId) {
-  if (!orderId) return;
-  await DB.updateOrder(orderId, {
-    paid: true,
-    paidAt: new Date().toISOString()
-  });
-  beep();
-}
-
-async function archiveOrder(orderId) {
-  if (!orderId) return;
-  await DB.updateOrder(orderId, {
-    active: false,
-    archived: true
-  });
-  beep();
-}
-
-/* ======================= Handlers de suscripción ======================= */
-
-function onOrders(list) {
-  state.orders = Array.isArray(list) ? list.slice() : [];
-
-  // Ordenar por createdAt asc (o por id como fallback)
-  state.orders.sort((a, b) => {
-    const ta = (a.createdAt && (a.createdAt.seconds || a.createdAt._seconds))
-      ? (a.createdAt.seconds || a.createdAt._seconds)
-      : (a.created || 0);
-    const tb = (b.createdAt && (b.createdAt.seconds || b.createdAt._seconds))
-      ? (b.createdAt.seconds || b.createdAt._seconds)
-      : (b.created || 0);
-    if (ta && tb && ta !== tb) return ta - tb;
-    return String(a.id || '').localeCompare(String(b.id || ''));
-  });
-
-  renderAll();
+  return card;
 }
 
 function renderAll() {
@@ -306,40 +273,97 @@ function renderAll() {
 
     const card = buildCard(o);
 
-    switch (bucket) {
-      case 'pend':
-        colPend && colPend.appendChild(card);
-        break;
-      case 'prog':
-        colProg && colProg.appendChild(card);
-        break;
-      case 'listos':
-        colListos && colListos.appendChild(card);
-        break;
-      case 'cobrar':
-        colCobrar && colCobrar.appendChild(card);
-        totalCobrar += getTotalFromOrder(o);
-        break;
-      case 'entregados':
-        colEntregados && colEntregados.appendChild(card);
-        break;
+    if (bucket === 'pend' && colPend) colPend.appendChild(card);
+    else if (bucket === 'prog' && colProg) colProg.appendChild(card);
+    else if (bucket === 'listos' && colListos) colListos.appendChild(card);
+    else if (bucket === 'cobrar' && colCobrar) {
+      colCobrar.appendChild(card);
+      totalCobrar += getTotal(o);
+    } else if (bucket === 'entregados' && colEntregados) {
+      colEntregados.appendChild(card);
     }
   }
 
-  if (totalCobrarEl) {
-    totalCobrarEl.textContent = money(totalCobrar);
+  if (totalCobrarEl) totalCobrarEl.textContent = money(totalCobrar);
+}
+
+/* ======================= Acciones DB ======================= */
+
+async function setStatus(id, status) {
+  if (!id || !status || !DB.updateOrder) return;
+  await DB.updateOrder(id, { status });
+}
+
+async function markPaid(id) {
+  if (!id || !DB.updateOrder) return;
+  await DB.updateOrder(id, {
+    paid: true,
+    paidAt: new Date().toISOString()
+  });
+}
+
+async function archiveOrder(id) {
+  if (!id || !DB.updateOrder) return;
+  await DB.updateOrder(id, {
+    archived: true,
+    active: false
+  });
+}
+
+/* ======================= Suscripción ======================= */
+
+function attachSubscription() {
+  if (state.attached) return;
+  state.attached = true;
+
+  const handler = (list) => {
+    state.orders = Array.isArray(list) ? list.slice() : [];
+    // ordena por fecha si hay
+    state.orders.sort((a, b) => {
+      const ta = (a.createdAt && (a.createdAt.seconds || a.createdAt._seconds))
+        ? (a.createdAt.seconds || a.createdAt._seconds)
+        : (a.created || 0);
+      const tb = (b.createdAt && (b.createdAt.seconds || b.createdAt._seconds))
+        ? (b.createdAt.seconds || b.createdAt._seconds)
+        : (b.created || 0);
+      if (ta && tb && ta !== tb) return ta - tb;
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+    renderAll();
+  };
+
+  try {
+    if (typeof DB.subscribeKitchenOrdersV2 === 'function') {
+      state.unsub = DB.subscribeKitchenOrdersV2(handler);
+      return;
+    }
+    if (typeof DB.subscribeKitchenOrders === 'function') {
+      state.unsub = DB.subscribeKitchenOrders(handler);
+      return;
+    }
+    if (typeof DB.subscribeOrdersV2 === 'function') {
+      state.unsub = DB.subscribeOrdersV2(handler, { kitchen: true });
+      return;
+    }
+    if (typeof DB.subscribeOrders === 'function') {
+      state.unsub = DB.subscribeOrders(handler, { kitchen: true });
+      return;
+    }
+
+    showInlineError('No encuentro función de suscripción en db.js (subscribeKitchenOrders/subscribeOrders). Revisa shared/db.js cuando puedas.');
+  } catch (e) {
+    console.error('[cocina] error attachSubscription', e);
+    showInlineError('Error conectando con pedidos. Revisa shared/db.js o la versión de app.js cuando tengas inspector.');
   }
 }
 
 /* ======================= Init ======================= */
 
 async function init() {
-  console.info('[cocina] init…');
-
   try {
     await ensureAuth();
   } catch (e) {
-    console.warn('[cocina] auth anon falló (seguimos igual)', e);
+    console.warn('[cocina] auth anónima falló, seguimos de todos modos', e);
   }
 
   try {
@@ -348,20 +372,7 @@ async function init() {
     console.warn('[cocina] theme init error', e);
   }
 
-  try {
-    if (typeof DB.subscribeKitchenOrders === 'function') {
-      state.unsub = DB.subscribeKitchenOrders(onOrders, { limitN: 300 });
-      console.info('[cocina] usando DB.subscribeKitchenOrders');
-    } else if (typeof DB.subscribeOrders === 'function') {
-      state.unsub = DB.subscribeOrders(onOrders, { limitN: 300 });
-      console.info('[cocina] usando DB.subscribeOrders');
-    } else {
-      throw new Error('No hay subscribeKitchenOrders ni subscribeOrders en db.js');
-    }
-  } catch (e) {
-    console.error('[cocina] error al suscribirse a pedidos', e);
-    toast('No se pudo conectar con pedidos');
-  }
+  attachSubscription();
 }
 
 init();
