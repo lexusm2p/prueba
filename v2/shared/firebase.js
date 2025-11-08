@@ -1,44 +1,16 @@
-// shared/firebase.js · Seven V2
-// Inicializa Firebase solo una vez y expone helpers compartidos.
-// Compatible con:
-//  - Kiosko V2 (ensureAuth desde aquí)
-//  - Cocina V2 (ensureAuth)
-//  - shared/db.js (usa window.FIREBASE_DB para decidir Firestore vs SIM)
-//  - Código legacy que importa { db, collection, doc, ... } directo de este módulo.
-
+// /shared/firebase.js
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import {
-  initializeApp,
-  getApps,
-  getApp,
-} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-
-import {
-  getAuth,
-  signInAnonymously,
-  onAuthStateChanged,
+  getAuth, signInAnonymously, onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-
 import {
   getFirestore,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
+  collection, doc, getDoc, getDocs, query, where, orderBy, limit,
   onSnapshot,
-  addDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-  increment,
-  Timestamp,
+  addDoc, setDoc, updateDoc, deleteDoc,
+  serverTimestamp, increment, Timestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
-// Config oficial del proyecto Seven de Burgers
 const firebaseConfig = {
   apiKey: "AIzaSyAidr-9HSNlfok5BOBer8Te8EflyV8VYi4",
   authDomain: "seven-de-burgers.firebaseapp.com",
@@ -50,96 +22,45 @@ const firebaseConfig = {
   databaseURL: "https://seven-de-burgers-default-rtdb.firebaseio.com"
 };
 
-/* ======================= Init único ======================= */
+export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db   = getFirestore(app);
 
-function initApp() {
-  try {
-    const hasConfig = !!firebaseConfig && !!firebaseConfig.projectId;
-    if (!hasConfig) throw new Error('Sin firebaseConfig');
-
-    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    // Exponer para módulos que dependen del objeto global
-    // (shared/db.js mira estas propiedades para decidir si hay DB real)
-    window.FIREBASE_APP = app;
-    window.FIREBASE_DB  = db;
-    // Alias legacy por si algo viejo los usa:
-    window.firebaseDb = db;
-    window.db = db;
-
-    console.info('[firebase] inicializado OK:', firebaseConfig.projectId);
-    return { app, auth, db };
-  } catch (e) {
-    console.warn('[firebase] no inicializado, se usará modo SIM/localStorage', e);
-    return { app: null, auth: null, db: null };
+// Login anónimo automático
+onAuthStateChanged(auth, (u) => {
+  if (!u) {
+    signInAnonymously(auth).catch(() => {});
   }
-}
+});
 
-const { app, auth, db } = initApp();
-
-/* ======================= Auth anónima ======================= */
-
-/**
- * Intenta garantizar que haya un usuario anónimo.
- * - Si todo va bien, devuelve el user.
- * - Si algo falla (offline, bloqueos, etc.), NO rompe la app:
- *   simplemente retorna null y el resto puede seguir en modo SIM.
- */
+// Helper para quien quiera esperar auth listo
 export async function ensureAuth() {
-  if (!auth) {
-    console.warn('[firebase] ensureAuth: sin auth (modo SIM)');
-    return null;
-  }
-
-  // Si ya hay usuario, listo
   if (auth.currentUser) return auth.currentUser;
-
-  try {
-    // Intento directo
-    const cred = await signInAnonymously(auth);
-    return cred.user || auth.currentUser || null;
-  } catch (e) {
-    console.warn('[firebase] signInAnonymously falló, sigo en SIM', e);
-    // No lanzamos error para no bloquear kiosko/cocina
-    return auth.currentUser || null;
-  }
-}
-
-// Auto-intento silencioso: si no hay usuario, tratamos de hacer login anónimo.
-// Si falla, no pasa nada; shared/db.js caerá a SIM.
-if (auth) {
-  onAuthStateChanged(auth, (user) => {
-    if (!user) {
-      signInAnonymously(auth).catch(() => {
-        console.warn('[firebase] auto signIn anónimo rechazado; usando SIM si es necesario');
-      });
-    }
+  await signInAnonymously(auth).catch(() => {});
+  return await new Promise((resolve, reject) => {
+    const off = onAuthStateChanged(auth, u => {
+      off();
+      u ? resolve(u) : reject(new Error("No auth"));
+    }, reject);
   });
 }
 
-/* ======================= Exports ======================= */
-
-// Exportar instancias para quien las necesite directamente
-export { app, auth, db };
-
-// Re-exportar helpers de Firestore para código existente
+// Export modular (por si se importa directo desde aquí)
 export {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
+  collection, doc, getDoc, getDocs, query, where, orderBy, limit,
   onSnapshot,
-  addDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-  increment,
-  Timestamp,
+  addDoc, setDoc, updateDoc, deleteDoc,
+  serverTimestamp, increment, Timestamp,
 };
+
+// 💡 CLAVE: exposiciones globales para shared/db.js y otros
+if (typeof window !== "undefined") {
+  window.FIREBASE_DB = db;
+  window.FIREBASE_FS = {
+    collection, doc, getDoc, getDocs, query, where, orderBy, limit,
+    onSnapshot,
+    addDoc, setDoc, updateDoc, deleteDoc,
+    serverTimestamp,
+  };
+  console.info("[firebase] inicializado OK: seven-de-burgers");
+}
