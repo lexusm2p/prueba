@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>Cocina — Seven (Legacy iPad)</title>
+
+  <!-- Usa el mismo styles.css grande (con fuentes más grandes) -->
+  <link rel="stylesheet" href="../shared/styles.css?v=20251108">
+
+  <style>
+    body{
+      background:#0b1220;
+      color:#e8f0ff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    .wrap{
+      max-width:1200px;
+      margin:12px auto;
+      padding:0 12px;
+    }
+    .cols{
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:10px;
+    }
+    @media (max-width:1024px){
+      .cols{ grid-template-columns:repeat(2,1fr); }
+    }
+    @media (max-width:768px){
+      .cols{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      background:#0f182a;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      padding:10px;
+      font-size:15px;
+    }
+    h3{
+      margin:0 0 8px;
+      font-size:16px;
+    }
+
+    .ord{
+      background:#131f33;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:10px;
+      padding:8px;
+      margin-bottom:8px;
+      font-size:14px;
+    }
+
+    .muted{
+      color:#a6b2c7;
+      font-size:13px;
+    }
+    .chips{
+      display:flex;
+      flex-wrap:wrap;
+      gap:4px;
+      margin-top:4px;
+    }
+    .chip{
+      background:#192840;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:13px;
+      white-space:nowrap;
+    }
+
+    .row{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+      margin-top:4px;
+    }
+    .btn{
+      background:#1a2740;
+      border:1px solid rgba(255,255,255,.18);
+      color:#e8f0ff;
+      border-radius:10px;
+      padding:6px 10px;
+      font-size:13px;
+      cursor:pointer;
+    }
+    .btn.ok{
+      background:#2fe38b;
+      color:#00150a;
+      font-weight:800;
+    }
+    .btn[disabled]{ opacity:.6; pointer-events:none; }
+    .empty{
+      color:#7f8aa3;
+      padding:8px;
+      font-size:13px;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cols">
+    <div class="card">
+      <h3>Pendientes</h3>
+      <div id="col-pending"></div>
+    </div>
+    <div class="card">
+      <h3>En progreso</h3>
+      <div id="col-progress"></div>
+    </div>
+    <div class="card">
+      <h3>Listos</h3>
+      <div id="col-ready"></div>
+    </div>
+    <div class="card">
+      <h3>Por cobrar</h3>
+      <div id="col-bill"></div>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORTANTE: scripts sin type="module", compatibles con Safari viejo -->
+<script src="../shared/firebase.js?v=20251108"></script>
+<script src="../shared/db.js?v=20251108"></script>
+<script src="../shared/notify.js?v=20251106a"></script>
+<script src="./app.legacy.js?v=20251108"></script>
+</body>
+</html>
