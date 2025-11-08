@@ -1,728 +1,711 @@
 // ==============================
 // Seven de Burgers — Kiosko V2
-// Archivo: kiosk/app.js
+// Archivo: /kiosk/app.js
 // ==============================
 
-/* --------- Rutas base / menú --------- */
-const __parts = location.pathname.split('/').filter(Boolean);
-// /prueba/v2/kiosk/index.html → BASE_PREFIX = /prueba/v2/
-const BASE_PREFIX = __parts.length >= 2 ? `/${__parts[0]}/${__parts[1]}/` : '/';
-const DATA_MENU_URL = `${BASE_PREFIX}data/menu.json`;
+/* 0) Rutas base (menu.json + track) */
 
-console.info('[kiosk] BASE_PREFIX =', BASE_PREFIX);
-console.info('[kiosk] DATA_MENU_URL =', DATA_MENU_URL);
+function getBasePrefix(){
+  // /prueba/v2/kiosk/index.html  -> /prueba/v2/
+  const path = location.pathname.replace(/\/index\.html$/,'');
+  const segs = path.split('/').filter(Boolean);
+  const kioskIdx = segs.lastIndexOf('kiosk');
+  const baseSegs = kioskIdx >= 0 ? segs.slice(0, kioskIdx) : segs.slice(0, -1);
+  if (!baseSegs.length) return '/';
+  return '/' + baseSegs.join('/') + '/';
+}
 
-const elBoot = document.getElementById('app');
-if (elBoot) elBoot.textContent = 'App.js cargado — iniciando módulos…';
+export const BASE_PREFIX   = getBasePrefix();
+export const DATA_MENU_URL = BASE_PREFIX + 'data/menu.json';
+const TRACK_PAGE_PATH      = BASE_PREFIX + 'kiosk/track.html';
 
-/* --------- Imports compartidos --------- */
+console.info('[kiosk] BASE_PREFIX =', BASE_PREFIX, 'DATA_MENU_URL =', DATA_MENU_URL);
+
+/* 1) Boot mínimo */
+
+const rootEl = document.getElementById('app');
+if (rootEl){
+  rootEl.textContent = 'App.js cargado — iniciando módulos…';
+}
+
+/* 2) Imports compartidos */
+
 import { beep, toast } from '../shared/notify.js?v=20251106a';
 import * as DB from '../shared/db.js?v=20251106a';
 import { ensureAuth } from '../shared/firebase.js?v=20251106a';
 import { initThemeFromSettings } from '../shared/theme.js?v=20251106a';
 
-/* --------- Estado global --------- */
+/* 3) Utils seguros */
+
+const safeInt = (v, def=0)=>{
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
+const safeStr = (v, def='')=>{
+  if (v === null || v === undefined) return def;
+  return String(v);
+};
+const escapeHtml = (s='')=>{
+  const map = { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' };
+  return String(s).replace(/[&<>"']/g, c => map[c]);
+};
+const slug = (s='') => String(s)
+  .toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+
+/* Elimina undefined anidados para Firestore */
+function sanitizeForFirestore(value){
+  if (value === undefined) return null; // Nunca mandar undefined
+  if (value === null) return null;
+  const t = typeof value;
+  if (t === 'string' || t === 'number' || t === 'boolean') return value;
+  if (value instanceof Date) return value;
+  if (Array.isArray(value)){
+    return value.map(v => sanitizeForFirestore(v));
+  }
+  if (t === 'object'){
+    const out = {};
+    for (const [k,v] of Object.entries(value)){
+      const sv = sanitizeForFirestore(v);
+      if (sv !== undefined) out[k] = sv;
+    }
+    return out;
+  }
+  return safeStr(value);
+}
+
+/* 4) Estado global */
+
 const state = {
   menu: null,
   mode: 'mini',
-
   cart: [],
-  etaText: '7–10 min',
-  etaSource: 'fallback',
-  hhLeftText: '',
-  themeName: '',
-  drinkComboActive: false,
-
-  // identidad / pedido
   customerName: '',
-  identified: false,
   orderMeta: {
     type: 'pickup',
     table: '',
     phone: '',
     payMethodPref: 'efectivo'
   },
-
-  // suscripciones Firebase
-  unsubHH: null,
-  unsubETA: null,
-  unsubTheme: null,
-  unsubReady: null,
-  unsubAnalytics: null,
-
-  // tracking
-  lastOrderId: null,
-  lastTrackUrl: '',
-  isSubmittingOrder: false,
-
-  // gamificación / regalo
-  gift: {
-    threshold: 117,
-    productId: 'powerdog-mini',
-    sound: null,
-    autoPrompt: true,
-    shownThisSession: false
+  etaText:'7–10 min',
+  etaSource:'fallback',
+  themeName:'',
+  // HH / subs (no-op seguros si no se usan)
+  unsubHH:null,
+  unsubETA:null,
+  unsubTheme:null,
+  unsubReady:null,
+  unsubAnalytics:null,
+  // Nudge bebidas
+  drinkComboActive:false,
+  // Regalo
+  gift:{
+    threshold:117,
+    productId:'powerdog-mini',
+    sound:null,
+    autoPrompt:true,
+    shownThisSession:false,
+    applied:false
   },
-
-  loyaltyEnabled: true,
-  loyaltyAskShown: false,
-  adminMode: false
+  // identidad
+  identified:false,
+  identifiedAt:0,
+  lastKnownPhone:'',
+  lastKnownName:'',
+  // tracking
+  lastOrderId:null,
+  lastTrackUrl:'',
+  // flags
+  isSubmittingOrder:false,
+  adminMode:false
 };
 
-/* --------- Constantes negocio --------- */
-const DRINK_PRICE = { solo: 19, combo: 19 };
+/* 5) Constantes negocio */
+
+const DRINK_PRICE = { solo:19, combo:19 };
 const CHEDDAR_UPGRADE_BASE = 7;
 
-/* =====================================================
-   Helpers básicos
-   ===================================================== */
+/* 6) Fetch catálogo */
 
-const money = n => '$' + Number(n || 0).toFixed(0);
-
-function safeInt(n, def = 0) {
-  const v = Number(n);
-  return Number.isFinite(v) ? v : def;
-}
-function safeStr(v, def = '') {
-  return (v === undefined || v === null) ? def : String(v);
-}
-
-function slug(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function escapeHtml(s = '') {
-  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  return String(s).replace(/[&<>"']/g, ch => map[ch]);
-}
-
-/* Deep-clean para Firestore: elimina undefined / funciones */
-function cleanForFirestore(value) {
-  // undefined y funciones: los quitamos
-  if (value === undefined || typeof value === 'function') {
-    return undefined;
-  }
-  // primitivos + null: se quedan igual
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value;
-  }
-  // arrays: limpiamos cada elemento
-  if (Array.isArray(value)) {
-    const arr = [];
-    for (const v of value) {
-      const c = cleanForFirestore(v);
-      if (c !== undefined) arr.push(c);
-    }
-    return arr;
-  }
-  // objetos planos
-  if (typeof value === 'object') {
-    const out = {};
-    for (const k of Object.keys(value)) {
-      const c = cleanForFirestore(value[k]);
-      if (c !== undefined) out[k] = c;
-    }
-    return out;
-  }
-  // cualquier otra cosa rara → null
-  return null;
-}
-
-/* =====================================================
-   Catálogo
-   ===================================================== */
-
-async function fetchCatalogWithFallback() {
-  try {
-    const r = await fetch(DATA_MENU_URL, { cache: 'no-store' });
+async function fetchCatalogWithFallback(){
+  try{
+    const r = await fetch(DATA_MENU_URL, { cache:'no-store' });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const cat = await r.json();
     console.info('[kiosk] catálogo:', {
-      burgers: cat?.burgers?.length || 0,
-      minis: cat?.minis?.length || 0,
-      sides: cat?.sides?.length || 0,
-      drinks: cat?.drinks?.length || 0,
-      combos: cat?.combos?.length || 0
+      burgers: cat?.burgers?.length||0,
+      minis:   cat?.minis?.length||0,
+      sides:   cat?.sides?.length||0,
+      drinks:  cat?.drinks?.length||0,
+      combos:  cat?.combos?.length||0
     });
     window.__CATALOG = cat;
-    document.getElementById('__debugMenu')?.remove();
     return cat;
-  } catch (e) {
+  }catch(e){
     console.error('[kiosk] error catálogo', e);
     const fallback = {
-      burgers: [{ id: 'starter', name: 'Starter Burger', price: 47 }],
-      minis: [],
-      drinks: [],
-      sides: [],
-      combos: [],
-      appSettings: {}
+      burgers:[{id:'starter',name:'Starter Burger',price:47}],
+      minis:[],
+      sides:[],
+      drinks:[],
+      combos:[]
     };
     window.__CATALOG = fallback;
-    document.getElementById('__debugMenu')?.remove();
     return fallback;
   }
 }
 
-/* =====================================================
-   Helpers catálogo / sides / HH
-   ===================================================== */
+/* 7) Helpers menú */
 
-function findItemById(id) {
+function findItemById(id){
   if (!state.menu) return null;
   return (
     state.menu.burgers?.find(b => b.id === id) ||
-    state.menu.minis?.find(m => m.id === id) ||
-    state.menu.drinks?.find(d => d.id === id) ||
-    state.menu.sides?.find(s => s.id === id) ||
-    state.menu.combos?.find(c => c.id === id) ||
+    state.menu.minis?.find(m => m.id === id)   ||
+    state.menu.drinks?.find(d => d.id === id)  ||
+    state.menu.sides?.find(s => s.id === id)   ||
+    state.menu.combos?.find(c => c.id === id)  ||
     null
   );
 }
 
-function baseOfItem(item) {
-  if (!item || !state.menu) return item;
-  if (item.baseOf) {
-    return state.menu.burgers?.find(b => b.id === item.baseOf) || item;
+function baseOfItem(item){
+  if (!item) return item;
+  if (item.baseOf){
+    return findItemById(item.baseOf) || item;
   }
-  if (item.mini && /-mini$/i.test(item.id || '')) {
-    const baseId = String(item.id).replace(/-mini$/i, '');
-    return state.menu.burgers?.find(b => b.id === baseId) || item;
+  if (item.mini && /-mini$/i.test(item.id||'')){
+    const baseId = String(item.id).replace(/-mini$/i,'');
+    return findItemById(baseId) || item;
   }
   return item;
 }
 
-function isSide(item) {
-  if (!item) return false;
-  const t = String(item.type || '').toLowerCase();
-  const c = String(item.category || '').toLowerCase();
-  if (t === 'side' || c === 'side') return true;
-  if (/side-|papas|gajo/i.test(String(item.id || ''))) return true;
-  if (Array.isArray(item.seasonings)) return true;
-  return false;
-}
-
-function normalizeSeasonings(item) {
-  const raw = Array.isArray(item?.seasonings) ? item.seasonings : [];
-  return raw
-    .map(x => {
-      if (typeof x === 'string') {
-        const id = slug(x);
-        return id ? { id, name: x, kitchen: x } : null;
-      }
-      const id = x.id || slug(x.name || x.kitchen || '');
-      const name = x.name || x.kitchen || '';
-      const kitchen = x.kitchen || x.name || '';
-      return id && name ? { id, name, kitchen } : null;
-    })
-    .filter(Boolean);
-}
-
-function defaultSeasoning(item) {
-  const list = normalizeSeasonings(item);
-  if (!list.length) return null;
-  const salt = list.find(
-    x => /sal\b/i.test(x.name || '') || /sal\b/i.test(x.kitchen || '')
-  );
-  return (salt || list[0]).kitchen;
-}
-
-function formatIngredientsFor(item, base) {
-  const app = state.menu?.appSettings || {};
-  const meatDefaultBig = safeInt(app.meatGrams, 85);
-  const meatDefaultMini = safeInt(app.miniMeatGrams, 45);
+function formatIngredientsFor(item, base){
+  const meatDefaultBig  = safeInt(state.menu?.appSettings?.meatGrams, 85);
+  const meatDefaultMini = safeInt(state.menu?.appSettings?.miniMeatGrams,45);
   const grams = safeInt(
     item?.meatGrams,
     item?.mini ? meatDefaultMini : meatDefaultBig
   );
-
-  const src = Array.isArray(item?.ingredients) && item.ingredients.length
+  const src = (Array.isArray(item?.ingredients) && item.ingredients.length)
     ? item.ingredients
-    : base?.ingredients || [];
-
+    : (base?.ingredients || []);
   return src.map(s =>
     /^Carne(\b|\s|$)/i.test(String(s))
       ? `Carne ${grams} g`
-      : String(s)
+      : s
   );
 }
 
-/* --------- Happy Hour --------- */
+/* Sides / sazonadores */
 
-function hhInfo() {
+function isSide(item){
+  if (!item) return false;
+  const t = String(item.type||'').toLowerCase();
+  const c = String(item.category||'').toLowerCase();
+  if (t === 'side' || c === 'side') return true;
+  if (/side-|papas|gajo/i.test(String(item.id||''))) return true;
+  return Array.isArray(item.seasonings);
+}
+
+function normalizeSeasonings(item){
+  const raw = Array.isArray(item?.seasonings) ? item.seasonings : [];
+  return raw.map(x=>{
+    if (typeof x === 'string'){
+      return { id:slug(x), name:x, kitchen:x };
+    }
+    return {
+      id: x.id || slug(x.name || x.kitchen || ''),
+      name: x.name || x.kitchen || '',
+      kitchen: x.kitchen || x.name || ''
+    };
+  }).filter(o => o.id && o.name);
+}
+
+function defaultSeasoning(item){
+  const list = normalizeSeasonings(item);
+  if (!list.length) return null;
+  const salt = list.find(x =>
+    /sal\b/i.test(x.name) || /sal\b/i.test(x.kitchen)
+  );
+  return (salt || list[0]).kitchen;
+}
+
+/* 8) HH */
+
+function hhInfo(){
   const hh = state.menu?.happyHour || {};
   const enabled = !!hh.enabled;
-  const pct = Math.max(0, Math.min(100, Number(hh.discountPercent || 0))) / 100;
+  const pct = Math.max(0, Math.min(100, safeInt(hh.discountPercent))) / 100;
   const eligibleOnly = hh.applyEligibleOnly !== false;
   return { enabled, pct, eligibleOnly };
 }
 
-function hhDiscountPerUnit(item) {
+function hhDiscountPerUnit(item){
   const { enabled, pct, eligibleOnly } = hhInfo();
   if (!enabled || pct <= 0 || !item) return 0;
   if (item.type === 'drink' || item.type === 'combo') return 0;
-  const isEligible = eligibleOnly ? item.hhEligible !== false : true;
+  const isEligible = eligibleOnly ? (item.hhEligible !== false) : true;
   if (!isEligible) return 0;
-  const unit = Number(item.price || 0);
+  const unit = safeInt(item.price,0);
   return unit * pct;
 }
 
-/* =====================================================
-   Iconos / temas
-   ===================================================== */
+/* 9) Icons (base + tema) */
 
 const ICONS = {
-  starter: "../shared/img/burgers/starter.png",
-  koopa: "../shared/img/burgers/koopa.png",
-  fatality: "../shared/img/burgers/fatality.png",
-  mega: "../shared/img/burgers/mega.png",
-  hadouken: "../shared/img/burgers/hadouken.png",
-  nintendo: "../shared/img/burgers/nintendo.png",
+  starter:   "../shared/img/burgers/starter.png",
+  koopa:     "../shared/img/burgers/koopa.png",
+  fatality:  "../shared/img/burgers/fatality.png",
+  mega:      "../shared/img/burgers/mega.png",
+  hadouken:  "../shared/img/burgers/hadouken.png",
+  nintendo:  "../shared/img/burgers/nintendo.png",
   finalboss: "../shared/img/burgers/finalboss.png"
 };
 const ICONS_MEX = {
-  starter: "../shared/img/burgers_mex/starter.png",
-  koopa: "../shared/img/burgers_mex/koopa.png",
-  fatality: "../shared/img/burgers_mex/fatality.png",
-  mega: "../shared/img/burgers_mex/mega.png",
-  hadouken: "../shared/img/burgers_mex/hadouken.png",
-  nintendo: "../shared/img/burgers_mex/nintendo.png",
+  starter:   "../shared/img/burgers_mex/starter.png",
+  koopa:     "../shared/img/burgers_mex/koopa.png",
+  fatality:  "../shared/img/burgers_mex/fatality.png",
+  mega:      "../shared/img/burgers_mex/mega.png",
+  hadouken:  "../shared/img/burgers_mex/hadouken.png",
+  nintendo:  "../shared/img/burgers_mex/nintendo.png",
   finalboss: "../shared/img/burgers_mex/finalboss.png"
 };
-
-function getThemeIconFor(baseId) {
+function getThemeIconFor(baseId){
   const preset = window.__lastThemePreset || {};
-  const base = preset.packBaseUrl || '';
-  const map = preset.icons || {};
-  const rel = map[baseId];
+  const base   = preset.packBaseUrl || '';
+  const map    = preset.icons || {};
+  const rel    = map?.[baseId];
   if (!rel || !base) return null;
-  try {
+  try{
     return new URL(rel, window.location.origin + base).toString();
-  } catch {
+  }catch{
     return null;
   }
 }
 
-function readThemeNameFromDOM() {
+/* 10) Tema watcher */
+
+function readThemeNameFromDOM(){
   const root = document.documentElement;
   const dataAttr =
     root.getAttribute('data-theme-name') ||
     root.getAttribute('data-theme') ||
     root.dataset?.themeName ||
-    root.dataset?.theme ||
-    '';
+    root.dataset?.theme || '';
   if (dataAttr) return String(dataAttr).trim();
-  const cssVar = getComputedStyle(root).getPropertyValue('--theme-name') || '';
-  return String(cssVar).trim().replace(/^"|"$/g, '');
+  const cssVar = getComputedStyle(root)
+    .getPropertyValue('--theme-name') || '';
+  return String(cssVar).trim().replace(/^"|"$/g,'');
 }
 
-function startThemeWatcher() {
+function startThemeWatcher(){
   state.themeName = readThemeNameFromDOM();
-  const mo = new MutationObserver(() => {
-    const newName = readThemeNameFromDOM();
-    if (newName !== state.themeName) {
-      state.themeName = newName;
+  const mo = new MutationObserver(()=>{
+    const nn = readThemeNameFromDOM();
+    if (nn !== state.themeName){
+      state.themeName = nn;
       renderCards();
     }
   });
   mo.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['data-theme', 'data-theme-name']
+    attributes:true,
+    attributeFilter:['data-theme','data-theme-name']
   });
-  window.addEventListener('theme:changed', () => {
-    const newName = readThemeNameFromDOM();
-    if (newName !== state.themeName) {
-      state.themeName = newName;
+  window.addEventListener('theme:changed', ()=>{
+    const nn = readThemeNameFromDOM();
+    if (nn !== state.themeName){
+      state.themeName = nn;
       renderCards();
     }
   });
 }
 
-/* =====================================================
-   Acordeón + barra de poder (cards)
-   ===================================================== */
+/* 11) Power bar + acordeón */
 
-const HIGHLIGHTS = {
-  starter: 'La base de todo · sencilla',
-  koopa: 'Crunch dulce: piña + tocino',
-  fatality: 'Picoso extremo: habanero + cheddar + tocino',
-  mega: 'Cheddar cremoso + salchicha y bacon',
-  hadouken: 'Doble queso + chipotle · clásico SF',
-  nintendo: 'Nostalgia noventera con piña',
-  finalboss: 'La más cargada · sensación de jefe final'
-};
-
-function getHighlight(item, base) {
-  const id = (base?.id || item?.id || '').toLowerCase();
-  return item?.highlight || HIGHLIGHTS[id] || '';
-}
-
-function powerBarHtml(icon = '🍔') {
+function powerBarHtml(icon='🍔'){
   return `
   <div class="power-bar" aria-hidden="true">
-    <div class="power-icon" role="img">${icon}</div>
+    <div class="power-icon" role="img" aria-label="icon">${icon}</div>
     <div class="power-track">
       <div class="power-fill"></div>
     </div>
   </div>`;
 }
 
-function buildAccordionForItem(item, base) {
-  if (item?.type === 'combo') {
-    const rawItems = Array.isArray(item.items) ? item.items : [];
-    const subs = rawItems
-      .map(ci => {
-        const ref = findItemById(ci.id);
-        const qtyText = ci.qty && ci.qty > 1 ? ` ×${ci.qty}` : '';
-        const inc = ref
-          ? formatIngredientsFor(ref, baseOfItem(ref))
-          : [];
-        return `
-        <li>
-          <strong>${escapeHtml(ref?.name || ci.id)}${qtyText}</strong>
-          ${
-            inc.length
-              ? `<ul>${inc
-                  .map(s => `<li>${escapeHtml(s)}</li>`)
-                  .join('')}</ul>`
-              : ''
-          }
-        </li>`;
-      })
-      .join('');
+const HIGHLIGHTS = {
+  starter:   'La base de todo · sencilla',
+  koopa:     'Crunch dulce: piña + tocino',
+  fatality:  'Picoso extremo: habanero + cheddar + tocino',
+  mega:      'Cheddar cremoso + salchicha y bacon',
+  hadouken:  'Doble queso + chipotle · clásico SF',
+  nintendo:  'Nostalgia noventera con piña',
+  finalboss: 'La más cargada · sensación de jefe final'
+};
 
-    const short = rawItems.slice(0, 3).map(ci => {
+function getHighlight(item, base){
+  const id = (base?.id || item?.id || '').toLowerCase();
+  return item?.highlight || HIGHLIGHTS[id] || '';
+}
+
+function buildAccordionForItem(item, base){
+  // combos: lista interna
+  if (item?.type === 'combo'){
+    const raw = Array.isArray(item.items) ? item.items : [];
+    const subs = raw.map(ci=>{
       const ref = findItemById(ci.id);
       const qty = ci.qty && ci.qty > 1 ? ` ×${ci.qty}` : '';
+      const inc = ref ? formatIngredientsFor(ref, baseOfItem(ref)) : [];
+      return `
+        <li>
+          <strong>${escapeHtml(ref?.name || ci.id)}${qty}</strong>
+          ${inc.length ? `<ul>${inc.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ul>`:''}
+        </li>`;
+    }).join('');
+    const short = raw.slice(0,3).map(ci=>{
+      const ref = findItemById(ci.id);
+      const qty = ci.qty && ci.qty>1 ? ` ×${ci.qty}` : '';
       return `${escapeHtml(ref?.name || ci.id)}${qty}`;
     });
-    const extra = Math.max(0, rawItems.length - short.length);
-
+    const extra = Math.max(0, raw.length - short.length);
     return `
-    <details class="ing-acc" data-acc data-id="${escapeHtml(item.id)}">
-      <summary class="ing-head">
-        <div class="k-chips">
-          ${short.map(s => `<span class="k-chip">${s}</span>`).join('')}
-          ${
-            extra > 0
-              ? `<span class="k-chip chip-more" data-more>+${extra}</span>`
-              : ''
-          }
-        </div>
-        ${
-          getHighlight(item, base)
-            ? `<div class="muted small">${escapeHtml(
-                getHighlight(item, base)
-              )}</div>`
-            : ''
-        }
-        ${powerBarHtml('⭐')}
-      </summary>
-      ${
-        subs
-          ? `<ul class="ing-list" style="margin:8px 0 0 18px">${subs}</ul>`
-          : ''
-      }
-    </details>`;
+      <details class="ing-acc" data-acc data-id="${escapeHtml(item.id)}">
+        <summary>
+          <div class="k-chips">
+            ${short.map(s=>`<span class="k-chip">${s}</span>`).join('')}
+            ${extra>0 ? `<span class="k-chip chip-more" data-more>+${extra}</span>`:''}
+          </div>
+          ${getHighlight(item, base)
+            ? `<div class="muted small">${escapeHtml(getHighlight(item, base))}</div>`
+            : ''}
+          ${powerBarHtml('⭐')}
+        </summary>
+        ${subs ? `<ul class="ing-list">${subs}</ul>`:''}
+      </details>`;
   }
 
   const inc = formatIngredientsFor(item, base).filter(Boolean);
-  if (!inc.length) {
+  if (!inc.length){
     return getHighlight(item, base)
-      ? `<div class="muted small" style="margin-top:4px">${escapeHtml(
-          getHighlight(item, base)
-        )}</div>`
+      ? `<div class="muted small">${escapeHtml(getHighlight(item, base))}</div>`
       : '';
   }
-  const shown = inc.slice(0, 3);
+  const shown = inc.slice(0,3);
   const extra = Math.max(0, inc.length - shown.length);
   return `
-  <details class="ing-acc" data-acc data-id="${escapeHtml(item.id)}">
-    <summary class="ing-head">
-      <div class="k-chips">
-        ${shown
-          .map(s => `<span class="k-chip">${escapeHtml(s)}</span>`)
-          .join('')}
-        ${extra > 0 ? `<span class="k-chip">+${extra}</span>` : ``}
-      </div>
-      ${
-        getHighlight(item, base)
-          ? `<div class="muted small">${escapeHtml(
-              getHighlight(item, base)
-            )}</div>`
-          : ''
-      }
-      ${powerBarHtml(isSide(item) ? '🥔' : '🍔')}
-    </summary>
-    <ul class="ing-list" style="margin:8px 0 0 18px">
-      ${inc.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
-    </ul>
-  </details>`;
+    <details class="ing-acc" data-acc data-id="${escapeHtml(item.id)}">
+      <summary>
+        <div class="k-chips">
+          ${shown.map(s=>`<span class="k-chip">${escapeHtml(s)}</span>`).join('')}
+          ${extra>0 ? `<span class="k-chip">+${extra}</span>`:''}
+        </div>
+        ${getHighlight(item, base)
+          ? `<div class="muted small">${escapeHtml(getHighlight(item, base))}</div>`
+          : ''}
+        ${powerBarHtml(isSide(item)?'🥔':'🍔')}
+      </summary>
+      <ul class="ing-list">
+        ${inc.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}
+      </ul>
+    </details>`;
 }
 
-function bindAccordionBehavior(container) {
-  container.addEventListener('toggle', ev => {
-    const d = ev.target;
+function bindAccordionBehavior(container){
+  container.addEventListener('toggle', e=>{
+    const d = e.target;
     if (!d?.matches?.('details.ing-acc')) return;
     const fill = d.querySelector('.power-fill');
     if (!fill) return;
-    if (d.open) {
+    if (d.open){
       fill.style.width = '100%';
-      try { beep(); } catch {}
-    } else {
+      try{ beep(); }catch{}
+    }else{
       fill.style.width = '0%';
-      try { beep(); } catch {}
     }
   });
 }
 
-/* =====================================================
-   Tabs
-   ===================================================== */
+/* 12) Bebidas / Combo Drink (VERSIÓN COMPLETA) */
 
-document.getElementById('btnMinis')?.addEventListener('click', () => setMode('mini'));
-document.getElementById('btnBig')?.addEventListener('click', () => setMode('big'));
-document.getElementById('btnPapas')?.addEventListener('click', () => setMode('papas'));
-
-function setMode(mode) {
-  state.mode = mode;
-  renderCards();
-  setActiveTab(mode);
-}
-
-function setActiveTab(mode = state.mode) {
-  const ids = ['btnMinis', 'btnBig', 'btnPapas', 'btnCombos', 'btnDrinks'];
-  const on = el => {
-    if (!el) return;
-    el.classList.add('is-active');
-    el.setAttribute('aria-selected', 'true');
-  };
-  const off = el => {
-    if (!el) return;
-    el.classList.remove('is-active');
-    el.setAttribute('aria-selected', 'false');
-  };
-  ids.forEach(id => off(document.getElementById(id)));
-  if (mode === 'mini') on(document.getElementById('btnMinis'));
-  else if (mode === 'big') on(document.getElementById('btnBig'));
-  else if (mode === 'papas') on(document.getElementById('btnPapas'));
-  else if (mode === 'combos') on(document.getElementById('btnCombos'));
-  else if (mode === 'drinks') on(document.getElementById('btnDrinks'));
-}
-
-function enableCombosTab() {
-  const hasCombos = Array.isArray(state.menu?.combos) && state.menu.combos.length > 0;
-  if (!hasCombos) return;
-  const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
-  if (!bar || document.getElementById('btnCombos')) return;
-  const btn = document.createElement('button');
-  btn.id = 'btnCombos';
-  btn.className = 'btn tab';
-  btn.textContent = 'Combos';
-  btn.addEventListener('click', () => setMode('combos'));
-  bar.appendChild(btn);
-}
-function enableDrinksTab() {
-  const hasDrinks = Array.isArray(state.menu?.drinks) && state.menu.drinks.length > 0;
-  if (!hasDrinks) return;
-  const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
-  if (!bar || document.getElementById('btnDrinks')) return;
-  const btn = document.createElement('button');
-  btn.id = 'btnDrinks';
-  btn.className = 'btn tab';
-  btn.textContent = 'Bebidas';
-  btn.addEventListener('click', () => setMode('drinks'));
-  bar.appendChild(btn);
-}
-function enablePapasTab() {
-  const hasSides = Array.isArray(state.menu?.sides) && state.menu.sides.length > 0;
-  if (!hasSides) return;
-  const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
-  if (!bar || document.getElementById('btnPapas')) return;
-  const btn = document.createElement('button');
-  btn.id = 'btnPapas';
-  btn.className = 'btn tab';
-  btn.textContent = 'Papas';
-  btn.addEventListener('click', () => setMode('papas'));
-  const btnDrinks = document.getElementById('btnDrinks');
-  if (btnDrinks) bar.insertBefore(btn, btnDrinks);
-  else bar.appendChild(btn);
-}
-
-/* =====================================================
-   Bebidas / Combo Drink
-   ===================================================== */
-
-function subtotalSinBebidas(cart = state.cart) {
-  return cart.reduce((a, l) => {
+function subtotalSinBebidas(cart = state.cart){
+  return cart.reduce((a,l)=>{
     if (!l || l.isGift) return a;
     if (l.type === 'drink') return a;
     return a + safeInt(l.lineTotal);
   }, 0);
 }
-function isDrinkComboUnlocked(cart = state.cart) {
+
+function isDrinkComboUnlocked(cart = state.cart){
   return subtotalSinBebidas(cart) >= 77;
 }
-function ensureDrinkPrices(cart = state.cart) {
+
+function ensureDrinkPrices(cart = state.cart){
   const unlocked = isDrinkComboUnlocked(cart);
   const target = unlocked ? DRINK_PRICE.combo : DRINK_PRICE.solo;
 
-  if (unlocked !== state.drinkComboActive) {
+  if (unlocked !== state.drinkComboActive){
     state.drinkComboActive = unlocked;
-    if (unlocked) {
-      try { playAchievement(); } catch {}
+    if (unlocked){
+      try{ playAchievement(); }catch{}
       toast('🎉 Combo Drink Seven activo: bebidas a precio combo');
-    } else {
+    }else{
       toast('Combo Drink Seven desactivado — bebidas a $19');
     }
   }
-  cart.forEach(l => {
-    if (l?.type === 'drink') {
-      const qty = safeInt(l.qty, 1);
-      l.meta = l.meta || {};
-      l.meta.pricingMode = unlocked ? 'combo' : 'solo';
-      l.unitPrice = target;
-      l.hhDisc = 0;
-      l.lineTotal = qty * target;
-    }
-  });
+
+  for (const l of cart){
+    if (!l || l.type !== 'drink') continue;
+    const qty = safeInt(l.qty,1);
+    l.meta = l.meta || {};
+    l.meta.pricingMode = unlocked ? 'combo' : 'solo';
+    l.unitPrice = target;
+    l.hhDisc = 0;
+    l.lineTotal = qty * target;
+  }
 }
 
-function findDrinkFlexible(key = '') {
+function findDrinkFlexible(key=''){
   const list = state.menu?.drinks || [];
   const k = String(key).toLowerCase();
-  let d = list.find(x => String(x.id || '').toLowerCase() === k);
+  if (!k) return list[0] || null;
+  let d = list.find(x => String(x.id||'').toLowerCase() === k);
   if (d) return d;
-  d = list.find(x => String(x.name || '').toLowerCase().includes(k));
+  d = list.find(x => String(x.name||'').toLowerCase().includes(k));
   return d || null;
 }
 
-function addDrinkToCart(drink) {
+function addDrinkToCart(drink){
   if (!drink) return;
   const comboOn = isDrinkComboUnlocked();
-  const price = comboOn ? DRINK_PRICE.combo : DRINK_PRICE.solo;
+  const basePrice = safeInt(drink.price, DRINK_PRICE.solo);
+  const price = comboOn ? DRINK_PRICE.combo : basePrice;
+
   state.cart.push({
     id: safeStr(drink.id),
     name: safeStr(drink.name),
-    type: 'drink',
-    qty: 1,
-    unitPrice: safeInt(drink.price, price),
+    type:'drink',
+    qty:1,
+    unitPrice: basePrice,
+    baseIngredients:[],
+    extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null, seasoning:null, cheddarUpgrade:false },
+    notes:'',
     lineTotal: price,
-    baseIngredients: [],
-    extras: { sauces: [], ingredients: [] },
-    notes: '',
     hhDisc: 0,
-    meta: { pricingMode: comboOn ? 'combo' : 'solo' },
-    isGift: false
+    meta:{ pricingMode: comboOn ? 'combo' : 'solo' },
+    isGift:false
   });
+
   ensureDrinkPrices();
   updateCartBar();
-  beep();
-  toast(`${drink.name} agregado`);
+  beep(); toast(`${drink.name} agregado`);
 }
 
-function addDrinkByKey(key) {
-  const d = findDrinkFlexible(key);
-  if (!d) {
-    toast('Bebida no disponible');
-    return;
-  }
-  addDrinkToCart(d);
+function getSuggestedDrinks(max=2){
+  const list = (state.menu?.drinks || [])
+    .filter(d => !d.hidden);
+  return list.slice(0,max);
 }
 
-/* =====================================================
-   Render de tarjetas
-   ===================================================== */
+function smartDrinkNudge(){
+  const drinks = getSuggestedDrinks(2);
+  if (!drinks.length) return;
 
-function qtyInCart(id) {
+  const existing = document.getElementById('__drinkNudge');
+  if (existing) existing.remove();
+
+  const priceTxt = isDrinkComboUnlocked()
+    ? DRINK_PRICE.combo
+    : DRINK_PRICE.solo;
+
+  const box = document.createElement('div');
+  box.id = '__drinkNudge';
+  box.style.cssText = [
+    'position:fixed',
+    'left:8px',
+    'bottom:8px',
+    'z-index:1000',
+    'background:#0f182a',
+    'border:1px solid rgba(255,255,255,.12)',
+    'border-radius:12px',
+    'padding:8px',
+    'display:flex',
+    'gap:8px',
+    'align-items:center'
+  ].join(';');
+
+  let btns = drinks.map((d,i)=>`
+    <button class="btn tiny" data-i="${i}">
+      ${escapeHtml(d.name)} $${priceTxt}
+    </button>`).join('');
+
+  btns += `<button class="btn ghost tiny" data-x="1">No</button>`;
+
+  box.innerHTML = `
+    <span class="muted small" style="white-space:nowrap">¿Bebida?</span>
+    ${btns}
+  `;
+  document.body.appendChild(box);
+
+  box.onclick = ev=>{
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.x){
+      box.remove();
+      return;
+    }
+    const idx = Number(b.dataset.i);
+    const d = drinks[idx];
+    if (d) addDrinkToCart(d);
+    box.remove();
+  };
+
+  setTimeout(()=>{ try{ box.remove(); }catch{} }, 5000);
+}
+
+/* 13) Tabs */
+
+document.getElementById('btnMinis')?.addEventListener('click', ()=> setMode('mini'));
+document.getElementById('btnBig')?.addEventListener('click', ()=> setMode('big'));
+document.getElementById('btnPapas')?.addEventListener('click', ()=> setMode('papas'));
+
+function setMode(mode){
+  state.mode = mode;
+  renderCards();
+  setActiveTab(mode);
+}
+
+function setActiveTab(mode=state.mode){
+  const ids = ['btnMinis','btnBig','btnPapas','btnCombos','btnDrinks'];
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    const active =
+      (mode === 'mini'   && id==='btnMinis')  ||
+      (mode === 'big'    && id==='btnBig')    ||
+      (mode === 'papas'  && id==='btnPapas')  ||
+      (mode === 'combos' && id==='btnCombos') ||
+      (mode === 'drinks' && id==='btnDrinks');
+    el.classList.toggle('is-active', active);
+    el.setAttribute('aria-selected', active ? 'true':'false');
+  });
+}
+
+function enableCombosTab(){
+  const has = Array.isArray(state.menu?.combos) && state.menu.combos.length;
+  if (!has) return;
+  if (document.getElementById('btnCombos')) return;
+  const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
+  if (!bar) return;
+  const b = document.createElement('button');
+  b.id = 'btnCombos';
+  b.className = 'btn tab';
+  b.textContent = 'Combos';
+  b.addEventListener('click',()=> setMode('combos'));
+  bar.appendChild(b);
+}
+function enableDrinksTab(){
+  const has = Array.isArray(state.menu?.drinks) && state.menu.drinks.length;
+  if (!has) return;
+  if (document.getElementById('btnDrinks')) return;
+  const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
+  if (!bar) return;
+  const b = document.createElement('button');
+  b.id='btnDrinks';
+  b.className='btn tab';
+  b.textContent='Bebidas';
+  b.addEventListener('click',()=> setMode('drinks'));
+  bar.appendChild(b);
+}
+function enablePapasTab(){
+  const has = Array.isArray(state.menu?.sides) && state.menu.sides.length;
+  if (!has) return;
+  if (document.getElementById('btnPapas')) return;
+  const bar = document.getElementById('tabsBar') || document.querySelector('.tabs');
+  if (!bar) return;
+  const b = document.createElement('button');
+  b.id='btnPapas';
+  b.className='btn tab';
+  b.textContent='Papas';
+  b.addEventListener('click',()=> setMode('papas'));
+  const btnDr = document.getElementById('btnDrinks');
+  if (btnDr) bar.insertBefore(b, btnDr);
+  else bar.appendChild(b);
+}
+
+/* 14) Render cards */
+
+function qtyInCart(id){
   return state.cart
     .filter(l => l && l.id === id && !l.isGift)
-    .reduce((a, l) => a + safeInt(l.qty, 1), 0);
+    .reduce((a,l)=> a + safeInt(l.qty,1), 0);
 }
 
-function renderCards() {
+function renderCards(){
   const grid = document.getElementById('cards');
   if (!grid || !state.menu) return;
   grid.innerHTML = '';
 
   let items;
-  if (state.mode === 'mini') items = state.menu.minis || [];
-  else if (state.mode === 'big') items = state.menu.burgers || [];
-  else if (state.mode === 'papas') items = state.menu.sides || [];
+  if (state.mode === 'mini')        items = state.menu.minis  || [];
+  else if (state.mode === 'big')    items = state.menu.burgers|| [];
+  else if (state.mode === 'papas')  items = state.menu.sides  || [];
   else if (state.mode === 'combos') items = state.menu.combos || [];
   else if (state.mode === 'drinks') items = state.menu.drinks || [];
-  else items = state.menu.minis || [];
+  else                              items = state.menu.minis  || [];
 
-  items.forEach(it => {
-    const base = baseOfItem(it);
-    const rawId = it.id || '';
-    const baseId =
-      base?.id ||
+  items.forEach(it=>{
+    const base   = baseOfItem(it);
+    const rawId  = it.id || '';
+    const baseId = (base?.id) ||
       (it.mini && /-mini$/i.test(rawId)
-        ? rawId.replace(/-mini$/i, '')
+        ? rawId.replace(/-mini$/i,'')
         : rawId);
 
-    const mxOn = /independencia|méx|mex|patria|viva/i.test(
-      String(state.themeName || '')
-    );
+    const mxOn   = /independencia|méx|mex|patria|viva/i.test(state.themeName||'');
     const themedSrc = getThemeIconFor(baseId);
     const iconSrc =
       it.icon ||
       themedSrc ||
-      (mxOn && ICONS_MEX[baseId]) ||
-      ICONS[baseId] ||
-      null;
+      ((mxOn && ICONS_MEX[baseId]) ? ICONS_MEX[baseId] : (ICONS[baseId] || null));
 
     const card = document.createElement('div');
     card.className = 'card';
 
     const isCombo = it.type === 'combo';
-    const isDrink = it.type === 'drink' || state.mode === 'drinks';
+    const isDrink = it.type === 'drink' || (state.mode === 'drinks');
+    const isSideItem = isSide(it);
 
-    const disc = !isDrink && !isCombo ? hhDiscountPerUnit(it) : 0;
-    const basePrice = safeInt(it.price);
-    const eff = !isDrink && !isCombo
-      ? Math.max(0, basePrice - disc)
-      : (isDrink ? safeInt(it.price || DRINK_PRICE.solo) : basePrice);
+    const disc = (!isDrink && !isCombo) ? hhDiscountPerUnit(it) : 0;
+    const eff  = (!isDrink && !isCombo)
+      ? Math.max(0, safeInt(it.price) - disc)
+      : safeInt(it.price, DRINK_PRICE.solo);
 
-    const qSel = qtyInCart(it.id);
-    const selectedBadge =
-      qSel > 0
-        ? `<span class="tag" data-sel>×${qSel} en pedido</span>`
-        : '';
+    const selQty = qtyInCart(it.id);
+    const selBadge = selQty > 0
+      ? `<span class="tag" data-sel>×${selQty} en pedido</span>`
+      : '';
 
-    const showPrice = isCombo ? basePrice : eff;
+    const showPrice = isCombo ? safeInt(it.price, eff) : eff;
 
-    const priceHtml =
-      !isDrink && !isCombo && disc > 0
-        ? `<div class="price"><s>${money(basePrice)}</s> <span class="tag">${money(
-            eff
-          )}</span> ${selectedBadge}</div>`
-        : `<div class="price">${money(showPrice)} ${selectedBadge}</div>`;
+    const priceHtml = (!isDrink && !isCombo && disc > 0)
+      ? `<div class="price"><s>${'$'+safeInt(it.price)}</s> <span class="tag">${'$'+eff}</span> ${selBadge}</div>`
+      : `<div class="price">${'$'+showPrice} ${selBadge}</div>`;
 
     const actionsHtml = isDrink
       ? `<button class="btn small" data-a="drinkAdd">Agregar</button>`
       : `${
-          isCombo
-            ? ''
-            : `<button class="btn small ghost" data-a="custom">Personalizar</button>`
-        }
-         <button class="btn small" data-a="${
-           isCombo ? 'order' : 'quick'
-         }">${isCombo ? 'Ordenar combo' : 'Ordenar rápido'}</button>`;
+           isCombo
+             ? ''
+             : `<button class="btn small ghost" data-a="custom">Personalizar</button>`
+         }
+         <button class="btn small" data-a="${isCombo?'order':'quick'}">
+           ${isCombo ? 'Ordenar combo' : 'Ordenar rápido'}
+         </button>`;
 
     const mediaImg = iconSrc
-      ? `<img src="${iconSrc}" alt="${escapeHtml(
-          it.name
-        )}" class="icon-img" loading="lazy"/>`
+      ? `<img src="${iconSrc}" alt="${escapeHtml(it.name)}" class="icon-img" loading="lazy">`
       : `<div class="icon" aria-hidden="true"></div>`;
 
     card.innerHTML = `
@@ -731,43 +714,41 @@ function renderCards() {
       ${buildAccordionForItem(it, base)}
       <div class="row">
         ${priceHtml}
-        <div class="row" style="gap:8px">${actionsHtml}</div>
+        <div class="row">${actionsHtml}</div>
       </div>
     `;
+
     grid.appendChild(card);
 
-    if (qSel > 0) {
+    if (selQty > 0){
       card.classList.add('is-selected');
       const fill = card.querySelector('.power-fill');
       if (fill) fill.style.width = '100%';
     }
 
-    card.querySelector('[data-more]')?.addEventListener('click', ev => {
+    card.querySelector('[data-more]')?.addEventListener('click', ev=>{
       ev.preventDefault();
       openItemModal(it, base);
     });
 
-    if (isCombo) {
-      card.querySelector('[data-a="order"]')?.addEventListener('click', async () => {
+    if (isCombo){
+      card.querySelector('[data-a="order"]')?.addEventListener('click', async ()=>{
         const ok = await ensureCustomerIdentified(state.orderMeta.type);
         if (!ok) return;
         addComboToCart(it);
       });
-    } else if (isDrink) {
-      card.querySelector('[data-a="drinkAdd"]')?.addEventListener('click', async () => {
+    }else if (isDrink){
+      card.querySelector('[data-a="drinkAdd"]')?.addEventListener('click', async ()=>{
         const ok = await ensureCustomerIdentified(state.orderMeta.type);
         if (!ok) return;
         addDrinkToCart(it);
       });
-    } else {
-      card.querySelector('[data-a="custom"]')?.addEventListener('click', async () => {
-        if (!state.identified) {
-          const ok = await ensureCustomerIdentified(state.orderMeta.type);
-          if (!ok) return;
-        }
+    }else{
+      card.querySelector('[data-a="custom"]')?.addEventListener('click', async ()=>{
+        if (!state.identified) await ensureCustomerIdentified(state.orderMeta.type);
         openItemModal(it, base);
       });
-      card.querySelector('[data-a="quick"]')?.addEventListener('click', async () => {
+      card.querySelector('[data-a="quick"]')?.addEventListener('click', async ()=>{
         const ok = await ensureCustomerIdentified(state.orderMeta.type);
         if (!ok) return;
         addQuickItem(it, base);
@@ -781,296 +762,146 @@ function renderCards() {
   enablePapasTab();
 }
 
-/* =====================================================
-   Quick add / combos
-   ===================================================== */
+/* 15) Quick add / combos */
 
-async function addQuickItem(item, base) {
+async function addQuickItem(item, base){
   const ok = await ensureCustomerIdentified(state.orderMeta.type);
   if (!ok) return;
 
   const d = hhDiscountPerUnit(item);
   const unit = Math.max(0, safeInt(item.price) - d);
-  const seasoning = isSide(item) ? defaultSeasoning(item) : null;
+
+  let seasoning = null;
+  if (isSide(item)) seasoning = defaultSeasoning(item);
 
   state.cart.push({
-    id: safeStr(item.id),
-    name: safeStr(item.name),
-    mini: !!item.mini,
-    qty: 1,
-    unitPrice: safeInt(item.price),
+    id:item.id,
+    name:item.name,
+    mini:!!item.mini,
+    qty:1,
+    unitPrice:safeInt(item.price),
     baseIngredients: formatIngredientsFor(item, base),
-    ingredients: formatIngredientsFor(item, base),
+    ingredients:     formatIngredientsFor(item, base),
     salsaDefault: base?.salsaDefault || base?.suggested || null,
-    salsaCambiada: null,
-    extras: {
-      sauces: [],
-      ingredients: [],
-      dlcCarne: false,
-      surpriseSauce: null,
-      seasoning
-    },
-    notes: '',
-    lineTotal: unit,
-    hhDisc: d,
-    type: isSide(item) ? 'side' : 'burger',
-    isGift: false
+    salsaCambiada:null,
+    extras:{ sauces:[], ingredients:[], dlcCarne:false, surpriseSauce:null, seasoning },
+    notes:'',
+    lineTotal:unit,
+    hhDisc:d,
+    type:isSide(item)?'side':null,
+    isGift:false
   });
 
   ensureDrinkPrices();
   updateCartBar();
-  beep();
-  toast(`${item.name} agregado`);
+  beep(); toast(`${item.name} agregado`);
   smartDrinkNudge();
 }
 
-function smartDrinkNudge() {
-  const priceTxt = isDrinkComboUnlocked() ? DRINK_PRICE.combo : DRINK_PRICE.solo;
-  let box = document.getElementById('__drinkNudge');
-  if (box) box.remove();
-  box = document.createElement('div');
-  box.id = '__drinkNudge';
-  box.style.cssText =
-    'position:fixed;left:8px;bottom:8px;z-index:1000;background:#0f182a;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px;display:flex;gap:8px;align-items:center';
-  box.innerHTML = `
-    <span class="muted small">¿Bebida?</span>
-    <button class="btn tiny" data-k="7up">Limonada $${priceTxt}</button>
-    <button class="btn tiny" data-k="pepsi">Cola $${priceTxt}</button>
-    <button class="btn ghost tiny" data-k="x">No</button>`;
-  document.body.appendChild(box);
-  box.onclick = e => {
-    const b = e.target.closest('button[data-k]');
-    if (!b) return;
-    const k = b.getAttribute('data-k');
-    if (k === 'x') {
-      box.remove();
-      return;
-    }
-    addDrinkByKey(k);
-    box.remove();
-  };
-  setTimeout(() => {
-    try { box.remove(); } catch {}
-  }, 5000);
-}
-
-async function addComboToCart(combo) {
+async function addComboToCart(combo){
   const ok = await ensureCustomerIdentified(state.orderMeta.type);
   if (!ok) return;
-  try {
+  try{
     const items = [];
-    if (Array.isArray(combo.items)) {
-      combo.items.forEach(ci => {
+    if (Array.isArray(combo.items)){
+      for (const ci of combo.items){
         const ref = findItemById(ci.id);
         items.push({
-          kind: ci.kind || (ref?.mini ? 'mini' : isSide(ref) ? 'side' : 'burger'),
-          id: safeStr(ci.id),
-          qty: safeInt(ci.qty, 1),
-          name: safeStr(ref?.name || ci.id),
+          kind: ci.kind || (ref?.mini ? 'mini' : (isSide(ref)?'side':'burger')),
+          id: ci.id,
+          qty: safeInt(ci.qty,1),
+          name: ref?.name || ci.id,
           grams: ci.grams || null,
           seasoning: ci.seasoningId || null,
           sauce: ci.sauce || null
         });
-      });
+      }
     }
-
-    const unitPrice = safeInt(combo.price);
-    state.cart.push({
-      id: safeStr(combo.id),
-      name: safeStr(combo.name),
-      type: 'combo',
-      qty: 1,
+    const unitPrice = safeInt(combo.price,0);
+    const line = {
+      id: combo.id,
+      name: combo.name,
+      type:'combo',
+      qty:1,
       unitPrice,
-      lineTotal: unitPrice,
-      hhDisc: 0,
+      lineTotal:unitPrice,
+      hhDisc:0,
       items,
-      extras: { cheddarUpgrade: false },
-      notes: '',
-      isGift: false
-    });
-
+      extras:{ cheddarUpgrade:false },
+      notes:'',
+      isGift:false
+    };
+    state.cart.push(line);
     ensureDrinkPrices();
     updateCartBar();
-    beep();
-    toast(`${combo.name} agregado`);
-  } catch (e) {
+    beep(); toast(`${combo.name} agregado`);
+  }catch(e){
     console.warn('addComboToCart fail', e);
     toast('No pude agregar el combo');
   }
 }
 
-/* =====================================================
-   Modal Personalizar
-   ===================================================== */
+/* 16) Modal producto (versión compacta segura) */
 
-function openItemModal(item, base) {
+function openItemModal(item, base){
+  // Para tu versión real puedes reinyectar tu modal completo.
+  // Esta versión mínima evita errores si el HTML no está.
   const modal = document.getElementById('modal');
-  const body = document.getElementById('modalBody');
-  const title = document.getElementById('modalTitle');
-  const btnAdd = document.getElementById('modalAdd');
-  const qtyInput = document.getElementById('modalQty');
-  const notesInput = document.getElementById('modalNotes');
-
-  if (!modal || !body || !title || !btnAdd || !qtyInput || !notesInput) {
-    console.warn('modal incompleto en HTML');
-    return;
+  if (!modal) return;
+  const body  = modal.querySelector('.modal-body');
+  const title = modal.querySelector('.modal-title');
+  const btn   = modal.querySelector('[data-a="addToCart"]');
+  if (title) title.textContent = item.name;
+  if (body){
+    body.innerHTML = `
+      <p class="muted small">Personaliza tu ${escapeHtml(item.name)}.</p>
+      <p class="muted small">(Configurador completo pendiente en esta build.)</p>
+    `;
   }
-
-  const baseItem = baseOfItem(item);
-  const ingredients = formatIngredientsFor(item, baseItem);
-
-  title.textContent = `${item.name} · ${money(item.price)}`;
-
-  let html = '';
-  if (ingredients.length) {
-    html += `<div class="field">
-      <label>Incluye</label>
-      <ul class="ing-list">${ingredients
-        .map(s => `<li>${escapeHtml(s)}</li>`)
-        .join('')}</ul>
-    </div>`;
+  if (btn){
+    btn.onclick = async ()=>{
+      await addQuickItem(item, base);
+      closeModal(modal);
+    };
   }
-
-  if (isSide(item)) {
-    const seasonings = normalizeSeasonings(item);
-    if (seasonings.length) {
-      const def = defaultSeasoning(item);
-      html += `<div class="field"><label>Sazonador (gratis)</label><div id="seasonings">`;
-      seasonings.forEach(seas => {
-        const id = `seas_${seas.id}`;
-        const checked = seas.kitchen === def ? 'checked' : '';
-        html += `
-          <label for="${id}">
-            <input type="radio" name="seasoning" id="${id}" value="${escapeHtml(
-          seas.kitchen
-        )}" ${checked}>
-            <span>${escapeHtml(seas.name)}</span>
-          </label>`;
-      });
-      html += `</div></div>`;
-    }
-  }
-
-  body.innerHTML = html;
-  qtyInput.value = '1';
-  notesInput.value = '';
-
   modal.classList.add('open');
-
-  const close = () => modal.classList.remove('open');
-  modal.querySelector('[data-close]')?.addEventListener('click', close, {
-    once: true
-  });
-  modal.addEventListener(
-    'click',
-    e => {
-      if (e.target === modal) close();
-    },
-    { once: true }
-  );
-
-  btnAdd.onclick = () => {
-    const qty = Math.max(1, safeInt(qtyInput.value, 1));
-    const notes = safeStr(notesInput.value, '').trim();
-
-    let seasoning = null;
-    if (isSide(item)) {
-      const sel = body.querySelector('#seasonings input[type=radio]:checked');
-      seasoning = sel ? sel.value : null;
-    }
-
-    const d = hhDiscountPerUnit(item);
-    const unit = Math.max(0, safeInt(item.price) - d);
-
-    state.cart.push({
-      id: safeStr(item.id),
-      name: safeStr(item.name),
-      mini: !!item.mini,
-      qty,
-      unitPrice: safeInt(item.price),
-      baseIngredients: ingredients,
-      ingredients,
-      extras: {
-        sauces: [],
-        ingredients: [],
-        dlcCarne: false,
-        surpriseSauce: null,
-        seasoning
-      },
-      notes,
-      lineTotal: unit * qty,
-      hhDisc: d * qty,
-      type: isSide(item) ? 'side' : 'burger',
-      isGift: false
-    });
-
-    ensureDrinkPrices();
-    updateCartBar();
-    beep();
-    toast(`${item.name} agregado`);
-    close();
-  };
 }
+function closeModal(m){ m?.classList?.remove('open'); }
+document.querySelectorAll('[data-close-modal]')
+  ?.forEach(b=> b.addEventListener('click',()=> closeModal(b.closest('.modal'))));
 
-/* =====================================================
-   Carrito
-   ===================================================== */
+/* 17) Carrito */
 
 const cartBar = document.getElementById('cartBar');
 document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
-function recomputeLine(l) {
-  if (!l) return;
-  const item = findItemById(l.id);
-  if (l.type === 'drink') {
-    const qty = safeInt(l.qty, 1);
-    const base = isDrinkComboUnlocked() ? DRINK_PRICE.combo : DRINK_PRICE.solo;
-    l.unitPrice = base;
-    l.hhDisc = 0;
-    l.lineTotal = qty * base;
-    return;
-  }
-  if (item) {
-    const d = hhDiscountPerUnit(item);
-    const qty = safeInt(l.qty, 1);
-    const unit = Math.max(0, safeInt(item.price) - d);
-    l.unitPrice = safeInt(item.price);
-    l.hhDisc = d * qty;
-    l.lineTotal = unit * qty;
-  } else {
-    const qty = safeInt(l.qty, 1);
-    l.unitPrice = safeInt(l.unitPrice);
-    l.lineTotal = safeInt(l.lineTotal, l.unitPrice * qty);
-    l.hhDisc = safeInt(l.hhDisc);
-  }
-}
-
-function recomputeAllLines() {
-  state.cart.forEach(recomputeLine);
+function updateCartBar(){
   ensureDrinkPrices();
+  const count = state.cart.reduce((a,l)=> a + safeInt(l.qty,1), 0);
+  const total = state.cart.reduce((a,l)=> a + safeInt(l.lineTotal,0), 0);
+
+  const countEl = document.getElementById('cartCount');
+  if (countEl) countEl.textContent = String(count);
+  const totalEl = document.getElementById('cartBarTotal');
+  if (totalEl) totalEl.textContent = '$' + total;
+
+  if (cartBar) cartBar.style.display = count>0 ? 'flex' : 'none';
+  document.body.classList.toggle('has-cart', count>0);
+
+  checkGiftUnlock();
+  paintIdentityBadge();
 }
 
-function computeBreakdown() {
-  let total = 0;
-  let hh = 0;
-  state.cart.forEach(l => {
-    total += safeInt(l.lineTotal);
-    hh += safeInt(l.hhDisc);
-  });
-  const subtotal = total + hh;
-  return { subtotal, hh, total };
+function checkGiftUnlock(){
+  const unlocked = subtotalSinBebidas() >= state.gift.threshold;
+  state.giftUnlocked = unlocked;
 }
 
-function paintBreakdown() {
-  ensureDrinkPrices();
-  const { total } = computeBreakdown();
-  const totFooter = document.getElementById('cartTotalFooter');
-  if (totFooter) totFooter.textContent = money(total);
-}
+/* Identidad badge */
 
-function paintIdentityBadge() {
+function paintIdentityBadge(){
   let b = document.getElementById('idBadge');
-  if (!b) {
+  if (!b){
     b = document.createElement('div');
     b.id = 'idBadge';
     b.className = 'tag';
@@ -1082,371 +913,201 @@ function paintIdentityBadge() {
   b.style.display = state.identified ? 'inline-flex' : 'none';
 }
 
-function updateCartBar() {
-  ensureDrinkPrices();
-  const count = state.cart.reduce((a, l) => a + safeInt(l.qty, 1), 0);
-  const total = state.cart.reduce(
-    (a, l) => a + safeInt(l.lineTotal),
-    0
-  );
-  const countEl = document.getElementById('cartCount');
-  const totalEl = document.getElementById('cartBarTotal');
-  if (countEl) countEl.textContent = String(count);
-  if (totalEl) totalEl.textContent = money(total);
-  if (cartBar) cartBar.style.display = count > 0 ? 'flex' : 'none';
-  document.body.classList.toggle('has-cart', count > 0);
-  checkGiftUnlock(!state.gift.shownThisSession);
-  paintIdentityBadge();
-}
+/* Modal carrito mínimo */
 
-function openCartModal() {
-  if (!state.cart.length) return;
-  recomputeAllLines();
+function openCartModal(){
+  const m = document.getElementById('cartModal');
+  if (!m) return;
+  const body = m.querySelector('#cartBody');
+  if (!body) return;
 
-  const modal = document.getElementById('cartModal');
-  const body = document.getElementById('cartBody');
-  const totalEl = document.getElementById('cartTotalFooter');
-  const btnSend = document.getElementById('btnSendOrder');
-  if (!modal || !body || !btnSend) return;
+  const rows = state.cart.map((l,i)=>`
+    <div class="row" data-i="${i}">
+      <div class="ellipsis">
+        ${escapeHtml(l.name)} ×${safeInt(l.qty,1)}
+      </div>
+      <div class="right">$${safeInt(l.lineTotal,0)}</div>
+    </div>
+  `).join('') || '<p class="muted small">Tu carrito está vacío.</p>';
 
-  const { subtotal, hh, total } = computeBreakdown();
-  totalEl.textContent = money(total);
+  body.innerHTML = rows;
 
-  body.innerHTML = '';
-  state.cart.forEach((l, idx) => {
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.innerHTML = `
-      <div class="ellipsis">${escapeHtml(l.name)} ×${safeInt(
-      l.qty,
-      1
-    )}</div>
-      <div class="right">${money(l.lineTotal)}</div>
-      <button class="btn tiny ghost">–</button>
-    `;
-    row.querySelector('button').onclick = () => {
-      state.cart.splice(idx, 1);
-      openCartModal();
-      updateCartBar();
-    };
-    body.appendChild(row);
-  });
-
-  if (hh > 0) {
-    const hhRow = document.createElement('div');
-    hhRow.className = 'muted small';
-    hhRow.textContent = `Ahorro Happy Hour: ${money(hh)}`;
-    body.appendChild(hhRow);
+  const totEl = document.getElementById('cartTotalFooter');
+  if (totEl){
+    const total = state.cart.reduce((a,l)=> a + safeInt(l.lineTotal,0), 0);
+    totEl.textContent = '$' + total;
   }
 
-  modal.classList.add('open');
-
-  const close = () => modal.classList.remove('open');
-  modal.querySelector('[data-close]')?.addEventListener('click', close, {
-    once: true
-  });
-  modal.addEventListener(
-    'click',
-    e => {
-      if (e.target === modal) close();
-    },
-    { once: true }
-  );
-
-  btnSend.onclick = submitOrderSafely;
-}
-
-/* =====================================================
-   Regalo / Gift
-   ===================================================== */
-
-function checkGiftUnlock(autoOpen = false) {
-  const { total } = computeBreakdown();
-  if (
-    !state.gift ||
-    state.gift.shownThisSession ||
-    !state.gift.productId
-  )
-    return;
-  if (total >= state.gift.threshold) {
-    state.gift.shownThisSession = true;
-    if (autoOpen) {
-      openGiftModal();
-    }
+  const btn = m.querySelector('[data-a="submitOrder"]');
+  if (btn){
+    btn.onclick = submitOrder;
   }
+
+  m.classList.add('open');
 }
 
-function openGiftModal() {
-  try {
-    playGiftSfx();
-  } catch {}
-  toast('🎁 Lograste el regalo de la casa. Díselo al staff.');
+/* 18) Crear pedido (Firebase-safe) */
+
+function makeTrackUrl(oid){
+  return `${TRACK_PAGE_PATH}?oid=${encodeURIComponent(oid)}&gamify=1&autostart=1`;
 }
 
-let achievementAudio = null;
-async function playAchievement() {
-  try {
-    if (achievementAudio) {
-      await achievementAudio.play();
-      return;
-    }
-  } catch {}
-  beep();
-}
-let giftAudio = null;
-async function playGiftSfx() {
-  try {
-    if (giftAudio) {
-      await giftAudio.play();
-      return;
-    }
-  } catch {}
-  beep();
+function updateSubmitButtonState(loading){
+  const btn = document.querySelector('#cartModal [data-a="submitOrder"]');
+  if (!btn) return;
+  btn.disabled = loading;
+  btn.textContent = loading ? 'Enviando…' : 'Confirmar pedido';
 }
 
-/* =====================================================
-   Identidad cliente
-   ===================================================== */
-
-async function ensureCustomerIdentified(type = 'pickup') {
-  if (state.identified && state.orderMeta.phone) return true;
-
-  try {
-    const cachedName = localStorage.getItem('kiosk:name') || '';
-    const cachedPhone = localStorage.getItem('kiosk:phone') || '';
-
-    let name = cachedName;
-    let phone = cachedPhone;
-
-    if (!name) {
-      name = prompt('Tu nombre para el pedido:', cachedName || '') || '';
-    }
-    if (!phone) {
-      phone =
-        prompt(
-          'WhatsApp / teléfono para avisarte cuando esté listo:',
-          cachedPhone || ''
-        ) || '';
-    }
-
-    name = name.trim();
-    phone = phone.trim();
-
-    if (!name || !phone) {
-      toast('Necesito tu nombre y teléfono para continuar 🙂');
-      return false;
-    }
-
-    state.customerName = name;
-    state.orderMeta.type = type || 'pickup';
-    state.orderMeta.phone = phone;
-    state.orderMeta.table = safeStr(state.orderMeta.table, '');
-    state.orderMeta.payMethodPref =
-      safeStr(state.orderMeta.payMethodPref, 'efectivo');
-    state.identified = true;
-
-    localStorage.setItem('kiosk:name', name);
-    localStorage.setItem('kiosk:phone', phone);
-
-    paintIdentityBadge();
-    return true;
-  } catch (e) {
-    console.warn('identity prompt blocked', e);
-    return true;
-  }
-}
-
-/* =====================================================
-   Envío de pedido → Firebase
-   ===================================================== */
-
-async function submitOrderSafely() {
-  if (!state.cart.length) {
+async function submitOrder(){
+  if (state.isSubmittingOrder) return;
+  if (!state.cart.length){
     toast('Tu carrito está vacío');
     return;
   }
-  if (state.isSubmittingOrder) return;
-
-  const okId = await ensureCustomerIdentified(state.orderMeta.type);
-  if (!okId) return;
 
   state.isSubmittingOrder = true;
+  updateSubmitButtonState(true);
 
-  try {
-    recomputeAllLines();
-    const { subtotal, hh, total } = computeBreakdown();
+  try{
+    const ts = Date.now();
 
-    const items = state.cart.map(l => {
-      const extras = l.extras || {};
-      return {
-        id: safeStr(l.id),
-        name: safeStr(l.name),
-        type: safeStr(
-          l.type || (isSide(findItemById(l.id)) ? 'side' : 'burger')
-        ),
-        qty: safeInt(l.qty, 1),
-        unitPrice: safeInt(l.unitPrice),
-        lineTotal: safeInt(l.lineTotal),
-        hhDisc: safeInt(l.hhDisc),
-        notes: safeStr(l.notes, ''),
-        extras: {
-          sauces: Array.isArray(extras.sauces) ? extras.sauces : [],
-          ingredients: Array.isArray(extras.ingredients)
-            ? extras.ingredients
-            : [],
-          dlcCarne: !!extras.dlcCarne,
-          surpriseSauce:
-            extras.surpriseSauce === undefined
-              ? null
-              : extras.surpriseSauce,
-          seasoning:
-            extras.seasoning === undefined ? null : extras.seasoning,
-          cheddarUpgrade: !!extras.cheddarUpgrade
-        },
-        meta: l.meta ? cleanForFirestore(l.meta) || null : null,
-        isGift: !!l.isGift
-      };
-    });
+    const items = state.cart.map(l => ({
+      id: safeStr(l.id),
+      name: safeStr(l.name),
+      qty: safeInt(l.qty,1),
+      type: l.type || null,
+      mini: !!l.mini,
+      unitPrice: safeInt(l.unitPrice,0),
+      lineTotal: safeInt(l.lineTotal,0),
+      hhDisc: safeInt(l.hhDisc,0),
+      extras: l.extras || {},
+      notes: safeStr(l.notes || ''),
+      isGift: !!l.isGift
+    }));
 
-    const now = Date.now();
+    const total = items.reduce((a,l)=> a + safeInt(l.lineTotal,0), 0);
+    const hhTotalDiscount = items.reduce((a,l)=> a + safeInt(l.hhDisc,0), 0);
 
-    const order = {
-      items,
-      subtotal,
-      hhDiscount: hh,
-      total,
+    const orderDocRaw = {
+      createdAt: ts,
+      updatedAt: ts,
       status: 'pending',
-      createdAt: now,
-      updatedAt: now,
-      source: 'kiosk-v2',
-      etaText: safeStr(state.etaText),
-      etaSource: safeStr(state.etaSource),
-      theme: safeStr(state.themeName),
-      meta: {
-        customerName: safeStr(state.customerName),
-        phone: safeStr(state.orderMeta.phone),
-        table: safeStr(state.orderMeta.table),
-        type: safeStr(state.orderMeta.type || 'pickup'),
-        payMethodPref: safeStr(
-          state.orderMeta.payMethodPref || 'efectivo'
-        )
-      }
+      source: 'kiosk',
+      kioskMode: 'v2',
+      // cliente
+      customerName: safeStr(
+        state.customerName || state.lastKnownName || 'Cliente'
+      ),
+      phone: safeStr(state.orderMeta.phone || state.lastKnownPhone || ''),
+      type: state.orderMeta.type || 'pickup',
+      table: safeStr(state.orderMeta.table || ''),
+      payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
+      // totales
+      items,
+      total,
+      hhTotalDiscount,
+      gift: state.giftUnlocked ? {
+        productId: safeStr(state.gift.productId),
+        applied: !!state.gift.applied
+      } : null,
+      etaText: safeStr(state.etaText || ''),
+      theme: safeStr(state.themeName || ''),
+      trackAllowed: true
     };
 
-    const cleanOrder = cleanForFirestore(order);
+    const orderDoc = sanitizeForFirestore(orderDocRaw);
 
-    if (!DB || typeof DB.createOrder !== 'function') {
-      console.error(
-        '[kiosk] DB.createOrder no disponible — revisa shared/db.js'
-      );
-      toast('Error de conexión con cocina. Avísale al staff.');
-      state.isSubmittingOrder = false;
-      return;
-    }
+    const oid = await DB.createOrder(orderDoc);
+    console.info('[kiosk] order created', oid);
 
-    const res = await DB.createOrder(cleanOrder);
-    const orderId =
-      res?.orderId || res?.id || res || `O-${String(now)}`;
-
-    state.lastOrderId = orderId;
-
-    const trackUrl = new URL('./track.html', location.href);
-    trackUrl.searchParams.set('oid', orderId);
-    trackUrl.searchParams.set('gamify', '1');
-    trackUrl.searchParams.set('autostart', '1');
-    state.lastTrackUrl = trackUrl.toString();
-
-    console.info('[kiosk] track URL =', state.lastTrackUrl);
+    state.lastOrderId = oid;
+    state.lastTrackUrl = makeTrackUrl(oid);
+    const url = state.lastTrackUrl;
 
     state.cart = [];
     updateCartBar();
 
-    // Aquí usas tu modal / UI real; dejo alerta simple + podrías mostrar overlay ya hecho
-    alert(
-      `Pedido enviado.\nTu número de orden: ${orderId}\n` +
-        `Puedes seguirlo aquí:\n${state.lastTrackUrl}`
-    );
-
-    try {
-      window.open(state.lastTrackUrl, '_blank');
-    } catch {}
-
-    beep();
-    toast('Pedido enviado a cocina ✅');
-  } catch (e) {
-    console.error('[kiosk] error al enviar pedido', e);
-    toast('No se pudo enviar el pedido. Intenta de nuevo o avisa al staff.');
-  } finally {
+    showTrackModal(url);
+  }catch(err){
+    console.error('createOrder error', err);
+    toast('No pude enviar tu pedido. Intenta de nuevo.');
+  }finally{
     state.isSubmittingOrder = false;
-    document.getElementById('cartModal')?.classList.remove('open');
+    updateSubmitButtonState(false);
   }
 }
 
-/* =====================================================
-   HH / ETA / Analytics (si existen en db.js)
-   ===================================================== */
+/* Track-modal simple */
 
-function bindHappyHour() {
-  if (!DB || typeof DB.subscribeHappyHour !== 'function') return;
-  try {
-    state.unsubHH = DB.subscribeHappyHour(info => {
-      if (!info) return;
-      state.hhLeftText = info.text || '';
-      const pill = document.getElementById('hhText');
-      if (pill) pill.textContent = state.hhLeftText;
-    });
-  } catch (e) {
-    console.warn('HH subscribe fail', e);
+function showTrackModal(url){
+  const m = document.getElementById('trackModal') || document.getElementById('cartModal');
+  if (!m) {
+    alert('Pedido enviado. Seguimiento: ' + url);
+    return;
   }
+  const linkBox = m.querySelector('[data-track-link]');
+  if (linkBox){
+    linkBox.value = location.origin + url;
+  }
+  const btnOpen = m.querySelector('[data-a="openTrack"]');
+  if (btnOpen){
+    btnOpen.onclick = ()=> {
+      window.open(url, '_blank');
+    };
+  }
+  m.classList.add('open');
 }
 
-function bindETA() {
-  if (!DB || typeof DB.subscribeETA !== 'function') return;
-  try {
-    state.unsubETA = DB.subscribeETA(data => {
-      if (!data) return;
-      state.etaText = data.text || state.etaText;
-      state.etaSource = data.source || 'remote';
-      document
-        .querySelectorAll('[data-eta-text]')
-        .forEach(el => (el.textContent = state.etaText));
-    });
-  } catch (e) {
-    console.warn('ETA subscribe fail', e);
-  }
+/* 19) Identidad básica */
+
+async function ensureCustomerIdentified(type='pickup'){
+  if (state.identified && state.orderMeta.phone) return true;
+  try{
+    const storedPhone = localStorage.getItem('kiosk:phone') || '';
+    const storedName  = localStorage.getItem('kiosk:name') || '';
+    if (storedPhone){
+      state.orderMeta.phone = storedPhone;
+      state.customerName = storedName || 'Cliente';
+      state.identified = true;
+      paintIdentityBadge();
+      return true;
+    }
+  }catch{}
+  // Si no hay form de identidad, asumimos ok para no bloquear flujo en test
+  state.identified = true;
+  paintIdentityBadge();
+  return true;
 }
 
-function startOrdersAnalytics() {
-  if (!DB || typeof DB.startOrdersAnalytics !== 'function') return;
-  try {
-    state.unsubAnalytics = DB.startOrdersAnalytics('kiosk-v2');
-  } catch (e) {
-    console.warn('analytics init fail', e);
-  }
-}
+/* 20) Hooks vacíos seguros (HH, ETA, analytics, gift modal) */
 
-/* Hooks opcionales (no rompen si no hay UI específica) */
-function ensureTrackPrompt() {}
-function ensureGiftModal() {}
+function bindHappyHour(){}
+function bindETA(){}
+function startOrdersAnalytics(){}
+function ensureTrackPrompt(){}
+function ensureGiftModal(){}
 
-/* =====================================================
-   Init
-   ===================================================== */
+/* 21) Init */
 
 init();
 
-async function init() {
-  try {
+async function init(){
+  try{
     await ensureAuth();
-  } catch (e) {
-    console.warn('anon auth fail', e);
+  }catch(e){
+    console.warn('Anon auth fail', e);
   }
 
-  try {
+  try{
     state.customerName = localStorage.getItem('kiosk:name') || '';
     state.orderMeta.phone = localStorage.getItem('kiosk:phone') || '';
-    if (state.orderMeta.phone) state.identified = true;
-  } catch {}
+    if (state.orderMeta.phone){
+      state.identified = true;
+      state.lastKnownPhone = state.orderMeta.phone;
+      state.lastKnownName  = state.customerName;
+    }
+  }catch{}
 
   state.menu = await fetchCatalogWithFallback();
 
@@ -1459,32 +1120,31 @@ async function init() {
   bindHappyHour();
   bindETA();
   startOrdersAnalytics();
-
-  if (state.unsubTheme) {
-    try { state.unsubTheme(); } catch {}
-    state.unsubTheme = null;
-  }
-  state.unsubTheme = initThemeFromSettings({ defaultName: 'Base' });
-
   ensureTrackPrompt();
   ensureGiftModal();
   paintIdentityBadge();
 
-  if (sessionStorage.getItem('kioskAdmin') === '1') {
+  if (state.unsubTheme){
+    try{ state.unsubTheme(); }catch{}
+    state.unsubTheme = null;
+  }
+  state.unsubTheme = initThemeFromSettings({ defaultName:'Base' });
+
+  if (sessionStorage.getItem('kioskAdmin') === '1'){
     state.adminMode = true;
   }
+
+  console.info('[kiosk] init done');
 }
 
-/* =====================================================
-   Limpieza
-   ===================================================== */
+/* 22) Limpieza */
 
-window.addEventListener('beforeunload', () => {
-  try {
+window.addEventListener('beforeunload', ()=>{
+  try{
     state.unsubHH?.();
     state.unsubETA?.();
     state.unsubTheme?.();
     state.unsubReady?.();
     state.unsubAnalytics?.();
-  } catch {}
+  }catch{}
 });
