@@ -3,65 +3,88 @@
 // Compatible con Firestore real y con modo SIM (localStorage).
 
 /* ======================= Base prefix ======================= */
-
-// Ejemplo rutas:
-//   /prueba/v2/kiosk/...
-//   /prueba/v2/cocina/...
-// BASE_PREFIX debe quedar como /prueba/v2/
-const parts = (location.pathname || '/').split('/').filter(Boolean);
-const idxV2 = parts.indexOf('v2');
+/**
+ * Ejemplos de rutas:
+ *   /prueba/v2/kiosk/...
+ *   /prueba/v2/cocina/...
+ * Resultado deseado:
+ *   BASE_PREFIX = /prueba/v2/
+ */
+const parts = (location.pathname || "/").split("/").filter(Boolean);
+const idxV2 = parts.indexOf("v2");
 
 export const BASE_PREFIX =
-  idxV2 >= 0 ? '/' + parts.slice(0, idxV2 + 1).join('/') + '/' : '/';
+  idxV2 >= 0 ? "/" + parts.slice(0, idxV2 + 1).join("/") + "/" : "/";
 
-const LS_NAMESPACE = (BASE_PREFIX.replace(/\W+/g, '-') || 'seven') + '-orders-sim';
+const LS_NAMESPACE =
+  (BASE_PREFIX.replace(/\W+/g, "-") || "seven") + "-orders-sim";
 const ORDERS_KEY = LS_NAMESPACE;
 
-console.info('[db] BASE_PREFIX =', BASE_PREFIX, 'LS namespace =', LS_NAMESPACE);
+console.info("[db] BASE_PREFIX =", BASE_PREFIX, "LS namespace =", LS_NAMESPACE);
 
 /* ======================= Firestore helpers ======================= */
 
-// Intenta usar la instancia global que tú inicialices en firebase.js
+/**
+ * Obtiene la instancia de Firestore creada en firebase.js
+ * Debes asegurarte en firebase.js de hacer:
+ *   window.FIREBASE_DB = db;
+ *   window.FIREBASE_FS = { collection, addDoc, ... }
+ */
 function getDb() {
   return (
-    window.FIREBASE_DB || // recomendado (getFirestore())
-    window.firebaseDb ||  // alias posible
-    window.db ||          // por compatibilidad vieja
+    window.FIREBASE_DB || // recomendado (getFirestore(app))
+    window.firebaseDb || // alias posible
+    window.db || // compatibilidad vieja
     null
   );
 }
 
 let _firestorePkg = null;
 
-// Carga perezosa del SDK modular de Firestore (solo si hay db real)
+/**
+ * Carga perezosa del SDK de Firestore.
+ * 1) Si firebase.js expuso window.FIREBASE_FS -> lo usamos.
+ * 2) Si hay db real pero no FIREBASE_FS -> import dinámico (10.12.5).
+ * 3) Si no hay nada -> seguimos en modo SIM.
+ */
 async function ensureFirestorePkg() {
   if (_firestorePkg) return _firestorePkg;
+
+  // Preferir lo que dejó firebase.js
+  if (window.FIREBASE_FS) {
+    _firestorePkg = window.FIREBASE_FS;
+    console.info("[db] Firestore SDK desde firebase.js");
+    return _firestorePkg;
+  }
+
+  const db = getDb();
+  if (!db) {
+    console.warn("[db] Sin instancia Firestore, modo SIM");
+    return null;
+  }
+
   try {
     const mod = await import(
-      'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
+      "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"
     );
     _firestorePkg = {
-      collection:    mod.collection,
-      addDoc:        mod.addDoc,
-      onSnapshot:    mod.onSnapshot,
-      query:         mod.query,
-      orderBy:       mod.orderBy,
-      updateDoc:     mod.updateDoc,
-      doc:           mod.doc,
-      getDoc:        mod.getDoc,
-      setDoc:        mod.setDoc,
-      serverTimestamp: mod.serverTimestamp || (() => Date.now())
+      collection: mod.collection,
+      addDoc: mod.addDoc,
+      onSnapshot: mod.onSnapshot,
+      query: mod.query,
+      orderBy: mod.orderBy,
+      updateDoc: mod.updateDoc,
+      doc: mod.doc,
+      getDoc: mod.getDoc,
+      setDoc: mod.setDoc,
+      serverTimestamp: mod.serverTimestamp || (() => Date.now()),
     };
-    console.info('[db] Firestore SDK listo');
+    console.info("[db] Firestore SDK dinámico listo");
   } catch (e) {
-    console.warn('[db] No se pudo cargar Firestore, usando modo SIM', e);
+    console.warn("[db] No se pudo cargar Firestore dinámico, modo SIM", e);
     _firestorePkg = null;
   }
   return _firestorePkg;
-}
-
-function hasRealDb() {
-  return !!getDb();
 }
 
 /* ======================= SIM (localStorage compartido) ======================= */
@@ -80,7 +103,9 @@ function readSimOrders() {
 function writeSimOrders(list) {
   try {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(list || []));
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 function createOrderSim(order) {
@@ -92,12 +117,12 @@ function createOrderSim(order) {
     ...order,
     createdAt: order.createdAt || now,
     updatedAt: now,
-    status: order.status || 'pending',
-    source: order.source || 'kiosk-v2-sim'
+    status: order.status || "pending",
+    source: order.source || "kiosk-v2-sim",
   };
   all.push(full);
   writeSimOrders(all);
-  console.info('[db] order created SIM', id);
+  console.info("[db] order created SIM", id);
   return id;
 }
 
@@ -116,13 +141,13 @@ function subscribeSim(onChange) {
 
 function updateStatusSim(id, status, extra = {}) {
   const all = readSimOrders();
-  const i = all.findIndex(o => o.id === id);
+  const i = all.findIndex((o) => o.id === id);
   if (i === -1) return;
   all[i] = {
     ...all[i],
     status,
     ...extra,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
   };
   writeSimOrders(all);
 }
@@ -134,11 +159,11 @@ function updateStatusSim(id, status, extra = {}) {
  */
 export async function createOrder(order) {
   const base = {
-    createdAt: order.createdAt || Date.now(),
+    createdAt: order?.createdAt || Date.now(),
     updatedAt: Date.now(),
-    status: order.status || 'pending',
-    source: order.source || 'kiosk-v2',
-    ...order
+    status: (order && order.status) || "pending",
+    source: (order && order.source) || "kiosk-v2",
+    ...order,
   };
 
   const db = getDb();
@@ -158,12 +183,12 @@ export async function createOrder(order) {
     const docRef = await fs.addDoc(col, {
       ...base,
       createdAt: base.createdAt,
-      updatedAt: base.updatedAt
+      updatedAt: base.updatedAt,
     });
-    console.info('[db] order created', docRef.id);
+    console.info("[db] order created", docRef.id);
     return docRef.id;
   } catch (e) {
-    console.error('[db] createOrder Firestore falló, usando SIM', e);
+    console.error("[db] createOrder Firestore falló, usando SIM", e);
     return createOrderSim(base);
   }
 }
@@ -176,22 +201,24 @@ export async function subscribeOrders(onChange) {
   const fs = db ? await ensureFirestorePkg() : null;
 
   if (!db || !fs) {
-    console.warn('[db] subscribeOrders en modo SIM');
+    console.warn("[db] subscribeOrders en modo SIM");
     return subscribeSim(onChange);
   }
 
   const col = fs.collection(db, `${BASE_PREFIX}orders`);
-  const q = fs.query(col, fs.orderBy('createdAt', 'asc'));
+  const q = fs.query(col, fs.orderBy("createdAt", "asc"));
 
   const unsub = fs.onSnapshot(
     q,
-    snap => {
+    (snap) => {
       const items = [];
-      snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
+      snap.forEach((docSnap) =>
+        items.push({ id: docSnap.id, ...docSnap.data() })
+      );
       onChange(items);
     },
-    err => {
-      console.error('[db] onSnapshot error, cambiando a SIM', err);
+    (err) => {
+      console.error("[db] onSnapshot error, cambiando a SIM", err);
       unsub();
       subscribeSim(onChange);
     }
@@ -218,56 +245,61 @@ export async function updateOrderStatus(id, status, extra = {}) {
     await fs.updateDoc(ref, {
       status,
       ...extra,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     });
   } catch (e) {
-    console.error('[db] updateOrderStatus error, usando SIM', e);
+    console.error("[db] updateOrderStatus error, usando SIM", e);
     updateStatusSim(id, status, extra);
   }
 }
 
 /* ======================= Exports para compatibilidad ======================= */
 
-// Muchos módulos antiguos esperan poder hacer:
-//   import { db } from './db.js'
+/**
+ * Muchos módulos antiguos esperan poder hacer:
+ *   import { db } from './db.js'
+ * Esto siempre lee la instancia actual (o null si no hay).
+ */
 export const db = getDb();
 
 /**
- * Compatibilidad con theme.js y otros:
- * Re-exportamos wrappers de Firestore modular.
- * Si Firestore no está cargado, lanzan error (catcheable) y tu código
- * puede hacer fallback sin romper el import.
+ * Wrappers mínimos para compatibilidad con theme.js u otros.
+ * Si aún no hay Firestore cargado, lanzan error controlable.
  */
 
 export const doc = (...args) => {
   if (!_firestorePkg?.doc) {
-    throw new Error('[db] doc() no disponible (Firestore no cargado)');
+    throw new Error("[db] doc() no disponible (Firestore no cargado)");
   }
   return _firestorePkg.doc(...args);
 };
 
 export const getDoc = (...args) => {
   if (!_firestorePkg?.getDoc) {
-    throw new Error('[db] getDoc() no disponible (Firestore no cargado)');
+    throw new Error("[db] getDoc() no disponible (Firestore no cargado)");
   }
   return _firestorePkg.getDoc(...args);
 };
 
 export const setDoc = (...args) => {
   if (!_firestorePkg?.setDoc) {
-    throw new Error('[db] setDoc() no disponible (Firestore no cargado)');
+    throw new Error("[db] setDoc() no disponible (Firestore no cargado)");
   }
   return _firestorePkg.setDoc(...args);
 };
 
 export const onSnapshot = (...args) => {
   if (!_firestorePkg?.onSnapshot) {
-    throw new Error('[db] onSnapshot() no disponible (Firestore no cargado)');
+    throw new Error(
+      "[db] onSnapshot() no disponible (Firestore no cargado)"
+    );
   }
   return _firestorePkg.onSnapshot(...args);
 };
 
-// Helper opcional por si algún módulo quiere forzar la carga del SDK
+/**
+ * Helper opcional por si algún módulo quiere forzar la carga del SDK
+ */
 export function ensureFs() {
   return ensureFirestorePkg();
 }
@@ -286,7 +318,7 @@ const defaultExport = {
   getDoc,
   setDoc,
   onSnapshot,
-  ensureFs
+  ensureFs,
 };
 
 export default defaultExport;
