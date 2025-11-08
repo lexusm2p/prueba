@@ -1,440 +1,371 @@
-// Cocina — Seven de Burgers
-// Kiosko V2 · app.js (2025-11) — Drop-in replacement
-// - Escucha pedidos en tiempo real desde shared/db.js
-// - Agrupa por estado: Pendientes / En progreso / Listos / Por cobrar / Entregados
-// - Total en "Por cobrar"
-// - Sin dependencias rotas: detecta funciones disponibles en DB de forma segura
+// Cocina — Seven de Burgers V2
+// Vista de cocina para pedidos del kiosko v2
+// Compatible con shared/db.js (subscribeKitchenOrders / updateOrder)
 
 /* ======================= Imports ======================= */
-import { ensureAuth } from '../shared/firebase.js?v=20251106a';
-import * as DB from '../shared/db.js?v=20251106a';
 import { beep, toast } from '../shared/notify.js?v=20251106a';
+import * as DB from '../shared/db.js?v=20251106a';
+import { ensureAuth } from '../shared/firebase.js?v=20251106a';
 import { initThemeFromSettings } from '../shared/theme.js?v=20251106a';
 
 /* ======================= Estado ======================= */
 const state = {
-  orders: new Map(),   // id -> order normalizado
+  orders: [],
   unsub: null,
-  totalToCharge: 0
+  lastErrorAt: 0
 };
 
-/* ======================= Helpers genéricos ======================= */
-const money = (n) => '$' + Number(n || 0).toFixed(0);
+/* ======================= DOM refs ======================= */
+const colPend       = document.getElementById('colPend');
+const colProg       = document.getElementById('colProg');
+const colListos     = document.getElementById('colListos');
+const colCobrar     = document.getElementById('colCobrar');
+const colEntregados = document.getElementById('colEntregados');
 
-function toDate(v){
-  if (!v) return null;
-  if (v instanceof Date) return v;
-  if (typeof v === 'number') return new Date(v);
-  // Firestore Timestamp
-  if (typeof v === 'object' && v.seconds != null){
-    return new Date(v.seconds * 1000 + (v.nanoseconds||0)/1e6);
+const totalCobrarEl =
+  document.getElementById('totalCobrar') ||
+  document.querySelector('[data-total-cobrar]') ||
+  document.getElementById('totalGlobal');
+
+/* ======================= Helpers ======================= */
+
+function money(n) {
+  const v = Number.isFinite(Number(n)) ? Number(n) : 0;
+  return '$' + v.toFixed(0);
+}
+
+function safeStr(x) {
+  return (x == null ? '' : String(x)).trim();
+}
+
+function getTotalFromOrder(o = {}) {
+  if (Number.isFinite(o.total)) return Number(o.total);
+  if (o.totals && Number.isFinite(o.totals.total))
+    return Number(o.totals.total);
+  if (Number.isFinite(o.amount)) return Number(o.amount);
+  if (Number.isFinite(o.totalCents)) return Number(o.totalCents) / 100;
+  return 0;
+}
+
+function isPaid(o = {}) {
+  if (o.paid === true) return true;
+  if (o.paidAt) return true;
+  if (o.payment && typeof o.payment === 'object') {
+    const ps = String(o.payment.status || '').toLowerCase();
+    if (ps === 'paid' || ps === 'approved' || ps === 'success') return true;
   }
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return false;
 }
 
-function fmtTime(v){
-  const d = toDate(v);
-  if (!d) return '';
-  const hh = d.getHours().toString().padStart(2,'0');
-  const mm = d.getMinutes().toString().padStart(2,'0');
-  return `${hh}:${mm}`;
-}
+/**
+ * Bucket visual según status + pago:
+ *
+ * - PENDING       → Pendientes
+ * - IN_PROGRESS   → En progreso
+ * - READY         → Listos
+ * - DELIVERED
+ *      - !paid    → Por cobrar
+ *      - paid     → Entregados
+ */
+function bucketFor(order) {
+  const st = String(order.status || '').toUpperCase();
 
-function safeText(v){
-  if (v == null) return '';
-  return String(v)
-    .replace(/[<>]/g, c => ({'<':'&lt;','>':'&gt;'}[c]));
-}
+  if (st === 'PENDING') return 'pend';
+  if (st === 'IN_PROGRESS') return 'prog';
+  if (st === 'READY') return 'listos';
 
-/* ======================= DOM referencias ======================= */
-
-const col = {
-  pending:    document.querySelector('[data-col="pending"]')    || document.getElementById('colPending'),
-  cooking:    document.querySelector('[data-col="cooking"]')    || document.getElementById('colCooking'),
-  ready:      document.querySelector('[data-col="ready"]')      || document.getElementById('colReady'),
-  toCharge:   document.querySelector('[data-col="toCharge"]')   || document.getElementById('colToCharge'),
-  delivered:  document.querySelector('[data-col="delivered"]')  || document.getElementById('colDelivered'),
-};
-const totalEl = document.getElementById('totalAmount') || document.querySelector('[data-total]');
-
-// Si el HTML original solo tiene paneles vacíos, asegúranos de que haya contenedores internos
-for (const key of Object.keys(col)){
-  const c = col[key];
-  if (!c) continue;
-  if (!c.querySelector('.k-list')){
-    const wrap = document.createElement('div');
-    wrap.className = 'k-list';
-    c.appendChild(wrap);
+  if (st === 'DELIVERED') {
+    return isPaid(order) ? 'entregados' : 'cobrar';
   }
-}
 
-/* ======================= Normalización de estados ======================= */
-
-function mapStatus(rawStatus){
-  const s = String(rawStatus || '').toUpperCase();
-
-  if (s === 'PENDING' || s === '' || s === 'NEW') return 'pending';
-  if (s === 'COOKING' || s === 'IN_PROGRESS' || s === 'PREPARING') return 'cooking';
-  if (s === 'READY') return 'ready';
-  if (s === 'TO_CHARGE' || s === 'PENDING_PAY' || s === 'UNPAID') return 'toCharge';
-  if (s === 'DONE' || s === 'DELIVERED' || s === 'FINISHED') return 'delivered';
-
-  // fallback conservador
-  return 'pending';
-}
-
-/* ======================= Suscripción a pedidos ======================= */
-
-function startOrdersListener(){
-  if (state.unsub) { try{ state.unsub(); }catch{} state.unsub = null; }
-
-  // Handler flexible: acepta QuerySnapshot o {added, modified, removed}
-  const handle = (payload) => {
-    try{
-      if (!payload) return;
-
-      // Forma Firestore QuerySnapshot
-      if (payload.docChanges && typeof payload.docChanges === 'function'){
-        payload.docChanges().forEach(change => {
-          const doc = change.doc;
-          const data = doc.data ? doc.data() : doc;
-          applyChange(change.type, doc.id, data);
-        });
-      }
-      // Forma { added, modified, removed }
-      else if (payload.added || payload.modified || payload.removed){
-        (payload.added || []).forEach(doc => applyChange('added',  doc.id || doc.orderId || doc.uid, doc));
-        (payload.modified || []).forEach(doc => applyChange('modified', doc.id || doc.orderId || doc.uid, doc));
-        (payload.removed || []).forEach(doc => applyChange('removed', doc.id || doc.orderId || doc.uid, doc));
-      }
-      else if (Array.isArray(payload)){
-        // Snapshot completo: reseteamos y cargamos todo
-        state.orders.clear();
-        payload.forEach(doc => {
-          const id = doc.id || doc.orderId || doc.uid;
-          if (!id) return;
-          applyChange('added', id, doc);
-        });
-      }
-
-      renderAll();
-    }catch(e){
-      console.error('[cocina] handle snapshot error', e);
-      toast('Error actualizando tablero de cocina');
-    }
-  };
-
-  // Intentamos varios nombres para máxima compatibilidad
-  try{
-    if (typeof DB.subscribeKitchenOrders === 'function'){
-      state.unsub = DB.subscribeKitchenOrders(handle);
-      console.info('[cocina] usando DB.subscribeKitchenOrders');
-      return;
-    }
-    if (typeof DB.subscribeOrders === 'function'){
-      state.unsub = DB.subscribeOrders(handle);
-      console.info('[cocina] usando DB.subscribeOrders');
-      return;
-    }
-    if (typeof DB.listenOrders === 'function'){
-      state.unsub = DB.listenOrders(handle);
-      console.info('[cocina] usando DB.listenOrders');
-      return;
-    }
-    if (typeof DB.onOrdersSnapshot === 'function'){
-      state.unsub = DB.onOrdersSnapshot(handle);
-      console.info('[cocina] usando DB.onOrdersSnapshot');
-      return;
-    }
-
-    console.error('[cocina] No encontré función de suscripción en DB');
-    toast('⚠️ Cocina sin conexión a pedidos (revisar shared/db.js)');
-  }catch(e){
-    console.error('[cocina] Error iniciando listener', e);
-    toast('⚠️ No se pudo conectar a pedidos');
-  }
-}
-
-function applyChange(type, id, raw){
-  if (!id) return;
-  if (type === 'removed'){
-    state.orders.delete(id);
-    return;
-  }
-  if (!raw) return;
-
-  // Algunos wrappers pasan { id, data }
-  const data = raw.data && typeof raw.data === 'function' ? raw.data() : raw;
-
-  const statusKey = mapStatus(data.status);
-  const createdAt = data.createdAt || data.ts || data.created || null;
-  const total = Number(
-    data.total ??
-    data.totalCents/100 ??
-    data.amount ??
-    0
-  );
-
-  const shortId =
-    data.shortId ||
-    data.code ||
-    (id.length > 6 ? '...' + id.slice(-4) : id);
-
-  const name =
-    data.customerName ||
-    data.name ||
-    data.orderMeta?.name ||
-    data.orderMeta?.customerName ||
-    '';
-
-  const table =
-    data.table ||
-    data.orderMeta?.table ||
-    data.orderMeta?.spot ||
-    '';
-
-  const payMethod =
-    data.payMethod ||
-    data.orderMeta?.payMethod ||
-    data.orderMeta?.payMethodPref ||
-    '';
-
-  const channel =
-    data.channel ||
-    data.source ||
-    'kiosk';
-
-  const items = Array.isArray(data.items) ? data.items : (data.lines || []);
-
-  const norm = {
-    id,
-    shortId,
-    status: statusKey,
-    rawStatus: data.status || '',
-    createdAt,
-    total,
-    name,
-    table,
-    payMethod,
-    channel,
-    items
-  };
-
-  state.orders.set(id, norm);
+  // Otros estados quedan ocultos en la vista de cocina
+  return null;
 }
 
 /* ======================= Render ======================= */
 
-function clearCols(){
-  for (const key of Object.keys(col)){
-    const c = col[key];
-    if (!c) continue;
-    const list = c.querySelector('.k-list') || c;
-    list.innerHTML = '';
+function clearColumns() {
+  [colPend, colProg, colListos, colCobrar, colEntregados].forEach(col => {
+    if (col) col.innerHTML = '';
+  });
+}
+
+function buildItemsSummary(order) {
+  const lines = [];
+  const cart = Array.isArray(order.items || order.cart)
+    ? (order.items || order.cart)
+    : [];
+
+  for (const l of cart) {
+    if (!l) continue;
+    const qty = l.qty || 1;
+    const name = safeStr(l.name || l.id || 'Item');
+    lines.push(`${qty}× ${name}`);
+  }
+
+  return lines.join(' · ');
+}
+
+function shortId(id = '') {
+  const s = String(id);
+  if (s.length <= 6) return s;
+  return s.slice(-6).toUpperCase();
+}
+
+function buildCard(order) {
+  const card = document.createElement('div');
+  card.className = 'k-card';
+
+  const bucket = bucketFor(order);
+  const total = getTotalFromOrder(order);
+
+  const name =
+    safeStr(order.customerName || order.name || order.clientName) || 'Sin nombre';
+  const code =
+    safeStr(order.shortCode || order.pickupCode || order.trackCode || '');
+
+  const itemsSummary = buildItemsSummary(order);
+
+  const created =
+    order.createdAt || order.created || order.ts || order.time || null;
+  const createdTxt = created
+    ? new Date(created.seconds ? created.seconds * 1000 : created).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : '';
+
+  // Header
+  const head = document.createElement('div');
+  head.className = 'k-head';
+
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = `${name}${code ? ' · #' + code : ''}`;
+
+  const meta = document.createElement('div');
+  meta.className = 'muted small';
+  meta.textContent = `ID ${shortId(order.id)}${createdTxt ? ' · ' + createdTxt : ''}`;
+
+  head.appendChild(title);
+  head.appendChild(meta);
+  card.appendChild(head);
+
+  // Items
+  if (itemsSummary) {
+    const itemsEl = document.createElement('div');
+    itemsEl.className = 'small';
+    itemsEl.textContent = itemsSummary;
+    card.appendChild(itemsEl);
+  }
+
+  // Total
+  const totalEl = document.createElement('div');
+  totalEl.className = 'price';
+  totalEl.textContent = money(total);
+  card.appendChild(totalEl);
+
+  // Badges
+  const badges = document.createElement('div');
+  badges.className = 'k-badges';
+
+  const stBadge = document.createElement('div');
+  stBadge.className = 'k-badge';
+  stBadge.textContent = bucketLabel(bucket, order);
+  badges.appendChild(stBadge);
+
+  if (isPaid(order)) {
+    const p = document.createElement('div');
+    p.className = 'k-badge ok';
+    p.textContent = 'Pagado';
+    badges.appendChild(p);
+  }
+
+  card.appendChild(badges);
+
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'k-actions';
+
+  injectActionsForBucket(actions, bucket, order);
+
+  if (actions.children.length) {
+    card.appendChild(actions);
+  }
+
+  return card;
+}
+
+function bucketLabel(bucket, order) {
+  switch (bucket) {
+    case 'pend': return 'Pendiente';
+    case 'prog': return 'En progreso';
+    case 'listos': return 'Listo para entregar';
+    case 'cobrar': return 'Entregado · Por cobrar';
+    case 'entregados':
+      return isPaid(order) ? 'Entregado · Pagado' : 'Entregado';
+    default: return safeStr(order.status || '');
   }
 }
 
-function renderAll(){
-  clearCols();
+function injectActionsForBucket(container, bucket, order) {
+  const addBtn = (label, variant, handler) => {
+    const b = document.createElement('button');
+    b.className = 'btn small' + (variant === 'ghost' ? ' ghost' : '');
+    b.textContent = label;
+    b.addEventListener('click', ev => {
+      ev.stopPropagation();
+      handler().catch(err => {
+        console.error('[cocina] action error', err);
+        toast('No pude actualizar el pedido');
+      });
+    });
+    container.appendChild(b);
+  };
 
-  const all = Array.from(state.orders.values());
+  const id = order.id;
 
-  // orden: más viejos primero
-  all.sort((a,b)=>{
-    const da = toDate(a.createdAt)?.getTime() ?? 0;
-    const db = toDate(b.createdAt)?.getTime() ?? 0;
-    return da - db;
+  if (!id) return;
+
+  if (bucket === 'pend') {
+    addBtn('Iniciar', null, () => setStatus(id, 'IN_PROGRESS'));
+  }
+
+  if (bucket === 'prog') {
+    addBtn('Listo', null, () => setStatus(id, 'READY'));
+  }
+
+  if (bucket === 'listos') {
+    addBtn('Entregar', null, () => setStatus(id, 'DELIVERED'));
+    addBtn('Cancelar', 'ghost', () => setStatus(id, 'CANCELLED'));
+  }
+
+  if (bucket === 'cobrar') {
+    addBtn('Marcar pagado', null, () => markPaid(id));
+  }
+
+  if (bucket === 'entregados') {
+    addBtn('Archivar', 'ghost', () => archiveOrder(id));
+  }
+}
+
+/* ======================= Acciones DB ======================= */
+
+async function setStatus(orderId, status) {
+  if (!orderId || !status) return;
+  await DB.updateOrder(orderId, { status });
+  beep();
+}
+
+async function markPaid(orderId) {
+  if (!orderId) return;
+  await DB.updateOrder(orderId, {
+    paid: true,
+    paidAt: new Date().toISOString()
+  });
+  beep();
+}
+
+async function archiveOrder(orderId) {
+  if (!orderId) return;
+  await DB.updateOrder(orderId, {
+    active: false,
+    archived: true
+  });
+  beep();
+}
+
+/* ======================= Handlers de suscripción ======================= */
+
+function onOrders(list) {
+  state.orders = Array.isArray(list) ? list.slice() : [];
+
+  // Ordenar por createdAt asc (o por id como fallback)
+  state.orders.sort((a, b) => {
+    const ta = (a.createdAt && (a.createdAt.seconds || a.createdAt._seconds))
+      ? (a.createdAt.seconds || a.createdAt._seconds)
+      : (a.created || 0);
+    const tb = (b.createdAt && (b.createdAt.seconds || b.createdAt._seconds))
+      ? (b.createdAt.seconds || b.createdAt._seconds)
+      : (b.created || 0);
+    if (ta && tb && ta !== tb) return ta - tb;
+    return String(a.id || '').localeCompare(String(b.id || ''));
   });
 
-  let sumToCharge = 0;
-
-  for (const o of all){
-    const colName = o.status || 'pending';
-    const target =
-      (colName === 'pending'   && col.pending)
-      || (colName === 'cooking'   && col.cooking)
-      || (colName === 'ready'     && col.ready)
-      || (colName === 'toCharge'  && col.toCharge)
-      || (colName === 'delivered' && col.delivered)
-      || col.pending;
-
-    if (!target) continue;
-
-    const list = target.querySelector('.k-list') || target;
-
-    const el = document.createElement('div');
-    el.className = 'k-card';
-    el.dataset.id = o.id;
-
-    const itemsText = buildItemsText(o.items);
-
-    el.innerHTML = `
-      <div class="k-head">
-        <div class="title">
-          #${safeText(o.shortId)} 
-          ${o.table ? `· ${safeText(o.table)}` : ''}
-        </div>
-        <div class="muted small">
-          ${fmtTime(o.createdAt)} 
-          ${o.channel ? `· ${safeText(o.channel)}` : ''}
-        </div>
-      </div>
-      <div class="k-body small">
-        ${itemsText || '<span class="muted">Sin detalle</span>'}
-      </div>
-      <div class="k-badges">
-        ${o.name ? `<span class="k-badge">${safeText(o.name)}</span>` : ''}
-        ${o.payMethod ? `<span class="k-badge">${safeText(o.payMethod)}</span>` : ''}
-        ${o.rawStatus && o.rawStatus !== o.status
-          ? `<span class="k-badge warn">${safeText(o.rawStatus)}</span>` : ''}
-        ${o.total ? `<span class="k-badge ok">${money(o.total)}</span>` : ''}
-      </div>
-      <div class="k-actions">
-        ${actionsFor(o)}
-      </div>
-    `;
-
-    list.appendChild(el);
-
-    if (colName === 'toCharge') sumToCharge += o.total || 0;
-  }
-
-  state.totalToCharge = sumToCharge;
-  if (totalEl){
-    totalEl.textContent = money(sumToCharge);
-  }
-
-  wireActions();
+  renderAll();
 }
 
-function buildItemsText(items){
-  if (!Array.isArray(items) || !items.length) return '';
-  const parts = items.map(it=>{
-    if (!it) return '';
-    const name = it.name || it.title || it.id || '';
-    const qty = it.qty || it.quantity || 1;
-    return `${qty>1?qty+'× ':''}${name}`;
-  }).filter(Boolean);
-  return safeText(parts.join(' · '));
-}
+function renderAll() {
+  clearColumns();
 
-function actionsFor(o){
-  const idAttr = `data-id="${o.id}"`;
-  switch(o.status){
-    case 'pending':
-      return `
-        <button class="btn small" data-a="toCooking" ${idAttr}>Tomar</button>
-        <button class="btn small ghost" data-a="cancel" ${idAttr}>Cancelar</button>
-      `;
-    case 'cooking':
-      return `
-        <button class="btn small" data-a="toReady" ${idAttr}>Listo</button>
-        <button class="btn small ghost" data-a="backPending" ${idAttr}>Regresar</button>
-      `;
-    case 'ready':
-      return `
-        <button class="btn small" data-a="toCharge" ${idAttr}>Por cobrar</button>
-        <button class="btn small ghost" data-a="toDelivered" ${idAttr}>Entregado</button>
-      `;
-    case 'toCharge':
-      return `
-        <button class="btn small" data-a="toDelivered" ${idAttr}>Cobrado / Entregado</button>
-      `;
-    case 'delivered':
-    default:
-      return '';
-  }
-}
+  let totalCobrar = 0;
 
-/* ======================= Acciones (update en DB) ======================= */
+  for (const o of state.orders) {
+    const bucket = bucketFor(o);
+    if (!bucket) continue;
 
-async function updateOrderStatus(id, status){
-  const patch = { status };
+    const card = buildCard(o);
 
-  try{
-    if (typeof DB.updateOrderStatus === 'function'){
-      await DB.updateOrderStatus(id, status, patch);
-    } else if (typeof DB.setOrderStatus === 'function'){
-      await DB.setOrderStatus(id, status, patch);
-    } else if (typeof DB.updateOrder === 'function'){
-      await DB.updateOrder(id, patch);
-    } else if (typeof DB.patchOrder === 'function'){
-      await DB.patchOrder(id, patch);
-    } else {
-      console.warn('[cocina] No hay función clara para actualizar status, haciendo fallback');
-      if (typeof DB.saveOrder === 'function'){
-        await DB.saveOrder(id, patch);
-      } else {
-        toast('No se pudo actualizar (falta método en DB)');
-        return;
-      }
+    switch (bucket) {
+      case 'pend':
+        colPend && colPend.appendChild(card);
+        break;
+      case 'prog':
+        colProg && colProg.appendChild(card);
+        break;
+      case 'listos':
+        colListos && colListos.appendChild(card);
+        break;
+      case 'cobrar':
+        colCobrar && colCobrar.appendChild(card);
+        totalCobrar += getTotalFromOrder(o);
+        break;
+      case 'entregados':
+        colEntregados && colEntregados.appendChild(card);
+        break;
     }
-    beep();
-  }catch(e){
-    console.error('[cocina] updateOrderStatus fail', e);
-    toast('Error actualizando pedido');
   }
-}
 
-async function cancelOrder(id){
-  if (!confirm('¿Cancelar este pedido?')) return;
-  await updateOrderStatus(id, 'CANCELLED');
-}
-
-function wireActions(){
-  const root = document.body;
-  root.onclick = async (ev)=>{
-    const btn = ev.target.closest('button[data-a]');
-    if (!btn) return;
-    const id = btn.getAttribute('data-id');
-    const action = btn.getAttribute('data-a');
-    if (!id || !action) return;
-
-    if (action === 'toCooking')      await updateOrderStatus(id, 'COOKING');
-    else if (action === 'backPending') await updateOrderStatus(id, 'PENDING');
-    else if (action === 'toReady')   await updateOrderStatus(id, 'READY');
-    else if (action === 'toCharge')  await updateOrderStatus(id, 'TO_CHARGE');
-    else if (action === 'toDelivered') await updateOrderStatus(id, 'DELIVERED');
-    else if (action === 'cancel')    await cancelOrder(id);
-  };
+  if (totalCobrarEl) {
+    totalCobrarEl.textContent = money(totalCobrar);
+  }
 }
 
 /* ======================= Init ======================= */
 
-init().catch(e=>console.error(e));
-
-async function init(){
+async function init() {
   console.info('[cocina] init…');
 
-  try{
+  try {
     await ensureAuth();
-  }catch(e){
-    console.warn('[cocina] auth anónima falló (continuando)', e);
+  } catch (e) {
+    console.warn('[cocina] auth anon falló (seguimos igual)', e);
   }
 
-  initThemeFromSettings?.({ defaultName:'Base' });
+  try {
+    initThemeFromSettings?.({ defaultName: 'Base' });
+  } catch (e) {
+    console.warn('[cocina] theme init error', e);
+  }
 
-  // Mensaje visual si alguien dejó el kiosko en modo entrenamiento
-  try{
-    const training = sessionStorage.getItem('training');
-    if (training === '1'){
-      toast('🧪 Modo entrenamiento: pedidos ficticios (cocina no verá reales)');
+  try {
+    if (typeof DB.subscribeKitchenOrders === 'function') {
+      state.unsub = DB.subscribeKitchenOrders(onOrders, { limitN: 300 });
+      console.info('[cocina] usando DB.subscribeKitchenOrders');
+    } else if (typeof DB.subscribeOrders === 'function') {
+      state.unsub = DB.subscribeOrders(onOrders, { limitN: 300 });
+      console.info('[cocina] usando DB.subscribeOrders');
+    } else {
+      throw new Error('No hay subscribeKitchenOrders ni subscribeOrders en db.js');
     }
-  }catch{}
-
-  startOrdersListener();
-
-  // Fallback: si después de un rato no hay pedidos ni errores, avisar
-  setTimeout(()=>{
-    if (!state.orders.size){
-      console.info('[cocina] sin pedidos aún. Si kiosko está vendiendo y aquí no salen, revisar rutas y DB.');
-    }
-  }, 8000);
+  } catch (e) {
+    console.error('[cocina] error al suscribirse a pedidos', e);
+    toast('No se pudo conectar con pedidos');
+  }
 }
 
-/* ======================= Limpieza ======================= */
+init();
 
-window.addEventListener('beforeunload', ()=>{
-  try{ state.unsub?.(); }catch{}
+window.addEventListener('beforeunload', () => {
+  try { state.unsub && state.unsub(); } catch {}
 });
