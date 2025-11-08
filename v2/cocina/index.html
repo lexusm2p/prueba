@@ -143,15 +143,26 @@
       flex-wrap:wrap;
       color:var(--muted);
     }
+
     .order-items{
       margin:2px 0 0;
       padding-left:10px;
       list-style:disc;
       color:#d9e2ff;
     }
-    .order-items li{
-      margin-bottom:2px;
+    .order-items > li{
+      margin:2px 0 3px;
     }
+
+    /* Lista de ingredientes estandarizada debajo de cada item */
+    .order-items ul.ing{
+      margin:1px 0 2px 14px;
+      padding-left:10px;
+      list-style:disc;
+      font-size:9px;
+      color:#cbd5ff;
+    }
+
     .notes{
       margin-top:2px;
       padding:3px 4px;
@@ -308,14 +319,17 @@
     modeBadge: document.getElementById('modeBadge')
   };
 
-  // Init tema (no rompe si no hay Firestore)
+  // Config limpieza de "Entregados"
+  const MAX_DONE_AGE_MS = 2 * 60 * 60 * 1000; // 2 horas en pantalla
+  const MAX_DONE_COUNT  = 30;                 // máximo 30 cards en columna Entregados
+
+  // Init tema (si falla Firestore, usa Base local)
   initThemeFromSettings({ defaultName:'Base' });
 
-  // Suscribirse a pedidos
+  // Suscribirse a pedidos (SIM o Firestore)
   state.unsub = await subscribeOrders(onOrders);
 
   function onOrders(list){
-    // Normalizar un poco
     state.orders = (list || []).map(o => ({
       ...o,
       id: o.id || o.orderId || '',
@@ -324,19 +338,20 @@
       status: (o.status || 'pending').toLowerCase(),
       total: Number(o.total || o.lineTotal || 0),
       items: Array.isArray(o.items) ? o.items : [],
-      source: o.source || 'kiosk-v2'
+      source: o.source || 'kiosk-v2',
+      createdAt: o.createdAt || o.timestamp || Date.now(),
+      updatedAt: o.updatedAt || o.createdAt || o.timestamp || Date.now()
     }));
     render();
   }
 
   function pickColumnKey(ord){
     const s = ord.status;
-    if (s === 'pending' || !s) return 'pending';
+    if (s === 'pending' || !s)                 return 'pending';
     if (s === 'preparing' || s === 'in-progress') return 'progress';
-    if (s === 'ready') return 'ready';
-    if (s === 'delivered') return 'charge';  // Entregado al cliente, falta cobro
-    if (s === 'paid' || s === 'completed') return 'done';
-    // Desconocido → por si acaso mostrar en pendientes
+    if (s === 'ready')                        return 'ready';
+    if (s === 'delivered')                    return 'charge'; // entregado, falta pago
+    if (s === 'paid' || s === 'completed')    return 'done';
     return 'pending';
   }
 
@@ -350,11 +365,22 @@
 
     const counts = { pending:0, progress:0, ready:0, charge:0, done:0 };
     let totalPend = 0;
+    const now = Date.now();
+    let doneOrders = [];
 
     state.orders.forEach(ord => {
       const key = pickColumnKey(ord);
       const col = el.cols[key];
       if (!col) return;
+
+      if (key === 'done') {
+        const refTs = ord.updatedAt || ord.createdAt || 0;
+        const age = refTs ? (now - refTs) : 0;
+        // Oculta visualmente pedidos muy viejos
+        if (age > MAX_DONE_AGE_MS) return;
+        doneOrders.push(ord);
+        return;
+      }
 
       const card = buildOrderCard(ord);
       col.appendChild(card);
@@ -363,10 +389,26 @@
       if (empty) empty.style.display = 'none';
 
       counts[key]++;
-      if (key === 'pending' || key === 'progress'){
+      if (key === 'pending' || key === 'progress') {
         totalPend += ord.total || 0;
       }
     });
+
+    // Pintar Entregados con límite
+    if (doneOrders.length){
+      doneOrders.sort((a,b)=>(a.updatedAt||a.createdAt||0)-(b.updatedAt||b.createdAt||0));
+      if (doneOrders.length > MAX_DONE_COUNT){
+        doneOrders = doneOrders.slice(doneOrders.length - MAX_DONE_COUNT);
+      }
+      const colDone = el.cols.done;
+      const emptyDone = colDone.querySelector('.empty');
+      if (emptyDone) emptyDone.style.display = 'none';
+      doneOrders.forEach(o => {
+        const card = buildOrderCard(o);
+        colDone.appendChild(card);
+        counts.done++;
+      });
+    }
 
     // Actualizar contadores
     Object.entries(counts).forEach(([k,v]) => {
@@ -375,7 +417,7 @@
     el.totalPend.textContent = '$' + totalPend.toFixed(0);
     el.countPend.textContent = `${counts.pending + counts.progress} pedidos`;
 
-    // Mostrar modo (SIM vs real) según id generado
+    // Mostrar modo (SIM vs real)
     const anySim = state.orders.some(o => String(o.id).startsWith('SIM-'));
     el.modeBadge.textContent = `modo: ${anySim ? 'SIM (localStorage)' : 'Firestore'}`;
   }
@@ -390,34 +432,10 @@
     const phone = ord.phone ? `📞 ${ord.phone}` : '';
     const src = ord.source || '';
 
-    // Items bonitos
-    const itemsHtml = (ord.items || []).map(it => {
-      const qty = it.qty || 1;
-      const nm  = it.name || it.id || 'item';
-      const notes = (it.notes || '').trim();
-      let line = `${qty}× ${nm}`;
-      if (it.type === 'drink') line += ' 🥤';
-      if (it.type === 'mini')  line += ' (mini)';
-      if (it.type === 'side')  line += ' 🍟';
-      const extras = it.extras || {};
-      const extraBits = [];
-
-      if (extras.seasoning) extraBits.push(`Sazonador: ${extras.seasoning}`);
-      if (Array.isArray(extras.sauces) && extras.sauces.length){
-        extraBits.push('Salsas: ' + extras.sauces.join(', '));
-      }
-      if (Array.isArray(extras.ingredients) && extras.ingredients.length){
-        extraBits.push('Extras: ' + extras.ingredients.map(e => e.name || e.id || e).join(', '));
-      }
-      if (notes) extraBits.push('Nota: ' + notes);
-
-      if (!extraBits.length) return `<li>${line}</li>`;
-      return `<li>${line}<br><span class="muted">${extraBits.join(' · ')}</span></li>`;
-    }).join('') || '<li>Sin desglose (revisar en ticket)</li>';
-
-    const orderNotes = (ord.notes || '').trim();
-
     const statusLabel = ord.status || 'pending';
+
+    const itemsHtml = buildItemsHtml(ord.items || []);
+    const orderNotes = (ord.notes || '').trim();
 
     div.innerHTML = `
       <div class="order-header">
@@ -442,9 +460,9 @@
       </div>
     `;
 
-    // Bind actions
+    // Bind acciones
     div.querySelectorAll('[data-act]').forEach(btn => {
-      btn.addEventListener('click', async (ev) => {
+      btn.addEventListener('click', async ev => {
         ev.stopPropagation();
         const act = btn.dataset.act;
         await handleAction(ord, act);
@@ -454,15 +472,68 @@
     return div;
   }
 
+  // Desglose de productos con ingredientes estandarizados
+  function buildItemsHtml(items){
+    if (!items.length){
+      return '<li>Sin desglose (revisar ticket)</li>';
+    }
+
+    return items.map(it => {
+      const qty = it.qty || 1;
+      const nm  = it.name || it.id || 'item';
+      const notes = (it.notes || '').trim();
+
+      let line = `${qty}× ${nm}`;
+      if (it.type === 'drink') line += ' 🥤';
+      if (it.type === 'mini')  line += ' (mini)';
+      if (it.type === 'side')  line += ' 🍟';
+
+      // ingredientes que manda el kiosko v2
+      const ings = Array.isArray(it.ingredients) && it.ingredients.length
+        ? it.ingredients
+        : (Array.isArray(it.baseIngredients) ? it.baseIngredients : []);
+
+      const extras = it.extras || {};
+      const extraBits = [];
+
+      if (extras.seasoning){
+        extraBits.push(`Sazonador: ${extras.seasoning}`);
+      }
+      if (Array.isArray(extras.sauces) && extras.sauces.length){
+        extraBits.push('Salsas: ' + extras.sauces.join(', '));
+      }
+      if (Array.isArray(extras.ingredients) && extras.ingredients.length){
+        extraBits.push('Extras: ' + extras.ingredients.map(e => e.name || e.id || e).join(', '));
+      }
+      if (notes){
+        extraBits.push('Nota: ' + notes);
+      }
+
+      const ingsHtml = ings.length
+        ? `<ul class="ing">${ings.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>`
+        : '';
+
+      const extraHtml = extraBits.length
+        ? `<div class="muted">${escapeHtml(extraBits.join(' · '))}</div>`
+        : '';
+
+      return `
+        <li>
+          <div>${escapeHtml(line)}</div>
+          ${ingsHtml}
+          ${extraHtml}
+        </li>`;
+    }).join('');
+  }
+
   function buildActionsHtml(ord){
     const s = (ord.status || 'pending').toLowerCase();
 
     // Flujo:
-    // pending   -> [Tomar] (preparing)
-    // preparing -> [Listo] (ready)
-    // ready     -> [Entregado] (delivered -> Por cobrar)
-    // delivered -> [Cobrar] (paid -> Entregados)
-    // paid      -> sin acciones
+    // pending   -> [Tomar]      -> preparing
+    // preparing -> [Listo]      -> ready
+    // ready     -> [Entregado]  -> delivered (Por cobrar)
+    // delivered -> [Cobrar]     -> paid (Entregados)
     if (s === 'pending') {
       return `<button class="btn btn-primary" data-act="take">Tomar</button>`;
     }
@@ -500,7 +571,6 @@
         return;
       }
       if (act === 'paid') {
-        // Marca como pagado/archivado
         await updateOrderStatus(ord.id, 'paid');
         beep();
         toast('Pedido cobrado y archivado');
