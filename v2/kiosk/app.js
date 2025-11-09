@@ -1,5 +1,5 @@
 // Seven — Kiosko V2 (test)
-// app.js · 2025-11-08-final
+// app.js · 2025-11-08-plus
 // Compatible con HTML V2, Cocina V2, track V2 y shared/db.js + firebase.js.
 
 // ======================= Rutas base =======================
@@ -17,10 +17,8 @@ const elMsg = document.getElementById('app');
 if (elMsg) elMsg.textContent = 'App.js cargado — iniciando módulos…';
 
 // ======================= Imports =======================
-// 1) firebase.js (side-effect) -> window.FIREBASE_DB/FIREBASE_FS
+// 1) Side-effect firebase -> expone window.FIREBASE_*
 // 2) db.js usa esos globals
-// 3) notify/theme normal
-
 import '../shared/firebase.js?v=20251108';
 
 import { beep, toast } from '../shared/notify.js?v=20251106a';
@@ -36,7 +34,7 @@ const state = {
   cart: [],
   customerName: '',
   orderMeta: {
-    type: 'pickup',   // pickup | online (se ajusta con ?mode=)
+    type: 'pickup',   // pickup | online (ajusta con ?mode=)
     table: '',
     phone: '',
     payMethodPref: 'efectivo'
@@ -175,7 +173,7 @@ function formatIngredientsFor(item, base) {
     ? item.ingredients
     : (base?.ingredients || []);
   return src.map(s =>
-    /^Carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s
+    /^carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s
   );
 }
 
@@ -192,6 +190,54 @@ function getCheddarUpgradePrice() {
   return Number.isFinite(fromMenu) && fromMenu > 0
     ? fromMenu
     : CHEDDAR_UPGRADE_BASE;
+}
+
+/* ===== Extras con costo (genérico) ===== */
+
+function normalizePaidExtra(x) {
+  if (!x) return null;
+  if (typeof x === 'string') {
+    return {
+      id: slug(x),
+      name: x,
+      price: getCheddarUpgradePrice()
+    };
+  }
+  const id = x.id || slug(x.name || x.kitchen || '');
+  const name = x.name || x.kitchen || ('Extra ' + id);
+  let price = Number(x.price || x.priceCents || x.cents || 0);
+  if (!Number.isFinite(price) || price <= 0) {
+    price = getCheddarUpgradePrice();
+  }
+  return { id, name, price };
+}
+
+/**
+ * Decide qué extras mostrar:
+ * - Preferimos item.paidExtras / item.extras.ingredients
+ * - Si no hay, usamos menú global extras.ingredients
+ */
+function getPaidExtrasList(item) {
+  let list = [];
+
+  if (Array.isArray(item?.paidExtras)) {
+    list = item.paidExtras;
+  } else if (item?.extras && Array.isArray(item.extras.ingredients)) {
+    list = item.extras.ingredients;
+  } else if (Array.isArray(state.menu?.extras?.ingredients)) {
+    list = state.menu.extras.ingredients;
+  }
+
+  const out = [];
+  const seen = {};
+  list.forEach(x => {
+    const ex = normalizePaidExtra(x);
+    if (!ex || !ex.id || ex.price <= 0) return;
+    if (seen[ex.id]) return;
+    seen[ex.id] = 1;
+    out.push(ex);
+  });
+  return out;
 }
 
 // ======================= Sides / sazonadores =======================
@@ -656,17 +702,17 @@ function renderCards() {
 
     if (isDrink) {
       card.querySelector('[data-a="drinkAdd"]')?.addEventListener('click', async () => {
-        const ok = await ensureCustomerIdentified(state.orderMeta.type);
+        const ok = await ensureCustomerIdentified();
         if (!ok) return;
         addDrinkToCart(it);
       });
     } else {
       card.querySelector('[data-a="custom"]')?.addEventListener('click', async () => {
-        if (!state.identified) await ensureCustomerIdentified(state.orderMeta.type);
+        if (!state.identified) await ensureCustomerIdentified();
         openItemModal(it, base);
       });
       card.querySelector('[data-a="quick"]')?.addEventListener('click', async () => {
-        const ok = await ensureCustomerIdentified(state.orderMeta.type);
+        const ok = await ensureCustomerIdentified();
         if (!ok) return;
         addQuickItem(it, base);
       });
@@ -681,21 +727,20 @@ function renderCards() {
 // ======================= Orden rápido =======================
 
 async function addQuickItem(item, base) {
-  const ok = await ensureCustomerIdentified(state.orderMeta.type);
+  const ok = await ensureCustomerIdentified();
   if (!ok) return;
   const d = hhDiscountPerUnit(item);
   const unit = Math.max(0, Number(item.price || 0) - d);
   let seasoning = null;
   if (isSide(item)) seasoning = defaultSeasoning(item);
-  const inc = formatIngredientsFor(item, base);
   state.cart.push({
     id: item.id,
     name: item.name,
     mini: !!item.mini,
     qty: 1,
-    unitPrice: Number(item.price || 0),
-    baseIngredients: inc,
-    ingredients: inc,
+    unitPrice: unit,
+    baseIngredients: formatIngredientsFor(item, base),
+    ingredients: formatIngredientsFor(item, base),
     extras: {
       sauces: [],
       ingredients: [],
@@ -770,6 +815,7 @@ function openItemModal(item, base) {
 
   const inc = formatIngredientsFor(item, base);
   const seasoningList = isSide(item) ? normalizeSeasonings(item) : [];
+  const extrasList = getPaidExtrasList(item);
 
   title.textContent = item.name;
   body.innerHTML = `
@@ -792,6 +838,20 @@ function openItemModal(item, base) {
         </label>`).join('')}
       </div>
     </div>` : ''}
+    ${extrasList.length ? `
+    <div class="field">
+      <label>Extras con costo</label>
+      <div id="extraList">
+        ${extrasList.map(ex => `
+        <label>
+          <input type="checkbox"
+                 data-extra-id="${escapeHtml(ex.id)}"
+                 data-extra-name="${escapeHtml(ex.name)}"
+                 data-extra-price="${Number(ex.price) || 0}">
+          <span>${escapeHtml(ex.name)} (+${money(ex.price)})</span>
+        </label>`).join('')}
+      </div>
+    </div>` : ''}
     <div class="field">
       <label>Cantidad</label>
       <input type="number" id="qty" min="1" value="1"/>
@@ -803,47 +863,79 @@ function openItemModal(item, base) {
   `;
 
   const qtyInput = body.querySelector('#qty');
+  const extraInputs = body.querySelectorAll('#extraList input[type="checkbox"]');
+
+  const computeExtrasPerUnit = () => {
+    let sum = 0;
+    extraInputs.forEach(inp => {
+      if (inp.checked) sum += Number(inp.dataset.extraPrice || 0);
+    });
+    return sum;
+  };
+
   const recompute = () => {
     const q = Math.max(1, Number(qtyInput.value || 1));
     const d = hhDiscountPerUnit(item);
-    const unit = Math.max(0, Number(item.price || 0) - d);
-    totalEl.textContent = money(unit * q);
+    const baseUnit = Math.max(0, Number(item.price || 0) - d);
+    const extrasUnit = computeExtrasPerUnit();
+    const finalUnit = baseUnit + extrasUnit;
+    totalEl.textContent = money(finalUnit * q);
   };
+
   qtyInput.addEventListener('input', recompute);
+  extraInputs.forEach(inp => inp.addEventListener('change', recompute));
   recompute();
 
   addBtn.onclick = async () => {
-    const ok = await ensureCustomerIdentified(state.orderMeta.type);
+    const ok = await ensureCustomerIdentified();
     if (!ok) return;
     const q = Math.max(1, Number(qtyInput.value || 1));
     const d = hhDiscountPerUnit(item);
-    const unit = Math.max(0, Number(item.price || 0) - d);
+    const baseUnit = Math.max(0, Number(item.price || 0) - d);
+    const extrasUnit = computeExtrasPerUnit();
+    const finalUnit = baseUnit + extrasUnit;
+
     const notes = (body.querySelector('#notes')?.value || '').trim();
+
     let seasoning = null;
     if (isSide(item)) {
       const r = body.querySelector('input[name="seasoning"]:checked');
       seasoning = r?.value || defaultSeasoning(item);
     }
+
+    const selectedExtras = [];
+    extraInputs.forEach(inp => {
+      if (inp.checked) {
+        selectedExtras.push(inp.dataset.extraName || 'extra');
+      }
+    });
+
     state.cart.push({
       id: item.id,
       name: item.name,
       mini: !!item.mini,
       qty: q,
-      unitPrice: Number(item.price || 0),
+      unitPrice: finalUnit,
       baseIngredients: inc,
       ingredients: inc,
       extras: {
         sauces: [],
-        ingredients: [],
+        ingredients: selectedExtras,
         dlcCarne: false,
         surpriseSauce: null,
         seasoning: seasoning || null
       },
       notes,
-      lineTotal: unit * q,
+      lineTotal: finalUnit * q,
+      // HH solo aplica al precio base; el extra se cobra completo
       hhDisc: d * q,
-      type: isSide(item) ? 'side' : undefined
+      type: isSide(item) ? 'side' : undefined,
+      meta: {
+        baseUnit,
+        extrasUnit
+      }
     });
+
     ensureDrinkPrices();
     updateCartBar();
     beep();
@@ -905,7 +997,7 @@ function paintIdentityBadge() {
     b.style.cssText = 'position:fixed;right:10px;bottom:56px;z-index:1000;';
     document.body.appendChild(b);
   }
-  b.textContent = 'Cliente reconocido';
+  b.textContent = 'Datos listos para este pedido';
   b.style.display = state.identified ? 'inline-flex' : 'none';
 }
 
@@ -1023,49 +1115,110 @@ function ensureTrackPrompt(url) {
 // ======================= Identidad =======================
 
 async function ensureCustomerIdentified() {
+  // Si ya capturamos datos en este flujo, no molestamos otra vez
   if (state.identified && state.orderMeta.phone) return true;
-
-  try {
-    const n = localStorage.getItem('kiosk:name') || '';
-    const p = localStorage.getItem('kiosk:phone') || '';
-    if (p) {
-      state.customerName = n;
-      state.orderMeta.phone = p;
-      state.identified = true;
-      paintIdentityBadge();
-      return true;
-    }
-  } catch {}
 
   const modal = document.getElementById('idModal');
   const nameEl = document.getElementById('idName');
   const phoneEl= document.getElementById('idPhone');
   const okBtn  = document.getElementById('idOk');
 
-  if (!modal || !phoneEl || !okBtn) {
-    state.identified = true;
-    return true;
+  // Prefill con último dato conocido (pero siempre pedimos confirmar)
+  if (modal && phoneEl) {
+    if (!phoneEl.value && state.lastKnownPhone) phoneEl.value = state.lastKnownPhone;
+    if (!nameEl.value && state.lastKnownName)  nameEl.value  = state.lastKnownName;
   }
 
-  return new Promise(resolve => {
-    openModal(modal);
-    okBtn.onclick = () => {
-      const name = (nameEl?.value || '').trim();
-      const phone = (phoneEl.value || '').trim();
-      if (!phone) { toast('Pon un teléfono para avisarte'); return; }
-      state.customerName = name;
-      state.orderMeta.phone = phone;
-      state.identified = true;
-      state.identifiedAt = Date.now();
-      try {
-        localStorage.setItem('kiosk:name', name);
-        localStorage.setItem('kiosk:phone', phone);
-      } catch {}
-      paintIdentityBadge();
-      closeModal(modal);
-      resolve(true);
+  // Modal presente (flujo principal)
+  if (modal && phoneEl && okBtn) {
+    return new Promise(resolve => {
+      openModal(modal);
+      okBtn.onclick = () => {
+        const name = (nameEl?.value || '').trim();
+        const phone = (phoneEl.value || '').trim();
+        if (!phone) { toast('Pon un teléfono para avisarte'); return; }
+
+        state.customerName = name;
+        state.orderMeta.phone = phone;
+        state.identified = true;
+        state.identifiedAt = Date.now();
+
+        state.lastKnownName = name;
+        state.lastKnownPhone = phone;
+        try {
+          localStorage.setItem('kiosk:name', name);
+          localStorage.setItem('kiosk:phone', phone);
+        } catch {}
+
+        paintIdentityBadge();
+        closeModal(modal);
+        resolve(true);
+      };
+    });
+  }
+
+  // Fallback (si no existe modal): prompt simple
+  try {
+    const phone = prompt('Pon tu número de WhatsApp para avisarte cuando esté listo:') || '';
+    if (!phone.trim()) return false;
+    const name = prompt('Tu nombre para el pedido:', '') || '';
+    state.customerName = name.trim();
+    state.orderMeta.phone = phone.trim();
+    state.identified = true;
+    state.lastKnownName = state.customerName;
+    state.lastKnownPhone = state.orderMeta.phone;
+    try {
+      localStorage.setItem('kiosk:name', state.customerName);
+      localStorage.setItem('kiosk:phone', state.orderMeta.phone);
+    } catch {}
+    paintIdentityBadge();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ======================= Dopamina post-pedido =======================
+
+function showLoyaltyNudge() {
+  if (state.loyaltyAskShown || !state.orderMeta.phone) return;
+  state.loyaltyAskShown = true;
+
+  try {
+    const box = document.createElement('div');
+    box.id = '__loyaltyNudge';
+    box.style.cssText =
+      'position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.86);';
+    box.innerHTML = `
+      <div style="max-width:360px;background:#0b1220;border-radius:18px;padding:18px;border:1px solid rgba(255,255,255,.18);box-shadow:0 14px 40px rgba(0,0,0,.7);text-align:center;">
+        <div style="font-size:24px;margin-bottom:10px;">🎮 Nivel Seven desbloqueado</div>
+        <div style="font-size:15px;color:#cfd8ff;margin-bottom:14px;">
+          Con este número podemos guardar tus pedidos y desbloquear
+          <b>regalos sorpresa, combos secretos y upgrades gratis</b>.
+          Tu próxima visita puede traer premio. ¿Activamos tu perfil Seven?
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button id="lvYes" class="btn" style="font-size:14px;padding:9px 16px;min-width:150px;">
+            Sí, quiero mis recompensas
+          </button>
+          <button id="lvNo" class="btn ghost" style="font-size:13px;padding:8px 14px;min-width:120px;">
+            Tal vez después
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(box);
+
+    box.querySelector('#lvYes').onclick = () => {
+      toast('✨ Listo, tu número empezará a sumar sorpresas Seven.');
+      try { document.body.removeChild(box); } catch {}
     };
-  });
+    box.querySelector('#lvNo').onclick = () => {
+      try { document.body.removeChild(box); } catch {}
+    };
+  } catch (e) {
+    console.warn('loyalty nudge error', e);
+  }
 }
 
 // ======================= Crear pedido =======================
@@ -1104,11 +1257,7 @@ async function submitOrder() {
         lineTotal: l.lineTotal || 0,
         notes: l.notes || '',
         extras: l.extras || {},
-        meta: l.meta || {},
-        // 👇 Esto es clave para que Cocina pueda mostrar el listado:
-        ingredients: Array.isArray(l.ingredients)
-          ? l.ingredients
-          : (Array.isArray(l.baseIngredients) ? l.baseIngredients : [])
+        meta: l.meta || {}
       })),
       subtotal,
       hhDiscount: hh,
@@ -1133,6 +1282,7 @@ async function submitOrder() {
     beep();
     toast('✅ Pedido enviado');
     ensureTrackPrompt(url);
+    showLoyaltyNudge();
   } catch (e) {
     console.error('[kiosk] submitOrder error', e);
     toast('No se pudo enviar el pedido. Intenta otra vez.');
@@ -1152,10 +1302,10 @@ async function init() {
 
   try { await ensureAuth(); } catch (e) { console.warn('anon auth fail', e); }
 
+  // Solo recordamos como sugerencia, no como nombre fijo
   try {
-    state.customerName = localStorage.getItem('kiosk:name') || '';
-    state.orderMeta.phone = localStorage.getItem('kiosk:phone') || '';
-    if (state.orderMeta.phone) state.identified = true;
+    state.lastKnownName = localStorage.getItem('kiosk:name') || '';
+    state.lastKnownPhone = localStorage.getItem('kiosk:phone') || '';
   } catch {}
 
   state.menu = await fetchCatalogWithFallback();
