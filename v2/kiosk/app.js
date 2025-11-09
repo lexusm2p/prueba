@@ -1,5 +1,5 @@
 // Seven — Kiosko V2 (full)
-// app.js · 2025-11-09
+// app.js · 2025-11-09b
 // Compatible con HTML V2, Cocina V2, track V2 y shared/db.js + firebase.js.
 
 // ======================= Rutas base =======================
@@ -74,15 +74,15 @@ const state = {
 const DRINK_PRICE = { solo: 19, combo: 19 };
 const CHEDDAR_UPGRADE_BASE = 7;
 
-// Extras con costo estándar (se pueden combinar con lo del menú)
+// Extras con costo estándar
 const PAID_EXTRAS_BASE = [
   { id: 'tocino-extra',     label: 'Tocino extra',                    price: 9 },
-  { id: 'pina-extra',       label: 'Rebanada de piña',                price: 5 },
-  { id: 'jamon-extra',      label: 'Jamón',                           price: 7 },
-  { id: 'cebolla-blanca',   label: 'Cebolla blanca',                  price: 3 },
+  { id: 'pina-extra',       label: 'Rebanada de piña',                price: 7 },
+  { id: 'jamon-extra',      label: 'Jamón',                           price: 5 },
+  { id: 'cebolla-asada',    label: 'Cebolla asada',                   price: 3 },
   { id: 'dlc-mini',         label: 'DLC mini → carne grande',         price: 15, onlyMini: true },
   { id: 'carne-extra',      label: 'Carne extra 85 g',                price: 22 },
-  { id: 'salchicha-extra',  label: 'Salchicha extra',                 price: 15 },
+  { id: 'salchicha-extra',  label: 'Salchicha extra',                 price: 10 },
   { id: 'aderezo-1oz',      label: 'Aderezo extra 1 oz',              price: 5 }
 ];
 
@@ -242,7 +242,6 @@ function getPaidExtrasForItem(item) {
   const isMini = !!item?.mini;
   const list = [];
 
-  // base estándar
   PAID_EXTRAS_BASE.forEach(e => {
     if (e.onlyMini && !isMini) return;
     list.push({
@@ -252,7 +251,6 @@ function getPaidExtrasForItem(item) {
     });
   });
 
-  // extras definidos en el menú (si existen)
   const fromMenu = []
     .concat(item?.paidExtras || [])
     .concat(state.menu?.extras?.paidExtras || [])
@@ -271,7 +269,6 @@ function getPaidExtrasForItem(item) {
     }
   });
 
-  // quitar duplicados (primer precio gana)
   const seen = {};
   return list.filter(x => {
     if (!x.id) return false;
@@ -804,7 +801,7 @@ function smartDrinkNudge() {
   setTimeout(() => { try { box.remove(); } catch {} }, 5000);
 }
 
-// ======================= Modal custom (con extras con costo) =======================
+// ======================= Modal custom =======================
 
 function openItemModal(item, base) {
   const modal = document.getElementById('modal');
@@ -918,7 +915,7 @@ function openItemModal(item, base) {
 
     const unitFinal = baseUnit + extrasUnit;
     const lineTotal = unitFinal * q;
-    const hhDisc = d * q; // HH solo sobre base
+    const hhDisc = d * q;
 
     state.cart.push({
       id: item.id,
@@ -969,7 +966,7 @@ document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
 function recomputeLine(l) {
   if (!l) return;
-  if (l.type === 'drink') return; // bebidas ya se recalculan en ensureDrinkPrices
+  if (l.type === 'drink') return;
   if (!l.unitPrice) {
     const ref = findItemById(l.id);
     l.unitPrice = Number(ref?.price || 0);
@@ -1086,7 +1083,7 @@ document.addEventListener('click', e => {
   submitOrder();
 });
 
-// ======================= Gift / HH / ETA (stubs seguros) =======================
+// ======================= Gift / HH / ETA (stubs) =======================
 
 function checkGiftUnlock(autoOpen) {
   const { total } = computeBreakdown();
@@ -1120,10 +1117,9 @@ function ensureTrackPrompt(url) {
   if (!linkInput && !btnNow) toast('Sigue tu pedido aquí: ' + url);
 }
 
-// ======================= Identidad (pickup / mesa + nombre cada vez) =======================
+// ======================= Identidad =======================
 
 async function ensureCustomerIdentified() {
-  // Elegir tipo de pedido si no se ha elegido
   if (!state.orderMeta.typeChosen) {
     const isPickup = confirm('¿Tu pedido es PARA LLEVAR?\nAceptar = Para llevar\nCancelar = Comer aquí (mesa)');
     state.orderMeta.type = isPickup ? 'pickup' : 'dinein';
@@ -1137,7 +1133,6 @@ async function ensureCustomerIdentified() {
 
   const isPickup = state.orderMeta.type === 'pickup';
 
-  // Siempre pedir nombre (usando sugerencia)
   const suggestedName = state.lastKnownName || localStorage.getItem('kiosk:name') || '';
   const name = (prompt('Nombre para el pedido:', suggestedName) || '').trim();
   if (!name) {
@@ -1145,7 +1140,6 @@ async function ensureCustomerIdentified() {
     return false;
   }
 
-  // Teléfono: obligatorio solo para pickup
   const suggestedPhone = state.lastKnownPhone || localStorage.getItem('kiosk:phone') || '';
   let phone = '';
   if (isPickup) {
@@ -1178,7 +1172,6 @@ async function ensureCustomerIdentified() {
 
 function showLoyaltyNudge() {
   if (state.loyaltyAskShown || !state.loyaltyEnabled) return;
-  // Solo tiene sentido si no tenemos teléfono (ej. pedido en mesa)
   if (state.orderMeta.phone) return;
 
   state.loyaltyAskShown = true;
@@ -1312,7 +1305,6 @@ async function submitOrder() {
     toast('✅ Pedido enviado');
     ensureTrackPrompt(url);
 
-    // Nudge de lealtad (solo si aplica)
     showLoyaltyNudge();
   } catch (e) {
     console.error('[kiosk] submitOrder error', e);
