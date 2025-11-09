@@ -1,5 +1,5 @@
-// Seven — Kiosko V2 (test)
-// app.js · 2025-11-08-plus
+// Seven — Kiosko V2 (full)
+// app.js · 2025-11-09
 // Compatible con HTML V2, Cocina V2, track V2 y shared/db.js + firebase.js.
 
 // ======================= Rutas base =======================
@@ -17,14 +17,12 @@ const elMsg = document.getElementById('app');
 if (elMsg) elMsg.textContent = 'App.js cargado — iniciando módulos…';
 
 // ======================= Imports =======================
-// 1) Side-effect firebase -> expone window.FIREBASE_*
-// 2) db.js usa esos globals
-import '../shared/firebase.js?v=20251108';
 
-import { beep, toast } from '../shared/notify.js?v=20251106a';
-import * as DB from '../shared/db.js?v=20251108';
-import { ensureAuth } from '../shared/firebase.js?v=20251108';
-import { initThemeFromSettings } from '../shared/theme.js?v=20251108';
+import '../shared/firebase.js?v=20251109';
+import { beep, toast } from '../shared/notify.js?v=20251109';
+import * as DB from '../shared/db.js?v=20251109';
+import { ensureAuth } from '../shared/firebase.js?v=20251109';
+import { initThemeFromSettings } from '../shared/theme.js?v=20251109';
 
 // ======================= Estado global =======================
 
@@ -34,10 +32,11 @@ const state = {
   cart: [],
   customerName: '',
   orderMeta: {
-    type: 'pickup',   // pickup | online (ajusta con ?mode=)
+    type: '',        // pickup | dinein (se decide al identificar)
     table: '',
     phone: '',
-    payMethodPref: 'efectivo'
+    payMethodPref: 'efectivo',
+    typeChosen: false
   },
   unsubHH: null,
   unsubETA: null,
@@ -75,11 +74,22 @@ const state = {
 const DRINK_PRICE = { solo: 19, combo: 19 };
 const CHEDDAR_UPGRADE_BASE = 7;
 
+// Extras con costo estándar (se pueden combinar con lo del menú)
+const PAID_EXTRAS_BASE = [
+  { id: 'tocino-extra',     label: 'Tocino extra',                    price: 9 },
+  { id: 'pina-extra',       label: 'Rebanada de piña',                price: 5 },
+  { id: 'jamon-extra',      label: 'Jamón',                           price: 7 },
+  { id: 'cebolla-blanca',   label: 'Cebolla blanca',                  price: 3 },
+  { id: 'dlc-mini',         label: 'DLC mini → carne grande',         price: 15, onlyMini: true },
+  { id: 'carne-extra',      label: 'Carne extra 85 g',                price: 22 },
+  { id: 'salchicha-extra',  label: 'Salchicha extra',                 price: 15 },
+  { id: 'aderezo-1oz',      label: 'Aderezo extra 1 oz',              price: 5 }
+];
+
 // ======================= Helpers =======================
 
 const money = n => '$' + Number(n ?? 0).toFixed(0);
 
-/** Limpia recursivamente cualquier undefined (Firestore no los acepta). */
 function deepClean(value) {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -173,7 +183,7 @@ function formatIngredientsFor(item, base) {
     ? item.ingredients
     : (base?.ingredients || []);
   return src.map(s =>
-    /^carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s
+    /^Carne(\b|\s|$)/i.test(String(s)) ? `Carne ${grams} g` : s
   );
 }
 
@@ -190,54 +200,6 @@ function getCheddarUpgradePrice() {
   return Number.isFinite(fromMenu) && fromMenu > 0
     ? fromMenu
     : CHEDDAR_UPGRADE_BASE;
-}
-
-/* ===== Extras con costo (genérico) ===== */
-
-function normalizePaidExtra(x) {
-  if (!x) return null;
-  if (typeof x === 'string') {
-    return {
-      id: slug(x),
-      name: x,
-      price: getCheddarUpgradePrice()
-    };
-  }
-  const id = x.id || slug(x.name || x.kitchen || '');
-  const name = x.name || x.kitchen || ('Extra ' + id);
-  let price = Number(x.price || x.priceCents || x.cents || 0);
-  if (!Number.isFinite(price) || price <= 0) {
-    price = getCheddarUpgradePrice();
-  }
-  return { id, name, price };
-}
-
-/**
- * Decide qué extras mostrar:
- * - Preferimos item.paidExtras / item.extras.ingredients
- * - Si no hay, usamos menú global extras.ingredients
- */
-function getPaidExtrasList(item) {
-  let list = [];
-
-  if (Array.isArray(item?.paidExtras)) {
-    list = item.paidExtras;
-  } else if (item?.extras && Array.isArray(item.extras.ingredients)) {
-    list = item.extras.ingredients;
-  } else if (Array.isArray(state.menu?.extras?.ingredients)) {
-    list = state.menu.extras.ingredients;
-  }
-
-  const out = [];
-  const seen = {};
-  list.forEach(x => {
-    const ex = normalizePaidExtra(x);
-    if (!ex || !ex.id || ex.price <= 0) return;
-    if (seen[ex.id]) return;
-    seen[ex.id] = 1;
-    out.push(ex);
-  });
-  return out;
 }
 
 // ======================= Sides / sazonadores =======================
@@ -272,6 +234,51 @@ function defaultSeasoning(item) {
     /sal\b/i.test(x.name) || /sal\b/i.test(x.kitchen)
   );
   return (salt || list[0]).kitchen;
+}
+
+// ======================= Extras con costo =======================
+
+function getPaidExtrasForItem(item) {
+  const isMini = !!item?.mini;
+  const list = [];
+
+  // base estándar
+  PAID_EXTRAS_BASE.forEach(e => {
+    if (e.onlyMini && !isMini) return;
+    list.push({
+      id: e.id,
+      name: e.label,
+      price: Number(e.price || 0)
+    });
+  });
+
+  // extras definidos en el menú (si existen)
+  const fromMenu = []
+    .concat(item?.paidExtras || [])
+    .concat(state.menu?.extras?.paidExtras || [])
+    .filter(Boolean);
+
+  fromMenu.forEach(x => {
+    if (typeof x === 'string') {
+      list.push({ id: slug(x), name: x, price: 5 });
+    } else {
+      const id = x.id || slug(x.name || x.label || '');
+      const name = x.name || x.label || id;
+      const price = Number(x.price || x.cents || 5);
+      if (id && name && price > 0) {
+        list.push({ id, name, price });
+      }
+    }
+  });
+
+  // quitar duplicados (primer precio gana)
+  const seen = {};
+  return list.filter(x => {
+    if (!x.id) return false;
+    if (seen[x.id]) return false;
+    seen[x.id] = 1;
+    return true;
+  });
 }
 
 // ======================= Highlights =======================
@@ -660,7 +667,6 @@ function renderCards() {
 
     const isCombo = it.type === 'combo';
     const isDrink = it.type === 'drink' || state.mode === 'drinks';
-
     const disc = (!isDrink && !isCombo) ? hhDiscountPerUnit(it) : 0;
     const eff = (!isDrink && !isCombo)
       ? Math.max(0, Number(it.price || 0) - disc)
@@ -738,7 +744,7 @@ async function addQuickItem(item, base) {
     name: item.name,
     mini: !!item.mini,
     qty: 1,
-    unitPrice: unit,
+    unitPrice: Number(item.price || 0),
     baseIngredients: formatIngredientsFor(item, base),
     ingredients: formatIngredientsFor(item, base),
     extras: {
@@ -798,7 +804,7 @@ function smartDrinkNudge() {
   setTimeout(() => { try { box.remove(); } catch {} }, 5000);
 }
 
-// ======================= Modal custom =======================
+// ======================= Modal custom (con extras con costo) =======================
 
 function openItemModal(item, base) {
   const modal = document.getElementById('modal');
@@ -815,7 +821,7 @@ function openItemModal(item, base) {
 
   const inc = formatIngredientsFor(item, base);
   const seasoningList = isSide(item) ? normalizeSeasonings(item) : [];
-  const extrasList = getPaidExtrasList(item);
+  const paidExtras = getPaidExtrasForItem(item);
 
   title.textContent = item.name;
   body.innerHTML = `
@@ -827,6 +833,17 @@ function openItemModal(item, base) {
           : '<span class="muted small">Configurable en cocina</span>'}
       </div>
     </div>
+    ${paidExtras.length ? `
+    <div class="field">
+      <label>Extras con costo</label>
+      <div id="extrasList" class="ul-clean">
+        ${paidExtras.map(e => `
+        <label style="grid-column:1 / -1;display:flex;align-items:center;gap:8px;font-size:13px;">
+          <input type="checkbox" data-id="${escapeHtml(e.id)}" data-name="${escapeHtml(e.name)}" data-price="${e.price}">
+          <span>${escapeHtml(e.name)} (+${money(e.price)})</span>
+        </label>`).join('')}
+      </div>
+    </div>` : ''}
     ${seasoningList.length ? `
     <div class="field">
       <label>Sazonador (gratis)</label>
@@ -835,20 +852,6 @@ function openItemModal(item, base) {
         <label>
           <input type="radio" name="seasoning" value="${escapeHtml(s.kitchen)}" ${i===0?'checked':''}/>
           <span>${escapeHtml(s.name)}</span>
-        </label>`).join('')}
-      </div>
-    </div>` : ''}
-    ${extrasList.length ? `
-    <div class="field">
-      <label>Extras con costo</label>
-      <div id="extraList">
-        ${extrasList.map(ex => `
-        <label>
-          <input type="checkbox"
-                 data-extra-id="${escapeHtml(ex.id)}"
-                 data-extra-name="${escapeHtml(ex.name)}"
-                 data-extra-price="${Number(ex.price) || 0}">
-          <span>${escapeHtml(ex.name)} (+${money(ex.price)})</span>
         </label>`).join('')}
       </div>
     </div>` : ''}
@@ -863,27 +866,21 @@ function openItemModal(item, base) {
   `;
 
   const qtyInput = body.querySelector('#qty');
-  const extraInputs = body.querySelectorAll('#extraList input[type="checkbox"]');
-
-  const computeExtrasPerUnit = () => {
-    let sum = 0;
-    extraInputs.forEach(inp => {
-      if (inp.checked) sum += Number(inp.dataset.extraPrice || 0);
-    });
-    return sum;
-  };
+  const extraInputs = body.querySelectorAll('#extrasList input[type="checkbox"]');
 
   const recompute = () => {
     const q = Math.max(1, Number(qtyInput.value || 1));
     const d = hhDiscountPerUnit(item);
     const baseUnit = Math.max(0, Number(item.price || 0) - d);
-    const extrasUnit = computeExtrasPerUnit();
-    const finalUnit = baseUnit + extrasUnit;
-    totalEl.textContent = money(finalUnit * q);
+    let extrasUnit = 0;
+    extraInputs.forEach(ch => {
+      if (ch.checked) extrasUnit += Number(ch.dataset.price || 0);
+    });
+    const total = (baseUnit + extrasUnit) * q;
+    totalEl.textContent = money(total);
   };
-
-  qtyInput.addEventListener('input', recompute);
-  extraInputs.forEach(inp => inp.addEventListener('change', recompute));
+  if (qtyInput) qtyInput.addEventListener('input', recompute);
+  extraInputs.forEach(ch => ch.addEventListener('change', recompute));
   recompute();
 
   addBtn.onclick = async () => {
@@ -892,9 +889,6 @@ function openItemModal(item, base) {
     const q = Math.max(1, Number(qtyInput.value || 1));
     const d = hhDiscountPerUnit(item);
     const baseUnit = Math.max(0, Number(item.price || 0) - d);
-    const extrasUnit = computeExtrasPerUnit();
-    const finalUnit = baseUnit + extrasUnit;
-
     const notes = (body.querySelector('#notes')?.value || '').trim();
 
     let seasoning = null;
@@ -903,37 +897,49 @@ function openItemModal(item, base) {
       seasoning = r?.value || defaultSeasoning(item);
     }
 
-    const selectedExtras = [];
-    extraInputs.forEach(inp => {
-      if (inp.checked) {
-        selectedExtras.push(inp.dataset.extraName || 'extra');
+    const chosenExtras = [];
+    let extrasUnit = 0;
+    const metaFlags = {};
+    extraInputs.forEach(ch => {
+      if (!ch.checked) return;
+      const id = ch.dataset.id;
+      const name = ch.dataset.name;
+      const price = Number(ch.dataset.price || 0);
+      extrasUnit += price;
+      chosenExtras.push(name);
+
+      if (id === 'dlc-mini') metaFlags.dlcMiniToBig = true;
+      if (id === 'carne-extra') metaFlags.extraPatty = true;
+      if (id === 'salchicha-extra') metaFlags.extraSausage = true;
+      if (id === 'aderezo-1oz') {
+        metaFlags.extraSauceOz = (metaFlags.extraSauceOz || 0) + 1;
       }
     });
+
+    const unitFinal = baseUnit + extrasUnit;
+    const lineTotal = unitFinal * q;
+    const hhDisc = d * q; // HH solo sobre base
 
     state.cart.push({
       id: item.id,
       name: item.name,
       mini: !!item.mini,
       qty: q,
-      unitPrice: finalUnit,
+      unitPrice: unitFinal,
       baseIngredients: inc,
       ingredients: inc,
       extras: {
         sauces: [],
-        ingredients: selectedExtras,
-        dlcCarne: false,
+        ingredients: chosenExtras,
+        dlcCarne: !!metaFlags.dlcMiniToBig,
         surpriseSauce: null,
-        seasoning: seasoning || null
+        seasoning: seasoning || null,
+        meta: metaFlags
       },
       notes,
-      lineTotal: finalUnit * q,
-      // HH solo aplica al precio base; el extra se cobra completo
-      hhDisc: d * q,
-      type: isSide(item) ? 'side' : undefined,
-      meta: {
-        baseUnit,
-        extrasUnit
-      }
+      lineTotal,
+      hhDisc,
+      type: isSide(item) ? 'side' : (item.type || undefined)
     });
 
     ensureDrinkPrices();
@@ -963,7 +969,7 @@ document.getElementById('openCart')?.addEventListener('click', openCartModal);
 
 function recomputeLine(l) {
   if (!l) return;
-  if (l.type === 'drink') return;
+  if (l.type === 'drink') return; // bebidas ya se recalculan en ensureDrinkPrices
   if (!l.unitPrice) {
     const ref = findItemById(l.id);
     l.unitPrice = Number(ref?.price || 0);
@@ -1031,6 +1037,8 @@ function openCartModal() {
       row.className = 'row';
       row.innerHTML = `
         <div>${escapeHtml(l.name)} ×${l.qty || 1}</div>
+        ${l.extras?.ingredients?.length
+          ? `<div class="muted small">${l.extras.ingredients.map(escapeHtml).join(', ')}</div>` : ''}
         ${l.notes ? `<div class="muted small">${escapeHtml(l.notes)}</div>` : ''}
         <div style="margin-left:auto">${money(l.lineTotal || 0)}</div>
         <button class="btn tiny ghost" data-i="${i}">✕</button>
@@ -1112,113 +1120,133 @@ function ensureTrackPrompt(url) {
   if (!linkInput && !btnNow) toast('Sigue tu pedido aquí: ' + url);
 }
 
-// ======================= Identidad =======================
+// ======================= Identidad (pickup / mesa + nombre cada vez) =======================
 
 async function ensureCustomerIdentified() {
-  // Si ya capturamos datos en este flujo, no molestamos otra vez
-  if (state.identified && state.orderMeta.phone) return true;
+  // Elegir tipo de pedido si no se ha elegido
+  if (!state.orderMeta.typeChosen) {
+    const isPickup = confirm('¿Tu pedido es PARA LLEVAR?\nAceptar = Para llevar\nCancelar = Comer aquí (mesa)');
+    state.orderMeta.type = isPickup ? 'pickup' : 'dinein';
+    state.orderMeta.typeChosen = true;
 
-  const modal = document.getElementById('idModal');
-  const nameEl = document.getElementById('idName');
-  const phoneEl= document.getElementById('idPhone');
-  const okBtn  = document.getElementById('idOk');
-
-  // Prefill con último dato conocido (pero siempre pedimos confirmar)
-  if (modal && phoneEl) {
-    if (!phoneEl.value && state.lastKnownPhone) phoneEl.value = state.lastKnownPhone;
-    if (!nameEl.value && state.lastKnownName)  nameEl.value  = state.lastKnownName;
+    if (!isPickup) {
+      const mesa = prompt('Número o nombre de mesa (opcional):', '') || '';
+      state.orderMeta.table = mesa.trim();
+    }
   }
 
-  // Modal presente (flujo principal)
-  if (modal && phoneEl && okBtn) {
-    return new Promise(resolve => {
-      openModal(modal);
-      okBtn.onclick = () => {
-        const name = (nameEl?.value || '').trim();
-        const phone = (phoneEl.value || '').trim();
-        if (!phone) { toast('Pon un teléfono para avisarte'); return; }
+  const isPickup = state.orderMeta.type === 'pickup';
 
-        state.customerName = name;
-        state.orderMeta.phone = phone;
-        state.identified = true;
-        state.identifiedAt = Date.now();
-
-        state.lastKnownName = name;
-        state.lastKnownPhone = phone;
-        try {
-          localStorage.setItem('kiosk:name', name);
-          localStorage.setItem('kiosk:phone', phone);
-        } catch {}
-
-        paintIdentityBadge();
-        closeModal(modal);
-        resolve(true);
-      };
-    });
-  }
-
-  // Fallback (si no existe modal): prompt simple
-  try {
-    const phone = prompt('Pon tu número de WhatsApp para avisarte cuando esté listo:') || '';
-    if (!phone.trim()) return false;
-    const name = prompt('Tu nombre para el pedido:', '') || '';
-    state.customerName = name.trim();
-    state.orderMeta.phone = phone.trim();
-    state.identified = true;
-    state.lastKnownName = state.customerName;
-    state.lastKnownPhone = state.orderMeta.phone;
-    try {
-      localStorage.setItem('kiosk:name', state.customerName);
-      localStorage.setItem('kiosk:phone', state.orderMeta.phone);
-    } catch {}
-    paintIdentityBadge();
-    return true;
-  } catch {
+  // Siempre pedir nombre (usando sugerencia)
+  const suggestedName = state.lastKnownName || localStorage.getItem('kiosk:name') || '';
+  const name = (prompt('Nombre para el pedido:', suggestedName) || '').trim();
+  if (!name) {
+    toast('Pon un nombre para identificar tu pedido');
     return false;
   }
+
+  // Teléfono: obligatorio solo para pickup
+  const suggestedPhone = state.lastKnownPhone || localStorage.getItem('kiosk:phone') || '';
+  let phone = '';
+  if (isPickup) {
+    phone = (prompt('Número de WhatsApp para avisarte cuando esté listo (obligatorio):', suggestedPhone) || '').trim();
+    if (!phone) {
+      toast('El número es necesario para avisarte de tu pedido para llevar');
+      return false;
+    }
+  } else {
+    phone = (prompt('Número de WhatsApp para recompensas y avisos (opcional):', suggestedPhone) || '').trim();
+  }
+
+  state.customerName = name;
+  state.orderMeta.phone = phone;
+  state.identified = true;
+  state.identifiedAt = Date.now();
+
+  state.lastKnownName = name;
+  state.lastKnownPhone = phone;
+  try {
+    localStorage.setItem('kiosk:name', name);
+    if (phone) localStorage.setItem('kiosk:phone', phone);
+  } catch {}
+
+  paintIdentityBadge();
+  return true;
 }
 
-// ======================= Dopamina post-pedido =======================
+// ======================= Dopamina / Lealtad =======================
 
 function showLoyaltyNudge() {
-  if (state.loyaltyAskShown || !state.orderMeta.phone) return;
+  if (state.loyaltyAskShown || !state.loyaltyEnabled) return;
+  // Solo tiene sentido si no tenemos teléfono (ej. pedido en mesa)
+  if (state.orderMeta.phone) return;
+
   state.loyaltyAskShown = true;
 
-  try {
-    const box = document.createElement('div');
-    box.id = '__loyaltyNudge';
-    box.style.cssText =
-      'position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.86);';
-    box.innerHTML = `
-      <div style="max-width:360px;background:#0b1220;border-radius:18px;padding:18px;border:1px solid rgba(255,255,255,.18);box-shadow:0 14px 40px rgba(0,0,0,.7);text-align:center;">
-        <div style="font-size:24px;margin-bottom:10px;">🎮 Nivel Seven desbloqueado</div>
-        <div style="font-size:15px;color:#cfd8ff;margin-bottom:14px;">
-          Con este número podemos guardar tus pedidos y desbloquear
-          <b>regalos sorpresa, combos secretos y upgrades gratis</b>.
-          Tu próxima visita puede traer premio. ¿Activamos tu perfil Seven?
-        </div>
-        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-          <button id="lvYes" class="btn" style="font-size:14px;padding:9px 16px;min-width:150px;">
-            Sí, quiero mis recompensas
-          </button>
-          <button id="lvNo" class="btn ghost" style="font-size:13px;padding:8px 14px;min-width:120px;">
-            Tal vez después
-          </button>
-        </div>
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.82);
+  `;
+  overlay.innerHTML = `
+    <div style="
+      background:#050816;
+      border-radius:18px;
+      padding:18px 18px 14px;
+      max-width:360px;
+      width:90%;
+      box-shadow:0 18px 40px rgba(0,0,0,.7);
+      text-align:center;
+      border:1px solid rgba(255,255,255,.14);
+      position:relative;
+      overflow:hidden;
+    ">
+      <div style="
+        position:absolute;
+        top:-40px;right:-40px;
+        width:90px;height:90px;
+        border-radius:50%;
+        border:4px solid #ffc242;
+        box-shadow:0 0 22px rgba(255,194,66,.8);
+        animation:spinCoin 1.3s linear infinite;
+        background:
+          radial-gradient(circle at 30% 30%, #fff7d0 0%, #ffc242 45%, #b37700 100%);
+        ">
       </div>
-    `;
-    document.body.appendChild(box);
+      <h2 style="margin:0 0 6px;font-size:22px;color:#ffc242;">🎮 Nivel Seven desbloqueado</h2>
+      <p style="margin:0 0 10px;font-size:14px;color:#dbe4ff;">
+        Guarda tu WhatsApp y empieza a acumular puntos para
+        <b>bebidas, papas y burgers sorpresa</b>.
+      </p>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
+        <button id="lvYes" class="btn" style="font-size:13px;">Quiero mis recompensas</button>
+        <button id="lvNo" class="btn ghost" style="font-size:13px;">Ahora no</button>
+      </div>
+    </div>
+    <style>
+      @keyframes spinCoin{
+        from{transform:rotateY(0deg);}
+        50% {transform:rotateY(180deg);}
+        to{transform:rotateY(360deg);}
+      }
+    </style>
+  `;
+  document.body.appendChild(overlay);
 
-    box.querySelector('#lvYes').onclick = () => {
-      toast('✨ Listo, tu número empezará a sumar sorpresas Seven.');
-      try { document.body.removeChild(box); } catch {}
-    };
-    box.querySelector('#lvNo').onclick = () => {
-      try { document.body.removeChild(box); } catch {}
-    };
-  } catch (e) {
-    console.warn('loyalty nudge error', e);
-  }
+  overlay.querySelector('#lvYes').onclick = () => {
+    const p = (prompt('Escribe tu número de WhatsApp para vincular tus recompensas:','') || '').trim();
+    if (p) {
+      state.orderMeta.phone = p;
+      state.lastKnownPhone = p;
+      try { localStorage.setItem('kiosk:phone', p); } catch {}
+      toast('✨ Listo, tu perfil Seven quedó activo');
+    }
+    overlay.remove();
+  };
+  overlay.querySelector('#lvNo').onclick = () => {
+    overlay.remove();
+  };
 }
 
 // ======================= Crear pedido =======================
@@ -1244,7 +1272,8 @@ async function submitOrder() {
       createdAt: Date.now(),
       status: 'pending',
       source: 'kiosk-v2',
-      mode: state.orderMeta.type || 'online',
+      mode: state.orderMeta.type || 'pickup',
+      table: state.orderMeta.table || '',
       customerName: state.customerName || '',
       phone: state.orderMeta.phone || '',
       payMethodPref: state.orderMeta.payMethodPref || 'efectivo',
@@ -1282,6 +1311,8 @@ async function submitOrder() {
     beep();
     toast('✅ Pedido enviado');
     ensureTrackPrompt(url);
+
+    // Nudge de lealtad (solo si aplica)
     showLoyaltyNudge();
   } catch (e) {
     console.error('[kiosk] submitOrder error', e);
@@ -1297,12 +1328,14 @@ init();
 
 async function init() {
   const qs = new URLSearchParams(location.search);
-  const mode = (qs.get('mode') || 'online').toLowerCase();
-  state.orderMeta.type = (mode === 'offline') ? 'pickup' : 'online';
+  const modeQ = (qs.get('mode') || '').toLowerCase();
+  if (modeQ === 'offline') {
+    state.orderMeta.type = 'pickup';
+    state.orderMeta.typeChosen = true;
+  }
 
   try { await ensureAuth(); } catch (e) { console.warn('anon auth fail', e); }
 
-  // Solo recordamos como sugerencia, no como nombre fijo
   try {
     state.lastKnownName = localStorage.getItem('kiosk:name') || '';
     state.lastKnownPhone = localStorage.getItem('kiosk:phone') || '';
