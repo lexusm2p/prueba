@@ -96,6 +96,9 @@ async function ensureFirestorePkg() {
       doc:             mod.doc,
       getDoc:          mod.getDoc,
       setDoc:          mod.setDoc,
+      getDocs:         mod.getDocs,
+      where:           mod.where,
+      limit:           mod.limit,
       serverTimestamp: mod.serverTimestamp || (() => Date.now())
     };
     console.info("[db] Firestore SDK dinámico listo");
@@ -182,6 +185,15 @@ function updateStatusSim(id, status, extra = {}) {
   };
   writeSimOrders(all);
   console.info("[db] [SIM] status update", id, "=>", status);
+}
+
+/* ======================= Normalizadores útiles ======================= */
+
+function normPhone(p) {
+  return String(p || "")
+    .replace(/[^\d]+/g, "") // solo dígitos
+    .replace(/^52(\d{10})$/, "$1") // limpia 52 si viene junto
+    .trim();
 }
 
 /* ======================= API pública ======================= */
@@ -283,6 +295,109 @@ export async function updateOrderStatus(id, status, extra = {}) {
   }
 }
 
+/* ========== Historial por teléfono (para “Partida guardada”) ========== */
+
+/**
+ * Devuelve los últimos N pedidos para un teléfono.
+ * Usa:
+ *  - Firestore si está disponible.
+ *  - SIM (localStorage) como fallback.
+ *
+ * El kiosko V2 usa esto para mostrar:
+ *   💾 Partida guardada → “¿Lo mismo de siempre?”
+ */
+export async function getLastOrdersByPhone(phone, limit = 2) {
+  const raw = String(phone || "").trim();
+  const norm = normPhone(raw);
+  const max = Math.max(1, limit | 0 || 2);
+
+  if (!raw && !norm) return [];
+
+  const db = getDb();
+  const fs = db ? await ensureFirestorePkg() : null;
+
+  // === SIM / sin Firestore / sin helpers ===
+  if (!db || !fs || !fs.getDocs || !fs.where || !fs.limit) {
+    const all = readSimOrders();
+    if (!all.length) return [];
+    return all
+      .filter(o => {
+        const pRaw  = String(o.phone || o.customerPhone || "").trim();
+        const pNorm = normPhone(pRaw);
+        if (!pRaw && !pNorm) return false;
+        if (norm && pNorm) return pNorm === norm;
+        return pRaw === raw;
+      })
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, max);
+  }
+
+  // === Firestore real ===
+  try {
+    const colRef = fs.collection(db, ORDERS_COLLECTION);
+    const results = [];
+
+    // 1) intento directo con raw
+    if (raw) {
+      const q1 = fs.query(
+        colRef,
+        fs.where("phone", "==", raw),
+        fs.orderBy("createdAt", "desc"),
+        fs.limit(max)
+      );
+      const snap1 = await fs.getDocs(q1);
+      snap1.forEach(docSnap => {
+        results.push({ id: docSnap.id, ...docSnap.data() });
+      });
+    }
+
+    // 2) si no hubo suficientes y el normalizado es distinto, intentamos con norm
+    if (results.length < max && norm && norm !== raw) {
+      const q2 = fs.query(
+        colRef,
+        fs.where("phone", "==", norm),
+        fs.orderBy("createdAt", "desc"),
+        fs.limit(max)
+      );
+      const snap2 = await fs.getDocs(q2);
+      snap2.forEach(docSnap => {
+        const data = { id: docSnap.id, ...docSnap.data() };
+        if (!results.find(r => r.id === data.id)) {
+          results.push(data);
+        }
+      });
+    }
+
+    // Sanitiza + top N
+    return results
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, max);
+  } catch (e) {
+    console.error("[db] getLastOrdersByPhone error, usando SIM", e);
+    // Fallback a SIM
+    const all = readSimOrders();
+    return all
+      .filter(o => {
+        const pRaw  = String(o.phone || o.customerPhone || "").trim();
+        const pNorm = normPhone(pRaw);
+        if (!pRaw && !pNorm) return false;
+        if (norm && pNorm) return pNorm === norm;
+        return pRaw === raw;
+      })
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, max);
+  }
+}
+
+/**
+ * Alias más genérico por si en algún lado ya se usa este nombre.
+ * getCustomerOrders(phone, { limit })
+ */
+export async function getCustomerOrders(phone, opts = {}) {
+  const limit = typeof opts.limit === "number" ? opts.limit : 5;
+  return getLastOrdersByPhone(phone, limit);
+}
+
 /* ======================= Exports para compatibilidad ======================= */
 
 // Para imports antiguos: import { db } from './db.js'
@@ -329,6 +444,8 @@ export default {
   createOrder,
   subscribeOrders,
   updateOrderStatus,
+  getLastOrdersByPhone,
+  getCustomerOrders,
   BASE_PREFIX,
   ORDERS_COLLECTION,
   db,
