@@ -1,5 +1,5 @@
 // Seven — Kiosko V2 (full)
-// app.js · 2025-11-09b
+// app.js · 2025-11-10
 // Compatible con HTML V2, Cocina V2, track V2 y shared/db.js + firebase.js.
 
 // ======================= Rutas base =======================
@@ -32,7 +32,7 @@ const state = {
   cart: [],
   customerName: '',
   orderMeta: {
-    type: '',        // pickup | dinein (se decide al identificar)
+    type: '',        // pickup | dinein
     table: '',
     phone: '',
     payMethodPref: 'efectivo',
@@ -62,8 +62,12 @@ const state = {
   adminMode: false,
   loyaltyEnabled: true,
   loyaltyAskShown: false,
+
+  // identidad por pedido
   identified: false,
   identifiedAt: 0,
+
+  // para “partida guardada”
   lastKnownPhone: '',
   lastKnownName: '',
   lastOrderPreview: null
@@ -870,9 +874,7 @@ function openItemModal(item, base) {
     const d = hhDiscountPerUnit(item);
     const baseUnit = Math.max(0, Number(item.price || 0) - d);
     let extrasUnit = 0;
-    extraInputs.forEach(ch => {
-      if (ch.checked) extrasUnit += Number(ch.dataset.price || 0);
-    });
+    extraInputs.forEach(ch => { if (ch.checked) extrasUnit += Number(ch.dataset.price || 0); });
     const total = (baseUnit + extrasUnit) * q;
     totalEl.textContent = money(total);
   };
@@ -1117,39 +1119,209 @@ function ensureTrackPrompt(url) {
   if (!linkInput && !btnNow) toast('Sigue tu pedido aquí: ' + url);
 }
 
+// ======================= “Partida guardada” helpers =======================
+
+async function fetchLastOrdersByPhone(phone, limit = 2) {
+  try {
+    if (!phone) return [];
+    if (typeof DB.getLastOrdersByPhone === 'function') {
+      return await DB.getLastOrdersByPhone(phone, limit);
+    }
+    if (typeof DB.getCustomerOrders === 'function') {
+      const all = await DB.getCustomerOrders(phone, { limit });
+      return Array.isArray(all) ? all.slice(0, limit) : [];
+    }
+  } catch (e) {
+    console.warn('[kiosk] fetchLastOrdersByPhone error', e);
+  }
+  return [];
+}
+
+async function handleReturningCustomer(phone, name) {
+  const orders = await fetchLastOrdersByPhone(phone, 2);
+  if (!orders || !orders.length) return; // no registrado → nada extra
+
+  toast(`👾 Bienvenido de vuelta${name ? ', ' + name : ''}`);
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.88);
+  `;
+
+  const cardsHtml = orders.map((o, idx) => {
+    const items = Array.isArray(o.items) ? o.items : [];
+    const label = (items.map(it => `${it.qty || 1}× ${it.name}`).slice(0, 3).join(', ')) || 'Pedido anterior';
+    const total = o.total || o.subtotal || items.reduce((s, it) =>
+      s + (it.lineTotal || (it.unitPrice || it.price || 0) * (it.qty || 1)), 0);
+    return `
+      <div class="panel" style="margin-bottom:8px;text-align:left;">
+        <div class="muted small">Slot ${idx + 1}</div>
+        <div>${escapeHtml(label)}</div>
+        <div class="muted small">Total aprox: ${money(total)}</div>
+        <button class="btn small" data-slot="${idx}">Lo mismo de este</button>
+      </div>
+    `;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div style="
+      background:#020815;
+      border-radius:18px;
+      padding:16px 14px 10px;
+      max-width:420px;width:92%;
+      border:1px solid rgba(255,255,255,.16);
+      box-shadow:0 18px 40px rgba(0,0,0,.8);
+      font-size:14px;
+    ">
+      <h2 style="margin:0 0 4px;font-size:20px;color:#ffc242;">💾 Partida guardada</h2>
+      <p class="muted" style="margin:0 0 8px;font-size:13px;">
+        Detectamos tus últimas órdenes. ¿Quieres repetir alguna en automático?
+      </p>
+      ${cardsHtml}
+      <div class="row" style="margin-top:6px;justify-content:flex-end;">
+        <button class="btn ghost small" data-close>Elegir algo distinto</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', async e => {
+    const close = e.target.closest('[data-close]');
+    const slotBtn = e.target.closest('button[data-slot]');
+    if (close) {
+      overlay.remove();
+      return;
+    }
+    if (slotBtn) {
+      const idx = Number(slotBtn.dataset.slot || 0);
+      const chosen = orders[idx];
+      if (chosen) {
+        try {
+          await quickReorderFromSaved(chosen);
+          overlay.remove();
+        } catch (err) {
+          console.error('[kiosk] quick reorder error', err);
+          toast('No se pudo repetir, arma uno nuevo 🙂');
+          overlay.remove();
+        }
+      }
+    }
+  });
+}
+
+async function quickReorderFromSaved(saved) {
+  if (!saved || !Array.isArray(saved.items) || !saved.items.length) {
+    throw new Error('saved order inválido');
+  }
+
+  const items = saved.items.map(it => {
+    const qty = it.qty || 1;
+    const unit = Number(it.unitPrice || it.price || 0);
+    return {
+      id: it.id,
+      name: it.name,
+      qty,
+      type: it.type || 'item',
+      unitPrice: unit,
+      lineTotal: unit * qty,
+      notes: it.notes || '',
+      extras: it.extras || {},
+      meta: it.meta || {}
+    };
+  });
+
+  const subtotal = items.reduce((s, it) => s + (it.lineTotal || 0), 0);
+  const total = subtotal;
+
+  const order = deepClean({
+    createdAt: Date.now(),
+    status: 'pending',
+    source: 'kiosk-v2-replay',
+    mode: state.orderMeta.type || saved.mode || 'pickup',
+    table: state.orderMeta.table || '',
+    customerName: state.customerName || saved.customerName || '',
+    phone: state.orderMeta.phone || saved.phone || '',
+    payMethodPref: saved.payMethodPref || 'efectivo',
+    items,
+    subtotal,
+    hhDiscount: 0,
+    total
+  });
+
+  const newId = await DB.createOrder(order);
+  console.info('[kiosk] quick reorder ->', newId);
+  const url = buildTrackUrl(newId);
+  state.lastOrderId = newId;
+  state.lastTrackUrl = url;
+  beep();
+  toast('✅ Pedido repetido. Estamos preparando lo mismo de siempre.');
+  ensureTrackPrompt(url);
+
+  resetIdentityForNextCustomer();
+}
+
 // ======================= Identidad =======================
 
+function resetIdentityForNextCustomer() {
+  state.customerName = '';
+  state.orderMeta = {
+    type: '',
+    table: '',
+    phone: '',
+    payMethodPref: 'efectivo',
+    typeChosen: false
+  };
+  state.identified = false;
+  state.identifiedAt = 0;
+  paintIdentityBadge();
+}
+
+// Pide datos SOLO una vez por pedido.
+// Para siguientes clicks en el mismo pedido, regresa true directo.
 async function ensureCustomerIdentified() {
+  if (state.identified) return true;
+
+  // 1) Tipo de pedido (solo una vez)
   if (!state.orderMeta.typeChosen) {
-    const isPickup = confirm('¿Tu pedido es PARA LLEVAR?\nAceptar = Para llevar\nCancelar = Comer aquí (mesa)');
+    const isPickup = confirm(
+      '¿Tu pedido es PARA LLEVAR?\n\nAceptar = Para llevar\nCancelar = Comer aquí (mesa)'
+    );
     state.orderMeta.type = isPickup ? 'pickup' : 'dinein';
     state.orderMeta.typeChosen = true;
 
     if (!isPickup) {
-      const mesa = prompt('Número o nombre de mesa (opcional):', '') || '';
-      state.orderMeta.table = mesa.trim();
+      const mesa = (prompt('Número o nombre de mesa (opcional):', '') || '').trim();
+      state.orderMeta.table = mesa;
     }
   }
 
   const isPickup = state.orderMeta.type === 'pickup';
 
-  const suggestedName = state.lastKnownName || localStorage.getItem('kiosk:name') || '';
-  const name = (prompt('Nombre para el pedido:', suggestedName) || '').trim();
+  // 2) Nombre (sin rellenar con el anterior para no filtrar datos en kiosk público)
+  const name = (prompt('Nombre para el pedido:', '') || '').trim();
   if (!name) {
     toast('Pon un nombre para identificar tu pedido');
     return false;
   }
 
-  const suggestedPhone = state.lastKnownPhone || localStorage.getItem('kiosk:phone') || '';
+  // 3) Teléfono
   let phone = '';
   if (isPickup) {
-    phone = (prompt('Número de WhatsApp para avisarte cuando esté listo (obligatorio):', suggestedPhone) || '').trim();
+    phone = (prompt(
+      'Número de WhatsApp para avisarte cuando esté listo (obligatorio):',
+      ''
+    ) || '').trim();
     if (!phone) {
       toast('El número es necesario para avisarte de tu pedido para llevar');
       return false;
     }
   } else {
-    phone = (prompt('Número de WhatsApp para recompensas y avisos (opcional):', suggestedPhone) || '').trim();
+    phone = (prompt(
+      'Número de WhatsApp para recompensas y avisos (opcional):',
+      ''
+    ) || '').trim();
   }
 
   state.customerName = name;
@@ -1157,14 +1329,23 @@ async function ensureCustomerIdentified() {
   state.identified = true;
   state.identifiedAt = Date.now();
 
+  // Guardamos para “partida guardada” (pero ya no se prellena visualmente).
   state.lastKnownName = name;
   state.lastKnownPhone = phone;
   try {
-    localStorage.setItem('kiosk:name', name);
     if (phone) localStorage.setItem('kiosk:phone', phone);
+    localStorage.setItem('kiosk:name', name);
   } catch {}
 
   paintIdentityBadge();
+
+  // Si tiene teléfono, intentamos detectar partida guardada:
+  if (phone) {
+    try { handleReturningCustomer(phone, name); } catch (e) {
+      console.warn('[kiosk] handleReturningCustomer error', e);
+    }
+  }
+
   return true;
 }
 
@@ -1172,7 +1353,7 @@ async function ensureCustomerIdentified() {
 
 function showLoyaltyNudge() {
   if (state.loyaltyAskShown || !state.loyaltyEnabled) return;
-  if (state.orderMeta.phone) return;
+  if (state.orderMeta.phone) return; // ya tenemos número, no hostigar
 
   state.loyaltyAskShown = true;
 
@@ -1201,7 +1382,7 @@ function showLoyaltyNudge() {
         width:90px;height:90px;
         border-radius:50%;
         border:4px solid #ffc242;
-        box-shadow:0 0 22px rgba(255,194,66,.8);
+        box-shadow:0 0 22px rgba(255,255,255,.8);
         animation:spinCoin 1.3s linear infinite;
         background:
           radial-gradient(circle at 30% 30%, #fff7d0 0%, #ffc242 45%, #b37700 100%);
@@ -1306,6 +1487,9 @@ async function submitOrder() {
     ensureTrackPrompt(url);
 
     showLoyaltyNudge();
+
+    // Muy importante: limpiar identidad para el siguiente cliente en kiosk público
+    resetIdentityForNextCustomer();
   } catch (e) {
     console.error('[kiosk] submitOrder error', e);
     toast('No se pudo enviar el pedido. Intenta otra vez.');
@@ -1328,6 +1512,7 @@ async function init() {
 
   try { await ensureAuth(); } catch (e) { console.warn('anon auth fail', e); }
 
+  // (Guardamos lastKnown*, pero ya no se usan para rellenar prompts del kiosk)
   try {
     state.lastKnownName = localStorage.getItem('kiosk:name') || '';
     state.lastKnownPhone = localStorage.getItem('kiosk:phone') || '';
